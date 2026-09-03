@@ -330,48 +330,78 @@ var
   LPendingCount: SizeUInt;
   LId: UInt32;
   LTargetWindow: SizeUInt;
-  // perf: head+count O(1) pop (Move零拷贝仅需compaction时), BytesEnsureCapacity单源几何倍增, inline
+  // perf: ring buffer O(1) push/pop via modulo index, no linear compaction Move; BytesEnsureCapacity单源几何倍增, inline, Move零拷贝仅扩容线性化时
   function PendingFirstId: UInt32; inline;
   begin
     Result := LPendingIds[LPendingHead];
   end;
   procedure PushPending(AId: UInt32; AOff: UInt64); inline;
-  var LCap: SizeUInt; LIdx: SizeUInt;
+  var LCap, LOldCap: SizeUInt; LTail: SizeUInt; LNewIds: array of UInt32; LNewOffs: array of UInt64; LFirstPart: SizeUInt;
   begin
-    if LPendingHead + LPendingCount >= SizeUInt(Length(LPendingIds)) then
+    LCap := SizeUInt(Length(LPendingIds));
+    if LPendingCount >= LCap then
     begin
-      if LPendingHead > 0 then
+      LOldCap := LCap;
+      BytesEnsureCapacity(LCap, LPendingCount + 1);
+      if LCap <> LOldCap then
       begin
-        if LPendingCount > 0 then
+        if LOldCap = 0 then
         begin
-          Move(LPendingIds[LPendingHead], LPendingIds[0], LPendingCount * SizeOf(UInt32));
-          Move(LPendingOffs[LPendingHead], LPendingOffs[0], LPendingCount * SizeOf(UInt64));
+          SetLength(LPendingIds, LCap);
+          SetLength(LPendingOffs, LCap);
+        end
+        else if LPendingHead = 0 then
+        begin
+          SetLength(LPendingIds, LCap);
+          SetLength(LPendingOffs, LCap);
+        end
+        else
+        begin
+          SetLength(LNewIds, LCap);
+          SetLength(LNewOffs, LCap);
+          if LPendingHead + LPendingCount <= LOldCap then
+          begin
+            Move(LPendingIds[LPendingHead], LNewIds[0], LPendingCount * SizeOf(UInt32));
+            Move(LPendingOffs[LPendingHead], LNewOffs[0], LPendingCount * SizeOf(UInt64));
+          end
+          else
+          begin
+            LFirstPart := LOldCap - LPendingHead;
+            Move(LPendingIds[LPendingHead], LNewIds[0], LFirstPart * SizeOf(UInt32));
+            Move(LPendingIds[0], LNewIds[LFirstPart], (LPendingCount - LFirstPart) * SizeOf(UInt32));
+            Move(LPendingOffs[LPendingHead], LNewOffs[0], LFirstPart * SizeOf(UInt64));
+            Move(LPendingOffs[0], LNewOffs[LFirstPart], (LPendingCount - LFirstPart) * SizeOf(UInt64));
+          end;
+          LPendingIds := LNewIds;
+          LPendingOffs := LNewOffs;
+          LPendingHead := 0;
         end;
-        LPendingHead := 0;
       end;
-      if LPendingHead + LPendingCount >= SizeUInt(Length(LPendingIds)) then
-      begin
-        LCap := SizeUInt(Length(LPendingIds));
-        BytesEnsureCapacity(LCap, LPendingCount + 1);
-        SetLength(LPendingIds, LCap);
-        SetLength(LPendingOffs, LCap);
-      end;
+      LCap := SizeUInt(Length(LPendingIds));
     end;
-    LIdx := LPendingHead + LPendingCount;
-    LPendingIds[LIdx] := AId;
-    LPendingOffs[LIdx] := AOff;
+    LTail := (LPendingHead + LPendingCount) mod LCap;
+    LPendingIds[LTail] := AId;
+    LPendingOffs[LTail] := AOff;
     Inc(LPendingCount);
   end;
   procedure PopFrontPending; inline;
+  var LCap: SizeUInt;
   begin
     if LPendingCount = 0 then Exit;
-    Inc(LPendingHead);
+    LCap := SizeUInt(Length(LPendingIds));
+    if LCap = 0 then
+    begin
+      Dec(LPendingCount);
+      LPendingHead := 0;
+      Exit;
+    end;
+    LPendingHead := (LPendingHead + 1) mod LCap;
     Dec(LPendingCount);
     if LPendingCount = 0 then
       LPendingHead := 0;
   end;
   procedure PopPendingAt(AIdx: SizeUInt); inline;
-  var LPhys: SizeUInt; LRem: SizeUInt;
+  var LCap: SizeUInt; I: SizeUInt; LPhys, LNext: SizeUInt;
   begin
     if AIdx >= LPendingCount then Exit;
     if AIdx = 0 then
@@ -379,12 +409,13 @@ var
       PopFrontPending;
       Exit;
     end;
-    LPhys := LPendingHead + AIdx;
-    LRem := LPendingCount - AIdx - 1;
-    if LRem > 0 then
+    LCap := SizeUInt(Length(LPendingIds));
+    for I := AIdx to LPendingCount - 2 do
     begin
-      Move(LPendingIds[LPhys + 1], LPendingIds[LPhys], LRem * SizeOf(UInt32));
-      Move(LPendingOffs[LPhys + 1], LPendingOffs[LPhys], LRem * SizeOf(UInt64));
+      LPhys := (LPendingHead + I) mod LCap;
+      LNext := (LPendingHead + I + 1) mod LCap;
+      LPendingIds[LPhys] := LPendingIds[LNext];
+      LPendingOffs[LPhys] := LPendingOffs[LNext];
     end;
     Dec(LPendingCount);
     if LPendingCount = 0 then
@@ -482,36 +513,58 @@ var
   LPendingHead: SizeUInt;
   LPendingCount: SizeUInt;
   LId: UInt32;
+  // perf: ring buffer O(1) via modulo, no Move compaction on pop/push; BytesEnsureCapacity单源, inline, Move仅扩容线性化
   function PendingFirst: UInt32; inline;
   begin
     Result := LPending[LPendingHead];
   end;
   procedure Push(AId: UInt32); inline;
-  var LCap: SizeUInt; LIdx: SizeUInt;
+  var LCap, LOldCap: SizeUInt; LTail: SizeUInt; LNew: array of UInt32; LFirstPart: SizeUInt;
   begin
-    if LPendingHead + LPendingCount >= SizeUInt(Length(LPending)) then
+    LCap := SizeUInt(Length(LPending));
+    if LPendingCount >= LCap then
     begin
-      if LPendingHead > 0 then
+      LOldCap := LCap;
+      BytesEnsureCapacity(LCap, LPendingCount + 1);
+      if LCap <> LOldCap then
       begin
-        if LPendingCount > 0 then
-          Move(LPending[LPendingHead], LPending[0], LPendingCount * SizeOf(UInt32));
-        LPendingHead := 0;
+        if LOldCap = 0 then
+          SetLength(LPending, LCap)
+        else if LPendingHead = 0 then
+          SetLength(LPending, LCap)
+        else
+        begin
+          SetLength(LNew, LCap);
+          if LPendingHead + LPendingCount <= LOldCap then
+            Move(LPending[LPendingHead], LNew[0], LPendingCount * SizeOf(UInt32))
+          else
+          begin
+            LFirstPart := LOldCap - LPendingHead;
+            Move(LPending[LPendingHead], LNew[0], LFirstPart * SizeOf(UInt32));
+            Move(LPending[0], LNew[LFirstPart], (LPendingCount - LFirstPart) * SizeOf(UInt32));
+          end;
+          LPending := LNew;
+          LPendingHead := 0;
+        end;
       end;
-      if LPendingHead + LPendingCount >= SizeUInt(Length(LPending)) then
-      begin
-        LCap := SizeUInt(Length(LPending));
-        BytesEnsureCapacity(LCap, LPendingCount + 1);
-        SetLength(LPending, LCap);
-      end;
+      LCap := SizeUInt(Length(LPending));
     end;
-    LIdx := LPendingHead + LPendingCount;
-    LPending[LIdx] := AId;
+    LTail := (LPendingHead + LPendingCount) mod LCap;
+    LPending[LTail] := AId;
     Inc(LPendingCount);
   end;
   procedure PopFront; inline;
+  var LCap: SizeUInt;
   begin
     if LPendingCount = 0 then Exit;
-    Inc(LPendingHead);
+    LCap := SizeUInt(Length(LPending));
+    if LCap = 0 then
+    begin
+      Dec(LPendingCount);
+      LPendingHead := 0;
+      Exit;
+    end;
+    LPendingHead := (LPendingHead + 1) mod LCap;
     Dec(LPendingCount);
     if LPendingCount = 0 then
       LPendingHead := 0;

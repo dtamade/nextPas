@@ -1,6 +1,6 @@
 # nextpas.core.ssh 代码契约
 
-**模块路径**: `core/src/nextpas.core.ssh*.pas`（46 个生产源文件；见 §1.1）
+**模块路径**: `core/src/nextpas.core.ssh*.pas`（47 个生产源文件；见 §1.1，`cipher.factory` 为门面纯净化新增 impl）
 **层级**: L2（与 `tls` 同层：面向字节流的协议实现；仅依赖 L0–L1 及 `crypto`/`hash`/`net` 已文档化 owner）
 **Owner**: `codex/core-ssh` / ssh lane（`.worktrees/ssh`）
 **最后更新**: 2026-09-02
@@ -21,9 +21,10 @@
 | `nextpas.core.ssh.intf.pas` | 缝隙接口 `IDialer/ISshAgentDialer`（隔离 `net` 直连，仅 `io.intf+net.intf`） | intf |
 | `nextpas.core.ssh.net.ffi.pas` | 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，同步 `TcpConnect/UnixConnect` 经 `ISshDialer/ISshAgentDialer`、异步 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)/SshAsyncTcpStreamAdopt` 经 `IAsyncTcpStream` `inline` 零拷贝注入；`bytes.ops` 单源由外层 `Move` 保证，`try-finally` 释放不丢；`transport.async/session.async/proxyjump.async` 零直连 `net.async.tcp/dial`，L2 单缝隙统一） | ffi |
 | `nextpas.core.ssh.buffer.pas` | RFC 4251 wire 类型读写器 `TSshWriter/TSshReader`（`Ensure/Need` 边界） | impl |
-| `nextpas.core.ssh.cipher.pas` | 包加密门面 `ISshPacketSender/Receiver`（纯 re-export + 工厂薄转发，`FWriteBuf` move 语义零拷贝，`bytes.ops` 单源） | 门面 |
+| `nextpas.core.ssh.cipher.pas` | 包加密门面 `ISshPacketSender/Receiver`（纯 re-export + 工厂 inline 薄转发，分支与 Copy 切片已下沉至 `cipher.factory`，`FWriteBuf` move 语义零拷贝，`bytes.ops` 单源） | 门面 |
 | `nextpas.core.ssh.cipher.base.pas` | 加密共享基座（算法名判定/密钥尺寸/`PutU32BE/U32BEOf` `bytes.binary` 单源，`inline`） | base |
 | `nextpas.core.ssh.cipher.intf.pas` | 加密缝隙接口 `ISshPacketSender/Receiver`（隔离 AEAD/ETM/none 实现） | intf |
+| `nextpas.core.ssh.cipher.factory.pas` | 包加密工厂（`CreateSshPacketSender/Receiver` 分支与密钥切片单源，`base` 判定单源，`inline` 零拷贝转发） | impl |
 | `nextpas.core.ssh.cipher.chacha.pas` | `chacha20-poly1305@openssh.com` 实现（`SecureZero` 单源） | impl |
 | `nextpas.core.ssh.cipher.gcm.pas` | `aes*-gcm@openssh.com` 实现（`GCM` 单源） | impl |
 | `nextpas.core.ssh.cipher.etm.pas` | `aes*-ctr + hmac-sha2-*-etm` 实现（`TAesCtrStream` record值语义 `keystream` 跨包持久，`bytes.ops.MemXor` 批量） | impl |

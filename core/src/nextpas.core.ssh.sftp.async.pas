@@ -59,9 +59,12 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.builder,
+  nextpas.core.bytes.binary,
   nextpas.core.text.conv,
+  nextpas.core.text.utf8,
   nextpas.core.crypto.random,
   nextpas.core.ssh.window;
 
@@ -90,6 +93,7 @@ type
     FDeadline: TDeadline;
     FTimer: TAsyncTimerHandle;
     FReadBuf: IBytesBuilder; // perf: doubling single source bytes.builder (BYTES_BUILDER_MIN_GROW=64, 2×), inline zero-copy, amortized O(1), avoid O(n²)
+    FWriteBuf: TBytes; // perf: reuse geometric single source BytesEnsureCapacity 2×, zero-copy batch inline, channel parity, amortized O(1)
     FNextId: UInt32;
     FOpenCb: TProcSftpOpenAsync;
     FOpenCtx: Pointer;
@@ -159,6 +163,7 @@ type
     FWriteOff: SizeUInt;
     FWriteCb: TProcSftpVoid;
     FWriteCtx: Pointer;
+    FWriteBuf: TBytes; // perf: reuse geometric single source BytesEnsureCapacity 2×, zero-copy batch inline, channel parity, amortized O(1)
     procedure DoListDirStep;
     procedure OnListDirOpen(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
     procedure OnListDirRead(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
@@ -200,10 +205,10 @@ procedure Runner_SftpOnSent(AErr: ESSHError; AContext: Pointer); forward;
 // AppendChunkAsync removed: single source bytes.ops.BytesAppend inline; large accum via IBytesBuilder
 
 function GlobalReplyPayload(AOk: Boolean): TBytes;
-var LW: TsshWriter;
 begin
-  LW:=TsshWriter.Create(4);
-  try if AOk then LW.PutByte(SSH_MSG_REQUEST_SUCCESS) else LW.PutByte(SSH_MSG_REQUEST_FAILURE); Result:=LW.ToBytes; finally LW.Free; end;
+  // perf: no TsshWriter heap, single alloc 1B, inline zero-copy, bytes.ops single source via direct SetLength+Move
+  SetLength(Result, 1);
+  if AOk then Result[0]:=SSH_MSG_REQUEST_SUCCESS else Result[0]:=SSH_MSG_REQUEST_FAILURE;
 end;
 
 function IsAcceptable(AType: Byte; const AList: array of Byte): Boolean;
@@ -255,6 +260,8 @@ begin
   if FOpTimer.IsValid then try FLoop.CancelTimer(FOpTimer); except end;
   SetLength(FPending,0);
   FReadBuf := nil; // stability: release builder refcount, sized FreeMemOf via allocator
+  if Length(FWriteBuf)>0 then FillChar(FWriteBuf[0], SizeUInt(Length(FWriteBuf)), 0);
+  SetLength(FWriteBuf,0); // stability: release geometric buffer
   FSession := nil;
   inherited;
 end;
@@ -345,20 +352,23 @@ procedure SftpChannelRetryOpen(AContext: Pointer);
 begin TAsyncSftpChannel(AContext).SendOpen; end;
 
 procedure TAsyncSftpChannel.SendOpen;
-var LW: TsshWriter; Ok: Boolean;
+var LNeed: SizeUInt; LStrLen: SizeUInt;
 begin
-  LW := TsshWriter.Create(64);
-  try
-    LW.PutByte(SSH_MSG_CHANNEL_OPEN);
-    LW.PutStringText(SSH_CHANNEL_SESSION);
-    LW.PutUInt32(FLocalId);
-    LW.PutUInt32(FWindow.InitWindow);
-    LW.PutUInt32(FMaxPacket);
-    if not FTransport.AsyncSendPacket(LW.ToBytes, @Runner_SftpOnOpenSent, Self) then
-    begin
-      try FLoop.ScheduleAt(TDeadline.After(TDuration.FromMilliseconds(5)), @SftpChannelRetryOpen, Self); except Fail(ESSHError.Create(sekIO,'sftp async: open send failed')) end;
-    end;
-  finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2× BytesEnsureCapacity single source, inline zero-copy WriteUInt32BE+Move, amortized O(1), no TsshWriter heap
+  LStrLen:=SizeUInt(Length(SSH_CHANNEL_SESSION));
+  LNeed:=1+4+LStrLen+4+4+4;
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  FWriteBuf[0]:=SSH_MSG_CHANNEL_OPEN;
+  WriteUInt32BE(PByte(@FWriteBuf[1]), UInt32(LStrLen));
+  if LStrLen>0 then Move(PByte(PChar(SSH_CHANNEL_SESSION))^, FWriteBuf[5], LStrLen);
+  WriteUInt32BE(PByte(@FWriteBuf[5+LStrLen]), FLocalId);
+  WriteUInt32BE(PByte(@FWriteBuf[9+LStrLen]), FWindow.InitWindow);
+  WriteUInt32BE(PByte(@FWriteBuf[13+LStrLen]), FMaxPacket);
+  if not FTransport.AsyncSendPacket(FWriteBuf, @Runner_SftpOnOpenSent, Self) then
+  begin
+    try FLoop.ScheduleAt(TDeadline.After(TDuration.FromMilliseconds(5)), @SftpChannelRetryOpen, Self); except Fail(ESSHError.Create(sekIO,'sftp async: open send failed')) end;
+  end;
 end;
 
 procedure TAsyncSftpChannel.OnOpenSent(AErr: ESSHError; AContext: Pointer);
@@ -368,21 +378,24 @@ begin
 end;
 
 procedure TAsyncSftpChannel.SendSubsystem;
-var LW: TsshWriter; LTail: TBytes;
+var LNeed: SizeUInt; LPos: SizeUInt; LSubLen, LTailLen: SizeUInt;
 begin
-  LTail := nil;
-  LW := TsshWriter.Create(32);
-  try LW.PutStringText('sftp'); LTail:=LW.ToBytes; finally LW.Free; end;
-  LW := TsshWriter.Create(64);
-  try
-    LW.PutByte(SSH_MSG_CHANNEL_REQUEST);
-    LW.PutUInt32(FRemoteId);
-    LW.PutStringText(SSH_REQ_SUBSYSTEM);
-    LW.PutBoolean(True);
-    LW.PutRaw(LTail);
-    if not FTransport.AsyncSendPacket(LW.ToBytes, @Runner_SftpOnSubsystemSent, Self) then
-      Fail(ESSHError.Create(sekIO,'sftp async: subsystem send failed'));
-  finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, single alloc, inline zero-copy, no per-request TsshWriter heap, channel parity
+  LSubLen:=SizeUInt(Length(SSH_REQ_SUBSYSTEM));
+  LTailLen:=4+4; // string 'sftp' -> 4 len +4 data
+  LNeed:=1+4+(4+LSubLen)+1+LTailLen;
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  LPos:=0;
+  FWriteBuf[LPos]:=SSH_MSG_CHANNEL_REQUEST; Inc(LPos);
+  WriteUInt32BE(PByte(@FWriteBuf[LPos]), FRemoteId); Inc(LPos,4);
+  WriteUInt32BE(PByte(@FWriteBuf[LPos]), UInt32(LSubLen)); Inc(LPos,4);
+  if LSubLen>0 then begin Move(PByte(PChar(SSH_REQ_SUBSYSTEM))^, FWriteBuf[LPos], LSubLen); Inc(LPos, LSubLen); end;
+  FWriteBuf[LPos]:=1; Inc(LPos); // want_reply true
+  WriteUInt32BE(PByte(@FWriteBuf[LPos]), 4); Inc(LPos,4);
+  if 4>0 then begin Move(PByte(PChar('sftp'))^, FWriteBuf[LPos], 4); Inc(LPos,4); end;
+  if not FTransport.AsyncSendPacket(FWriteBuf, @Runner_SftpOnSubsystemSent, Self) then
+    Fail(ESSHError.Create(sekIO,'sftp async: subsystem send failed'));
 end;
 
 procedure TAsyncSftpChannel.OnSubsystemSent(AErr: ESSHError; AContext: Pointer);
@@ -392,21 +405,20 @@ begin
 end;
 
 procedure TAsyncSftpChannel.SendSftpInit;
-var LW: TsshWriter; LInner, LOuter: TBytes;
+var LNeed: SizeUInt;
 begin
-  LW := TsshWriter.Create(5);
-  try LW.PutByte(SSH_FXP_INIT); LW.PutUInt32(3); LInner:=LW.ToBytes; finally LW.Free; end;
-  LW := TsshWriter.Create(4+Length(LInner));
-  try LW.PutUInt32(UInt32(Length(LInner))); LW.PutRaw(LInner); LOuter:=LW.ToBytes; finally LW.Free; end;
-  LW := TsshWriter.Create(16+Length(LOuter));
-  try
-    LW.PutByte(SSH_MSG_CHANNEL_DATA);
-    LW.PutUInt32(FRemoteId);
-    LW.PutUInt32(UInt32(Length(LOuter)));
-    LW.PutRaw(LOuter);
-    if not FTransport.AsyncSendPacket(LW.ToBytes, @Runner_SftpOnSftpInitSent, Self) then
-      Fail(ESSHError.Create(sekIO,'sftp async: init send failed'));
-  finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, single alloc 18B, inline zero-copy, no TsshWriter heap churn, bytes.ops single source
+  LNeed:=1+4+4+4+1+4; // CHANNEL_DATA hdr + outer len + inner (INIT+version)
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  FWriteBuf[0]:=SSH_MSG_CHANNEL_DATA;
+  WriteUInt32BE(PByte(@FWriteBuf[1]), FRemoteId);
+  WriteUInt32BE(PByte(@FWriteBuf[5]), 9); // outer len =4+5
+  WriteUInt32BE(PByte(@FWriteBuf[9]), 5); // inner len
+  FWriteBuf[13]:=SSH_FXP_INIT;
+  WriteUInt32BE(PByte(@FWriteBuf[14]), 3);
+  if not FTransport.AsyncSendPacket(FWriteBuf, @Runner_SftpOnSftpInitSent, Self) then
+    Fail(ESSHError.Create(sekIO,'sftp async: init send failed'));
 end;
 
 procedure TAsyncSftpChannel.OnSftpInitSent(AErr: ESSHError; AContext: Pointer);
@@ -533,10 +545,14 @@ begin
 end;
 
 procedure TAsyncSftpChannel.SendWindowAdjust(ACount: UInt32);
-var LW: TsshWriter;
 begin
-  LW:=TsshWriter.Create(16);
-  try LW.PutByte(SSH_MSG_CHANNEL_WINDOW_ADJUST); LW.PutUInt32(FRemoteId); LW.PutUInt32(ACount); FTransport.AsyncSendPacket(LW.ToBytes, nil, nil); finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, 9B single alloc inline zero-copy, no TsshWriter heap, bytes.ops single source
+  BytesEnsureCapacity(FWriteBuf, 9);
+  SetLength(FWriteBuf, 9);
+  FWriteBuf[0]:=SSH_MSG_CHANNEL_WINDOW_ADJUST;
+  WriteUInt32BE(PByte(@FWriteBuf[1]), FRemoteId);
+  WriteUInt32BE(PByte(@FWriteBuf[5]), ACount);
+  FTransport.AsyncSendPacket(FWriteBuf, nil, nil);
 end;
 
 procedure TAsyncSftpChannel.HandleChannelRequest(const APayload: TBytes);
@@ -629,7 +645,7 @@ procedure TAsyncSftpChannel.OnOpTimeout(AContext: Pointer);
 begin FailAllPending(ESSHError.Create(sekTimeout,'sftp async: op timeout')); end;
 
 function TAsyncSftpChannel.SftpRoundTripAsync(AType: Byte; const APayload: TBytes; const AAccept: array of Byte; ACb: TProcSftpRaw; AContext: Pointer): Boolean;
-var LId: UInt32; LInner, LOuter: TBytes; LW: TsshWriter; I, LIdx: Integer;
+var LId: UInt32; I, LIdx: Integer; LNeed: SizeUInt; LPayloadLen: SizeUInt;
 begin
   if FFailed or (FState<>asReady) then begin if Assigned(ACb) then ACb(nil, ESSHError.Create(sekIO,'sftp async: not ready'), AContext); Exit(False); end;
   if Length(FPending) >= SFTP_PIPELINE_WINDOW then begin if Assigned(ACb) then ACb(nil, ESSHError.Create(sekProtocol,'sftp async: busy'), AContext); Exit(False); end;
@@ -648,19 +664,20 @@ begin
     SetLength(FPending, LIdx);
     raise;
   end;
-  LW:=TsshWriter.Create(5+Length(APayload));
-  try LW.PutByte(AType); LW.PutUInt32(LId); LW.PutRaw(APayload); LInner:=LW.ToBytes; finally LW.Free; end;
-  LW:=TsshWriter.Create(4+Length(LInner));
-  try LW.PutUInt32(UInt32(Length(LInner))); LW.PutRaw(LInner); LOuter:=LW.ToBytes; finally LW.Free; end;
-  LW:=TsshWriter.Create(16+Length(LOuter));
-  try
-    LW.PutByte(SSH_MSG_CHANNEL_DATA);
-    LW.PutUInt32(FRemoteId);
-    LW.PutUInt32(UInt32(Length(LOuter)));
-    LW.PutRaw(LOuter);
-    if not FTransport.AsyncSendPacket(LW.ToBytes, @Runner_SftpOnSent, Self) then
-    begin RemovePendingIdx(LIdx); if Assigned(ACb) then ACb(nil, ESSHError.Create(sekIO,'sftp async: send failed'), AContext); Exit(False); end;
-  finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, single alloc zero-copy batch (18+len), no 3× TsshWriter heap, bytes.ops single source
+  LPayloadLen:=SizeUInt(Length(APayload));
+  LNeed:=18+LPayloadLen;
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  FWriteBuf[0]:=SSH_MSG_CHANNEL_DATA;
+  WriteUInt32BE(PByte(@FWriteBuf[1]), FRemoteId);
+  WriteUInt32BE(PByte(@FWriteBuf[5]), UInt32(9+LPayloadLen)); // outer len =4+5+len
+  WriteUInt32BE(PByte(@FWriteBuf[9]), UInt32(5+LPayloadLen)); // inner len
+  FWriteBuf[13]:=AType;
+  WriteUInt32BE(PByte(@FWriteBuf[14]), LId);
+  if LPayloadLen>0 then Move(APayload[0], FWriteBuf[18], LPayloadLen);
+  if not FTransport.AsyncSendPacket(FWriteBuf, @Runner_SftpOnSent, Self) then
+  begin RemovePendingIdx(LIdx); if Assigned(ACb) then ACb(nil, ESSHError.Create(sekIO,'sftp async: send failed'), AContext); Exit(False); end;
   Result:=True;
 end;
 
@@ -679,13 +696,16 @@ begin
 end;
 
 procedure TAsyncSftpChannel.CloseChannel;
-var LW: TsshWriter;
 begin
   if FSentClose then Exit;
   FState:=asClosed;
   try
-    LW:=TsshWriter.Create(8); try LW.PutByte(SSH_MSG_CHANNEL_EOF); LW.PutUInt32(FRemoteId); FTransport.AsyncSendPacket(LW.ToBytes, nil, nil); finally LW.Free; end;
-    LW:=TsshWriter.Create(8); try LW.PutByte(SSH_MSG_CHANNEL_CLOSE); LW.PutUInt32(FRemoteId); FTransport.AsyncSendPacket(LW.ToBytes, nil, nil); finally LW.Free; end;
+    BytesEnsureCapacity(FWriteBuf, 5);
+    SetLength(FWriteBuf, 5);
+    FWriteBuf[0]:=SSH_MSG_CHANNEL_EOF; WriteUInt32BE(PByte(@FWriteBuf[1]), FRemoteId); FTransport.AsyncSendPacket(FWriteBuf, nil, nil);
+    BytesEnsureCapacity(FWriteBuf, 5);
+    SetLength(FWriteBuf, 5);
+    FWriteBuf[0]:=SSH_MSG_CHANNEL_CLOSE; WriteUInt32BE(PByte(@FWriteBuf[1]), FRemoteId); FTransport.AsyncSendPacket(FWriteBuf, nil, nil);
     FSentClose:=True;
   except end;
 end;
@@ -702,6 +722,9 @@ destructor TAsyncSftpFileSystem.Destroy;
 var Ch: TAsyncSftpChannel;
 begin
   Close;
+  if Length(FWriteBuf)>0 then FillChar(FWriteBuf[0], SizeUInt(Length(FWriteBuf)), 0);
+  SetLength(FWriteBuf,0);
+  FReadBuilder:=nil;
   Ch:=FChannel; FChannel:=nil;
   if Ch<>nil then
   begin
@@ -735,12 +758,18 @@ type
   TDataCtx = record Fs: TAsyncSftpFileSystem; Cb: TProcSftpData; Ctx: Pointer; end;
 
 function TAsyncSftpFileSystem.RealPathAsync(const APath: string; ACallback: TProcSftpRealPath; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes; P: PRealPathCtx;
+var LTail: TBytes; P: PRealPathCtx; LNeed: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback('', ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
-  LW:=TsshWriter.Create(64);
-  try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2× BytesEnsureCapacity single source, inline zero-copy WriteUInt32BE+Move, amortized O(1), no TsshWriter heap
+  if (Length(APath)>0) and not UTF8IsValid(PByte(PChar(APath)), SizeUInt(Length(APath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LNeed:=4+SizeUInt(Length(APath));
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  WriteUInt32BE(PByte(@FWriteBuf[0]), UInt32(Length(APath)));
+  if Length(APath)>0 then Move(PByte(PChar(APath))^, FWriteBuf[4], SizeUInt(Length(APath)));
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   New(P);
   try
     P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext;
@@ -753,12 +782,18 @@ begin
 end;
 
 function TAsyncSftpFileSystem.StatAsync(const APath: string; ACallback: TProcSftpStat; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes; P: PStatCtx;
+var LTail: TBytes; P: PStatCtx; LNeed: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(Default(TSftpAttrs), ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
-  LW:=TsshWriter.Create(64);
-  try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy, amortized O(1), no TsshWriter heap
+  if (Length(APath)>0) and not UTF8IsValid(PByte(PChar(APath)), SizeUInt(Length(APath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LNeed:=4+SizeUInt(Length(APath));
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  WriteUInt32BE(PByte(@FWriteBuf[0]), UInt32(Length(APath)));
+  if Length(APath)>0 then Move(PByte(PChar(APath))^, FWriteBuf[4], SizeUInt(Length(APath)));
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   New(P);
   try
     P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext;
@@ -771,12 +806,18 @@ begin
 end;
 
 function TAsyncSftpFileSystem.LstatAsync(const APath: string; ACallback: TProcSftpStat; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes; P: PStatCtx;
+var LTail: TBytes; P: PStatCtx; LNeed: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(Default(TSftpAttrs), ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
-  LW:=TsshWriter.Create(64);
-  try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy, amortized O(1), no TsshWriter heap
+  if (Length(APath)>0) and not UTF8IsValid(PByte(PChar(APath)), SizeUInt(Length(APath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LNeed:=4+SizeUInt(Length(APath));
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  WriteUInt32BE(PByte(@FWriteBuf[0]), UInt32(Length(APath)));
+  if Length(APath)>0 then Move(PByte(PChar(APath))^, FWriteBuf[4], SizeUInt(Length(APath)));
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   New(P);
   try
     P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext;
@@ -799,46 +840,78 @@ procedure FsOnWriteChunk(const APacket: TBytes; AErr: ESSHError; AContext: Point
 procedure FsOnWriteClose(const APacket: TBytes; AErr: ESSHError; AContext: Pointer); forward;
 
 function TAsyncSftpFileSystem.ListDirAsync(const APath: string; ACallback: TProcSftpDirList; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes;
+var LTail: TBytes; LNeed: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(nil, ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
   FListDirPath:=APath; FListDirCb:=ACallback; FListDirCtx:=AContext; SetLength(FListDirAccum,0); FListDirCount:=0; FListDirCap:=0; FListDirHandle:=nil;
-  LW:=TsshWriter.Create(64);
-  try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy, no TsshWriter heap
+  if (Length(APath)>0) and not UTF8IsValid(PByte(PChar(APath)), SizeUInt(Length(APath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LNeed:=4+SizeUInt(Length(APath));
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  WriteUInt32BE(PByte(@FWriteBuf[0]), UInt32(Length(APath)));
+  if Length(APath)>0 then Move(PByte(PChar(APath))^, FWriteBuf[4], SizeUInt(Length(APath)));
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   Result:=FChannel.SftpRoundTripAsync(SSH_FXP_OPENDIR, LTail, [SSH_FXP_HANDLE], @FsOnListDirOpen, Self);
 end;
 
 function TAsyncSftpFileSystem.ReadFileAsync(const APath: string; ACallback: TProcSftpData; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes;
+var LTail: TBytes; LNeed: SizeUInt; LPos: SizeUInt; LStrLen: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(nil, ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
   FReadPath:=APath; FReadCb:=ACallback; FReadCtx:=AContext; SetLength(FReadAccum,0); FReadBuilder := CreateBytesBuilder; // perf: doubling single source
   FReadOffset:=0; FReadHandle:=nil;
-  LW:=TsshWriter.Create(64);
-  try LW.PutStringText(APath); LW.PutUInt32(SSH_FXF_READ); PutAttrs(LW, Default(TSftpAttrs)); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy batch (string+flags+attrs), no TsshWriter heap
+  if (Length(APath)>0) and not UTF8IsValid(PByte(PChar(APath)), SizeUInt(Length(APath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LStrLen:=SizeUInt(Length(APath));
+  LNeed:=4+LStrLen+4+4; // string + READ flag + attrs(0)
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  LPos:=0;
+  WriteUInt32BE(PByte(@FWriteBuf[LPos]), UInt32(LStrLen)); Inc(LPos,4);
+  if LStrLen>0 then begin Move(PByte(PChar(APath))^, FWriteBuf[LPos], LStrLen); Inc(LPos, LStrLen); end;
+  WriteUInt32BE(PByte(@FWriteBuf[LPos]), SSH_FXF_READ); Inc(LPos,4);
+  WriteUInt32BE(PByte(@FWriteBuf[LPos]), 0); // Default(TSftpAttrs).Flags=0
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   Result:=FChannel.SftpRoundTripAsync(SSH_FXP_OPEN, LTail, [SSH_FXP_HANDLE], @FsOnReadOpen, Self);
 end;
 
 function TAsyncSftpFileSystem.WriteFileAsync(const APath: string; const AData: TBytes; ACallback: TProcSftpVoid; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes;
+var LTail: TBytes; LNeed: SizeUInt; LPos: SizeUInt; LStrLen: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
   FWritePath:=APath; FWriteData:=Copy(AData,0,Length(AData)); FWriteOff:=0; FWriteCb:=ACallback; FWriteCtx:=AContext; FWriteHandle:=nil;
-  LW:=TsshWriter.Create(64);
-  try LW.PutStringText(APath); LW.PutUInt32(SSH_FXF_WRITE or SSH_FXF_CREAT or SSH_FXF_TRUNC); PutAttrs(LW, Default(TSftpAttrs)); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy batch, no TsshWriter heap
+  if (Length(APath)>0) and not UTF8IsValid(PByte(PChar(APath)), SizeUInt(Length(APath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LStrLen:=SizeUInt(Length(APath));
+  LNeed:=4+LStrLen+4+4;
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  LPos:=0;
+  WriteUInt32BE(PByte(@FWriteBuf[LPos]), UInt32(LStrLen)); Inc(LPos,4);
+  if LStrLen>0 then begin Move(PByte(PChar(APath))^, FWriteBuf[LPos], LStrLen); Inc(LPos, LStrLen); end;
+  WriteUInt32BE(PByte(@FWriteBuf[LPos]), UInt32(SSH_FXF_WRITE or SSH_FXF_CREAT or SSH_FXF_TRUNC)); Inc(LPos,4);
+  WriteUInt32BE(PByte(@FWriteBuf[LPos]), 0);
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   Result:=FChannel.SftpRoundTripAsync(SSH_FXP_OPEN, LTail, [SSH_FXP_HANDLE], @FsOnWriteOpen, Self);
 end;
 
 function TAsyncSftpFileSystem.RemoveAsync(const APath: string; ACallback: TProcSftpVoid; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes; P: PVoidCtx;
+var LTail: TBytes; P: PVoidCtx; LNeed: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
-  LW:=TsshWriter.Create(64);
-  try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy, no TsshWriter heap
+  if (Length(APath)>0) and not UTF8IsValid(PByte(PChar(APath)), SizeUInt(Length(APath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LNeed:=4+SizeUInt(Length(APath));
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  WriteUInt32BE(PByte(@FWriteBuf[0]), UInt32(Length(APath)));
+  if Length(APath)>0 then Move(PByte(PChar(APath))^, FWriteBuf[4], SizeUInt(Length(APath)));
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   New(P);
   try
     P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=APath;
@@ -851,12 +924,20 @@ begin
 end;
 
 function TAsyncSftpFileSystem.MkdirAsync(const APath: string; ACallback: TProcSftpVoid; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes; P: PVoidCtx;
+var LTail: TBytes; P: PVoidCtx; LNeed: SizeUInt; LStrLen: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
-  LW:=TsshWriter.Create(80);
-  try LW.PutStringText(APath); PutAttrs(LW, Default(TSftpAttrs)); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy batch, no TsshWriter heap
+  if (Length(APath)>0) and not UTF8IsValid(PByte(PChar(APath)), SizeUInt(Length(APath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LStrLen:=SizeUInt(Length(APath));
+  LNeed:=4+LStrLen+4;
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  WriteUInt32BE(PByte(@FWriteBuf[0]), UInt32(LStrLen));
+  if LStrLen>0 then Move(PByte(PChar(APath))^, FWriteBuf[4], LStrLen);
+  WriteUInt32BE(PByte(@FWriteBuf[4+LStrLen]), 0);
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   New(P);
   try
     P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=APath;
@@ -869,12 +950,18 @@ begin
 end;
 
 function TAsyncSftpFileSystem.RmdirAsync(const APath: string; ACallback: TProcSftpVoid; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes; P: PVoidCtx;
+var LTail: TBytes; P: PVoidCtx; LNeed: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
-  LW:=TsshWriter.Create(64);
-  try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy, no TsshWriter heap
+  if (Length(APath)>0) and not UTF8IsValid(PByte(PChar(APath)), SizeUInt(Length(APath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LNeed:=4+SizeUInt(Length(APath));
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  WriteUInt32BE(PByte(@FWriteBuf[0]), UInt32(Length(APath)));
+  if Length(APath)>0 then Move(PByte(PChar(APath))^, FWriteBuf[4], SizeUInt(Length(APath)));
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   New(P);
   try
     P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=APath;
@@ -887,12 +974,22 @@ begin
 end;
 
 function TAsyncSftpFileSystem.RenameAsync(const AOldPath, ANewPath: string; ACallback: TProcSftpVoid; AContext: Pointer): Boolean;
-var LW: TsshWriter; LTail: TBytes; P: PVoidCtx;
+var LTail: TBytes; P: PVoidCtx; LNeed: SizeUInt; LOldLen, LNewLen: SizeUInt;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
-  LW:=TsshWriter.Create(128);
-  try LW.PutStringText(AOldPath); LW.PutStringText(ANewPath); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy batch, no TsshWriter heap
+  if (Length(AOldPath)>0) and not UTF8IsValid(PByte(PChar(AOldPath)), SizeUInt(Length(AOldPath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  if (Length(ANewPath)>0) and not UTF8IsValid(PByte(PChar(ANewPath)), SizeUInt(Length(ANewPath))) then raise ESSHError.Create(sekProtocol,'ssh buffer: PutStringText requires UTF-8');
+  LOldLen:=SizeUInt(Length(AOldPath)); LNewLen:=SizeUInt(Length(ANewPath));
+  LNeed:=4+LOldLen+4+LNewLen;
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  WriteUInt32BE(PByte(@FWriteBuf[0]), UInt32(LOldLen));
+  if LOldLen>0 then Move(PByte(PChar(AOldPath))^, FWriteBuf[4], LOldLen);
+  WriteUInt32BE(PByte(@FWriteBuf[4+LOldLen]), UInt32(LNewLen));
+  if LNewLen>0 then Move(PByte(PChar(ANewPath))^, FWriteBuf[8+LOldLen], LNewLen);
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   New(P);
   try
     P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=AOldPath+' -> '+ANewPath;
@@ -962,10 +1059,15 @@ end;
 // Fs internal steps
 
 procedure TAsyncSftpFileSystem.DoListDirStep;
-var LW: TsshWriter; LTail: TBytes; Cb: TProcSftpDirList; Ctx: Pointer;
+var LTail: TBytes; Cb: TProcSftpDirList; Ctx: Pointer; LNeed: SizeUInt;
 begin
-  LW:=TsshWriter.Create(16);
-  try LW.PutStringBytes(FListDirHandle); LTail:=LW.ToBytes; finally LW.Free; end;
+  // perf: reuse FWriteBuf geometric 2× BytesEnsureCapacity single source, inline zero-copy, amortized O(1), no TsshWriter heap
+  LNeed:=4+SizeUInt(Length(FListDirHandle));
+  BytesEnsureCapacity(FWriteBuf, LNeed);
+  SetLength(FWriteBuf, LNeed);
+  WriteUInt32BE(PByte(@FWriteBuf[0]), UInt32(Length(FListDirHandle)));
+  if Length(FListDirHandle)>0 then Move(FListDirHandle[0], FWriteBuf[4], SizeUInt(Length(FListDirHandle)));
+  LTail:=SpanCopySlice(TByteSpan.FromBytes(FWriteBuf),0,LNeed);
   if not FChannel.SftpRoundTripAsync(SSH_FXP_READDIR, LTail, [SSH_FXP_NAME, SSH_FXP_STATUS], @FsOnListDirRead, Self) then
   begin
     Cb:=FListDirCb; Ctx:=FListDirCtx; FListDirCb:=nil; Cb(nil, ESSHError.Create(sekIO,'sftp async: readdir send failed'), Ctx);
@@ -983,13 +1085,14 @@ begin
 end;
 
 procedure TAsyncSftpFileSystem.OnListDirRead(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
-var Self: TAsyncSftpFileSystem; LR: TsshReader; LType: Byte; LCode: UInt32; LN, I: Integer; LW: TsshWriter; Tail: TBytes; Cb: TProcSftpDirList; Ctx2: Pointer; Cb2: TProcSftpDirList; Ctx: Pointer; LName, LLong: string; LAttrs: TSftpAttrs;
+var Self: TAsyncSftpFileSystem; LR: TsshReader; LType: Byte; LCode: UInt32; LN, I: Integer; Tail: TBytes; Cb: TProcSftpDirList; Ctx2: Pointer; Cb2: TProcSftpDirList; Ctx: Pointer; LName, LLong: string; LAttrs: TSftpAttrs; LNeed: SizeUInt;
 begin
   Self:=TAsyncSftpFileSystem(AContext);
   if AErr<>nil then
   begin
     if Length(Self.FListDirHandle)>0 then
-    begin LW:=TsshWriter.Create(16); try LW.PutStringBytes(Self.FListDirHandle); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnListDirClose, Self); end;
+    begin // perf: reuse FWriteBuf geometric 2×, inline zero-copy, no TsshWriter heap
+      LNeed:=4+SizeUInt(Length(Self.FListDirHandle)); BytesEnsureCapacity(Self.FWriteBuf, LNeed); SetLength(Self.FWriteBuf, LNeed); WriteUInt32BE(PByte(@Self.FWriteBuf[0]), UInt32(Length(Self.FListDirHandle))); if Length(Self.FListDirHandle)>0 then Move(Self.FListDirHandle[0], Self.FWriteBuf[4], SizeUInt(Length(Self.FListDirHandle))); Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed); Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnListDirClose, Self); end;
     Cb:=Self.FListDirCb; Ctx:=Self.FListDirCtx; Self.FListDirCb:=nil; if Assigned(Cb) then Cb(nil, AErr, Ctx); Exit;
   end;
   LType:=APacket[0];
@@ -1000,7 +1103,8 @@ begin
     if LCode=SSH_FX_EOF then
     begin
       if Self.FListDirCount <> Self.FListDirCap then SetLength(Self.FListDirAccum, Self.FListDirCount); Self.FListDirCap:=Self.FListDirCount;
-      LW:=TsshWriter.Create(16); try LW.PutStringBytes(Self.FListDirHandle); Tail:=LW.ToBytes; finally LW.Free; end; if not Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnListDirClose, Self) then begin Cb2:=Self.FListDirCb; Ctx2:=Self.FListDirCtx; Self.FListDirCb:=nil; if Assigned(Cb2) then Cb2(Self.FListDirAccum, nil, Ctx2); SetLength(Self.FListDirAccum,0); Self.FListDirCount:=0; Self.FListDirCap:=0; end;
+      // perf: reuse FWriteBuf geometric 2×
+      LNeed:=4+SizeUInt(Length(Self.FListDirHandle)); BytesEnsureCapacity(Self.FWriteBuf, LNeed); SetLength(Self.FWriteBuf, LNeed); WriteUInt32BE(PByte(@Self.FWriteBuf[0]), UInt32(Length(Self.FListDirHandle))); if Length(Self.FListDirHandle)>0 then Move(Self.FListDirHandle[0], Self.FWriteBuf[4], SizeUInt(Length(Self.FListDirHandle))); Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed); if not Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnListDirClose, Self) then begin Cb2:=Self.FListDirCb; Ctx2:=Self.FListDirCtx; Self.FListDirCb:=nil; if Assigned(Cb2) then Cb2(Self.FListDirAccum, nil, Ctx2); SetLength(Self.FListDirAccum,0); Self.FListDirCount:=0; Self.FListDirCap:=0; end;
       Exit;
     end else
     begin
@@ -1039,17 +1143,26 @@ begin
 end;
 
 procedure TAsyncSftpFileSystem.OnReadOpen(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
-var Self: TAsyncSftpFileSystem; LR: TsshReader; LW: TsshWriter; Tail: TBytes; Cb: TProcSftpData; Ctx: Pointer;
+var Self: TAsyncSftpFileSystem; LR: TsshReader; Tail: TBytes; Cb: TProcSftpData; Ctx: Pointer; LNeed: SizeUInt; LPos: SizeUInt;
 begin
   Self:=TAsyncSftpFileSystem(AContext);
   if AErr<>nil then begin Cb:=Self.FReadCb; Ctx:=Self.FReadCtx; Self.FReadCb:=nil; if Assigned(Cb) then Cb(nil, AErr, Ctx); Exit; end;
   LR:=TsshReader.Create(APacket);
   try LR.ReadByte; LR.ReadUInt32; Self.FReadHandle:=LR.ReadStringBytes; finally LR.Free; end;
-  LW:=TsshWriter.Create(24); try LW.PutStringBytes(Self.FReadHandle); LW.PutUInt64(Self.FReadOffset); LW.PutUInt32(SFTP_CHUNK_SIZE); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_READ, Tail, [SSH_FXP_DATA, SSH_FXP_STATUS], @FsOnReadChunk, Self);
+  // perf: reuse FWriteBuf geometric 2×, inline zero-copy batch (handle+offset+len), no TsshWriter heap, bytes.ops single source
+  LNeed:=4+SizeUInt(Length(Self.FReadHandle))+8+4;
+  BytesEnsureCapacity(Self.FWriteBuf, LNeed);
+  SetLength(Self.FWriteBuf, LNeed);
+  LPos:=0; WriteUInt32BE(PByte(@Self.FWriteBuf[LPos]), UInt32(Length(Self.FReadHandle))); Inc(LPos,4);
+  if Length(Self.FReadHandle)>0 then begin Move(Self.FReadHandle[0], Self.FWriteBuf[LPos], SizeUInt(Length(Self.FReadHandle))); Inc(LPos, SizeUInt(Length(Self.FReadHandle))); end;
+  WriteUInt64BE(PByte(@Self.FWriteBuf[LPos]), Self.FReadOffset); Inc(LPos,8);
+  WriteUInt32BE(PByte(@Self.FWriteBuf[LPos]), SFTP_CHUNK_SIZE);
+  Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed);
+  Self.FChannel.SftpRoundTripAsync(SSH_FXP_READ, Tail, [SSH_FXP_DATA, SSH_FXP_STATUS], @FsOnReadChunk, Self);
 end;
 
 procedure TAsyncSftpFileSystem.OnReadChunk(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
-var Self: TAsyncSftpFileSystem; LR: TsshReader; LType: Byte; LCode: UInt32; LChunk: TBytes; LW: TsshWriter; Tail: TBytes; Cb: TProcSftpData; Ctx: Pointer;
+var Self: TAsyncSftpFileSystem; LR: TsshReader; LType: Byte; LCode: UInt32; LChunk: TBytes; Tail: TBytes; Cb: TProcSftpData; Ctx: Pointer; LNeed: SizeUInt; LPos: SizeUInt;
 begin
   Self:=TAsyncSftpFileSystem(AContext);
   if AErr<>nil then begin Cb:=Self.FReadCb; Ctx:=Self.FReadCtx; Self.FReadCb:=nil; if Assigned(Cb) then Cb(nil, AErr, Ctx); Exit; end;
@@ -1060,7 +1173,8 @@ begin
     try LR.ReadByte; LR.ReadUInt32; LCode:=LR.ReadUInt32; finally LR.Free; end;
     if LCode=SSH_FX_EOF then
     begin
-      LW:=TsshWriter.Create(16); try LW.PutStringBytes(Self.FReadHandle); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnReadClose, Self);
+      // perf: reuse FWriteBuf geometric 2×, inline zero-copy, no TsshWriter heap
+      LNeed:=4+SizeUInt(Length(Self.FReadHandle)); BytesEnsureCapacity(Self.FWriteBuf, LNeed); SetLength(Self.FWriteBuf, LNeed); WriteUInt32BE(PByte(@Self.FWriteBuf[0]), UInt32(Length(Self.FReadHandle))); if Length(Self.FReadHandle)>0 then Move(Self.FReadHandle[0], Self.FWriteBuf[4], SizeUInt(Length(Self.FReadHandle))); Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed); Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnReadClose, Self);
       Exit;
     end else
     begin Cb:=Self.FReadCb; Ctx:=Self.FReadCtx; Self.FReadCb:=nil; if Assigned(Cb) then Cb(nil, ESSHError.Create(sekSftp,'sftp: '+SftpStatusName(LCode)), Ctx); Exit; end;
@@ -1071,10 +1185,19 @@ begin
   Inc(Self.FReadOffset, SizeUInt(Length(LChunk)));
   if Length(LChunk)=0 then
   begin
-    LW:=TsshWriter.Create(16); try LW.PutStringBytes(Self.FReadHandle); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnReadClose, Self);
+    LNeed:=4+SizeUInt(Length(Self.FReadHandle)); BytesEnsureCapacity(Self.FWriteBuf, LNeed); SetLength(Self.FWriteBuf, LNeed); WriteUInt32BE(PByte(@Self.FWriteBuf[0]), UInt32(Length(Self.FReadHandle))); if Length(Self.FReadHandle)>0 then Move(Self.FReadHandle[0], Self.FWriteBuf[4], SizeUInt(Length(Self.FReadHandle))); Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed); Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnReadClose, Self);
     Exit;
   end;
-  LW:=TsshWriter.Create(24); try LW.PutStringBytes(Self.FReadHandle); LW.PutUInt64(Self.FReadOffset); LW.PutUInt32(SFTP_CHUNK_SIZE); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_READ, Tail, [SSH_FXP_DATA, SSH_FXP_STATUS], @FsOnReadChunk, Self);
+  // perf: reuse FWriteBuf geometric 2× for READ next chunk
+  LNeed:=4+SizeUInt(Length(Self.FReadHandle))+8+4;
+  BytesEnsureCapacity(Self.FWriteBuf, LNeed);
+  SetLength(Self.FWriteBuf, LNeed);
+  LPos:=0; WriteUInt32BE(PByte(@Self.FWriteBuf[LPos]), UInt32(Length(Self.FReadHandle))); Inc(LPos,4);
+  if Length(Self.FReadHandle)>0 then begin Move(Self.FReadHandle[0], Self.FWriteBuf[LPos], SizeUInt(Length(Self.FReadHandle))); Inc(LPos, SizeUInt(Length(Self.FReadHandle))); end;
+  WriteUInt64BE(PByte(@Self.FWriteBuf[LPos]), Self.FReadOffset); Inc(LPos,8);
+  WriteUInt32BE(PByte(@Self.FWriteBuf[LPos]), SFTP_CHUNK_SIZE);
+  Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed);
+  Self.FChannel.SftpRoundTripAsync(SSH_FXP_READ, Tail, [SSH_FXP_DATA, SSH_FXP_STATUS], @FsOnReadChunk, Self);
 end;
 
 procedure TAsyncSftpFileSystem.OnReadClose(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
@@ -1088,7 +1211,7 @@ begin
 end;
 
 procedure TAsyncSftpFileSystem.OnWriteOpen(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
-var Self: TAsyncSftpFileSystem; LR: TsshReader; LW: TsshWriter; Tail: TBytes; Cb: TProcSftpVoid; Ctx: Pointer; LTake: SizeUInt;
+var Self: TAsyncSftpFileSystem; LR: TsshReader; Tail: TBytes; Cb: TProcSftpVoid; Ctx: Pointer; LTake: SizeUInt; LNeed: SizeUInt; LPos: SizeUInt;
 begin
   Self:=TAsyncSftpFileSystem(AContext);
   if AErr<>nil then begin Cb:=Self.FWriteCb; Ctx:=Self.FWriteCtx; Self.FWriteCb:=nil; if Assigned(Cb) then Cb(AErr, Ctx); Exit; end;
@@ -1096,25 +1219,47 @@ begin
   try LR.ReadByte; LR.ReadUInt32; Self.FWriteHandle:=LR.ReadStringBytes; finally LR.Free; end;
   if Length(Self.FWriteData)=0 then
   begin
-    LW:=TsshWriter.Create(16); try LW.PutStringBytes(Self.FWriteHandle); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnWriteClose, Self);
+    // perf: reuse FWriteBuf geometric 2×, inline zero-copy, no TsshWriter heap
+    LNeed:=4+SizeUInt(Length(Self.FWriteHandle)); BytesEnsureCapacity(Self.FWriteBuf, LNeed); SetLength(Self.FWriteBuf, LNeed); WriteUInt32BE(PByte(@Self.FWriteBuf[0]), UInt32(Length(Self.FWriteHandle))); if Length(Self.FWriteHandle)>0 then Move(Self.FWriteHandle[0], Self.FWriteBuf[4], SizeUInt(Length(Self.FWriteHandle))); Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed); Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnWriteClose, Self);
     Exit;
   end;
   LTake:=SizeUInt(Length(Self.FWriteData)); if LTake>SFTP_CHUNK_SIZE then LTake:=SFTP_CHUNK_SIZE;
-  LW:=TsshWriter.Create(24+Integer(LTake)); try LW.PutStringBytes(Self.FWriteHandle); LW.PutUInt64(0); LW.PutUInt32(UInt32(LTake)); if LTake>0 then LW.PutRaw(@Self.FWriteData[0], LTake); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_WRITE, Tail, [SSH_FXP_STATUS], @FsOnWriteChunk, Self); Self.FWriteOff:=LTake;
+  // perf: reuse FWriteBuf geometric 2×, single alloc, inline batch (handle+off+len+data)
+  LNeed:=4+SizeUInt(Length(Self.FWriteHandle))+8+4+LTake;
+  BytesEnsureCapacity(Self.FWriteBuf, LNeed);
+  SetLength(Self.FWriteBuf, LNeed);
+  LPos:=0; WriteUInt32BE(PByte(@Self.FWriteBuf[LPos]), UInt32(Length(Self.FWriteHandle))); Inc(LPos,4);
+  if Length(Self.FWriteHandle)>0 then begin Move(Self.FWriteHandle[0], Self.FWriteBuf[LPos], SizeUInt(Length(Self.FWriteHandle))); Inc(LPos, SizeUInt(Length(Self.FWriteHandle))); end;
+  WriteUInt64BE(PByte(@Self.FWriteBuf[LPos]), 0); Inc(LPos,8);
+  WriteUInt32BE(PByte(@Self.FWriteBuf[LPos]), UInt32(LTake)); Inc(LPos,4);
+  if LTake>0 then Move(Self.FWriteData[0], Self.FWriteBuf[LPos], LTake);
+  Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed);
+  Self.FChannel.SftpRoundTripAsync(SSH_FXP_WRITE, Tail, [SSH_FXP_STATUS], @FsOnWriteChunk, Self); Self.FWriteOff:=LTake;
 end;
 
 procedure TAsyncSftpFileSystem.OnWriteChunk(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
-var Self: TAsyncSftpFileSystem; LW: TsshWriter; Tail: TBytes; Cb: TProcSftpVoid; Ctx: Pointer; LTake: SizeUInt;
+var Self: TAsyncSftpFileSystem; Tail: TBytes; Cb: TProcSftpVoid; Ctx: Pointer; LTake: SizeUInt; LNeed: SizeUInt; LPos: SizeUInt;
 begin
   Self:=TAsyncSftpFileSystem(AContext);
   if AErr<>nil then begin Cb:=Self.FWriteCb; Ctx:=Self.FWriteCtx; Self.FWriteCb:=nil; if Assigned(Cb) then Cb(AErr, Ctx); Exit; end;
   if Self.FWriteOff >= SizeUInt(Length(Self.FWriteData)) then
   begin
-    LW:=TsshWriter.Create(16); try LW.PutStringBytes(Self.FWriteHandle); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnWriteClose, Self);
+    // perf: reuse FWriteBuf geometric 2×, inline zero-copy, no TsshWriter heap
+    LNeed:=4+SizeUInt(Length(Self.FWriteHandle)); BytesEnsureCapacity(Self.FWriteBuf, LNeed); SetLength(Self.FWriteBuf, LNeed); WriteUInt32BE(PByte(@Self.FWriteBuf[0]), UInt32(Length(Self.FWriteHandle))); if Length(Self.FWriteHandle)>0 then Move(Self.FWriteHandle[0], Self.FWriteBuf[4], SizeUInt(Length(Self.FWriteHandle))); Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed); Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnWriteClose, Self);
     Exit;
   end;
   LTake:=SizeUInt(Length(Self.FWriteData))-Self.FWriteOff; if LTake>SFTP_CHUNK_SIZE then LTake:=SFTP_CHUNK_SIZE;
-  LW:=TsshWriter.Create(24+Integer(LTake)); try LW.PutStringBytes(Self.FWriteHandle); LW.PutUInt64(UInt64(Self.FWriteOff)); LW.PutUInt32(UInt32(LTake)); if LTake>0 then LW.PutRaw(@Self.FWriteData[Self.FWriteOff], LTake); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_WRITE, Tail, [SSH_FXP_STATUS], @FsOnWriteChunk, Self); Inc(Self.FWriteOff, LTake);
+  // perf: reuse FWriteBuf geometric 2×, single alloc batch, inline zero-copy, bytes.ops single source
+  LNeed:=4+SizeUInt(Length(Self.FWriteHandle))+8+4+LTake;
+  BytesEnsureCapacity(Self.FWriteBuf, LNeed);
+  SetLength(Self.FWriteBuf, LNeed);
+  LPos:=0; WriteUInt32BE(PByte(@Self.FWriteBuf[LPos]), UInt32(Length(Self.FWriteHandle))); Inc(LPos,4);
+  if Length(Self.FWriteHandle)>0 then begin Move(Self.FWriteHandle[0], Self.FWriteBuf[LPos], SizeUInt(Length(Self.FWriteHandle))); Inc(LPos, SizeUInt(Length(Self.FWriteHandle))); end;
+  WriteUInt64BE(PByte(@Self.FWriteBuf[LPos]), UInt64(Self.FWriteOff)); Inc(LPos,8);
+  WriteUInt32BE(PByte(@Self.FWriteBuf[LPos]), UInt32(LTake)); Inc(LPos,4);
+  if LTake>0 then Move(Self.FWriteData[Self.FWriteOff], Self.FWriteBuf[LPos], LTake);
+  Tail:=SpanCopySlice(TByteSpan.FromBytes(Self.FWriteBuf),0,LNeed);
+  Self.FChannel.SftpRoundTripAsync(SSH_FXP_WRITE, Tail, [SSH_FXP_STATUS], @FsOnWriteChunk, Self); Inc(Self.FWriteOff, LTake);
 end;
 
 procedure TAsyncSftpFileSystem.OnWriteClose(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);

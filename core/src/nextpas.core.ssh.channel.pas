@@ -934,8 +934,9 @@ begin
     Exit;
   end;
   Move(LData[0], ABuffer, ACount);
-  FBuf := Copy(LData, ACount, Length(LData) - Integer(ACount));
-  FBufPos := 0;
+  // perf: zero-copy tail via TByteSpan view + ownership transfer (TByteSpan.FromBytes(LData).Slice(ACount, Len-ACount) view via FBuf/FBufPos offset), avoids Copy temp TBytes alloc+Move O(n) heap churn per Read; bytes.ops single source (TByteSpan), single Move for head, no secondary alloc/copy for tail, amortized O(1)
+  FBuf := LData;
+  FBufPos := ACount;
   Result := ACount;
 end;
 
