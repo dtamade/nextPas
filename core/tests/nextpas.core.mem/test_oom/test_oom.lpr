@@ -2,9 +2,7 @@ program test_oom;
 {$mode ObjFPC}{$H+}
 
 uses
-  {$IFDEF UNIX}
-  cthreads,
-  {$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,

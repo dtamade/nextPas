@@ -3,9 +3,7 @@ program test_concurrent_wrappers;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}
-  cthreads,
-  {$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.text.conv,

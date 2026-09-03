@@ -17,7 +17,7 @@ program test_stdlib_integration;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.mem,

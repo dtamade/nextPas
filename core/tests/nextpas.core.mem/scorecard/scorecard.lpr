@@ -20,8 +20,8 @@ program scorecard;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
   nextpas.core.thread.init,
+  nextpas.core.platform.thread,
   nextpas.core.base,
   nextpas.core.system.heap,
   nextpas.core.atomic.core,
@@ -329,7 +329,7 @@ type
     Freed: UInt64;
   end;
 
-function SC3Producer(Parameter: Pointer): PtrInt;
+function SC3Producer(Parameter: Pointer): Pointer; cdecl;
 var
   LCtx: PCrossCtx;
   I: Integer;
@@ -351,7 +351,7 @@ begin
       begin
         InterlockedExchange(LCtx^.Error, 1);
         InterlockedExchange(LCtx^.Stop, 1);
-        Exit(1);
+        Exit(Pointer(1));
       end;
       PByte(LPtr)^ := Byte(I);
       LCtx^.Ptrs[I] := LPtr;
@@ -360,10 +360,10 @@ begin
     InterlockedExchange(LCtx^.Ready, 1);
     Inc(LCtx^.Filled);
   end;
-  Result := 0;
+  Result := nil;
 end;
 
-function SC3Consumer(Parameter: Pointer): PtrInt;
+function SC3Consumer(Parameter: Pointer): Pointer; cdecl;
 var
   LCtx: PCrossCtx;
   I: Integer;
@@ -385,7 +385,7 @@ begin
       begin
         InterlockedExchange(LCtx^.Error, 1);
         InterlockedExchange(LCtx^.Stop, 1);
-        Exit(1);
+        Exit(Pointer(1));
       end;
       LCtx^.Alloc.FreeMem(LPtr, SC3_SIZE);
       LCtx^.Ptrs[I] := nil;
@@ -396,13 +396,13 @@ begin
     if LCtx^.Freed >= SC3_ROUNDS then
       InterlockedExchange(LCtx^.Stop, 1);
   end;
-  Result := 0;
+  Result := nil;
 end;
 
 procedure RunSC3;
 var
   LCtx: TCrossCtx;
-  LProd, LCons: TThreadID;
+  LProd, LCons: TPlatformThreadRecord;
   LStart, LEnd: UInt64;
   LOps: UInt64;
   LNs: Int64;
@@ -421,10 +421,26 @@ begin
     LCtx.Ptrs[I] := nil;
 
   LStart := platform_monotonic_ns;
-  LProd := BeginThread(@SC3Producer, @LCtx);
-  LCons := BeginThread(@SC3Consumer, @LCtx);
-  WaitForThreadTerminate(LProd, 0);
-  WaitForThreadTerminate(LCons, 0);
+  if platform_thread_spawn(LProd, @SC3Producer, @LCtx) <> 0 then
+  begin
+    WriteLn('SC3 producer spawn failed');
+    Halt(1);
+  end;
+  if platform_thread_spawn(LCons, @SC3Consumer, @LCtx) <> 0 then
+  begin
+    WriteLn('SC3 consumer spawn failed');
+    Halt(1);
+  end;
+  if platform_thread_wait(LProd) <> 0 then
+  begin
+    WriteLn('SC3 producer join failed');
+    Halt(1);
+  end;
+  if platform_thread_wait(LCons) <> 0 then
+  begin
+    WriteLn('SC3 consumer join failed');
+    Halt(1);
+  end;
   LEnd := platform_monotonic_ns;
 
   LOps := LCtx.Freed * SC3_BATCH;

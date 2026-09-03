@@ -3,9 +3,7 @@ program test_thread_arena;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}
-  cthreads,
-  {$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.test,

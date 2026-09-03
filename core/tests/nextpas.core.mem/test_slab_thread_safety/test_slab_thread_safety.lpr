@@ -3,7 +3,7 @@ program test_slab_thread_safety;
 {$I nextpas.core.settings.inc}
 
 uses
-  cthreads,
+  nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.pool.slab,

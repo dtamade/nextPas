@@ -3,9 +3,8 @@ program test_tracking_allocator;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}
-  cthreads,
-  {$ENDIF}
+  nextpas.core.thread.init,
+  nextpas.core.platform.thread,
   nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.mem.base,
@@ -189,12 +188,12 @@ begin
 end;
 
 { 线程过程：使用全局 GTracker 进行分配释放 }
-function ThreadAllocAndFree(arg: Pointer): PtrInt;
+function ThreadAllocAndFree(arg: Pointer): Pointer; cdecl;
 var
   LPtrs: array[0..99] of Pointer;
   J: Integer;
 begin
-  Result := 0;
+  Result := nil;
   for J := 0 to 99 do
     LPtrs[J] := GTracker.GetMem(16);
   for J := 0 to 99 do
@@ -205,16 +204,17 @@ procedure TestThreadSafety;
 const
   THREAD_COUNT = 4;
 var
-  LThreads: array[0..THREAD_COUNT - 1] of TThreadID;
+  LThreads: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
   I: Integer;
 begin
   GTracker := TTrackingAllocator.Create(GetRtlAllocator);
   try
     for I := 0 to THREAD_COUNT - 1 do
-      LThreads[I] := BeginThread(@ThreadAllocAndFree, nil);
+      Check(platform_thread_spawn(LThreads[I], @ThreadAllocAndFree, nil) = 0,
+        'spawn tracking worker');
 
     for I := 0 to THREAD_COUNT - 1 do
-      WaitForThreadTerminate(LThreads[I], 0);
+      Check(platform_thread_wait(LThreads[I]) = 0, 'join tracking worker');
 
     Check(GTracker.ActiveAllocCount = 0,
       'after all threads done: count=0, got ' + IntToStr(GTracker.ActiveAllocCount));

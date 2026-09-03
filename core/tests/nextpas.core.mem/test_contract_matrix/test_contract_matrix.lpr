@@ -14,8 +14,8 @@ program test_contract_matrix;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
   nextpas.core.thread.init,
+  nextpas.core.platform.thread,
   nextpas.core.base,
   nextpas.core.atomic.core,
   nextpas.core.test,
@@ -181,13 +181,13 @@ type
     Failed: Boolean;
   end;
 
-function RtlWorker(AParam: Pointer): PtrInt;
+function RtlWorker(AParam: Pointer): Pointer; cdecl;
 var
   LCtx: PRtlWorkerCtx;
   I: Integer;
   LPtr: Pointer;
 begin
-  Result := 0;
+  Result := nil;
   LCtx := PRtlWorkerCtx(AParam);
   try
     for I := 1 to C08_ITERS do
@@ -215,7 +215,7 @@ end;
 procedure RunIAllocatorThreadSafeSmoke(const AAlloc: IAllocator; const AName: string);
 var
   LTraits: TAllocatorTraits;
-  LIds: array[0..C08_THREADS - 1] of TThreadID;
+  LIds: array[0..C08_THREADS - 1] of TPlatformThreadRecord;
   LCtx: array[0..C08_THREADS - 1] of TRtlWorkerCtx;
   I: Integer;
   LAnyFail: Boolean;
@@ -230,10 +230,11 @@ begin
   begin
     LCtx[I].Alloc := AAlloc;
     LCtx[I].Failed := False;
-    LIds[I] := BeginThread(@RtlWorker, @LCtx[I]);
+    Check(platform_thread_spawn(LIds[I], @RtlWorker, @LCtx[I]) = 0,
+      'spawn RtlWorker');
   end;
   for I := 0 to C08_THREADS - 1 do
-    WaitForThreadTerminate(LIds[I], 0);
+    Check(platform_thread_wait(LIds[I]) = 0, 'join RtlWorker');
   LAnyFail := False;
   for I := 0 to C08_THREADS - 1 do
     if LCtx[I].Failed then
@@ -293,13 +294,13 @@ type
     Failed: Boolean;
   end;
 
-function GrowWorker(AParam: Pointer): PtrInt;
+function GrowWorker(AParam: Pointer): Pointer; cdecl;
 var
   LCtx: PGrowWorkerCtx;
   I: Integer;
   LPtr: Pointer;
 begin
-  Result := 0;
+  Result := nil;
   LCtx := PGrowWorkerCtx(AParam);
   try
     for I := 1 to C08_ITERS do
@@ -327,7 +328,7 @@ end;
 procedure RunGrowingThreadSafeSmoke;
 var
   LAlloc: TGrowingAllocator;
-  LIds: array[0..C08_THREADS - 1] of TThreadID;
+  LIds: array[0..C08_THREADS - 1] of TPlatformThreadRecord;
   LCtx: array[0..C08_THREADS - 1] of TGrowWorkerCtx;
   I: Integer;
   LAnyFail: Boolean;
@@ -338,10 +339,11 @@ begin
     begin
       LCtx[I].Alloc := LAlloc;
       LCtx[I].Failed := False;
-      LIds[I] := BeginThread(@GrowWorker, @LCtx[I]);
+      Check(platform_thread_spawn(LIds[I], @GrowWorker, @LCtx[I]) = 0,
+        'spawn GrowWorker');
     end;
     for I := 0 to C08_THREADS - 1 do
-      WaitForThreadTerminate(LIds[I], 0);
+      Check(platform_thread_wait(LIds[I]) = 0, 'join GrowWorker');
     LAnyFail := False;
     for I := 0 to C08_THREADS - 1 do
       if LCtx[I].Failed then
@@ -579,7 +581,7 @@ type
     Error: LongInt;
   end;
 
-function HeapCrossProducer(AParam: Pointer): PtrInt;
+function HeapCrossProducer(AParam: Pointer): Pointer; cdecl;
 var
   LCtx: PHeapCrossCtx;
   I: Integer;
@@ -592,20 +594,20 @@ begin
       if LCtx^.Ptrs[I] = nil then
       begin
         InterlockedExchange(LCtx^.Error, 1);
-        Exit(1);
+        Exit(Pointer(1));
       end;
       PByte(LCtx^.Ptrs[I])^ := Byte(I);
     end;
     ReadWriteBarrier;
     InterlockedExchange(LCtx^.Ready, 1);
-    Result := 0;
+    Result := nil;
   except
     InterlockedExchange(LCtx^.Error, 1);
-    Result := 1;
+    Result := Pointer(1);
   end;
 end;
 
-function HeapCrossConsumer(AParam: Pointer): PtrInt;
+function HeapCrossConsumer(AParam: Pointer): Pointer; cdecl;
 var
   LCtx: PHeapCrossCtx;
   I: Integer;
@@ -620,22 +622,22 @@ begin
       if (LCtx^.Ptrs[I] = nil) or (PByte(LCtx^.Ptrs[I])^ <> Byte(I)) then
       begin
         InterlockedExchange(LCtx^.Error, 1);
-        Exit(1);
+        Exit(Pointer(1));
       end;
       LCtx^.Heap.FreeMem(LCtx^.Ptrs[I], 64);
       LCtx^.Ptrs[I] := nil;
     end;
-    Result := 0;
+    Result := nil;
   except
     InterlockedExchange(LCtx^.Error, 1);
-    Result := 1;
+    Result := Pointer(1);
   end;
 end;
 
 procedure RunDefaultHeapCrossThreadFree;
 var
   LCtx: THeapCrossCtx;
-  LProd, LCons: TThreadID;
+  LProd, LCons: TPlatformThreadRecord;
   I: Integer;
 begin
   FillChar(LCtx, SizeOf(LCtx), 0);
@@ -646,10 +648,12 @@ begin
   for I := 0 to LCtx.Count - 1 do
     LCtx.Ptrs[I] := nil;
 
-  LProd := BeginThread(@HeapCrossProducer, @LCtx);
-  LCons := BeginThread(@HeapCrossConsumer, @LCtx);
-  WaitForThreadTerminate(LProd, 0);
-  WaitForThreadTerminate(LCons, 0);
+  Check(platform_thread_spawn(LProd, @HeapCrossProducer, @LCtx) = 0,
+    'spawn HeapCrossProducer');
+  Check(platform_thread_spawn(LCons, @HeapCrossConsumer, @LCtx) = 0,
+    'spawn HeapCrossConsumer');
+  Check(platform_thread_wait(LProd) = 0, 'join HeapCrossProducer');
+  Check(platform_thread_wait(LCons) = 0, 'join HeapCrossConsumer');
   Check(LCtx.Error = 0, 'DefaultHeap cross-thread free (M2-1)');
 end;
 

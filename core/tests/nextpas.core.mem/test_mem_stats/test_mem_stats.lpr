@@ -2,9 +2,8 @@ program test_mem_stats;
 {$mode ObjFPC}{$H+}
 
 uses
-  {$IFDEF UNIX}
-  cthreads,
-  {$ENDIF}
+  nextpas.core.thread.init,
+  nextpas.core.platform.thread,
   nextpas.core.test,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
@@ -358,7 +357,7 @@ end;
 var
   GStats: TAllocStatsAllocator;
 
-function WorkerThread(Data: Pointer): PtrInt;
+function WorkerThread(Data: Pointer): Pointer; cdecl;
 var
   LJ: Integer;
   LPtr: Pointer;
@@ -369,12 +368,12 @@ begin
     if LPtr <> nil then
       GStats.FreeMem(LPtr);
   end;
-  Result := 0;
+  Result := nil;
 end;
 
 procedure TestConcurrentAlloc;
 var
-  LThreads: array[0..3] of TThreadID;
+  LThreads: array[0..3] of TPlatformThreadRecord;
   LI: Integer;
   LSnap: TAllocSnapshot;
 begin
@@ -382,11 +381,12 @@ begin
   try
     // 启动 4 个线程
     for LI := 0 to 3 do
-      LThreads[LI] := BeginThread(@WorkerThread, nil);
+      Check(platform_thread_spawn(LThreads[LI], @WorkerThread, nil) = 0,
+        'spawn stats worker');
 
     // 等待完成
     for LI := 0 to 3 do
-      WaitForThreadTerminate(LThreads[LI], 0);
+      Check(platform_thread_wait(LThreads[LI]) = 0, 'join stats worker');
 
     LSnap := GStats.Snapshot;
     Check(LSnap.TotalAllocs = 4000, 'TotalAllocs=4000 (4 threads * 1000)');
