@@ -1676,7 +1676,7 @@ begin
   LWorkDir := GetWorkDir;
   if LWorkDir = '' then
     raise EGitError.Create(GIT_EINVALID, 'ApplyPatch: bare repository has no workdir');
-  LTmpPatch := PathJoin([GetTempDir, 'nextpas_patch_apply.patch']);
+  LTmpPatch := nextpas.core.fs.PathJoin([GetTempDir, 'nextpas_patch_apply.patch']);
   WriteFileText(LTmpPatch, APatchText);
   try
     LOut := RunIn('/usr/bin/git', ['apply', '--whitespace=nowarn', LTmpPatch], LWorkDir);

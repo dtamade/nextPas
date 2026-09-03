@@ -2551,10 +2551,10 @@ begin
   List := GitWorktreeList(GitDir);
   CheckEqual(2, Length(List), 'after linked worktree');
   CheckEqual(GWorktreeMain, List[0].Path, 'main first');
-  // linked may be at any position (fs order), find by path
+  // linked may be at any position (fs order), find by path (realpath: gitdir file holds canonical path, TMPDIR may be symlinked e.g. /tmp -> /vm/tmp)
   Found := False;
   for I := 0 to High(List) do
-    if List[I].Path = GWorktreeLinked then
+    if nextpas.core.fs.PathRealPath(List[I].Path) = nextpas.core.fs.PathRealPath(GWorktreeLinked) then
     begin
       Found := True;
       CheckEqual('refs/heads/br1', List[I].HeadRef, 'linked branch');
@@ -2580,7 +2580,7 @@ begin
   CheckEqual(3, Length(List), 'after detached');
   FoundDet := False;
   for I := 0 to High(List) do
-    if List[I].Path = GWorktreeDetached then
+    if nextpas.core.fs.PathRealPath(List[I].Path) = nextpas.core.fs.PathRealPath(GWorktreeDetached) then
     begin
       FoundDet := True;
       CheckTrue(List[I].IsDetached, 'detached flag');

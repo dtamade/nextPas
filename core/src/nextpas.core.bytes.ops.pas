@@ -64,6 +64,8 @@ function AsciiUpperString(const S: string): string; inline;
 function SpanConcat(const A, B: TByteSpan): TBytes;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 function SpanClone(const ASpan: TByteSpan): TBytes;
+{ restored from git lane: SpanCopy single source for fixed-size zero-copy copy (OID 20/32 etc.), inline + single Move, no heap }
+procedure SpanCopy(const ADst, ASrc: TByteSpan); inline;
 
 function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
@@ -534,6 +536,18 @@ begin
   SetLength(Result, ASpan.Len);
   if ASpan.Len > 0 then
     Move(ASpan.Data^, Pointer(Result)^, ASpan.Len);
+end;
+
+{ restored from git lane: fixed-size zero-copy span copy, inline + single Move }
+procedure SpanCopy(const ADst, ASrc: TByteSpan); inline;
+begin
+  if ASrc.Len = 0 then
+    Exit;
+  if (ASrc.Data = nil) or (ADst.Data = nil) then
+    raise EArgumentNil.Create('SpanCopy: nil span');
+  if ASrc.Len > ADst.Len then
+    raise EOutOfRange.Create('SpanCopy: src len > dst len');
+  Move(ASrc.Data^, ADst.Data^, ASrc.Len);
 end;
 
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;

@@ -31,6 +31,7 @@ type
   git_config = Pointer;
   git_diff = Pointer;
   git_patch = Pointer;
+  git_blame = Pointer;
   git_revwalk = Pointer;
   git_worktree = Pointer;
   git_status_list = Pointer;

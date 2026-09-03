@@ -238,8 +238,7 @@ uses
   nextpas.core.platform.base,
   nextpas.core.platform.dl,
   nextpas.core.platform.env,
-  nextpas.core.bytes.ops,
-  nextpas.core.git.libgit2.base;
+  nextpas.core.bytes.ops;
 
 function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
 begin

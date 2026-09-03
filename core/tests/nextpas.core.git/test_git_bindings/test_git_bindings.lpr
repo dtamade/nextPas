@@ -90,18 +90,18 @@ end;
 
 procedure TestCoreStructSizes;
 begin
-  // git_oid grew a leading type byte in newer libgit2: 1 + 20 payload + pad
-  CheckTrue(SizeOf(TGitOid) = 33, 'sizeof(git_oid) = 33');
+  // installed libgit2 1.9 (non-experimental SHA256): plain 20-byte id, no leading type byte (C probe: sizeof=20, offsetof(id)=0)
+  CheckTrue(SizeOf(TGitOid) = 20, 'sizeof(git_oid) = 20');
   CheckTrue(SizeOf(TGitStrarray) = 16, 'sizeof(git_strarray) = 16');
   CheckTrue(SizeOf(TGitSignature) = 32, 'sizeof(git_signature) = 32');
   CheckTrue(SizeOf(TGitTime) = 16, 'sizeof(git_time) = 16');
   CheckTrue(SizeOf(TGitCommitarray) = 16, 'sizeof(git_commitarray) = 16');
   CheckTrue(SizeOf(TGitBuf) = 24, 'sizeof(git_buf) = 24');
   CheckTrue(SizeOf(TGitError) = 16, 'sizeof(git_error) = 16');
-  CheckTrue(SizeOf(TGitPushUpdate) = 88, 'sizeof(git_push_update) = 88');
+  CheckTrue(SizeOf(TGitPushUpdate) = 56, 'sizeof(git_push_update) = 56');
   CheckTrue(SizeOf(TGitStatusEntry) = 24, 'sizeof(git_status_entry) = 24');
-  CheckTrue(SizeOf(TGitDiffDelta) = 144, 'sizeof(git_diff_delta) = 144');
-  CheckTrue(SizeOf(TGitIndexEntry) = 88, 'sizeof(git_index_entry) = 88');
+  CheckTrue(SizeOf(TGitDiffDelta) = 112, 'sizeof(git_diff_delta) = 112');
+  CheckTrue(SizeOf(TGitIndexEntry) = 72, 'sizeof(git_index_entry) = 72');
 end;
 
 procedure TestOptionsStructSizes;
@@ -119,7 +119,7 @@ end;
 
 procedure TestFieldOffsets;
 begin
-  CheckTrue(OffsetOfOidId = 1, 'offsetof(git_oid.id) = 1');
+  CheckTrue(OffsetOfOidId = 0, 'offsetof(git_oid.id) = 0');
   CheckTrue(OffsetOfStrarrayCount = 8, 'offsetof(git_strarray.count) = 8');
   CheckTrue(OffsetOfSignatureWhen = 16, 'offsetof(git_signature.when) = 16');
   CheckTrue(OffsetOfErrorKlass = 8, 'offsetof(git_error.klass) = 8');
@@ -133,8 +133,8 @@ begin
     'offsetof(git_fetch_options.download_tags) = 144');
   CheckTrue(OffsetOfPushUpdateSrc = 16,
     'offsetof(git_push_update.src) = 16');
-  CheckTrue(OffsetOfIndexEntryPath = 80,
-    'offsetof(git_index_entry.path) = 80');
+  CheckTrue(OffsetOfIndexEntryPath = 64,
+    'offsetof(git_index_entry.path) = 64');
 end;
 
 procedure TestMacroConstantsSurviveTranslation;

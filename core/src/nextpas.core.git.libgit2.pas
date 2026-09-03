@@ -7,6 +7,7 @@ interface
 uses nextpas.core.base, nextpas.core.fs, nextpas.core.git.intf, nextpas.core.git.base,
   nextpas.core.git.libgit2.base,
   nextpas.core.git.libgit2.types, nextpas.core.git.libgit2.ffi.consts,
+  nextpas.core.git.libgit2.ffi.structs, nextpas.core.git.libgit2.ffi.options,
   nextpas.core.git.libgit2.backend, nextpas.core.git.libgit2.binding;
 
 type
@@ -177,7 +178,6 @@ function NewGitManager: IGitManager;
 implementation
 
 uses
-  nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.git.factory,
   nextpas.core.git.native.refs,

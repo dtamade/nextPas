@@ -564,6 +564,7 @@ var Data, Pack: TBytes;
     Off: SizeInt;
     I: Integer;
     PackHash, PackPath, IdxPath, RefPath, NeedMkdir: string;
+    LHeadText, LHeadTarget: string;
     Idx: TBytes;
     Trail: TBytes;
 begin
@@ -590,12 +591,31 @@ begin
   begin
     if Hdr.Refs[I].Name = 'HEAD' then
     begin
-      // store HEAD as detached? But writing HEAD file with oid may overwrite symref.
-      // Check if HEAD is symref in target: preserve? For unbundle we write detached HEAD only if target has no HEAD.
-      // Simpler: write refs/heads from bundle's HEAD is not a branch; store as HEAD oid if target HEAD missing.
-      // We'll write refs/bundle/HEAD for inspection, and also update HEAD if it doesn't exist.
+      // bundle created from HEAD carries a literal 'HEAD' ref. A fresh bare
+      // target already has a HEAD symref, so resolve it and land the oid on
+      // the symref target branch (fetch-into-bare semantics); only write a
+      // detached HEAD when the target has no HEAD at all.
       if not FileExists(PathJoin([ATargetGitDir, 'HEAD'])) then
-        WriteFileText(PathJoin([ATargetGitDir, 'HEAD']), GitOidToHex(Hdr.Refs[I].Oid) + #10);
+        WriteFileText(PathJoin([ATargetGitDir, 'HEAD']), GitOidToHex(Hdr.Refs[I].Oid) + #10)
+      else
+      begin
+        LHeadText := '';
+        try
+          LHeadText := Trim(ReadFileText(PathJoin([ATargetGitDir, 'HEAD'])));
+        except
+        end;
+        if Copy(LHeadText, 1, 5) = 'ref: ' then
+        begin
+          LHeadTarget := Trim(Copy(LHeadText, 6, MaxInt));
+          if (LHeadTarget <> '') and not FileExists(PathJoin([ATargetGitDir, LHeadTarget])) then
+          begin
+            RefPath := PathJoin([ATargetGitDir, LHeadTarget]);
+            NeedMkdir := PathDir(RefPath);
+            if NeedMkdir <> '' then MkdirAll(NeedMkdir, PermDirDefault);
+            WriteFileText(RefPath, GitOidToHex(Hdr.Refs[I].Oid) + #10);
+          end;
+        end;
+      end;
       // also write a loose file for inspection
       RefPath := PathJoin([ATargetGitDir, 'refs', 'bundle', 'HEAD']);
       NeedMkdir := PathDir(RefPath);
