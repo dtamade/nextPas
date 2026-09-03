@@ -199,6 +199,14 @@ type
     procedure RequestCancel;
   end;
 
+  {** 连接句柄内标记：PRAGMA foreign_keys=ON 去重（wallet 热租约零锁/零哈希）。
+      可选能力：sqlite 实现，pg/mysql 忽略；QueryInterface 探测，未实现 = 回退单次 Exec。 *}
+  IDbForeignKeysControl = interface
+    ['{F7C2E1A0-3B2D-4E8F-A9C1-5D6E7F8A9B0C}']
+    function ForeignKeysOn: Boolean;
+    procedure SetForeignKeysOn(const AValue: Boolean);
+  end;
+
   {** 后端能力自述（V3-B1）：只描述统一层契约内的能力面，不做元数据
       全家桶。可选能力接口——QueryInterface 探测，未实现 = 连接来自
       早于本契约的适配器；门面 DbCapabilities 统一探测并允许 nil。
@@ -314,6 +322,9 @@ type
       BusyTimeout、Checkpoint、LISTEN/NOTIFY 等未覆盖特性。 }
     function Raw: Pointer;
   end;
+
+  {** 参数化连接回调（B13 租约纪律，owner=intf）：连接由框架作实参传入，回调体零捕获，语句结束即归还。单源于 db.intf（IDbConnection 所在），L2 pool 直接 uses 本面零 L2→L3 上向；tx 侧 thin alias。 *}
+  TDbConnProc = reference to procedure(const AConn: IDbConnection);
 
 implementation
 

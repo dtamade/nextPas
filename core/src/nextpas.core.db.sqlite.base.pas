@@ -14,6 +14,12 @@ uses
   nextpas.core.base;
 
 const
+  { 透明语句缓存默认容量（LRU，键 = 原始 SQL 文本）；0 = 关闭缓存。
+    单源归本后端 owner nextpas.core.db.sqlite.base，复用 bytes.ops
+    单源路径零拷贝键（不以 db.base 聚合跨后端语义）。 }
+  DEFAULT_SQLITE_STMT_CACHE_CAPACITY = 64;
+
+const
   { Result codes (sqlite3.h) — 单源词汇（err 侧别名引用本表，不自持副本） }
   SQLITE_OK          = 0;
   SQLITE_ERROR       = 1;
@@ -66,6 +72,10 @@ const
   { Destructor-style values for text/blob binds }
   SQLITE_STATIC    = 0;
   SQLITE_TRANSIENT = -1;
+
+  { F-10 busy_timeout 缺省（文件库并发读写排队）；单源于本单元，
+    供 sqlite.pool 与 db 门面 OpenSqlitePool 便利形态共用，零漂移（5000ms）。 }
+  DefaultSqliteBusyTimeoutMs = 5000;
 
 type
   TSqliteHandle = Pointer;   // sqlite3*
@@ -120,6 +130,18 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.bytes.ops;
+
+const
+  { 编译期单源门禁：串/字节零拷贝单源为 bytes.ops（BYTES_OPS_SINGLE_SOURCE），漂移编译期拦截 }
+  SQLITE_BASE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
+  SQLITE_BASE_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
+
+{$IF not BYTES_OPS_SINGLE_SOURCE}
+  {$FATAL 'bytes.ops single source drift: sqlite.base must reuse bytes.ops'}
+{$IFEND}
 
 { C5 安全缺省（文件库）：WAL + synchronous=NORMAL + 外键强制。
   逐字段显式赋值；仅在消费方显式传入 pragmas 重载时生效——

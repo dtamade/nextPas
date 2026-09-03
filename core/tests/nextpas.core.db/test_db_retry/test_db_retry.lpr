@@ -113,7 +113,7 @@ begin
   begin
     Dec(FFailCommitsLeft);
     FPending := 0;                       { 提交失败 = 未提交副作用全灭 }
-    raise EDbError.CreateFullPg('40P01', 'ERROR', '',
+    raise NewDbErrorPg('40P01', 'ERROR', '',
       'deadlock detected', decTransaction, dckNone);
   end;
   FCommitted := FCommitted + FPending;
@@ -225,28 +225,28 @@ procedure TestDefaultPredicateClassification;
 var
   E: EDbError;
 begin
-  E := EDbError.CreateFullPg('40P01', 'ERROR', '', 'deadlock',
+  E := NewDbErrorPg('40P01', 'ERROR', '', 'deadlock',
     decTransaction, dckNone);
   try
     Check(DbRetryableDefault(E), 'pred: deadlock retryable');
   finally
     E.Free;
   end;
-  E := EDbError.CreateFullPg('40001', 'ERROR', '', 'serialization failure',
+  E := NewDbErrorPg('40001', 'ERROR', '', 'serialization failure',
     decTransaction, dckNone);
   try
     Check(DbRetryableDefault(E), 'pred: serialization retryable');
   finally
     E.Free;
   end;
-  E := EDbError.CreateFullSqlite(DB_SQLITE_BUSY, 0, decTimeout, dckNone,
+  E := NewDbErrorSqlite(DB_SQLITE_BUSY, 0, decTimeout, dckNone,
     'database is locked');
   try
     Check(DbRetryableDefault(E), 'pred: sqlite busy retryable');
   finally
     E.Free;
   end;
-  E := EDbError.CreateFullPg('57014', 'ERROR', '', 'statement timeout',
+  E := NewDbErrorPg('57014', 'ERROR', '', 'statement timeout',
     decTimeout, dckNone);
   try
     Check(not DbRetryableDefault(E),
@@ -261,7 +261,7 @@ begin
   finally
     E.Free;
   end;
-  E := EDbError.CreateFullSqlite(2067, 0, decConstraint, dckUnique,
+  E := NewDbErrorSqlite(2067, 0, decConstraint, dckUnique,
     'unique violation');
   try
     Check(not DbRetryableDefault(E), 'pred: constraint is not transient');
@@ -297,7 +297,7 @@ begin
       if FailLeft > 0 then
       begin
         Dec(FailLeft);
-        raise EDbError.CreateFullSqlite(2067, 0, decConstraint, dckUnique,
+        raise NewDbErrorSqlite(2067, 0, decConstraint, dckUnique,
           'unique race');
       end;
       LObj.Pending := LObj.Pending + 1;

@@ -17,11 +17,20 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
+  nextpas.core.text.number,
   nextpas.core.db.pg.base,
   nextpas.core.db.pg.ffi,
   nextpas.core.db.pg.loader,
-  nextpas.core.db.sqlscan;
+  nextpas.core.text.sqlscan;
+
+const
+  PG_CONN_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
+
+{$IF not BYTES_OPS_SINGLE_SOURCE}
+  {$FATAL 'bytes.ops single source drift: db.pg.conn must reuse bytes.ops'}
+{$IFEND}
 
 type
   TPgConn = class;
@@ -89,6 +98,7 @@ type
   TPgPreparedEntry = record
     Sql: string;              { bytea cast 后的规范形（缓存键） }
     Name: string;             { 服务端 prepared statement 名 }
+    Hash: THashCode;          { FNV-1a 32 预筛哈希，命中零字符串比对前过滤 }
   end;
 
   TPgConn = class
@@ -102,6 +112,7 @@ type
       事务性，靠 prepare 期 42P05 自愈兜底。 }
     FStmtCapacity: Integer;
     FStmts: array of TPgPreparedEntry;
+    FStmtsCount: Integer;     { 逻辑长度；Length(FStmts)=容量，指数扩容摊还 O(1) }
     FStmtSeq: Integer;        { 名字单调递增不复用 }
     FStmtHits: Int64;
     FStmtMisses: Int64;
@@ -180,21 +191,32 @@ end;
        Dollar-quoted bodies ($$ ... $$) are not used by this module's
        repository SQL; a '$$' in a literal would count, which is
        acceptable for controlled SQL. *}
-function MaxParamIndex(const ASql: string): Integer;
+function MaxParamIndex(const ASql: string): Integer; inline;
 begin
-  { V3-C6：词法扫描收敛至 db.sqlscan 共享引擎（行为逐字节兼容） }
-  Result := SqlScanMaxPlaceholderIndex(ASql, DBSQLSCAN_PG, '$');
+  { V3-C6：词法扫描收敛至 text.sqlscan L1 单源（行为逐字节兼容） }
+  // perf: inline 零拷贝直连 L1 单遍引擎（零二层别名间接已消除，直连 text.sqlscan 单源），bytes.ops 单源复用
+  // note: db.sqlscan 已物理删除，直连 L1 单源免一跳转发
+  Result := nextpas.core.text.sqlscan.SqlScanMaxPlaceholderIndex(ASql, nextpas.core.text.sqlscan.SQLSCAN_PG, '$');
 end;
 
 {** @desc 对 ASql 中列出的 $N 参数追加 ::bytea cast。扫描状态机与
        MaxParamIndex 完全一致（跳过字面量/注释），保证索引对齐；
        dollar-quote 体不识别——与 MaxParamIndex 同一受控边界。 *}
 function AppendByteaCasts(const ASql: string;
-  const AIndexes: array of Integer): string;
+  const AIndexes: array of Integer): string; inline;
 begin
-  { V3-C6：词法扫描收敛至 db.sqlscan 共享引擎（行为逐字节兼容） }
-  Result := SqlScanDecorate(ASql, DBSQLSCAN_PG, '$', AIndexes,
+  { V3-C6：词法扫描收敛至 text.sqlscan L1 单源（行为逐字节兼容） }
+  // perf: inline 零拷贝直连 L1 单遍引擎（零二层别名间接已消除，直连 text.sqlscan 单源），bytes.ops 单源复用
+  // note: db.sqlscan 已物理删除，直连 L1 单源免一跳转发
+  Result := nextpas.core.text.sqlscan.SqlScanDecorate(ASql, nextpas.core.text.sqlscan.SQLSCAN_PG, '$', AIndexes,
     '::bytea');
+end;
+
+{ ===== pg statement cache growth — bytes.ops single source ===== }
+function PgStmtGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline;
+begin
+  // perf: inline 零拷贝指数扩容单源（MIN_GROW 4, *2），64 容量下摊还 O(1) 避免 O(N^2) 搬移；复用 bytes.ops 单源
+  Result := BytesCalcGrowCapWithMin(AOld, ARequired, 4);
 end;
 
 { ===== TPgConn ===== }
@@ -234,12 +256,15 @@ end;
 
 { ===== V3-C1 语句缓存内部面 ===== }
 
-function TPgConn.LookupPrepared(const ASql: string): string;
+function TPgConn.LookupPrepared(const ASql: string): string; inline;
 var
   I: Integer;
+  LHash: THashCode;
 begin
-  for I := 0 to High(FStmts) do
-    if FStmts[I].Sql = ASql then
+  // perf: inline 零拷贝 FNV-1a 哈希预筛（base.HashString 单源，batch 8 展开）+ 命中时单次字符串比对；O(Cap) 4字节哈希比对替代 O(Cap) 全串扫描，单连接单线程零锁，仅逻辑长度 FStmtsCount
+  LHash := HashString(ASql);
+  for I := 0 to FStmtsCount - 1 do
+    if (FStmts[I].Hash = LHash) and (FStmts[I].Sql = ASql) then
     begin
       Result := FStmts[I].Name;
       Inc(FStmtHits);
@@ -256,29 +281,46 @@ begin
 end;
 
 procedure TPgConn.RegisterPrepared(const ASql, AName: string);
+var
+  LCap: SizeUInt;
 begin
-  SetLength(FStmts, Length(FStmts) + 1);
-  FStmts[High(FStmts)].Sql := ASql;
-  FStmts[High(FStmts)].Name := AName;
+  // perf: 指数扩容摊还 O(1)（MIN_GROW 4, *2，经 bytes.ops 单源），64 容量下避免 O(N^2) 搬移；单 Move 零拷贝，容量=Length(FStmts)，逻辑长度=FStmtsCount
+  if FStmtsCount >= Length(FStmts) then
+  begin
+    LCap := PgStmtGrowCap(SizeUInt(Length(FStmts)), SizeUInt(FStmtsCount + 1));
+    SetLength(FStmts, Integer(LCap));
+  end;
+  FStmts[FStmtsCount].Sql := ASql;
+  FStmts[FStmtsCount].Name := AName;
+  FStmts[FStmtsCount].Hash := HashString(ASql);
+  Inc(FStmtsCount);
 end;
 
 procedure TPgConn.ForgetPrepared(const ASql: string);
 var
   I, K: Integer;
+  LHash: THashCode;
 begin
-  for I := 0 to High(FStmts) do
-    if FStmts[I].Sql = ASql then
+  // perf: 哈希预筛同 LookupPrepared（base.HashString 单源），避免 O(Cap) 全串扫描
+  LHash := HashString(ASql);
+  for I := 0 to FStmtsCount - 1 do
+    if (FStmts[I].Hash = LHash) and (FStmts[I].Sql = ASql) then
     begin
-      for K := I to High(FStmts) - 1 do
+      for K := I to FStmtsCount - 2 do
         FStmts[K] := FStmts[K + 1];
-      SetLength(FStmts, Length(FStmts) - 1);
+      // 稳定性：释放尾槽重复引用，避免字符串滞留；保留容量不缩容，指数扩容摊还不丢
+      if FStmtsCount > 0 then
+      begin
+        FStmts[FStmtsCount - 1] := Default(TPgPreparedEntry);
+        Dec(FStmtsCount);
+      end;
       Exit;
     end;
 end;
 
 procedure TPgConn.EvictPreparedIfFull;
 begin
-  if (FStmtCapacity <= 0) or (Length(FStmts) <= FStmtCapacity) then
+  if (FStmtCapacity <= 0) or (FStmtsCount <= FStmtCapacity) then
     Exit;
   { 头 = 最旧；DEALLOCATE 与 PREPARE 同为事务性——若驱逐发生在
     回滚的事务内，服务端语句复活而登记已删，后续 prepare 撞 42P05
@@ -289,16 +331,18 @@ end;
 
 procedure TPgConn.ClearPrepared;
 begin
-  if Length(FStmts) > 0 then
+  if FStmtsCount > 0 then
     Exec('DEALLOCATE ALL');
   SetLength(FStmts, 0);
+  FStmtsCount := 0;
   FStmtHits := 0;
   FStmtMisses := 0;
 end;
 
-function TPgConn.PreparedCount: Integer;
+function TPgConn.PreparedCount: Integer; inline;
 begin
-  Result := Length(FStmts);
+  // perf: inline 零拷贝直接取逻辑长度，不触容量
+  Result := FStmtsCount;
 end;
 
 function TPgConn.PreparedHitRate: Double;
@@ -409,13 +453,33 @@ begin
 end;
 
 procedure TPgQuery.BindInt64(const AIndex: Integer; const AValue: Int64);
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
-  BindText(AIndex, IntToStr(AValue));
+  // perf: 栈缓冲 IntToBuffer 单 Move 零拷贝 via text.number single source (bytes.ops BYTES_OPS_SINGLE_SOURCE), 单次堆分配复用 (批量写入零二次分配), not inline per red line 1
+  if (AIndex < 1) or (AIndex > FParamCount) then
+    raise EPgError.CreateFmt('绑定参数 %d 越界（共 %d 个占位符）', [AIndex, FParamCount]);
+  LLen := IntToBuffer(AValue, @LBuf[0]);
+  SetLength(FParamStorage[AIndex - 1], LLen);
+  if LLen > 0 then
+    Move(LBuf[0], FParamStorage[AIndex - 1][1], SizeUInt(LLen));
+  FParamValues[AIndex - 1] := PAnsiChar(AnsiString(FParamStorage[AIndex - 1]));
 end;
 
 procedure TPgQuery.BindDouble(const AIndex: Integer; const AValue: Double);
+var
+  LBuf: array[0..63] of AnsiChar;
+  LLen: Int32;
 begin
-  BindText(AIndex, FloatToStr(AValue));
+  // perf: 栈缓冲 FloatToBuffer 单 Move 零拷贝 via text.number single source (bytes.ops BYTES_OPS_SINGLE_SOURCE), 单次堆分配复用 (批量写入零二次分配), not inline per red line 1
+  if (AIndex < 1) or (AIndex > FParamCount) then
+    raise EPgError.CreateFmt('绑定参数 %d 越界（共 %d 个占位符）', [AIndex, FParamCount]);
+  LLen := FloatToBuffer(AValue, @LBuf[0]);
+  SetLength(FParamStorage[AIndex - 1], LLen);
+  if LLen > 0 then
+    Move(LBuf[0], FParamStorage[AIndex - 1][1], SizeUInt(LLen));
+  FParamValues[AIndex - 1] := PAnsiChar(AnsiString(FParamStorage[AIndex - 1]));
 end;
 
 procedure TPgQuery.AddCastIndex(const AIndex: Integer);

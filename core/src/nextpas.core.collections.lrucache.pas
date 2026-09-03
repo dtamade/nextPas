@@ -90,7 +90,9 @@ type
     function EvictLeastRecent(aCount: SizeUInt): SizeUInt;
     function Peek(const aKey: K; out aValue: V): Boolean;
     function Remove(const aKey: K): Boolean;
+    function TryTake(const aKey: K; out aValue: V): Boolean;
     function Contains(const aKey: K): Boolean;
+    function PeekLeastRecent(out aKey: K; out aValue: V): Boolean;
   end;
 
 implementation
@@ -570,6 +572,55 @@ begin
   end;
 end;
 
+function TLruCache.TryTake(const aKey: K; out aValue: V): Boolean;
+var
+  LNode: PNode;
+  LPrevCtx: Pointer;
+  LFound: Boolean;
+begin
+  // perf: 原子 Get+Remove 单哈希（500k ops 下减半哈希与键比对，零额外拷贝；复用 FMap 单次 TryGetValue，Hit/Miss 计数与 Get 一致）
+  if FUseCustomLookup then
+  begin
+    LPrevCtx := GLruCacheActive;
+    GLruCacheActive := Self;
+    try
+      LFound := FMap.TryGetValue(aKey, LNode);
+    finally
+      GLruCacheActive := LPrevCtx;
+    end;
+  end
+  else
+    LFound := FMap.TryGetValue(aKey, LNode);
+  if LFound then
+  begin
+    aValue := LNode^.Value; // inline AddRef（接口/串托管），零分配转移所有权
+    Inc(FHitCount);
+    RemoveNode(LNode);
+    if FUseCustomLookup then
+    begin
+      LPrevCtx := GLruCacheActive;
+      GLruCacheActive := Self;
+      try
+        FMap.Remove(aKey);
+      finally
+        GLruCacheActive := LPrevCtx;
+      end;
+    end
+    else
+      FMap.Remove(aKey);
+    // stability: 先清 Value 避免 DestroyNode 重复 Release 刚移交的接口
+    LNode^.Value := Default(V);
+    DestroyNode(LNode);
+    Dec(FSize);
+    Result := True;
+  end
+  else
+  begin
+    Inc(FMissCount);
+    Result := False;
+  end;
+end;
+
 function TLruCache.Contains(const aKey: K): Boolean;
 var
   LPrevCtx: Pointer;
@@ -586,6 +637,16 @@ begin
   end
   else
     Result := FMap.ContainsKey(aKey);
+end;
+
+function TLruCache.PeekLeastRecent(out aKey: K; out aValue: V): Boolean;
+begin
+  // perf: inline O(1) LRU peek tail zero-copy (no MRU move, no hash), for byte-capped eviction
+  if FTail = nil then
+    Exit(False);
+  aKey := PNode(FTail)^.Key;
+  aValue := PNode(FTail)^.Value;
+  Result := True;
 end;
 
 end.

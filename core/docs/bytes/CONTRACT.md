@@ -73,10 +73,10 @@ function CreateBytesBuilderWith(const AAllocator: TMemAllocator; const AInitialC
 | `SpanClone(Span): TBytes` | 克隆 |
 | `SpanConcatMany/BysConcatMany` | 多段拼接 |
 | `BytesEqual/Compare/IndexOf/Concat/StartsWith/EndsWith` | TBytes 便捷面（inline → Span） |
-| `BytesAppend/BytesToString/StringToBytes` | TBytes 追加与字符串互转 |
+| `BytesAppend/BytesToString/StringToBytes` | TBytes 追加与字符串互转（`BytesAppend*`/`BytesToString`/`StringToBytes`/`BytesSliceToString` 非 inline，红线 1：索引元素喂 Move 禁 inline，零拷贝 Move 单次分配 + 容量守卫倍增（`MIN_GROW 64, *2`，FPC shrink 隐式保容，循环追加摊还 O(1)，避免 O(n²)）；其余 Span 便捷面 inline） |
 | `SpanClone/SpanCopySlice` | 仅两处分配；其余 Span 为非拥有视图 |
 
-约定：`bytes.ops` 为 Span/TBytes 比较与切片的唯一实现源；门面与其它实现均 inline 转发，不复制逻辑。
+约定：`bytes.ops` 为 Span/TBytes 比较与切片/转换的唯一实现源（`BYTES_OPS_SINGLE_SOURCE` 编译期单出口）；`BytesToString`/`StringToBytes`/`StripLeadingZero*` 仅在 `bytes.ops` 实现，门面（`bytes.pas`）与 `text.conv` 以 `inline` 薄转发 + 哨兵 `BYTES_OPS_SINGLE_SOURCE`/`TEXT_CONV_SINGLE_SOURCE` 与 `initialization` 指针断言守卫单源，禁止分叉；其余除红线 1 涉及的 `Move` 族（`BytesAppend*`/`BytesToString`/`StringToBytes`/`BytesSliceToString`）外均 `inline` 转发，不复制逻辑。`BytesAppend*` 内建容量守卫倍增，极高频仍推荐 `BytesReserve`/`BytesEnsureCapacity` 预分配或 `IBytesBuilder`/`BytesConcatMany` 批量零拷贝。
 
 ### 1.4 字节序与游标编解码
 
@@ -105,7 +105,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - **[INV-2]** IBytesBuilder 按需倍增增长（`capacity ≥ length`，下界 `BYTES_BUILDER_MIN_GROW`，溢出钳制）；`Clear` 保留容量；`Truncate` 仅缩 `FLen`。
 - **[INV-3]** `NATIVE_ENDIAN` 编译时确定（当前 `endLittle`）；`ToEndian/FromEndian` 在 native 时直通无翻转。
 - **[INV-4]** 越界受查：`SpanCopySlice` 越界 → `EOutOfRange`；IByteCursor 越界 → `EIndexOutOfRangeError`；`Try*` 变体返回 `False` 不抛异常、不推进。
-- **[INV-5]** 单源复用：比较/查找经 `bytes.ops`（`MemEqual/MemCompare/MemFindByte/BytesIndexOf` + SIMD）；门面全部 `inline` 转发，不分叉实现。
+- **[INV-5]** 单源复用（编译期单出口）：比较/查找/转换经 `bytes.ops`（`MemEqual/MemCompare/MemFindByte/BytesIndexOf` + SIMD，`BytesToString`/`StringToBytes`/`StripLeadingZero*` 仅 `bytes.ops`）；`BYTES_OPS_SINGLE_SOURCE` 哨兵 + `bytes.pas`/`text.conv` `inline` 薄转发 + `initialization` 断言为编译期单出口校验；门面除 `BytesAppend*`/`BytesToString`/`StringToBytes`/`BytesSliceToString`（红线 1 禁 inline）外全部 `inline` 转发，不分叉实现；`BytesAppend*` 内建容量守卫倍增（`MIN_GROW 64, *2`，隐式保容摊还 O(1)）+ 批量路径 `BytesReserve`/`IBytesBuilder`/`BytesConcatMany` 为零拷贝预分配单源。
 - **[INV-6]** 资源释放不丢：`TBytesBuilderImpl.Destroy` 与 `TByteStreamBuf.Destroy` 以 sized `FreeMemOf/ReallocMemOf` 经注入 `TMemAllocator/IAllocator` 释放；`Clear/Consume` 不丢块；`try-finally/Free` 语义由调用方持有接口/对象生命周期保证。
 - **[INV-7]** L0-L3 分层：bytes 为 L1，仅依赖 L0（`base/mem/platform/simd`）及文档化 `bytes↔text↔encoding` seam（interface/implementation 分区引用，不形成循环）；门面不含逻辑。
 
@@ -134,7 +134,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - Span 操作：非拥有视图，不分配（Concat/CopySlice/Clone 除外返回独立 `TBytes`）。
 - IBytesBuilder：内部块经 `TMemAllocator` 增长，`Grow` 倍增；`ToBytes` 返回拷贝；`WrittenSpan` 为当前写入区的零拷贝视图（随后续 Append 失效）。
 - TByteStreamBuf：块经 `IAllocator`；`EnsureCapacity` 幂等；`ReserveAppend` 先压实后倍增；`Consume/Clear` 保留容量；`Destroy` sized free。
-- 零拷贝：`Move/FillChar` 直操内存；门面与 `Bytes*` 便捷面均为 `inline` 转发，无额外拷贝。
+- 零拷贝：`Move/FillChar` 直操内存；门面与 `Bytes*` 便捷面除红线 1 禁 inline 族外均为 `inline` 转发，无额外拷贝；`BytesAppend*`/`BytesToString` 族零拷贝 `Move` + 容量守卫倍增（`heaptrc 0`，摊还 O(1)），批量路径经 `BytesReserve`/`IBytesBuilder`/`ConcatMany` 单分配批量 Move。
 
 ---
 
@@ -156,4 +156,5 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-08-10 | 1.2 | bytes.ops 单源编译期单出口（BYTES_OPS_SINGLE_SOURCE 哨兵 + facade/text.conv inline 转发 + init 断言）与 BytesAppend* 容量守卫倍增（MIN_GROW 64, *2 隐式保容摊还 O(1)，O(n²) 根治） | Claude |
 | 2026-07-26 | 1.1 | 时效刷新：补齐 8 文件门面（cursor/stream/pathvalid）、对齐 IBytesBuilder/Try* 真实签名、收敛 Span/Binary 单源与 inline/零拷贝不变量、资源释放（sized FreeMemOf）与 L1 分层四件套、测试 1→3 目录 | Claude |

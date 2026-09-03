@@ -25,7 +25,7 @@
 | OceanBase（MySQL 租户） | mysql 协议 | `ConnectMysql` | MySQL 线协议兼容 |
 | TiDB | mysql 协议 | `ConnectMysql` | MySQL 协议兼容 |
 | TDSQL-PG / -MySQL | 对应协议 | 同上 | 各自兼容形态 |
-| 达梦 DM8 | ODBC | `ConnectOdbc` | 无原生 pg/mysql 协议；官方 ODBC 驱动 |
+| 达梦 DM8 | DPI 原生（P2 优先，`ConnectDm`/`DbOpen('dm')`，`Savepoints=True`）/ ODBC 备选（P1，`ConnectOdbc`，`Savepoints=False` 降级） | `ConnectDm` / `ConnectOdbc` | DPI 原生真归一 `ClassifyDm` + 真 SAVEPOINT，ODBC 诚实降级；选型需 savepoint/精确归一时用 DPI，否则 ODBC 亦可（详 §2.4 / CONTRACT §2.21） |
 | GBase 8s / 神通等 | ODBC | `ConnectOdbc` | 以 ODBC 驱动为主要接入面 |
 | 其他有 ODBC 驱动的库 | ODBC | `ConnectOdbc` | 第四统一后端的设计初衷 |
 

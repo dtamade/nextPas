@@ -129,12 +129,41 @@ procedure ClassifyRedis(const AErrType: string;
 procedure ClassifyDm(const ACode: Integer; const ASqlState: string;
   out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
 
+{ 纯数据载体工厂（owner 反哺：base 零后端细节，db.err 薄转发）。
+  L2 依赖根 EDbError 仅暴露泛化 CreateFull；后端细节（Backend 枚举钉死、
+  码位/状态槽复用）由本 owner 单源封装，适配层经此构造零聚合 base。
+  全部 inline 薄转发至 EDbError.CreateFull 单源，零拷贝（托管串 refcount
+  浅拷贝），BYTES_OPS_SINGLE_SOURCE 由外层工厂保证（本单元纯工厂零分配）。 }
+function NewDbErrorSqlite(ACode, AExtended: Integer;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind;
+  const AMessage: string): EDbError; inline;
+function NewDbErrorPg(const ASqlState, ASeverity, ADetail, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+function NewDbErrorPgEx(const ASqlState, ASeverity, ADetail, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind;
+  const ASchemaName, ATableName, AColumnName: string): EDbError; inline;
+function NewDbErrorMy(ACode: Integer; const ASqlState, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+function NewDbErrorOdbc(ANativeCode: Integer; const ASqlState, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+function NewDbErrorRedis(const AErrType, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+function NewDbErrorDm(ACode: Integer; const ASqlState, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+
 { IDbSavepointControl 契约输入守卫：名字必须 [A-Za-z0-9_]+
   （会被内插进 SAVEPOINT 语句），违规 fail-closed 抛 EDbError。 }
 
 procedure ValidateDbSavepointName(const ABackend: TDbKind; const AName: string);
 
 implementation
+
+uses
+  nextpas.core.bytes.ops;
+
+{$IF not BYTES_OPS_SINGLE_SOURCE}
+  {$FATAL 'bytes.ops single source drift: db.err must reuse bytes.ops'}
+{$IFEND}
 
 procedure ClassifySqlite(const ACode, AExtended: Integer;
   out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
@@ -477,6 +506,50 @@ begin
     else if Copy(ASqlState, 1, 2) = '28' then ACategory := decAuth
     else if Copy(ASqlState, 1, 2) = '42' then ACategory := decSyntax;
   end;
+end;
+
+function NewDbErrorSqlite(ACode, AExtended: Integer;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind;
+  const AMessage: string): EDbError; inline;
+begin
+  Result := EDbError.CreateFull(dbkSqlite, ACode, AExtended, '', '', '', ACategory, AConstraint, AMessage);
+end;
+
+function NewDbErrorPg(const ASqlState, ASeverity, ADetail, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+begin
+  Result := EDbError.CreateFull(dbkPostgres, 0, 0, ASqlState, ASeverity, ADetail, ACategory, AConstraint, AMessage);
+end;
+
+function NewDbErrorPgEx(const ASqlState, ASeverity, ADetail, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind;
+  const ASchemaName, ATableName, AColumnName: string): EDbError; inline;
+begin
+  Result := EDbError.CreateFull(dbkPostgres, 0, 0, ASqlState, ASeverity, ADetail, ACategory, AConstraint, ASchemaName, ATableName, AColumnName, AMessage);
+end;
+
+function NewDbErrorMy(ACode: Integer; const ASqlState, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+begin
+  Result := EDbError.CreateFull(dbkMysql, ACode, 0, ASqlState, '', '', ACategory, AConstraint, AMessage);
+end;
+
+function NewDbErrorOdbc(ANativeCode: Integer; const ASqlState, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+begin
+  Result := EDbError.CreateFull(dbkOdbc, ANativeCode, 0, ASqlState, '', '', ACategory, AConstraint, AMessage);
+end;
+
+function NewDbErrorRedis(const AErrType, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+begin
+  Result := EDbError.CreateFull(dbkRedis, 0, 0, AErrType, '', '', ACategory, AConstraint, AMessage);
+end;
+
+function NewDbErrorDm(ACode: Integer; const ASqlState, AMessage: string;
+  ACategory: TDbErrorCategory; AConstraint: TDbConstraintKind): EDbError; inline;
+begin
+  Result := EDbError.CreateFull(dbkDm, ACode, 0, ASqlState, '', '', ACategory, AConstraint, AMessage);
 end;
 
 procedure ValidateDbSavepointName(const ABackend: TDbKind;

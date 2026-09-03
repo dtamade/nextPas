@@ -39,6 +39,15 @@
 
 **复核 2026-08-29**：`main 3a23647bd` 基线上复跑 `test_text 33 / bytes 35 / redis 12 / pool 21 / mysql 7 / git_native 114 / time_bucket 7 / multipart 13 heaptrc0` 与 `bench_kv 10 validate 0 allocs`（在册 `129/277/1102 ns`，当前 `123/354/1130 ns` 紧贴在册，0 allocs 稳，`3a23647` 含 time.bucket 单分配 + bytes 单源 + window 3.8 + tlspas P-384），`make hygiene pass` / `diff-check 0` / `Trim( 2 行 text.utils 单源 + git Hex/Bytes/fetch + bytes.ops 单源`，证据见 `benchmarks.md 验证锚点` 与 `{SCRATCH}`。
 
+## 2.1 增补 2026-09-01 — DM DPI 原生增量（stage-review 收口，v1.3）
+
+> 本增补不推翻 2026-08-28 封版裁定（R1-R5 递延仍有效），仅将 2026-08-30 落地的 `V3-D1 DM DPI 原生`（`nextpas.core.db.dm.{base,ffi,loader,adapter}` 四单元 + `factory.builtin` 注册 `dm` + `ConnectDm/DbOpen('dm')`）追认为独立增量，`CONTRACT v1.2→1.3`、能力矩阵/Roadmap 同步收口。
+
+- **范围**：DM DPI 仅追加第六后端，不改动 R0-2/R0-3/R1-1 四档基线；`benchmarks.md` 四档→六后端口径由 CONTRACT §2.21 增补登记
+- **能力**：`SupportsSavepoints=True` 真原生（ODBC 路径保持 `False` 诚实降级）、`ClassifyDm` 真归一、`StmtCache LRU`、`BulkCopy` 单事务路径
+- **门禁**：`test_db_dm_adapter` 离线全绿 + `NEXTPAS_DM_TEST_CONN` 真机门控（缺席 Skip），`make hygiene/diff-check 0` 维持
+- **决策**：`national-db-guide` §1 决策表达梦行改为双路径（DPI 优先 / ODBC 备选），与 CONTRACT §2.21 互证
+
 ## 3. 证据索引
 
 | 证据 | 路径 |

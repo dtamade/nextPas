@@ -37,7 +37,9 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `coroutine` | L3 | coroutine scheduler | yes | L0-L2 | focused-runtime |
 | `crypto` | L2 | cryptography | yes | L0-L1 plus backend owners | source-contract + focused-runtime |
 | `csv` | L2 | CSV parser/writer | yes | L0-L1 | focused-runtime |
-| `db` | L3 | unified database access family: IDbConnection/IDbQuery over sqlite+pg backends (`nextpas.core.db.*`; `nextpas.core.db.sqlite.*` and `nextpas.core.db.pg.*` are the L2 backend implementations) | yes | L0-L2 (sqlite/pg owners are in-family) | focused-runtime |
+| `db` | L3 家族（L3 门面/适配 L3；base/intf/pool/migrate/batch/perf/trace 等 L2 基础设施严格单向 L0-L2，无上向；可裁剪边界=直连 adapter Connect* 或按需 factory.register.* 单后端注册单元，显式锁定于 `core/docs/db/CONTRACT.md §1/§2.14`，`db.pool`/`db.migrate` 已下沉 L2 无 L3→L3，见 design-conventions L890） | unified database family: IDbConnection/IDbQuery over sqlite/pg/mysql/odbc/redis/dm 6 backends (`nextpas.core.db.*`; L2 backends `db.sqlite`/`db.pg`/`db.mysql`/`db.odbc`/`db.redis`/`db.dm` + L2 infra base/intf/pool/migrate/batch/perf/trace; wallet independent `nextpas.core.wallet` L3 pure aggregation, compat aliases physically deleted 2026-09-02) | yes | L0-L2 (L3 family; L2 infra base/intf/pool/migrate/batch/perf strictly one-way, trimmable boundary = direct adapter or factory.register.* single-backend see CONTRACT §1/§2.14) | focused-runtime |
+| `wallet` | L3 | wallet ledger/balance/redeem (L3 独立 Owner=wallet lane，四件套 wallet.base←wallet.intf←wallet.impl←wallet 纯聚合，物理 wallet.impl 单源；兼容别名 db.wallet / billing.wallet / db.wallet.impl 已物理删除 2026-09-02，文件已移除，不再计入 src 模块清单，统一使用 nextpas.core.wallet，Owner centralized见 wallet/CONTRACT.md §0) | yes | L0-L2 plus identity/time/text/bytes owners plus db infra `db.pool`/`db.migrate` (L2, strict downward, no L3→L3; see db/CONTRACT §1/§2.22) | focused-runtime |
+| `billing` | L3 | 通用计费域独立家族（L3 独立 Owner=billing lane，四件套 billing.base←billing.intf←billing.impl←billing 已落地，独立于 wallet，L0-L2 严格单向，bytes.ops/text.utils 单源 inline/零拷贝；billing.wallet 已物理删除 2026-09-02，文件已移除，统一使用 nextpas.core.wallet） | yes | L0-L2 plus text/bytes owners (strict downward, no L3→L3) | draft |
 | `deliverability` | L2 | SPF/DKIM/DMARC email authentication | yes | L0-L1 plus crypto/hash/dns owner | focused-runtime |
 | `dns` | L2 | DNS record codec + UDP resolver | yes | L0-L1 plus net owner | focused-runtime |
 | `diagnostics` | L1 | diagnostic builder (nextpas.core.diagnostics family; text probing) | yes | L0-L1 (text.format/text.utils) | focused-runtime |
@@ -74,16 +76,16 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `oauth` | L3 | OAuth2 authorization-code client + PKCE (RFC 6749 §4.1 / RFC 7636; `nextpas.core.oauth.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `os` | L2 | OS helper namespace | no | L0-L1; platform owns raw OS truth | source-contract |
 | `path` | L2 | path helpers | yes | L0-L1 | focused-runtime |
-| `pg` | L2 backend of `db` | PostgreSQL database (libpq FFI, dlopen); units live at `nextpas.core.db.pg.*` (legacy `nextpas.core.pg.*` shims deleted in the G2 sweep) | yes | L0-L1; platform.dl | focused-runtime |
+| `pg` | L2 backend of `db` | PostgreSQL database (libpq FFI, dlopen); units live at `nextpas.core.db.pg.*` (legacy top-level shim `nextpas.core.pg` restored 2026-08-25 as thin re-export to `nextpas.core.db.pg`, see `db/CONTRACT.md §3`; subunits `nextpas.core.pg.*` remain deleted, ffi never had shim) | yes | L0-L1; platform.dl | focused-runtime |
 | `platform` | L0 | host ABI and OS semantics | yes | host owner `platform.*.base/ffi`, L0 only | source-contract + focused-runtime |
 | `process` | L2 | process management | yes | L0-L1 | focused-runtime |
 | `props` | L3 | property helpers | yes | L0-L2 | draft |
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
-| `redis` | L2 backend of `db` | Redis native client (RESP2, no C library; transport over `nextpas.core.net` blocking TCP); units live at `nextpas.core.db.redis.{base,resp,transport,adapter}` plus facade `nextpas.core.db.redis` | yes | L0-L1 plus same-layer one-way `net`/`time`/`sync` | focused-runtime |
+| `redis` | L2 backend of `db` | Redis native client (RESP2, no C library; transport over `nextpas.core.net` blocking TCP); units live at `nextpas.core.db.redis.{base,resp,transport,pipeline,recv,adapter}` plus facade `nextpas.core.db.redis` | yes | L0-L1 plus same-layer one-way `net`/`time`/`sync` | focused-runtime |
 | `sevenz` | L2 | 7z archive read/write (single or multi-folder; LZMA2/BZip2/Deflate write with optional BCJ full-family/Delta prefilter chains and AES-256 password encryption incl. encrypted headers, reader executes Delta/BCJ family/BCJ2 chains and decrypts AES-256 folders/headers; pure Pascal LZMA1/LZMA2 codec with optional liblzma FFI backend) | yes | L0-L1 plus same-layer one-way `crypto`/`hash`/`compress` | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
-| `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (legacy `nextpas.core.sqlite.*` shims deleted in the G2 sweep) | yes | L0-L1 | focused-runtime |
+| `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (legacy top-level shim `nextpas.core.sqlite` restored 2026-08-25 as thin re-export to `nextpas.core.db.sqlite`, see `db/CONTRACT.md §3`; subunits `nextpas.core.sqlite.*` remain deleted, ffi never had shim) | yes | L0-L1 | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
@@ -111,9 +113,11 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 
 Database family: backends are L2 implementations inside the `db` family —
 currently `sqlite`, `pg`, `mysql`, `odbc` and `redis`, physically under
-`nextpas.core.db.<backend>.*`. The legacy `nextpas.core.sqlite.*` /
-`nextpas.core.pg.*` unit names were deleted in the G2 consumer sweep
-(2026-08-25); the ffi units never had shims. Design record:
+`nextpas.core.db.<backend>.*`. Legacy top-level shims `nextpas.core.sqlite` /
+`nextpas.core.pg` were re-introduced as thin re-export shims on 2026-08-25
+(forward to `nextpas.core.db.sqlite` / `nextpas.core.db.pg`, see `db/CONTRACT.md §3`);
+legacy subunits `nextpas.core.sqlite.*` / `nextpas.core.pg.*` (`.base/.conn/.tx/.ffi/.loader` etc.) remain deleted
+and the ffi units never had shims. Design record:
 `core/docs/plans/2026-08-23-db-module-boundary.md`; backend contracts:
 `core/docs/db/CONTRACT.md`.
 

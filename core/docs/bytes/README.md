@@ -33,7 +33,7 @@ core/src/nextpas.core.bytes.stream.pas   ← TByteStreamBuf 可增长流缓冲
 | `nextpas.core.bytes.cursor` | 边界受查只读游标（ZIP/PNG/WASM 等容器解析原语） | `IByteCursor`（`Length`/`Position`/`Remaining`/`Seek`/`TrySeek`/`ReadU16/32/64LE/BE`/`PeekU16/32/64LE`/`ReadBytes`/`TryReadBytes`/`ReadSpan`）、`NewByteCursor`/`NewByteCursorAt` |
 | `nextpas.core.bytes.stream` | 追加/消费/压实一体流缓冲（TLS/代理缓冲复用） | `TByteStreamBuf`（`EnsureCapacity`/`ReserveAppend`+`CommitAppend`/`Append`/`AppendByte`/`Consume`/`Clear`/`Compact`/`Data`/`Available`/`TailSpace`） |
 
-门面 `nextpas.core.bytes` 重导出以上常用符号：`TEndianness`/`IBytesBuilder`/`IByteCursor`/`TByteStreamBuf`、`CreateBytesBuilder`、`NewByteCursor`/`NewByteCursorAt`、全部 `Span*`/`Bytes*`（含 `BytesAppend*`/`BytesReserve`/`BytesEnsureCapacity`/`BytesConcatMany`/`SpanConcatMany`/`CompareUnsignedSpan`/`UnsignedEqualSpan`/`BytesToString` 等）与 `SwapUInt*`/`ToEndian*`/`Read*`/`Write*`/`TryRead*`/`TryWrite*`（`bytes.ops`/`bytes.binary` 单源 inline 转发，零拷贝）。
+门面 `nextpas.core.bytes` 重导出以上常用符号：`TEndianness`/`IBytesBuilder`/`IByteCursor`/`TByteStreamBuf`、`CreateBytesBuilder`、`NewByteCursor`/`NewByteCursorAt`、全部 `Span*`/`Bytes*`（含 `BytesAppend*`/`BytesReserve`/`BytesEnsureCapacity`/`BytesConcatMany`/`SpanConcatMany`/`CompareUnsignedSpan`/`UnsignedEqualSpan`/`BytesToString` 等）与 `SwapUInt*`/`ToEndian*`/`Read*`/`Write*`/`TryRead*`/`TryWrite*`（`bytes.ops`/`bytes.binary` 单源转发，零拷贝；`BytesAppend*`/`BytesToString`/`StringToBytes`/`BytesSliceToString` 遵红线 1 非 inline，其余 inline；`BytesToString`/`StringToBytes`/`StripLeadingZero*` 编译期单出口 `BYTES_OPS_SINGLE_SOURCE` 哨兵 + `inline` 转发 + `init` 断言）。`BytesAppend*` 内建容量守卫倍增（`MIN_GROW 64, *2` 隐式保容摊还 O(1)），极高频仍推荐 `BytesReserve`/`IBytesBuilder`/`BytesConcatMany` 批量零拷贝。
 
 ## 示例
 

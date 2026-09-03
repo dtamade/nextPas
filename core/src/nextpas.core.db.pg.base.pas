@@ -15,6 +15,12 @@ uses
   nextpas.core.exception;
 
 const
+  { 透明语句缓存默认容量（LRU，键 = 归一 SQL）；0 = 关闭缓存。
+    单源归本后端 owner nextpas.core.db.pg.base，服务端 prepared
+    注册表路径与 sqlite 侧独立，诚实能力分治。 }
+  DEFAULT_PG_STMT_CACHE_CAPACITY = 64;
+
+const
   { ConnStatusType (PQstatus) }
   CONNECTION_OK  = 0;
   CONNECTION_BAD = 1;
@@ -110,6 +116,17 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.bytes.ops;
+
+const
+  { 编译期单源门禁：串/字节零拷贝单源为 bytes.ops（BYTES_OPS_SINGLE_SOURCE），漂移编译期拦截 }
+  PG_BASE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
+
+{$IF not BYTES_OPS_SINGLE_SOURCE}
+  {$FATAL 'bytes.ops single source drift: db.pg.base must reuse bytes.ops'}
+{$IFEND}
 
 constructor EPgError.Create(const AMessage: string);
 begin

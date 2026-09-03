@@ -129,13 +129,14 @@ var
 begin
   LExec := NewSqliteExec(LConn);
   try
+    { 长查询首包显式预估 >阈值，强制异步以保可取消与单飞可观测（首轮保守同步零税修复后默认不异步） }
     LH := LExec.Submit(procedure
       begin
         LConn.Exec(LongCteSql);
-      end);
+      end, 1000000);
     LRejected := False;
     try
-      LExec.Submit(procedure begin end);
+      LExec.Submit(procedure begin end, 1000000);
     except
       on E: EDbError do
       begin
@@ -176,7 +177,7 @@ begin
     LH := LExec.Submit(procedure
       begin
         LConn.Exec(LongCteSql);
-      end, LTok);
+      end, 1000000, LTok);
     Sleep(50);                          { 让 worker 进入工作体 }
     Check(not LH.WaitFor(30), 'wait timeout branch returns False');
     LTok.Cancel;                        { 子令牌回调 → progress 中断 }
@@ -215,7 +216,7 @@ begin
     LH := LExec.Submit(procedure
       begin
         LConn.Exec(LongCteSql);
-      end);
+      end, 1000000);
     Sleep(50);
     LH.Cancel;                          { 不经令牌，直达取消面 }
     Check(LH.WaitFor(10000), 'direct-cancel op completes');
@@ -298,7 +299,7 @@ begin
   LH := LExec.Submit(procedure
     begin
       LConn.Exec(LongCteSql);
-    end);
+    end, 1000000);
   LH := nil;
   { 不等待直接析构：Destroy 必须 WaitAll 至自然完成 }
   LExec.Free;
@@ -427,7 +428,7 @@ begin
         { 服务端真跑的长查询：PQcancel 中断目标 }
         LConn.Exec(
           'SELECT count(*) FROM generate_series(1, 50000000)');
-      end, LTok);
+      end, 1000000, LTok);
     Sleep(200);                         { 确保查询已在服务端执行 }
     LTok.Cancel;                        { 子令牌桥 → PQcancel }
     Check(LH.WaitFor(10000), 'canceled query returns promptly');
@@ -469,10 +470,10 @@ begin
       begin
         LConn.Exec(
           'SELECT count(*) FROM generate_series(1, 50000000)');
-      end);
+      end, 1000000);
     LRejected := False;
     try
-      LExec.Submit(procedure begin end);
+      LExec.Submit(procedure begin end, 1000000);
     except
       on E: EDbError do
         LRejected := True;

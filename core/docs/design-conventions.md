@@ -157,6 +157,8 @@ end.
   `platform.thread` 这类跨平台统一 API 默认不创建自己的 `*.ffi.pas`，而是消费
   `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
   owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
+- `nextpas.core.db.mysql.tls` 为跨模块归属显式例外：单元名虽置于 `db.mysql` 命名空间（承载 MySQL DSN `sslmode/sslca` 等键的验证面，建连期 TLS 握手诚实缺席），但 TLS 校验语义 Owner=tls，复用 `nextpas.core.tls` 标准校验与 `bytes.ops` 单源零拷贝（`BYTES_OPS_SINGLE_SOURCE` 门禁，`CLIENT_SSL`/`MYSQL_OPT_SSL_*` 单源于 `db.mysql.base` 仅复用），性能 inline 零拷贝视图比对、稳定性 try..finally 句柄不丢且纯函数无泄漏、业务以 `core/docs/db/CONTRACT.md §2.1/§2.21` 为准缺能力先反哺 tls owner，需防平行校验器漂移不自建平行校验器；依赖 L2→L2 单向，不形成循环。
+- `nextpas.core.db` 为家族级门面聚合多后端复用放宽显式例外：L3 家族门面聚合 `base/intf/bulk/pool/tx/migrate/batch/perf/trace` 等 L2 基础设施与 6 后端工厂（`sqlite/pg/mysql/odbc/redis/dm`），未按单模块四件套 `base←intf←impl←facade` 严格图形，属家族多后端复用放宽，已由 `core/docs/db/CONTRACT.md §1/§2.14` 与本文 §15 模块清单及 `core/docs/module-registry.md` 双源锁定，由 `test_db_facade_source_contract` 与 `module-registry` 自动目录校验持续校验防回退，非文档豁免/白名单；门面仅 `inline` 薄转发经 `factory.facade` 驱动表，零后端 `adapter` 硬链接（可裁剪性 `factory.register.*`/直连 `adapter`），`bytes.ops` 单源 `BYTES_OPS_SINGLE_SOURCE` 单 `Move` 零拷贝，稳定性接口引用计数自动归还、池租约 `try..finally` 置 `nil` 不丢、业务以 `CONTRACT` 为准缺能力先反哺 `owner`（`bytes.ops`/`text.sqlscan` 等），L0-L3 严格单向无上向，无同层循环；此为家族级显式例外，非通用复用范式，不可直接套用于新家族。
 
 ### 单元体积指引
 
@@ -193,6 +195,7 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 - 只能向下依赖，不能向上依赖
 - 同层内允许单向依赖，禁止循环依赖
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
+- 层级纯度（已下沉 L2）：`nextpas.core.db.pool`/`nextpas.core.db.migrate` 为 L2 基础设施（通用池/迁移），`nextpas.core.wallet`（L3 业务域，已独立 wallet.impl）仅 L0-L2 严格单向复用，无 L3→L3 同层耦合；历史“家族内受控同层例外（已迁）”已彻底消除，可裁剪性与门面零拖后端一致（见 `core/docs/db/CONTRACT.md §1/§2.22` 与 `wallet/CONTRACT.md §0`）。
 
 ### 特殊依赖关系：encoding / bytes / text
 
@@ -886,7 +889,7 @@ build/
 
 | 模块        | 职责                                                       |
 | ----------- | ---------------------------------------------------------- |
-| `db`        | 数据库家族（6 后端 sqlite/pg/mysql/odbc/redis/dm + Bulk/CapProbe/sqlscan，L3 家族详 `core/docs/db/CONTRACT.md`） |
+| `db`        | 数据库家族（L3 门面/适配 L3；base/intf/pool/migrate/batch/perf/trace 等 L2 基础设施严格单向 L0-L2，无上向；可裁剪边界=直连 adapter Connect* 或按需 factory.register.* 单后端注册单元，显式锁定于 `core/docs/db/CONTRACT.md §1/§2.14` 与 `core/docs/module-registry.md`，见 CONTRACT 家族布局；`db.sqlscan` 已物理删除单源收敛至 `text.sqlscan` L1，L3 家族详 `core/docs/db/CONTRACT.md`） |
 | `log`       | 完整日志实现（格式化、输出、异步）                         |
 | `config`    | 配置管理（多源、热加载）                                   |
 | `redis`     | Redis 客户端（L2 能力，L3 框架面经 db.redis 统一）          |

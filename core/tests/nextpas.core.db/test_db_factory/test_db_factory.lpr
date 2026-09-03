@@ -15,8 +15,14 @@ uses
   nextpas.core.db.intf,
   nextpas.core.db,
   nextpas.core.db.factory,
-  nextpas.core.db.factory.builtin,
-  nextpas.core.db.pool;
+  nextpas.core.db.factory.pool,
+  nextpas.core.db.pool,
+  nextpas.core.db.sqlite.adapter,
+  nextpas.core.db.pg.adapter,
+  nextpas.core.db.mysql.adapter,
+  nextpas.core.db.odbc.adapter,
+  nextpas.core.db.redis.adapter,
+  nextpas.core.db.dm.adapter;
 
 type
   { 第三方假连接：Exec 计数，Query 明确不支持（诚实 fail-fast） }
@@ -53,6 +59,31 @@ type
 
 var
   T: TTestSuite;
+
+// 显式注册辅助：factory.builtin 已物理删除(2026-09-02) 不再计入模块节点，显式注册为准；本测试显式注入六驱动（直连 adapter owner，bytes.ops 单源 inline 零拷贝，接口引用计数自动归还；避免经门面循环依赖，裁剪边界=直连 adapter/按需 register 单元）
+function OpenSqliteForTest(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := nextpas.core.db.sqlite.adapter.ConnectSqlite(ADsn, AOptions); end;
+function OpenPgForTest(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := nextpas.core.db.pg.adapter.ConnectPostgres(ADsn, AOptions); end;
+function OpenMysqlForTest(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := nextpas.core.db.mysql.adapter.ConnectMysql(ADsn, AOptions); end;
+function OpenOdbcForTest(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := nextpas.core.db.odbc.adapter.ConnectOdbc(ADsn, AOptions); end;
+function OpenRedisForTest(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := nextpas.core.db.redis.adapter.ConnectRedis(ADsn, '', 0, AOptions); end;
+function OpenDmForTest(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := nextpas.core.db.dm.adapter.ConnectDm(ADsn, AOptions); end;
+
+procedure EnsureBuiltinDrivers; inline;
+begin
+  if DbDriverExists('sqlite') then Exit;
+  DbRegisterDriver(TBuiltinDriver.Create('sqlite', dbkSqlite, @OpenSqliteForTest));
+  DbRegisterDriver(TBuiltinDriver.Create('postgres', dbkPostgres, @OpenPgForTest));
+  DbRegisterDriver(TBuiltinDriver.Create('mysql', dbkMysql, @OpenMysqlForTest));
+  DbRegisterDriver(TBuiltinDriver.Create('odbc', dbkOdbc, @OpenOdbcForTest));
+  DbRegisterDriver(TBuiltinDriver.Create('redis', dbkRedis, @OpenRedisForTest));
+  DbRegisterDriver(TBuiltinDriver.Create('dm', dbkDm, @OpenDmForTest));
+end;
 
 function TFakeConn.Kind: TDbKind;
 begin
@@ -364,6 +395,7 @@ begin
 end;
 
 begin
+  EnsureBuiltinDrivers;
   T := TTestSuite.Create('nextpas.core.db.factory');
   T.Test('builtin registry snapshot', @TestBuiltinRegistrySnapshot);
   T.Test('driver exists probe', @TestDriverExistsProbe);

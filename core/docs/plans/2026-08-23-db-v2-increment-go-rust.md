@@ -165,7 +165,8 @@ Clear。门禁 `test_db_stmt_cache` 九组全绿（透明性对照/嵌套安全/
    证）。建议门面补泛型别名 re-export 或文档化该限制。
 
 容量经 `ConnectSqlite(path, capacity)` 可选参数注入（默认 64，词汇
-常量 DEFAULT_SQLITE_STMT_CACHE_CAPACITY 归 db.base）；<=0 关闭走直通。
+常量 DEFAULT_SQLITE_STMT_CACHE_CAPACITY 归 sqlite.base 单源，pg/mysql/odbc/dm
+各归其 base，Redis 诚实缺席不设共享常量——分治于 db.base 聚合之外）；<=0 关闭走直通。
 
 基准（附录入册）：点查 5 万次 nocache 316ms / cached 205ms =
 **1.54×**（hit_rate=1.0000）；多行扫描 2000 次 102ms / 98ms ≈ 1.04×

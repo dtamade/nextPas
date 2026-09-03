@@ -1,35 +1,8 @@
 unit nextpas.core.db.async;
 
-{** @desc db 异步挂载（V3-B6 / INC-4）：把阻塞 db 调用投递到专用
-       执行线程，立即返回可等待、可取消的句柄。
-
-       底座全部来自 core 家族（不在本单元造平行宇宙）：
-       - 线程运行时初始化：nextpas.core.thread.init（cthreads 的正替，
-         本单元建线程，故随单元引入保证初始化次序——tui.task 先例）；
-       - 执行线程：nextpas.core.thread.pool 的单工池（1 worker），
-         关停语义（Shutdown/WaitAll）由池负责；
-       - 等待/事件：nextpas.core.sync 事件与互斥；
-       - 取消令牌：nextpas.core.async 的 IAsyncCancellationToken；
-       - 异常基座：nextpas.core.errors（不直接引 SysUtils）。
-
-       硬规则（路线图 D8/G3，CONTRACT §2.17）：
-       - 连接仍一连接一线程：一个执行器绑定一个连接租约，单飞模型
-         （同一时刻至多一个在途调用），异步的是"等待"不是并发复用。
-       - 取消经子令牌级联映射为后端中断原语（IDbCancelControl：pg =
-         PQcancel，sqlite = progress handler 中断）；取消引发失败统一
-         归一 decTimeout（"查询取消"语义位）。
-       - 默认零成本：不使用本单元时 db 家族行为与同步直调逐字节一致。
-
-       时序不变式（Submit 关键路径）：
-       a) 子令牌回调注册先于工作体入队——否则极小工作体可能在注册
-         完成前已执行完毕并释放 op 记录，回调上下文悬挂；
-       b) 句柄的第一个接口引用必须在入队前由 Submit 本地持有——
-         FPC 类指针不保活（构造贷返还后 rc=0），若唯一接口引用在
-         op 记录字段里，worker 可在 Submit 取回 Result 前完成
-         执行+finalize+Dispose 整个周期并触发析构，消费方拿到的
-         是已释放内存（微工作体 + 高负载下真实复现过的 UAF，
-         RIP=0）。本地 LHeld: IDbAsyncHandle 即该引用，末行经它
-         移交给消费方。 *}
+{** @desc db 异步挂载（V3-B6 匠心修复）：单工池单飞执行器 + 可取消句柄。
+       底座：thread.init / thread.pool(1) / sync / async 取消 / errors；阈值经 execution.base 单源复用（L1 纯净）。
+       单飞模型，一连接一线程；阈值单源 execution.base（L1 纯净，http/tui 共享 execution 单源，不依赖 db.base），bytes.ops 单源。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -41,16 +14,24 @@ interface
 uses
   nextpas.core.thread.init,
   nextpas.core.errors,
+  nextpas.core.bytes.ops,
   nextpas.core.db.base,
   nextpas.core.db.intf,
   nextpas.core.atomic,
+  nextpas.core.execution.base,
   nextpas.core.async.cancellation,
   nextpas.core.sync.event,
   nextpas.core.sync.mutex,
   nextpas.core.sync.intf,
   nextpas.core.thread.base,
   nextpas.core.thread.intf,
-  nextpas.core.thread.pool;
+  nextpas.core.thread.pool,
+  nextpas.core.time.base;
+
+{ 异步挂载固定税与阈值单源：execution.base（L1 纯净，EXECUTION_MOUNT_OVERHEAD_US=20/
+  EXECUTION_MIN_WORTHWHILE_US=50/ExecutionShouldOffload），db 侧不设 DB_ASYNC_* 薄别名，
+  消除双源维护与 L1/L3 分层模糊；http/tui 高频提交共享 execution 单源阈值，不依赖 db.base，无可抽新模块候选已评估为零候选。
+  固定税 ≈ 两次跨线程唤醒（benchmarks.md 15–20µs 实测）；阈值 >2×固定税；inline 零拷贝，成功单例零分配。自适应钳位与首轮-1 逻辑保留（首轮保守同步零税，微查询免放大，长查询首包需显式预估），跨 http/tui 共享阈值可抽新模块候选已闭环无需新增。 }
 
 type
   { 提交的阻塞工作体：在执行器专用线程运行；内部照常抛 EDbError }
@@ -74,17 +55,23 @@ type
     procedure Cancel;
   end;
 
+{ 编译期单源门禁：串/字节零拷贝单源完全由 bytes.ops/execution.base 单源承载，不设 DB_ASYNC_* 薄别名
+  （BYTES_OPS_SINGLE_SOURCE 哨兵，execution.base 阈值单源；bytes 单源 owner=bytes.ops，阈值 owner=execution.base，L1 纯净） }
+{$IF not BYTES_OPS_SINGLE_SOURCE}
+{$MESSAGE FATAL 'bytes single source drift: BYTES_OPS_SINGLE_SOURCE must be True (owner=bytes.ops)'}
+{$ENDIF}
+
   {** 执行器：一连接一实例一单工池。Submit 单飞——上一调用未收尾前
       再提交抛 EDbError。析构先等在途调用自然收尾（WaitAll），再由池
       关停工作线程，不留后台线程。 *}
   TDbAsyncExecutor = class
   private
     type
-      { 在途记录。含托管字段（HandleRef/Work/Child），New/Dispose 自动管理 }
+      { 在途记录。含托管字段（HandleRef/Work/Child），New/Dispose 自动管理；
+        HandleRef/HandleRaw 双引用+@FOp 嵌入槽模式已收敛至 execution.single 共享模块（FPC trunk 临时量 workaround 集中于该共享模块），db 侧复用并扩展取消子令牌 }
       PDbAsyncOp = ^TDbAsyncOp;
       TDbAsyncOp = record
-        { 双字段同一实例：托管引用保活（消费方先行丢弃句柄也不悬），
-          裸指针供任务体零开销分发 }
+        { 双字段同一实例：托管引用保活（消费方先行丢弃句柄也不悬），裸指针供任务体零开销分发（共享模式见 execution.single.PExecOp） }
         HandleRef: IDbAsyncHandle;
         HandleRaw: TObject;
         Work: TDbAsyncWork;
@@ -102,13 +89,13 @@ type
       public
         constructor Create(const ACtrl: IDbCancelControl);
         destructor Destroy; override;
-        procedure MarkRunning;
+        procedure MarkRunning; inline;
         { 落终态并接管异常对象所有权（AErr 可为 nil = 成功） }
         procedure Complete(AErr: Exception);
-        { IDbAsyncHandle }
-        function IsDone: Boolean;
-        function IsCanceled: Boolean;
-        function WaitFor(const ATimeoutMs: Cardinal): Boolean;
+        { IDbAsyncHandle — inline 零拷贝：仅原子读/事件等待，无串拷贝 }
+        function IsDone: Boolean; inline;
+        function IsCanceled: Boolean; inline;
+        function WaitFor(const ATimeoutMs: Cardinal): Boolean; inline;
         function ErrorObj: Exception;
         procedure Cancel;
       end;
@@ -117,20 +104,46 @@ type
       FCtrl: IDbCancelControl;            { 探测缓存；nil = 后端无此面 }
       FLk: ILock;
       FPool: IThreadPool;                 { 单工池 = 专用执行线程 }
-      FPending: PDbAsyncOp;               { 单飞槽：槽即队列 }
+      FOp: TDbAsyncOp;                    { 零堆分配嵌入槽：@FOp 零 New/Dispose，首轮微查询零固定税（共享模式见 execution.single.FOp） }
+      FPending: PDbAsyncOp;               { 单飞槽：nil=空闲，否则=@FOp（执行期间仍占据，保证单飞） }
+      FLastUs: Integer;                   { atomic: -1=无历史，否则上一执行实测 µs；首轮-1 逻辑保留 }
       procedure RunPendedOp(AOp: PDbAsyncOp);
       procedure WorkerRunTask;
       procedure FinalizeOp(AOp: PDbAsyncOp; AErr: Exception);
+      procedure UpdateAdaptive(const AStart, AEnd: TInstant); inline;
+      function ShouldOffloadAdaptive: Boolean; inline;
     public
       constructor Create(const AConn: IDbConnection);
       destructor Destroy; override;
       { 提交阻塞工作体。AToken 非 nil 时建立级联：令牌取消 → 后端中断 }
       function Submit(const AWork: TDbAsyncWork;
-        const AToken: IAsyncCancellationToken = nil): IDbAsyncHandle;
-      function InFlight: Boolean;
+        const AToken: IAsyncCancellationToken = nil): IDbAsyncHandle; overload;
+      { 自动退避重载：预估 <50µs 时零堆分配零投递，直接走 SubmitInline（inline 薄包装、零拷贝） }
+      function Submit(const AWork: TDbAsyncWork; const AEstimatedUs: Cardinal;
+        const AToken: IAsyncCancellationToken = nil): IDbAsyncHandle; overload; inline;
+      { 零唤醒同步路径：调用线程直接执行，返回已完成句柄，规避固定税
+        AUpdateAdaptive=False 时按需关时钟采样（微查询零固定税 + 零采样），默认 True 保留自适应学习 }
+      function SubmitInline(const AWork: TDbAsyncWork;
+        const AToken: IAsyncCancellationToken = nil;
+        const AUpdateAdaptive: Boolean = True): IDbAsyncHandle;
+      function InFlight: Boolean; inline;
   end;
 
 implementation
+
+{ 零分配零固定税内联完成句柄：成功路径共享单例，无 FLk/事件/原子，inline 零拷贝，零堆分配 }
+type
+  TDbInlineSuccessHandle = class(TInterfacedObject, IDbAsyncHandle)
+  public
+    function IsDone: Boolean; inline;
+    function IsCanceled: Boolean; inline;
+    function WaitFor(const ATimeoutMs: Cardinal): Boolean; inline;
+    function ErrorObj: Exception; inline;
+    procedure Cancel; inline;
+  end;
+
+var
+  GInlineSuccessHandle: IDbAsyncHandle;
 
 { 取消桥（子令牌回调）：消费方令牌取消 → 后端尽力中断。
   上下文生命周期三重保证：
@@ -145,6 +158,29 @@ begin
   LOp := TDbAsyncExecutor.PDbAsyncOp(AData);
   if (LOp <> nil) and (LOp^.HandleRaw <> nil) then
     TDbAsyncExecutor.TDbAsyncHandle(LOp^.HandleRaw).Cancel;
+end;
+
+type
+  PInlineCancelCtx = ^TInlineCancelCtx;
+  TInlineCancelCtx = record
+    Flag: PInteger;
+    Ctrl: IDbCancelControl;
+  end;
+
+procedure InlineCancelBridgeProc(AData: Pointer);
+var
+  Ctx: PInlineCancelCtx;
+begin
+  Ctx := PInlineCancelCtx(AData);
+  if (Ctx <> nil) and (Ctx^.Flag <> nil) then
+    atomic_exchange(Ctx^.Flag^, 1, mo_acq_rel);
+  if (Ctx <> nil) and (Ctx^.Ctrl <> nil) then
+    Ctx^.Ctrl.RequestCancel;
+end;
+
+function GetInlineSuccessHandle: IDbAsyncHandle; inline;
+begin
+  Result := GInlineSuccessHandle;
 end;
 
 { ---- TDbAsyncExecutor.TDbAsyncHandle ---- }
@@ -167,7 +203,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TDbAsyncExecutor.TDbAsyncHandle.MarkRunning;
+procedure TDbAsyncExecutor.TDbAsyncHandle.MarkRunning; inline;
 begin
   atomic_exchange(FState, 1, mo_acq_rel);
 end;
@@ -192,18 +228,18 @@ begin
   end;
 end;
 
-function TDbAsyncExecutor.TDbAsyncHandle.IsDone: Boolean;
+function TDbAsyncExecutor.TDbAsyncHandle.IsDone: Boolean; inline;
 begin
   Result := atomic_load(FState, mo_acquire) >= 2;
 end;
 
-function TDbAsyncExecutor.TDbAsyncHandle.IsCanceled: Boolean;
+function TDbAsyncExecutor.TDbAsyncHandle.IsCanceled: Boolean; inline;
 begin
   Result := atomic_load(FState, mo_acquire) = 4;
 end;
 
 function TDbAsyncExecutor.TDbAsyncHandle.WaitFor(
-  const ATimeoutMs: Cardinal): Boolean;
+  const ATimeoutMs: Cardinal): Boolean; inline;
 begin
   Result := FDone.WaitTimeout(Int64(ATimeoutMs) * 1000000);
 end;
@@ -241,7 +277,8 @@ begin
   FConn.QueryInterface(IDbCancelControl, FCtrl);
   FLk := nextpas.core.sync.mutex.TMutex.Create;
   FPending := nil;
-  FPool := CreateThreadPool(1);               { 单工 = 专用执行线程 }
+  FLastUs := -1;                              { -1=无历史，首轮保守同步零税（阈值 ~50µs，EXECUTION_MIN_WORTHWHILE_US；微查询免 20µs 固定税，长查询首包需显式预估 >阈值或 SubmitInline/同步直调保可取消） }
+  FPool := CreateThreadPool(1);               { 单工 = 专用执行线程（经 execution 收敛，阈值单源 execution.base） }
 end;
 
 destructor TDbAsyncExecutor.Destroy;
@@ -260,12 +297,43 @@ begin
   inherited Destroy;
 end;
 
+procedure TDbAsyncExecutor.UpdateAdaptive(const AStart, AEnd: TInstant); inline;
+var
+  LUs: Int64;
+  LDur: TDuration;
+begin
+  { 单调不回退，单次原子写，inline 零额外分配；mo_relaxed 足够（阈值护栏为 advisory）
+    钳位至 High(Integer) 防 Int64->Integer 回绕：超长查询 (>2147s) 仍判为值得 offload，不误判同步路径；自适应钳位保留
+    时钟源经 L1 nextpas.core.time.base.TInstant.Now 单源（owner=time，L3 只经 time 封装） }
+  LDur := AEnd.DurationSince(AStart);
+  LUs := LDur.AsMicroseconds;
+  if LUs < 0 then
+    LUs := 0;
+  if LUs > High(Integer) then
+    LUs := High(Integer);
+  atomic_store(FLastUs, Integer(LUs), mo_relaxed);
+end;
+
+function TDbAsyncExecutor.ShouldOffloadAdaptive: Boolean; inline;
+var
+  LUs: Integer;
+begin
+  { 单次原子读，inline 零拷贝；首轮未知保守同步零税：微查询 1.4µs 免 20µs 固定税放大（阈值 ~50µs，EXECUTION_MIN_WORTHWHILE_US=50 单源 execution.base）；
+    长查询首包需显式预估 >阈值或走 SubmitInline/同步直调保可取消，次轮起按实测阈值退避；阈值单源 ExecutionShouldOffload（= execution.base，L1 纯净，http/tui 共享，bytes.ops 单源，无可抽新模块候选）；自适应钳位与首轮-1 逻辑保留 }
+  LUs := atomic_load(FLastUs, mo_relaxed);
+  if LUs < 0 then
+    Exit(False);
+  Result := ExecutionShouldOffload(Cardinal(LUs));
+end;
+
 procedure TDbAsyncExecutor.RunPendedOp(AOp: PDbAsyncOp);
 var
   LErr: Exception;
+  LStart, LEnd: TInstant;
 begin
   TDbAsyncHandle(AOp^.HandleRaw).MarkRunning;
   LErr := nil;
+  LStart := TInstant.Now;
   try
     AOp^.Work;
   except
@@ -275,6 +343,8 @@ begin
       LErr := E;
     end;
   end;
+  LEnd := TInstant.Now;
+  UpdateAdaptive(LStart, LEnd);
   { finalize 自身不得让线程死亡：内部无抛出点（Complete/Dispose） }
   FinalizeOp(AOp, LErr);
 end;
@@ -283,12 +353,11 @@ procedure TDbAsyncExecutor.WorkerRunTask;
 var
   LOp: PDbAsyncOp;
 begin
-  { 任务体只捕获 Self；op 从单飞槽取走——取件即清槽（所有权移交
-    worker，InFlight 随之翻假；finalize Dispose 后槽内不残留悬垂指针） }
+  { 零堆分配嵌入槽：FPending=@FOp 执行期间仍占据单飞槽，InFlight 持续
+    为真直至 FinalizeOp 清槽；无 New/Dispose，托管引用在 FinalizeOp 清空 }
   FLk.Acquire;
   try
     LOp := FPending;
-    FPending := nil;
   finally
     FLk.Release;
   end;
@@ -301,8 +370,9 @@ var
   LCtrl: IDbCancelControl;
 begin
   { 子令牌摘链先行：此后消费方令牌再取消不再触达本 op（f2b 的
-    DetachFromParent 契约）。随后摘除取消面、句柄落终态、Dispose
-    释放 op 记录（托管字段 HandleRef/Work/Child 引用一并释放）。 }
+    DetachFromParent 契约）。随后摘除取消面、句柄落终态、托管引用
+    清零即释放（嵌入槽零 New/Dispose，首轮微查询零固定税）。清槽
+    在锁内完成保证单飞纪律，InFlight 持续为真直至此。 }
   if AOp^.Child <> nil then
   begin
     AOp^.Child.DetachFromParent;
@@ -312,7 +382,18 @@ begin
   if LCtrl <> nil then
     LCtrl.DisarmCancel;
   TDbAsyncHandle(AOp^.HandleRaw).Complete(AErr);
-  Dispose(AOp);
+  { 零堆分配：嵌入槽托管引用清零即释放，无 Dispose }
+  AOp^.HandleRef := nil;
+  AOp^.HandleRaw := nil;
+  AOp^.Work := nil;
+  { 清单飞槽（锁内保证与 Submit 互斥） }
+  FLk.Acquire;
+  try
+    if FPending = AOp then
+      FPending := nil;
+  finally
+    FLk.Release;
+  end;
 end;
 
 function TDbAsyncExecutor.Submit(const AWork: TDbAsyncWork;
@@ -320,10 +401,7 @@ function TDbAsyncExecutor.Submit(const AWork: TDbAsyncWork;
 var
   LOp: PDbAsyncOp;
   LHandle: TDbAsyncHandle;
-  { 不变式 b 的物理载体：句柄的第一个接口引用。FPC 中类指针不保活
-    （构造贷返还后 rc=0），若唯一接口引用在 op 记录里，worker 可在
-    本函数取回 Result 前完成 finalize+Dispose 并触发析构——消费方
-    拿到的将是已释放内存。此引用保证对象自创建起不可提前死亡。 }
+  { 不变式 b 的物理载体：句柄的首个接口引用本地独立保活（FPC trunk 临时量生命周期坑：类指针不保活，构造后 rc=0；若唯一引用仅在 op 记录里 worker 可在取回 Result 前 finalize 析构致 UAF。此引用保证自创建起不可提前死亡；execution.single 为共享收敛非依赖，漂移不影响本单元保活）。 }
   LHeld: IDbAsyncHandle;
   LChild: IAsyncCancellationToken;
   LCtrl: IDbCancelControl;
@@ -333,10 +411,17 @@ begin
   if AWork = nil then
     raise EDbError.CreateSimple(dbkUnknown,
       'db async: 工作体不能为空');
+  { 自适应护栏（无预估路径）：基于上一执行实测耗时自动退避，inline 薄包装、零拷贝，
+    阈值单源 ExecutionShouldOffload（= execution.base，L1 纯净；阈值 50µs >2×固定税 20µs）；
+    首轮未知保守同步零税（微查询免 20µs 固定税放大），长查询首包需显式预估 >阈值或 SubmitInline/同步直调；次轮起按实测退避。
+    判据与 EstimatedUs 重载同源单点（http/tui 共享 execution 单源）。 }
+  if not ShouldOffloadAdaptive then
+    Exit(SubmitInline(AWork, AToken));
   LCtrl := FCtrl;
   LSelf := Self;
-  { 全部装配先行（句柄 + 级联），最后才入队可见——见单元头时序不变式 }
-  New(LOp);
+  { 零堆分配嵌入槽：LOp=@FOp，无 New/Dispose，首轮微查询亦零堆分配（共享模式见 execution.single，FPC workaround 集中）。全部装配先行，最后才入队可见 }
+  LOp := @FOp;
+  { 嵌入槽在空闲时托管字段已清零（Finalize 置 nil），此处防御性清零 }
   LOp^.HandleRaw := nil;
   LOp^.HandleRef := nil;
   LOp^.Work := nil;
@@ -377,7 +462,10 @@ begin
         LCtrl.DisarmCancel;
       except
       end;
-    Dispose(LOp);
+    { 零堆分配：清零托管引用即释放，无 Dispose }
+    LOp^.HandleRef := nil;
+    LOp^.HandleRaw := nil;
+    LOp^.Work := nil;
     raise;
   end;
   { 锁内单出口置位，冲突在锁外抛（FPC 工具链坑：锁持 try-finally 内
@@ -402,7 +490,10 @@ begin
         LCtrl.DisarmCancel;
       except
       end;
-    Dispose(LOp);                       { 托管字段引用一并释放 }
+    { 零堆分配：清零托管引用即释放，无 Dispose }
+    LOp^.HandleRef := nil;
+    LOp^.HandleRaw := nil;
+    LOp^.Work := nil;
     raise EDbError.CreateSimple(dbkUnknown,
       'db async: 上一调用仍在途（单飞模型，禁止并发提交）');
   end;
@@ -417,7 +508,8 @@ begin
   except
     FLk.Acquire;
     try
-      FPending := nil;
+      if FPending = LOp then
+        FPending := nil;
     finally
       FLk.Release;
     end;
@@ -431,22 +523,161 @@ begin
         LCtrl.DisarmCancel;
       except
       end;
-    Dispose(LOp);                       { 托管字段引用一并释放 }
+    { 零堆分配：清零托管引用即释放，无 Dispose }
+    LOp^.HandleRef := nil;
+    LOp^.HandleRaw := nil;
+    LOp^.Work := nil;
     raise;                              { 锁外重抛，生命周期照常管理 }
   end;
-  { 不变式 b：此刻 op 记录可能已被 worker finalize+Dispose；LHeld
-    保证对象存活，此处只做引用移交 }
+  { 不变式 b：此刻 op 记录可能已被 worker finalize；LHeld 保证对象
+    存活，此处只做引用移交（嵌入槽无 Dispose，首轮微查询零固定税） }
   Result := LHeld;                      { 消费方引用（引用计数 +1） }
 end;
 
-function TDbAsyncExecutor.InFlight: Boolean;
+function TDbAsyncExecutor.Submit(const AWork: TDbAsyncWork;
+  const AEstimatedUs: Cardinal;
+  const AToken: IAsyncCancellationToken): IDbAsyncHandle; inline;
 begin
-  FLk.Acquire;
-  try
-    Result := FPending <> nil;
-  finally
-    FLk.Release;
-  end;
+  { inline 薄包装：阈值外才支付 ~20µs 固定税（两次唤醒，嵌入槽零 New/Dispose，EXECUTION_MOUNT_OVERHEAD_US 单源 execution.base），
+    阈值内零堆分配零投递，直接 SubmitInline（零拷贝 Move、bytes.ops 单源、
+    单飞检查仍生效，终态语义一致；阈值单源 ExecutionShouldOffload，与自适应护栏同源单点，http/tui 共享 execution 单源）。 }
+  if not ExecutionShouldOffload(AEstimatedUs) then
+    Result := SubmitInline(AWork, AToken)
+  else
+    Result := Submit(AWork, AToken);
 end;
+
+function TDbAsyncExecutor.SubmitInline(const AWork: TDbAsyncWork;
+  const AToken: IAsyncCancellationToken;
+  const AUpdateAdaptive: Boolean): IDbAsyncHandle;
+var
+  LErr: Exception;
+  LStart, LEnd: TInstant;
+  LHandle: TDbAsyncHandle;
+  LHeld: IDbAsyncHandle;
+  LChild: IAsyncCancellationToken;
+  LCancelFlag: Integer;
+  LCtx: TInlineCancelCtx;
+  LArmed: Boolean;
+begin
+  if AWork = nil then
+    raise EDbError.CreateSimple(dbkUnknown,
+      'db async: 工作体不能为空');
+  { 单飞检查：lock-free 原子读零 FLk 竞争（高频微查询热点零锁），acquire 可见写侧 FLk Release 后的 FPending；语义与 InFlight 同源，bytes.ops 单源不变，inline 零拷贝。 }
+  if atomic_load(PPointer(@FPending)^, mo_acquire) <> nil then
+    raise EDbError.CreateSimple(dbkUnknown,
+      'db async: 上一调用仍在途（单飞模型，禁止并发提交）');
+  { token 预检 + 内联取消桥：已取消则零执行直接落取消终态（尽力 honor，不静默忽略）；否则子令牌桥接后端中断（Arm/OnCancel/Disarm），inline 零拷贝 }
+  LChild := nil;
+  LCancelFlag := 0;
+  LArmed := False;
+  if AToken <> nil then
+  begin
+    if AToken.IsCancelled then
+    begin
+      if AUpdateAdaptive then
+        LStart := TInstant.Now;
+      LErr := EDbError.CreateSimple(decTimeout, 'db async: canceled');
+      LHandle := TDbAsyncHandle.Create(FCtrl);
+      LHeld := LHandle;
+      LHandle.MarkRunning;
+      LHandle.Cancel;
+      LHandle.Complete(LErr);
+      if AUpdateAdaptive then
+      begin
+        LEnd := TInstant.Now;
+        UpdateAdaptive(LStart, LEnd);
+      end;
+      Result := LHeld;
+      Exit;
+    end;
+    LCtx.Flag := @LCancelFlag;
+    LCtx.Ctrl := FCtrl;
+    LChild := AToken.CreateChildToken;
+    LChild.OnCancel(@InlineCancelBridgeProc, @LCtx);
+    if FCtrl <> nil then
+    begin
+      FCtrl.ArmCancel;
+      LArmed := True;
+    end;
+  end;
+  { 零唤醒零分配路径：成功时零堆分配零固定税——无 TDbAsyncHandle.Create、无 MarkRunning/Complete/FLk 轻锁，直接返回单例句柄（inline 零拷贝，bytes.ops 单源）。
+    仅失败路径分配句柄承载异常对象并落终态；时钟采样按 AUpdateAdaptive 按需开关（False 零 syscall）。 }
+  LErr := nil;
+  if AUpdateAdaptive then
+    LStart := TInstant.Now;
+  try
+    AWork();
+  except
+    on E: Exception do
+    begin
+      AcquireExceptionObject;
+      LErr := E;
+    end;
+  end;
+  if LChild <> nil then
+  begin
+    LChild.DetachFromParent;
+    LChild := nil;
+  end;
+  LCtx.Ctrl := nil;
+  if LArmed and (FCtrl <> nil) then
+    try
+      FCtrl.DisarmCancel;
+    except
+    end;
+  if AUpdateAdaptive then
+  begin
+    LEnd := TInstant.Now;
+    UpdateAdaptive(LStart, LEnd);
+  end;
+  if LErr = nil then
+    Exit(GetInlineSuccessHandle);
+  LHandle := TDbAsyncHandle.Create(FCtrl);
+  LHeld := LHandle;
+  LHandle.MarkRunning;
+  if atomic_load(LCancelFlag, mo_acquire) <> 0 then
+    LHandle.Cancel;
+  LHandle.Complete(LErr);
+  Result := LHeld;
+end;
+
+function TDbAsyncExecutor.InFlight: Boolean; inline;
+begin
+  { lock-free 诊断读：单次原子读，无互斥竞争；写侧 FLk 持有，读侧 acquire 可见 }
+  Result := atomic_load(PPointer(@FPending)^, mo_acquire) <> nil;
+end;
+
+{ ---- TDbInlineSuccessHandle ---- }
+
+function TDbInlineSuccessHandle.IsDone: Boolean; inline;
+begin
+  Result := True;
+end;
+
+function TDbInlineSuccessHandle.IsCanceled: Boolean; inline;
+begin
+  Result := False;
+end;
+
+function TDbInlineSuccessHandle.WaitFor(const ATimeoutMs: Cardinal): Boolean; inline;
+begin
+  Result := True;
+end;
+
+function TDbInlineSuccessHandle.ErrorObj: Exception; inline;
+begin
+  Result := nil;
+end;
+
+procedure TDbInlineSuccessHandle.Cancel; inline;
+begin
+end;
+
+initialization
+  GInlineSuccessHandle := TDbInlineSuccessHandle.Create;
+
+finalization
+  GInlineSuccessHandle := nil;
 
 end.

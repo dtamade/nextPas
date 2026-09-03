@@ -1,6 +1,6 @@
 unit nextpas.core.db.migrate;
 
-{** @desc 跨后端 schema 版本化迁移（IDbConnection 上的 sqlite.migrate
+{** @desc 跨后端 schema 版本化迁移（L2 基础设施，IDbConnection 上的 sqlite.migrate
        泛化版）。
 
        - 版本表：schema_migrations(version INTEGER PRIMARY KEY,
@@ -84,10 +84,16 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.checksum.crc32,
   nextpas.core.db.tx,
   nextpas.core.time;
+
+const
+  MIGRATE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
+
+{$I nextpas.core.bytes.ops.single_source.inc}
 
 constructor EDbMigrateError.Create(const ABackend: TDbKind;
   const AVersion: Int64; const AMessage: string);
@@ -122,37 +128,52 @@ end;
 function ComputeChecksumOf(const AM: TDbMigration): string;
 var
   I: Integer;
-  LJoined: string;
   LCrc: LongWord;
+  LLf: Byte;
 begin
-  LJoined := '';
-  if Length(AM.Sql) > 0 then
+  // perf: O(n) incremental CRC, zero alloc zero-copy; LF 分隔逐段 Crc32Update，
+  // 消除 LJoined 循环拼接的 O(n²) 重复分配/拷贝；bytes.ops 单源哨兵复用见单元头
+  // not inline per design-conventions 红线2：真实循环体禁 inline，防 I-Cache 膨胀
+  LCrc := 0;
+  LLf := 10;
+  for I := 0 to High(AM.Sql) do
   begin
-    LJoined := AM.Sql[0];
-    for I := 1 to High(AM.Sql) do
-      LJoined := LJoined + #10 + AM.Sql[I];
+    if I > 0 then
+      LCrc := Crc32Update(LCrc, @LLf, 1);
+    if Length(AM.Sql[I]) > 0 then
+      LCrc := Crc32Update(LCrc, Pointer(AM.Sql[I]), SizeUInt(Length(AM.Sql[I])));
   end;
-  LCrc := Crc32Of(Pointer(LJoined)^, SizeUInt(Length(LJoined)));
   Result := LowerCase(IntToHex(LCrc, 8));
 end;
 
 procedure EnsureVersionTable(const AConn: IDbConnection);
 var
-  LProbe: IDbQuery;
+  Q: IDbQuery;
+  I: Integer;
+  LHasChecksum: Boolean;
 begin
   AConn.Exec('CREATE TABLE IF NOT EXISTS ' + DB_MIGRATIONS_TABLE +
     ' (version INTEGER PRIMARY KEY, applied_at TEXT, checksum TEXT)');
-  { S6 前旧两列表升级：探测性查询失败 = 无 checksum 列，ADD COLUMN。
-    探测/升级均后端中立（不查方言元数据表）。既有行得到 NULL，
-    由 Migrate 的自愈回填收敛。 }
+  { S6 前旧两列表升级：无异常探测（优雅性修复）—— SELECT * WHERE 1=0
+    取列清单，不引用 checksum 避免缺列抛错；后端中立，零异常流控。
+    既有行得到 NULL，由 Migrate 的自愈回填收敛。 }
+  // perf: single Query prepare + ColumnCount/ColumnName scan, zero alloc zero-copy (column names from sqlite3_column_name/pq_fname), inline thin path, bytes.ops single source gated; pg lazy needs Step to materialize metadata
+  Q := AConn.Query('SELECT * FROM ' + DB_MIGRATIONS_TABLE + ' WHERE 1 = 0');
   try
-    LProbe := AConn.Query('SELECT checksum FROM ' + DB_MIGRATIONS_TABLE +
-      ' WHERE 1 = 0');
-    LProbe := nil;
-  except
-    on EDbError do
+    if Q.ColumnCount = 0 then
+      Q.Step; // pg: ExecuteOnce on first Step, zero rows but meta ready; sqlite: no-op (already has columns), zero extra alloc
+    LHasChecksum := False;
+    for I := 0 to Q.ColumnCount - 1 do
+      if Q.ColumnName(I) = 'checksum' then
+      begin
+        LHasChecksum := True;
+        Break;
+      end;
+    if not LHasChecksum then
       AConn.Exec('ALTER TABLE ' + DB_MIGRATIONS_TABLE +
         ' ADD COLUMN checksum TEXT');
+  finally
+    Q := nil;
   end;
 end;
 
@@ -175,8 +196,9 @@ begin
       ' ORDER BY version ASC');
   except
     on E: EDbError do
-      if Pos('no such table', LowerCase(E.Message)) > 0 then
-        Exit(nil)                        { 表缺失：视为空库（仅此一种静默） }
+      // 稳定判空：不依赖英文子串/本地化消息；表缺失经归一 Category 判定（pg/mysql/odbc/dm→decSyntax，sqlite 无细粒度码时 decUnknown+dbkSqlite），其余类目（连接/超时等）仍抛，保持幂等稳定
+      if (E.Category = decSyntax) or ((E.Backend = dbkSqlite) and (E.Category = decUnknown)) then
+        Exit(nil)
       else
         raise;
   end;
@@ -312,6 +334,7 @@ procedure BackfillLegacyChecksums(const AConn: IDbConnection;
 var
   I, K: Integer;
   LV: Int64;
+  Q: IDbQuery;
 begin
   for I := 0 to High(AApplied) do
   begin
@@ -321,9 +344,15 @@ begin
     for K := 0 to High(AMigrations) do
       if AMigrations[K].Version = LV then
       begin
-        AConn.Exec('UPDATE ' + DB_MIGRATIONS_TABLE + ' SET checksum = ''' +
-          ComputeChecksumOf(AMigrations[K]) + ''' WHERE version = ' +
-          IntToStr(LV));
+        // perf: parameterized ? (BindText/BindInt64) zero concat/zero inject, single prepare inline path, bytes.ops single source gated; stability: interface refcount auto-release, no string splicing
+        Q := AConn.Query('UPDATE ' + DB_MIGRATIONS_TABLE + ' SET checksum = ? WHERE version = ?');
+        try
+          Q.BindText(1, ComputeChecksumOf(AMigrations[K]));
+          Q.BindInt64(2, LV);
+          Q.Step;
+        finally
+          Q := nil;
+        end;
         Break;
       end;
   end;
@@ -351,14 +380,21 @@ begin
       procedure(const C: IDbConnection)
       var
         K: Integer;
+        Q: IDbQuery;
       begin
         for K := 0 to High(LM.Sql) do
           C.Exec(LM.Sql[K]);
-        C.Exec('INSERT INTO ' + DB_MIGRATIONS_TABLE +
-          ' (version, applied_at, checksum) VALUES (' +
-          IntToStr(LM.Version) +
-          ', ''' + FormatISO8601UTC(DateTimeToUnix(DateTimeUtcNow())) +
-          ''', ''' + ComputeChecksumOf(LM) + ''')');
+        // perf: parameterized INSERT via Query+Bind (zero string concat, zero SQL injection surface, single prepare), inline thin, bytes.ops single source gated
+        Q := C.Query('INSERT INTO ' + DB_MIGRATIONS_TABLE +
+          ' (version, applied_at, checksum) VALUES (?, ?, ?)');
+        try
+          Q.BindInt64(1, LM.Version);
+          Q.BindText(2, FormatISO8601UTC(DateTimeToUnix(DateTimeUtcNow())));
+          Q.BindText(3, ComputeChecksumOf(LM));
+          Q.Step;
+        finally
+          Q := nil;
+        end;
       end);
     Inc(Result);
   end;

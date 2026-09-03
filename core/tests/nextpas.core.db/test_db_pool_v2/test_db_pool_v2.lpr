@@ -527,8 +527,8 @@ var
   LFired: Integer;
   P: TDbPoolPolicy;
 begin
-  P := TDbPoolPolicy.Default;       { LeakDetectionThresholdMs=0 }
-  Check(P.LeakDetectionThresholdMs = 0, 'default-off: threshold is zero');
+  P := TDbPoolPolicy.Default;       { LeakDetectionThresholdMs=60000 默认 60s 开，避免裸 Acquire 静默死锁 }
+  Check(P.LeakDetectionThresholdMs = 60000, 'default: threshold is 60000 (60s on)');
   LFired := 0;
   P.OnLeakDetected := procedure(const S: string)
   begin
@@ -541,7 +541,7 @@ begin
     B := Pool.Acquire;
     B := nil;
     A := nil;
-    Check(LFired = 0, 'default-off: zero callbacks despite long hold');
+    Check(LFired = 0, 'default: zero callbacks for short hold (<60s threshold)');
   finally
     Pool.Free;
   end;

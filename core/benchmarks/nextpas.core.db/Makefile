@@ -23,7 +23,10 @@ BENCHES := \
 	bench_db_blob_stream \
 	bench_db_pool_stress \
 	bench_db_async \
-	bench_db_listen
+	bench_db_listen \
+	bench_db_wallet \
+	bench_db_dm_adapter \
+	bench_db_dm_live
 
 .PHONY: bench $(BENCHES) clean
 

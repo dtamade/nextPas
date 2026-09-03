@@ -1,10 +1,15 @@
 # nextpas.core.db 代码契约（家族）
 
 **模块路径**：`core/src/nextpas.core.db*.pas`
-**层级**：L3 家族（依赖 L0-L2；SQLite/PostgreSQL 后端实现为 L2 子模块）
+**层级**：L3 家族（门面/适配 L3；base/intf/trace/后端/池/迁移/batch/perf 皆 L2 基础设施，严格依赖 L0-L2 单向，无上向，物理层级与目录隔离一致经 module-registry 自动目录校验非文档豁免；可裁剪边界=直连 adapter Connect* 或按需 factory.register.* 单后端注册单元，显式锁定于 module-registry，见 §1/§2.14；wallet 业务已独立 Owner=wallet lane，复用 L2 infra 零同层耦合）
 **Owner**：core-db lane
-**最后更新**：2026-08-30（MySQL BIND 偏移常量化 + DSN 零分配/端口校验自证）
-**版本**：1.2（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时、B3 观测钩子、C1 语句缓存、C2 数组绑定、C5 调优预设、B6 异步挂载、B7 LISTEN/NOTIFY、B8 Redis SUBSCRIBE、C6 SQL词法共享引擎）
+**最后更新**：2026-09-03（匠心修复11：PG N≥500 MUST走IDbArrayBinding unnest fail-closed防6×误用 + 母册瘦身 <500薄索引分治 + DM J1 nightly live 证据闭环）
+
+**版本**：1.5（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时 … 详见 `ROADMAP_FINAL_20260828.md`；1.5 瘦身分治单源收敛）
+
+> **维护注记**：家族布局/能力矩阵以 `capprobe`/`intf` 为单源，母册薄索引 <500 行无双处制表。
+
+> **分册索引**：见 `pool.md`/`trace.md`/`redis.md`/`batch.md`/`perf.md`/`migrate.md`/`nightly-live.md`/`wallet/CONTRACT.md`（仅索引不双处制表）。
 
 ---
 
@@ -12,18 +17,47 @@
 
 | 单元 | 层 | 职责 |
 |------|----|------|
-| `nextpas.core.db.base` | L0 依赖根 | TDbKind / TDbColumnType / EDbError / EDbNotSupported |
-| `nextpas.core.db.intf` | 接口 | IDbConnection / IDbQuery / IDbTxControl |
-| `nextpas.core.db.sqlite.*` | L2 后端 | SQLite 实现：base/ffi/conn/pool/tx/migrate + 门面 |
+| `nextpas.core.db.base` | L2 家族依赖根（仅依赖 L0-L1，L3 严格下向 L2，无上向/同层依赖；物理层级与目录隔离一致，自动目录校验，非文档豁免/白名单） | TDbKind / TDbColumnType / EDbError / EDbNotSupported |
+| `nextpas.core.db.intf` | L2 契约（仅依赖 base，同层单向） | IDbConnection / IDbQuery / IDbTxControl 等统一面 |
+| `nextpas.core.db.sqlite.*` | L2 后端 | SQLite 实现：base/ffi/conn/pool/tx + 门面 |
 | `nextpas.core.db.pg.*` | L2 后端 | PostgreSQL 实现：base/ffi/loader/conn/listen + 门面 |
-| `nextpas.core.db.sqlite.adapter` | 适配 | IDbConnection/IDbQuery 的 SQLite 包装（ConnectSqlite） |
-| `nextpas.core.db.pg.adapter` | 适配 | 同上 PG 包装（ConnectPostgres）+ ? → $N 占位符翻译 |
-| `nextpas.core.db.tx` | 泛化助手 | WithTransaction over IDbConnection |
-| `nextpas.core.db.migrate` | 泛化助手 | schema 版本化 over IDbConnection |
-| `nextpas.core.db.pas` | 门面 | 聚合 re-export 全部公共 API |
+| `nextpas.core.db.mysql.*` | L2 后端 | MySQL/MariaDB 实现：base/ffi/loader/adapter（双方言 72B/112B） |
+| `nextpas.core.db.odbc.*` | L2 后端 | ODBC 网关：base/ffi/loader/adapter（ISO CLI，含国产库） |
+| `nextpas.core.db.redis.*` | L2 后端 | Redis RESP2 实现：base/resp/transport/pipeline/recv/adapter/subscribe + 门面（recv+pipeline 体积分治，adapter <800 行软阈内，环形缓冲+分块流水线单源 bytes.ops 零拷贝，详 §2.13） |
+| `nextpas.core.db.dm.*` | L2 后端 | 达梦 DM8 DPI 原生：base/ffi/loader/adapter + adapter.synthetic 独立 helper（`libdmdpi.so`，§2.21） |
+| `nextpas.core.db.sqlite.adapter` | L3 适配（严格下向 L2 后端，无上向） | SQLite 包装（ConnectSqlite） |
+| `nextpas.core.db.pg.adapter` | L3 适配（严格下向 L2 后端，无上向） | PG 包装（ConnectPostgres）+ ? → $N 翻译 |
+| `nextpas.core.db.mysql.adapter` | L3 适配（严格下向 L2 后端，无上向） | MySQL 包装（ConnectMysql）+ `?N→?+槽位` 翻译 |
+| `nextpas.core.db.mysql.tls` | L2 桥接 | MySQL TLS 校验桥接（`bytes.ops` 单源 `inline` 零拷贝 + `nextpas.core.tls` 标准校验 Owner=tls，`ParseMysqlSslMode/MysqlTlsToVerifyMode/ValidateMysqlTlsOptions` 单源，`CLIENT_SSL=2048` + `MYSQL_OPT_SSL_*` 单源于 `db.mysql.base`，经 `ConnectMysql` `my_options` 直达建连已闭环 `verify-full`/`verify-ca`（`bytes.ops` 单源 inline 零拷贝，Owner=tls，见 §2.1）） |
+| `nextpas.core.db.odbc.adapter` | L3 适配（严格下向 L2 后端，无上向） | ODBC 包装（ConnectOdbc）+ SQLBindParameter |
+| `nextpas.core.db.redis.adapter` | L3 适配（严格下向 L2 后端，无上向） | Redis 包装（ConnectRedis）+ `?→bulk` |
+| `nextpas.core.db.dm.adapter` | L3 适配（严格下向 L2 后端，无上向） | DM 包装（ConnectDm）+ `?→$N` 翻译（§2.21） |
+| `nextpas.core.db.dm.adapter.synthetic` | L3 适配子模块（严格下向 L2 dm.base + L1 text/bytes/collections/sync，无上向） | DM 合成代理 surrounding cost 独立 helper（DmSyntheticDpiProxy/E2EProxy 单源，bytes.ops 单源 inline 零拷贝，已抽离 common，见 §2.21） |
+| `nextpas.core.wallet` | L3 业务 | Wallet 账本域已独立（Owner=wallet lane，四件套已迁至 wallet.impl，见 `wallet/CONTRACT.md` 单源；§2.22 仅薄索引） |
+| `nextpas.core.billing` | L3 业务 | 通用计费域已独立（Owner=billing lane，四件套 billing.base←billing.intf←billing.impl←billing 已落地，独立于 wallet，L0-L2 严格单向，bytes.ops/text 单源 inline/零拷贝） |
+| `nextpas.core.db.wallet` | 已移除(2026-09-02) | 兼容别名已物理删除，统一使用 `nextpas.core.wallet`（见 `wallet/CONTRACT.md`）；db 家族不再占用 wallet 命名，可裁剪性债务已闭环（原 deprecated 窗口至 2026-Q4，现提前物理删除） |
+| `nextpas.core.db.bulk` | 泛化助手 | BulkCopy 单事务批量行复制（V4.3 universal） |
+| `nextpas.core.db.batch` | L2 基础设施 | 统一批量/流工厂（`batch` 单源，见 `batch.md` §2.9/§2.16） |
+| `nextpas.core.db.perf` | L2 基础设施 | 独立性能契约单源（见 `perf.md`/`perf.pas` 单源，`nightly-live.md` 三级闸门） |
+| `nextpas.core.db.factory` | 泛化助手 | 统一驱动注册表 `DbOpen`（注册表零 L2 导入，可独立构建，见 §2.14） |
+| `nextpas.core.db.factory.pool` | 桥接叶 | 工厂-池桥接 `DbOpenPool`（见 §2.14） |
+| `nextpas.core.db.factory.builtin` | 已移除(2026-09-02) | 已物理删除（见 §2.14） |
+| `nextpas.core.db.pool` | L2 基础设施 | 通用连接池 TDbPool（读池+单写者，跨后端；L2 下沉后 wallet 仅 L0-L2 单向复用，无 L3→L3） |
+| `nextpas.core.db.async` | 泛化助手 | 异步挂载与取消 `TDbAsyncExecutor`（单飞 + 令牌→PQcancel） |
+| `nextpas.core.db.trace` | L2 观测（仅依赖 base/intf） | IDbTraceListener 同步回调面（四后端同构） |
+| `nextpas.core.db.sqlscan` | 共享引擎(已物理删除) | 已物理删除（缺失强制迁移，历史 deprecated 薄别名及类型/常量别名已删除无残留；单真相 `text.sqlscan`，见 §2.20） |
+| `nextpas.core.db.pg.listen` | 订阅 | PG LISTEN/NOTIFY 专用连接+泵线程（B7） |
+| `nextpas.core.db.redis.subscribe` | 订阅 | Redis SUBSCRIBE/PSUBSCRIBE 推送会话（B8） |
+| `nextpas.core.db.tx` | 泛化助手 | WithTransaction / WithTransactionRetry over IDbConnection |
+| `nextpas.core.db.migrate` | L2 基础设施 | schema 版本化 over IDbConnection（L2 下沉后 wallet 仅 L0-L2 单向复用，无 L3→L3） |
+| `nextpas.core.db.savepoint` | L2 基础设施 | Savepoint 拼串单源（Validate+`TBufStringBuilder` 单分配单 Move 零拷贝，`bytes.ops` 单源 inline，被 `bulk/pg/mysql/dm/batch` 复用，已收敛） |
+| `nextpas.core.db.err` | 归一 | Classify* 错误归一表（sqlite/pg/mysql/odbc/redis/dm） |
+| `nextpas.core.db.capprobe` | 探针 | 能力探针与版本解析（ServerVersion / Supports*） |
+| `nextpas.core.db.pas` | 门面 | 聚合 re-export 全部公共 API（六后端工厂 + 能力探测 + 事务/迁移；可裁剪，经 `factory` 驱动表可插拔，未使用后端零编译期耦合） |
 
-依赖方向严格单向：`db.base ← db.intf ← {adapter, tx, migrate, 后端} ← 门面`。
+依赖方向严格单向：L2 `db.base ← db.intf/trace ← 后端实现`；L3 `adapter/tx 严格下向 L2 契约与后端（无上向，无同层依赖，严格下向分层）` + L2 infra{pool,migrate} ← L3 门面`（pool/migrate 已下沉为 L2，wallet L3 仅 L0-L2 单向复用，无 L3→L3 同层耦合；家族内受控上向例外已消除，分治后零上向；物理层级与目录隔离一致经 `core/docs/module-registry.md` 与 `core/docs/db/CONTRACT.md §1/§2.14` 双源锁定，由 `test_db_facade_source_contract` 与 `module-registry` 自动目录校验持续校验防回退，非文档豁免/白名单）。
 **db.base 与 db.intf 禁止 uses 任何具体后端单元。**
+**门面可裁剪纯转发（硬门禁锁定）**：`nextpas.core.db.pas` 未使用后端零编译期耦合（实现段仅 factory 驱动表，零 adapter/addr 硬链接）；可裁剪零耦合与 inline 薄转发正交：单后端裁剪直连对应 adapter，全量显式注册不依赖隐式聚合叶（`factory.builtin` 已物理删除，显式注册为准，裁剪边界 = 直连 `Connect*` 或按需 `factory.register.*`，由 `test_db_facade_source_contract` 硬门禁锁定零硬链+inline 纪律，非文档约束；能力误用时诚实降级经 `capprobe`/`Supports*⇔接口` 互证硬门禁）。业务以 CONTRACT 为准、缺能力先反哺 owner。性能与资源释放由各 owner 承载（`bytes.ops` 单源 `BYTES_OPS_SINGLE_SOURCE`、接口自动归还，见 adapter/factory/`batch`）。
 
 ## 2. 统一层契约
 
@@ -79,45 +113,24 @@ while Q.Step do ...;                          // 接口引用计数自动释放
 - **Blob**：接口含 BindBlob/GetBlob。pg 侧经 hex 文本 + `::bytea` cast 实现，
   真机门禁覆盖；sqlite 侧原生透传。
 
-#### TLS（V3-B4 成文）
+#### TLS（V3-B4 成文，单源分治）
 
-责任表：TLS 建立与证书校验归各自传输栈，统一层不二次包装、不提供
-跨后端证书面（诚实边界——强校验模式由消费方在 DSN/选项中显式选择）。
+TLS 建立与校验归各自传输栈，统一层不二次包装（诚实边界）。**责任单源**：`postgres` libpq 原文透传 `sslmode=verify-full`（libpq 执行，`require` 仅加密不验）；`redis` `UseTls/TlsServerName` 经 `nextpas.core.tls TLSDial` 标准校验（`ErrType='NET'`→`decConnection`）；`mysql` 经 `nextpas.core.db.mysql.tls` 复用 `nextpas.core.tls` 标准校验 + `my_options` 直达建连已闭环（`bytes.ops` 单源 `inline` 零拷贝，`CLIENT_SSL=2048`/`MYSQL_OPT_SSL_*` 单源于 `db.mysql.base`，`ParseMysqlSslMode/ValidateMysqlTlsOptions` 单源 inline 零拷贝视图比对，`verify-ca/verify-full` 落地 `MYSQL_OPT_SSL_CA/CAPATH/CERT/KEY/CIPHER/CRL` + `MYSQL_OPT_SSL_VERIFY_SERVER_CERT` + `CLIENT_SSL`，Owner=tls，不自建平行校验器；性能 inline/零拷贝，稳定性 `try..finally` 句柄不丢）；`odbc` 驱运透传；`sqlite` N/A。细节与真机实证已沉至 `tls` owner 与 `redis.md`/`db.mysql.tls` 单源，本册不双处索引。
 
-| 后端 | 路径 | 配置样例 | 校验责任 |
-|---|---|---|---|
-| postgres | libpq conninfo 原文透传（适配器零 TLS 代码） | `sslmode=verify-full sslrootcert=/etc/ca.pem host=db.example.com` | libpq 按所选模式执行；推荐 verify-full |
-| redis | `ConnectRedis(addr, TDbRedisConnectOptions)` UseTls/TlsServerName（A5.1b，TLSDial 一体阻塞） | `UseTls=True; TlsServerName='db.example.com'` | nextpas.core.tls 栈标准校验；SNI 取显式名否则 Host |
+### 2.2 错误模型——判别联合单源
 
-> **pg 段真机实证（2026-08-26）**：本机 PG17.11 + 自签 CA（CN=localhost，
-> SAN 含 127.0.0.1）临时实例。`sslmode=verify-full` 正路径经完整栈
-> （adapter/listen 门禁 13+11 组全绿，heaptrc 0）；负路径错误 CA 被
-> libpq 证书校验拒绝（certificate verify failed）；`sslmode=require`
-> 加密通道经 pg_stat_ssl 确认 ssl=t。注意 localhost 双栈解析下
-> libpq 多地址回退可能掩盖证书错误诊断——负路径验证建议显式 IP。
-> redis 段 live 冒烟维持 NEXTPAS_REDIS_TEST_TLS_CONN env 门控惯例。
-| odbc | connstr 原文透传，加密键随驱动 | `Encrypt=yes;TrustServerCertificate=no`（MS 驱动系） | 各 ODBC 驱动 |
-| mysql | **v1 未支持**：DSN 解析器不识别 ssl 键，透传不生效——升级路径已登记（B4 余项），不假装支持 | — | — |
-| sqlite | N/A（进程内库） | — | — |
+适配器把后端异常转译为 `EDbError`（`TDbNativePayload` 判别联合，`Payload.Kind` 单源）：
 
-诚实注记：pg 的 `sslmode=require` 只加密不验证书（libpq 语义），
-生产环境应显式 verify-full + rootcert。redis TLS 负路径（不可达/
-握手失败）桥接为 EDbError decConnection、ErrType='NET'（§2.13）。
-
-### 2.2 错误模型——双码位并存
-
-适配器把后端异常转译为 `EDbError`：
-
-| 字段 | sqlite 引发时 | postgres 引发时 |
+| 判别分支 | 有效字段 | 语义 |
 |---|---|---|
-| Backend | dbkSqlite | dbkPostgres |
-| BackendCode / ExtendedCode | 原生结果码 / extended 码 | 0 |
-| SqlState / Severity / Detail | 空串 | libpq 诊断字段 |
-| Message | 原始消息 | 原始消息 |
+| `dbkSqlite` | `SqliteCode / SqliteExt` | 原生结果码 / extended 码 |
+| `dbkPostgres` | `State=SqlState, Severity, Detail` | libpq 诊断字段 |
+| `dbkMysql/dbkOdbc/dbkDm` | `NativeCode + State` | 服务端码位 + SQLSTATE |
+| `dbkRedis` | `State=ErrType` | RESP 首词 |
+| `dbkUnknown` | （无原生码位） | 统一层错误 |
+| 公共 | `Message` | 原始消息（全分支） |
 
-**v2 起语义归一经 `db.err` 受控映射**：Category/Constraint 枚举由
-ClassifySqlite/ClassifyPg 纯函数表产出（宁可欠归一不错归一），原始码位
-字段永远并存。非后端异常原样穿透。
+兼容属性 `BackendCode/ExtendedCode/SqlState/Severity/Detail` 为 `inline` 判别转发（非分支返回 0/空串，fail-closed）；新代码优先 `Payload.Kind` 分支访问。**v2 起语义归一经 `db.err` 受控映射**：Category/Constraint 枚举由 Classify* 纯函数表产出（宁可欠归一不错归一），判别载荷与归一枚举并存。非后端异常原样穿透。
 
 ### 2.3 事务（IDbTxControl + db.tx + IDbSavepointControl）
 
@@ -139,10 +152,10 @@ ClassifySqlite/ClassifyPg 纯函数表产出（宁可欠归一不错归一），
   ReleaseTo`，命名 `[A-Za-z0-9_]+`，违规抛 EDbError。
 - **池化租约纪律（B13）**：闭包对托管变量（含连接）的真实捕获会把该
   引用保持到闭包销毁——实测可迟至外层例程退出，期间 db.pool 出借的
-  租约（尤其单写者槽位）被滞留过语句边界。池化连接一律用参数化形态
+  租约（尤其单写者槽位）被滞留过语句边界（heaptrc 未覆盖闭包捕获非堆泄漏，source-contract 硬门禁已落地 `core/tests/nextpas.core.db/test_db_factory/check_pool_lease_source_contract.sh`）。池化连接一律用参数化形态
   `WithTransaction(Conn, procedure(const C: IDbConnection) ...)`
   （框架传实参、零捕获、语句结束即归还）；捕获形态仅限非池化/专用
-  连接。`WithTransactionRetry` 同样提供参数化重载，租约在重试结束
+  连接（已 `deprecated`，见 `nextpas.core.db.pas:148-152`）。`WithTransactionRetry` 同样提供参数化重载，租约在重试结束
   归还。
 - **瞬时错误重试（V3-B5）**：`WithTransactionRetry(Conn, Proc[,
   Policy])`（另有参数化 `Body: TDbConnProc` 重载，见上条）——仅整事务重跑，绝不部分重试；**幂等责任在回调**（同一
@@ -157,6 +170,8 @@ ClassifySqlite/ClassifyPg 纯函数表产出（宁可欠归一不错归一），
   pg 侧误用由簿记守卫（无 Begin 的 Commit/Rollback 抛错）兜底。
 
 ### 2.4 迁移（db.migrate）
+
+> **分册索引**：本节仅保留分治不变量，完整契约见 `migrate.md` 单源（`CONTRACT §2.4` 已分册，遵循单源分治复用不变量）。
 
 `Migrate(AConn, Migrations)` 是唯一的迁移面（G2 起旧 `db.sqlite.migrate`
 后端类表面已退役，消费方统一走本单元）：
@@ -181,6 +196,7 @@ sqlite 版。
   （不建版本表、不升级旧表）；结构性错误（乱序、越界）仍抛出。
   同一输入上 dry-run 上报 mismatch 而真实 `Migrate` 抛错——预览与
   应用的校验语义分野。
+- **wallet/身份域前置依赖（已落地）**：`WalletMakeMigrations v15` 迁移清单仅含 wallet 四表，FK `wallet_balances(user_id)→user_profiles(id)` 指向已落地 `nextpas.core.identity` 的 `user_profiles`（`IdentityMakeMigrations v14` 单源，`core/docs/identity/CONTRACT.md`），**部署序 = IdentityMakeMigrations v14 → WalletMakeMigrations v15**（见 §2.22 前置依赖序与 `wallet/CONTRACT.md §1`）；能力矩阵不新增 wallet 位，测试以 `Migrate(IdentityMakeMigrations)` 真表 + `FOREIGN_KEYS=ON` 保障（stub 仅作语义回退验证）。
 
 ### 2.5 逃生舱纪律
 
@@ -248,53 +264,9 @@ initialization/离线门 PtrUInt 自证钉死（Oracle 72B @68/70 vs MariaDB 112
 
 ### 2.7 连接池（db.pool）
 
-`TDbPool` 对任意后端 `IDbConnection` 池化，后端特化经连接工厂闭包注入，
-池体不懂方言：
+> **分册索引**：本节仅保留分治不变量，完整契约见 `pool.md` 单源（`CONTRACT §2.7` 已分册，遵循单源分治复用不变量）。
 
-- **开箱工厂（B13 配套）**：`OpenSqlitePool(Path, MaxRead)`（便利形态：
-  缺省策略仅覆盖读上限，busy_timeout 烘入生产级缺省）与
-  `OpenSqlitePool(Path, Policy, Options)`（全控形态：策略与连接选项
-  逐字采用），组合 db.pool × sqlite 统一适配器，经 nextpas.core.db
-  再导出；消费方不再各自手拼策略与连接选项。
-- **租约绑定纪律（B13 续）**：FPC 接口临时量为例程级生命周期——
-  `Pool.Acquire` / `Pool.Writer` 的函数结果若**直接内联传参**
-  （const 形参绑定，如 `Migrate(Pool.Writer, …)`）或经**全局托管
-  变量**中转，隐藏引用会把租约拖过语句边界、直至所在例程退出
-  （单写者槽位期间不可再借；五格矩阵实证）。合规形态：
-  租约先绑定局部变量、用毕显式置空；或直接用作用域助手
-  `Pool.WithRead(…)` / `Pool.WithWriter(…)`——租约约束在实现内
-  局部变量上（try..finally 归还），消费方从结构上不可能滞留。
-  池化连接上的事务一律走参数化形态（§2.3）。
-
-- **释放即归还**：Acquire/Writer 返回代理接口，消费方释放引用（出作用
-  域或置 nil）即自动归还，零手工 Free。代理经 QueryInterface 透传底层
-  连接全部能力面（IDbTxControl/IDbBatchExecutor 等），探测语义与直连
-  一致。
-- **坏连接弃置**：捕获数据库错误后经 `IDbPooledHandle.Discard` 弃置当前
-  连接，释放引用时不回池而直接关闭，防坏连接复用。
-- **生命周期安全**：持有租约时 Free 池合法——门面 Free 只停止出借并
-  清空空闲队列；在途租约归还时直接销毁底层连接（排空语义，不等待，
-  对齐 Go `DB.Close`），最后一个租约释放后池核心态自毁。Close 后
-  Acquire/Writer 抛 EDbError。
-- **策略**：TDbPoolPolicy 九字段（MaxReadConnections/AcquireTimeoutMs/
-  ValidateOnAcquire/MaxLifetimeSec/IdleTimeoutSec/MinConnections +
-  V3-C3 三招 LeakDetectionThresholdMs/OnLeakDetected/DebugAcquireStack）。
-  空闲回收无看门狗线程（Acquire 检查点惰性执行）；预热 fail-fast
-  （Create 内建满 MinConnections，失败原样上抛建连错误）。
-- **泄漏检测（V3-C3，默认关）**：`LeakDetectionThresholdMs > 0` 时，
-  持有超阈值的在途租约在任意检查点（Acquire/Writer 入口、归还路径）
-  被扫描入账（Warned 一次，检测不干预所有权——租约仍归持有者）。
-  报告只在安全点冲刷：Acquire/Writer 入口自动冲刷积压，或显式
-  `TDbPool.FlushDiagnostics` 排空。归还路径发生在代理析构链内，
-  只入账不触发用户代码——回调永不在析构链内执行（硬边界）。报告
-  经 `OnLeakDetected` 回调（nil 则写 StdErr）；回调在池调用线程同步
-  执行且不得重入本池。诚实模型：发现依赖下一次池活动或显式冲刷，
-  无看门狗线程。`DebugAcquireStack` 开启时报告附 ≤16 帧原始地址行
-  （BackTraceStrFunc 格式化，符号解析取决于链接信息），默认关零成本。
-- **单写者**：Writer 全池唯一专用槽位；占用期再取按 AcquireTimeoutMs
-  排队或抛错。写连接身份恒定（寿命到期才重建）。
-- **线程模型**：池方法线程安全（簿记互斥 + 槽位信号量）；单条底层连接
-  同一时刻仍只服务一个逻辑线程（§2.1），池化不改变该契约。
+`TDbPool` 对任意后端 `IDbConnection` 池化（L2 基础设施，已下沉 L2，wallet 仅 L0-L2 单向复用，无 L3→L3），后端特化经连接工厂闭包注入，池体不懂方言。**租约绑定纪律（B13）**：池化连接一律用参数化形态 `WithTransaction(Conn, Body)` 或 `WithRead/WithWriter` 作用域助手，租约语句边界归还；**释放即归还**（代理接口引用计数自动归还，`QueryInterface` 透传全能力面）；**泄漏检测（V3-C3，默认 60s 开）**与**单写者**等细节见 `pool.md` 单源。性能 `inline` 薄转发/`bytes.ops` 单源零拷贝与稳定性资源释放不丢由 `pool.impl` 承载，证据见 `pool.md`。
 
 ### 2.8 语句缓存（INC-3，双后端）
 
@@ -326,265 +298,47 @@ LRU，容量经 `ConnectPostgres(conninfo, options, capacity)` 注入，默认
   簿记清零。连接关闭时会话结束，服务端语句自动消亡。
 - **收益判据**：bench_db_stmt_cache pg 段点查对照（见 docs 基准册）。
 
-### 2.9 大对象流（INC-8）
+### 2.9 大对象流（INC-8，`nextpas.core.db.batch` 统一流工厂）
 
-统一流面 `IDbBlobStream`（Read/Write/Seek/Size，接口释放即关闭），
-开启能力按存储模型分面，消费方经 QueryInterface 探测：
+> **分册索引**：本节仅薄索引，完整契约见 `batch.md §2` 单源。
 
-- **sqlite（IDbRowBlobControl）**：`OpenRowBlob(table, column, rowid,
-  readwrite)` 打开既有行的 blob 单元。定长模型——Size 即单元字节数，
-  写越过末尾抛错（占位经 `zeroblob(N)` 预留）；行更新/schema 变更使
-  句柄失效，须重新 OpenRowBlob。单句柄操作上限 2GB（原生 API 契约）。
-- **pg（IDbLargeObjectControl）**：OID 模型。事务耦合不对称且强制：
-  CreateLO/OpenLO 要求活动事务（描述符事务末失效），UnlinkLO 反向
-  要求**事务外**调用（libpq 自管 BEGIN/END）；两向 fail-fast。
-  消费方以 WithTransaction 包裹读写、事务外删除。
-- **内存判据**：流式路径 RSS 恒定（128MB blob 实测增量 0.2MB）；
-  GetBlob 全量物化保留为小 blob 便捷路径（大 blob 有线性内存税）。
+`IDbBlobStream`（Read/Write/Seek/Size，接口释放即关闭）按存储模型分面经 `QueryInterface` 探测，已收敛至 `nextpas.core.db.batch` 统一流工厂（`batch.md §2` 单源，`bytes.ops` 单源 `inline` 零拷贝，接口自动归还）。
 
-### 2.10 能力矩阵（V3-B1）
+### 2.10 能力矩阵（V3-B1 单源，`capprobe`/`db.intf` 单源，无新模块候选）
 
-`IDbCapabilities` 是可选能力接口：经门面 `DbCapabilities(Conn)` 统一
-探测，连接实现则返回之，否则 nil（无值用 nil 表达）。它只描述统一层
-契约内的能力面；**布尔声明与对应可选接口的 QueryInterface 存在性互证**
-（conformance 钉死，防声明漂移）：
+六后端 `IDbCapabilities` 以 `core/src/nextpas.core.db.capprobe.pas`/`db.intf.pas` 为单源（`DbCapabilities(Conn)` 探测，`QueryInterface` 互证，`test_db_conformance` 钉死），本文仅索引不变量不双处制表（`pool`/`trace`/`redis`/`wallet` 不另制矩阵，防漂移）。分治：`SupportsArrayBinding⇔IDbArrayBinding`（pg-only `unnest`，见 §2.16）与 `SupportsBulkCopy⇔IDbBulkCopy` 正交（`db.bulk`）；方言差异见 §2.6，wallet 不新增位（见 `wallet/CONTRACT.md §1`）。
 
-| 能力项 | sqlite | PostgreSQL | MySQL/MariaDB | ODBC 网关 | 契约注记 |
-|---|---|---|---|---|---|
-| SupportsSavepoints | ✅ | ✅ | ✅ | ❌ ISO CLI 无发现机制 | ⇔ IDbSavepointControl |
-| SupportsBatchExecutor | ✅ | ✅ | ✅ | ✅ 逐条+单事务 | ⇔ IDbBatchExecutor |
-| SupportsStmtCacheControl | ✅ | ✅ | ❌（C 线排期） | ❌（C 线排期） | ⇔ IDbStmtCacheControl |
-| SupportsLargeObjects | ❌ | ✅ | ❌ | ❌ 无跨驱动 LO 语义 | ⇔ IDbLargeObjectControl；sqlite 行内模型走 IDbRowBlobControl |
-| SupportsNativeBool | ❌ 声明亲和 | ✅ OID16 | ❌ TINYINT(1) 约定 | ❌ 异构网关欠归一 | INC-6 |
-| SupportsMultiStatementExec | ✅ | ✅ | ✅ 连接期请求位 | ❌ 分号批因驱动而异 | mysql 需 CLIENT_MULTI_STATEMENTS，工厂默认携带 |
-| SupportsStatementTimeout | ❌ 诚实不支持 | ✅ 会话级 | 建连期探测定格 | ✅ QUERY_TIMEOUT 逐语句 | INC-7；mysql 仅 Oracle 库且 server ≥8.0；odbc 秒粒度向上取整 |
-| CaseSensitiveIdentifiers | ✅ 保留形式 | ❌ 折叠小写 | ❌ 列名不敏感 | 探测 IC_SENSITIVE，失败保守 False | §2.6 差异的运行时化 |
-| MaxPlaceholders | 999 保守下界 | 65535 协议上限 | 65535 uint16 | 999 保守下界 | libsqlite3 ≥3.32 实际更高；ISO CLI 无参数上限 InfoType |
-| ProductName / Version / Kind | 'SQLite' | 'PostgreSQL' | 按 flavor 'MySQL'/'MariaDB' | GetInfo(DBMS_NAME/VER) 原文 | 版本串原文透出，诊断展示用 |
+### 2.11 ODBC 网关（V3-A3/A4，`odbc.*` 单源）
 
-边界：能力矩阵**不覆盖 SQL 方言差异**——DDL 类型名、约束子码细分
-（PK 归并）、错误定位深度、NULL 排序等仍是 §2.6 的文档域。两套机制
-职责不同：能力矩阵回答"这个连接支持什么统一面"，§2.6 回答"跨后端
-SQL 与错误语义怎么写才可移植"。
-
-### 2.11 ODBC 网关（V3-A3/A4）
-
-`nextpas.core.db.odbc.*` 是第四统一后端：ISO CLI 之上的网关适配器，
-任何提供 ODBC 驱动的数据库均可接入——这也是国产库（达梦/openGauss/
-KingbaseES 等）的 D4 备选接入路径。契约要点：
-
-- **DSN 原文透传 + 离线词法校验**：connstr（`DSN=name;UID=...;PWD=...` 或 DSN-less
-  `Driver=...;Server=...`）原样交给 SQLDriverConnect，本层不改写；
-  空串/`malformed`/`unterminated`（含 `Driver={...` 未闭合）经
-  `text.kv` `ParseKV` 离线 fail-fast（`test_text_kv` 16 组 + `test_db_odbc_adapter` 4b/4c），
-  未触驱动管理器即抛 `EDbError(dbkOdbc)`。BusyTimeoutMs 映射 SQL_ATTR_LOGIN_TIMEOUT
-  （建连窗口，秒粒度向上取整；个别驱动不认则容忍，诚实表见 db.base）。
-- **执行模型**：SQLPrepare/SQLBindParameter/SQLExecute（服务端
-  prepared，参数化即注入安全）；结果 SQLFetch + SQLGetData 惰性
-  物化。整数族/BIT 以 SQL_C_SBIGINT 直取，浮点/DECIMAL/日期族以
-  文本形态取（精度无损），二进制族 BINARY。截断（01004）按指示符
-  扩缓冲同列整值重取——主流管理器/驱动的整值替换语义由 live 门禁
-  长文本往返钉死，指示符不自洽 fail-fast 不静默产错。
-- **参数缓冲所有权**：ODBC 绑定延迟求值（Execute 时才读缓冲），
-  参数值必须先编组进对象字段托管的稳定缓冲，禁止表达式临时地址。
-- **错误归一**：ClassifyOdbc 只消费 5 字符 SqlState——管理器族精确
-  码（IM002→decConnection、IM001/HYC00→decNotSupported、HY001/
-  HY013→decCapacity、HYT00/HYT01/HY008→decTimeout）+ ISO 类前缀
-  兜底（08 连接/23 完整性/25,40 事务/28 授权/42 语法/0A 不支持/
-  53,54 容量/58 系统错误）；NativeError 跨驱动无可移植语义，默认只
-  透传 BackendCode 不参与分类（宁可欠归一不错归一）。唯一例外：
-  建连期经 SQL_DRIVER_NAME / SQL_DBMS_NAME 探测命中 mysql/mariadb
-  词元的 MySQL 系驱动启用 ClassifyOdbcEx 码位单调提精——基础欠归一
-  时采纳码位类目、同类泛约束只补细分、永不降级矛盾；原 HY000+1062
-  → decUnknown 缺口就此收口，非 MySQL 驱动行为不变。
-- **事务控制面**：Begin = AUTOCOMMIT OFF，Commit/Rollback =
-  SQLEndTran + 恢复 AUTOCOMMIT ON（先恢复状态再上抛，防连接卡死在
-  手动提交）；TXN_CAPABLE=SQL_TC_NONE 的驱动 BeginTxn fail-fast
-  （decNotSupported）。AImmediate 无 ISO 对应语义，接受为 no-op。
-- **能力降级矩阵**：见 §2.10 表 ODBC 列与 adapter 单元头注（同文）。
-  Savepoints 因 ISO CLI 无发现机制整体降级且不实现
-  IDbSavepointControl（互证契约一致）。**达梦 DM8 备注（ADR 0002）**：
-  经 `ConnectOdbc(Driver=DM8 ODBC DRIVER;…)` 的 P1 ODBC 网关为 Tier-1
-  路径，`SupportsSavepoints=False` 为契约性诚实降级（嵌套
-  `WithTransaction` 将 fail-fast `decNotSupported`），`SupportsBatchExecutor
-  =True`（逐条+单事务、精确到步），`SupportsNativeBool=False`；约束违约等
-  归一依赖驱动的 SqlState 质量（多数报 `HY000` 欠归一、`NativeError`
-  仅透传，不经 `ClassifyOdbcEx` MySQL 提精——达梦自成体系码位不参与
-  提精，宁可欠归一不错归一），语句超时秒粒度向上取整。P2 `libdmdpi`
-  专用适配器（`dpi_*`/`ClassifyDm`/`dbkDm`）仅当触发条件满足时再议。
-- **占位符**：? 与统一契约同形直通；?N 槽位计划与 pg/mysql 同构
-  （Seq 只对裸 ? 递增）。重复逻辑号（如 `?, ?1`）的执行层复用三后端
-  一致不支持：服务端参数计数 = 占位符数，未绑定物理槽一律 fail-fast。
+`nextpas.core.db.odbc.*` ISO CLI 网关（D4 国产库备选）。单源契约：**DSN 原文透传** + `text.kv ParseKV` 离线 `fail-fast`（`test_text_kv` + `test_db_odbc_adapter`）；**执行** `SQLPrepare/Bind/Execute` 服务端 prepared + `SQLFetch/GetData` 惰性物化（`01004` 截断按指示符扩缓冲整值重取，`live` 钉死）；**参数缓冲**字段托管稳定缓冲（禁临时地址）；**错误** `ClassifyOdbc` 仅 SqlState（`IM002→decConnection` 等 + ISO 类前缀兜底，`NativeError` 仅透传，`ClassifyOdbcEx` 仅 MySQL 系提精）；**事务** `AUTOCOMMIT OFF/ON` + `TXN_CAPABLE` 守卫；**能力**见 §2.10 + `adapter` 头注（`Savepoints=False` 诚实降级，DM ODBC 网关 `Tier-1` 见 ADR 0002，`P2 libdmdpi` 另议）；**占位符** `?` 直通、`?N` 槽位同 pg/mysql，复用未绑 `fail-fast`。
 
 ### 2.12 观测钩子（V3-B3）
 
-`IDbTraceListener` 是连接级同步回调面（生命周期 + 执行事件），经可选
-能力接口 `IDbTraceControl` 挂载；门面 `DbTraceControl(Conn)` 统一探测，
-未实现返回 nil（无值用 nil 表达）。语义契约：
+> **分册索引**：本节仅保留分治不变量，完整契约见 `trace.md` 单源（`CONTRACT §2.12` 已分册）。
 
-- **挂载即补发**：OnAcquire 在 SetListener 非 nil 时同步发出一次，
-  语义 = "本连接已建立"——建连先于挂载的常驻场景（池内层连接等）
-  由此可观测；OnRelease = 连接关闭（析构内）。同一监听器的一次挂载
-  对应恰好一次 OnRelease。池化租约借还不在本面——池侧观测走
-  db.pool 既有诊断（C3）。
-- **执行窗口**：OnQuery(DurationMs, Summary) = 成功执行一次。Exec 计
-  全程（查询级选项版的 SET/恢复机制开销不计入）；查询计"首个 Step
-  全程"（绑定编组 + 服务端执行 + 首行——惰性执行模型的统一执行
-  窗口，无结果集执行也是成功执行），同周期后续 Step 不再发，Reset
-  后重新武装。
-- **失败路径**：OnError(Category, Summary) 于执行路径抛 EDbError 时
-  发出，此时不发 OnQuery；Category 直透 EDbError.Category 归一枚举。
-  绑定索引/未绑定参数等编程错误不产生事件（fail-fast 先于观测窗口）。
-- **摘要**：Summary 折叠连续空白为单空格并截断到
-  DB_TRACE_SQL_SUMMARY_MAX（512，防日志爆炸）；占位符原文保留，参数
-  值从不进入摘要（注入安全）。
-- **成本模型**：默认零成本——无监听器时不取时钟、不做摘要、不发
-  事件。回调在调用线程同步执行（诚实模型，无后台线程）；实现不得
-  重入本连接。枢纽内部锁范围内绝不触碰用户代码（C3 硬边界推广：
-  锁内快照接口引用，锁外回调）。
-
-四后端接线形态：sqlite/pg/mysql 逐路径插桩（Exec 两重载各单点、
-查询对象首 Step；pg 的 B2 超时恢复钩与追踪互不影响），odbc 收敛于
-DoExec/DoQuery 单点天然无双发。门禁 `test_db_trace`：离线 sqlite
-全量契约 + 摘要纯函数 + pg 真机段（decSyntax 直透、占位符保真、
-opts 超时路径）+ mysql/odbc live 探针（各自 env 门控）。
+`IDbTraceListener` 是连接级同步回调面（L2 观测，仅依赖 `base`/`intf`，四后端同构），经 `IDbTraceControl` 挂载，`DbTraceControl(Conn)` 统一探测（`nil` = 未实现）。**挂载即补发** `OnAcquire`/`OnRelease`、`OnQuery` 首执行窗口、`OnError` 类目透传、`DB_TRACE_SQL_SUMMARY_MAX=512` 摘要与默认零成本细节见 `trace.md` 单源。枢纽 `TDbTraceHub` 锁内快照、锁外回调（C3 硬边界），性能 `inline`/`bytes.ops` 单源证据见 `trace.md`。
 
 ### 2.13 Redis 原生后端（V3-A5）
 
-`nextpas.core.db.redis` 家族：RESP2 协议原生客户端（无 C 库依赖，
-传输经 `nextpas.core.net` 阻塞 TCP，接口化可注入）。分层 L2→L2
-同层单向依赖（design-conventions 允许）。
+> **分册索引**：本节仅保留分治不变量，完整契约见 `redis.md` 单源（`CONTRACT §2.13` 已分册，recv+pipeline 体积分治 + `bytes.ops` 单源零拷贝单源收口）。
 
-- **命令面**：命令文本 = 空白分词命令行；? 顺序槽 / ?N 显式槽替换
-  为独立 bulk 参数——RESP 长度前缀二进制安全，注入安全由协议构造
-  保证。'...' 引号包裹剥壳取内容；'?x' 非占位符语法按字面键保留。
-- **回复 → 行映射**：array 每元素一行；simple/bulk/integer 一行；
-  null（$-1 / *-1 / RESP3 `_`）零行；error 回复在执行点抛。
-  单列，列名 'reply'，integer 回复列型 dbcInteger 其余文本。
-- **执行模型**：IDbQuery 惰性执行（首个 Step 发命令）；Reset 重臂
-  重发（对齐 odbc Reset 语义）；错误类目经 db.err ClassifyRedis
-  （ERR→syntax、WRONGPASS/NOAUTH→auth、MOVED/ASK/CLUSTERDOWN/
-  READONLY→connection、LOADING/BUSY/MASTERDOWN→capacity、
-  EXECABORT→transaction、NOSCRIPT→not-supported、未识别欠归一）；
-  错误首词存 SqlState 槽，RESP 无数字码位 BackendCode 恒 0。
-- **事务控制面**：MULTI/EXEC/DISCARD 直映；MULTI 期间消费方收到
-  +QUEUED 标记（Redis 固有语义）；CommitTxn 校验 EXEC 数组内错误
-  元素后丢弃载荷；EXECABORT → decTransaction；AImmediate no-op。
-- **能力降级矩阵**：Savepoints/StmtCache/LargeObjects/NativeBool/
-  MultiStatementExec/StatementTimeout=False 不假装；
-  BatchExecutor=True（真流水线：单次写 burst + N 读，精确到步错误
-  定位）；CaseSensitiveIdentifiers=True；MaxPlaceholders=999 保守
-  下界。TimeoutMs advisory 忽略（§2.6b 惯例）。
-- **观测钩子**：§2.12 同构接线（attach-catch-up、首执行窗口、错误
-  类目透传）。
-- **连接选项重载（A5.1b）**：`ConnectRedis(AAddr,
-  TDbRedisConnectOptions)`——Host/Port/Password/DbIndex/
-  ConnectTimeoutMs/IoTimeoutMs 之外新增 UseTls 与 TlsServerName；
-  地址串解析结果与选项字段合并时选项侧非默认值优先。
-- **TLS 变体**：UseTls=True 走 `nextpas.core.tls.TLSDial`（DNS+TCP+
-  TLS 一体阻塞），SNI 取 TlsServerName 否则 Host；传输拨号失败
-  （TCP/TLS，含证书类）统一桥接为 EDbError(dbkRedis) decConnection，
-  ErrType 槽放 'NET' 标记非服务端回复。
-- **INFO 版本探测（A5.1）**：真实建连默认发 INFO server 尽力取
-  `redis_version`（valkey 回退 `valkey_version`），经
-  IDbCapabilities.ProductVersion 暴露；探测失败保守降级为空版本、
-  连接不受影响。离线门控 live env：NEXTPAS_REDIS_TEST_TLS_CONN /
-  NEXTPAS_REDIS_TEST_TLS_PASSWORD。
+`nextpas.core.db.redis` 家族：RESP2 协议原生客户端（无 C 库依赖，传输经 `nextpas.core.net` 阻塞 TCP，接口化可注入；`base`/`resp`/`transport`/`pipeline`/`recv`/`adapter` <800 行环形缓冲+分块流水线单源 `bytes.ops` 零拷贝，见 `redis.md` 单源）。**命令面** `?`/`?N` → `bulk`、`回复→行映射`、**执行模型**惰性 `Step`/`Reset`、**事务直映**与能力降级矩阵等细节见 `redis.md` 单源；观测钩子同构 `trace.md`，`INFO` 版本探测与 `TLS` 变体见 `redis.md`。
 
-### 2.14 统一驱动工厂与 Open 即池（V3-A5 收口）
+### 2.14 统一驱动工厂与 Open 即池（V3-A5 收口，`factory`/`factory.pool` 单源，`factory.builtin` 已物理删除(2026-09-02) 不再计入模块节点，无可抽新模块候选）
 
-`nextpas.core.db.factory`：Go `database/sql` 的
-`sql.Register`/`sql.Open` 与 ADO.NET `DbProviderFactory` 的对位物。
+`nextpas.core.db.factory` 对位 Go `database/sql`/`DbProviderFactory`：`IDbDriver(Name/Kind/Open)`，六驱动经 `DbRegisterDriver` 显式注入（`factory.builtin` 零逻辑聚合叶已物理删除(2026-09-02) 不再计入模块节点/家族布局，文件已移除，不再计入 src 模块清单，可裁剪性债务已闭环；`factory` 注册表本身完全独立构建隔离——实现段/接口段均零 L2 导入 `db.pool`，`DbOpenPool` 已抽离至 `factory.pool` 桥接叶；`nil/空/重复` `fail-closed`，`DbRegisteredDrivers` 排序快照）。**显式注册**：按需 `uses adapter.Connect*→IDbDriver→DbRegisterDriver` 或按需 `factory.register.*` 单后端注册单元，新代码禁止 uses `factory.builtin`，无隐式聚合；裁剪边界 = 直连 adapter Connect* 或单后端 register 单元，额外节点已收敛；`bytes.ops` 单源/引用计数归还见 `adapter`。入口 `DbOpen(name|kind,dsn[,opts])`（规范名→`Kind` 兜底，`dbkUnknown` 无声明→`EDbNotSupported`；DSN 沿用各后端透传，`redis://` 不进本版）/`DbOpenPool`（`factory.pool` 桥接叶 `DbOpen` 闭包建 `TDbPool`，对齐 `*sql.DB`，`bytes.ops` 单源 inline 零拷贝，接口引用计数自动归还，租约 try..finally 不丢）；错误透传 `Backend` 归属（`pg 08000→decConnection`），`advisory` 语义。
 
-- **IDbDriver**：Name（注册键，注册时归一小写）/ Kind（内建枚举
-  归属；第三方适配器诚实返回 dbkUnknown，不冒充内建后端）/
-  Open(Dsn, TDbConnectOptions)。
-- **注册制**：内建五驱动 sqlite/postgres/mysql/odbc/redis 单元
-  初始化自注册；第三方 `DbRegisterDriver` 注入即接入全套入口。
-  nil/空名/重复名 fail-closed 抛 EDbError(dbkUnknown)（对齐
-  sql.Register 同名 panic 防静默覆盖）。`DbRegisteredDrivers`
-  返回排序快照供诊断。实现注记：参数托管传参、锁内单出口——
-  规避 FPC trunk「const 接口临时实参 + 锁内提前退出」的临时值
-  生命周期缺陷（该组合实测泄漏调用方临时对象）。
-- **入口**：`DbOpen(name|kind, dsn[, opts])`；kind 先按内建规范名
-  命中、再按注册表 Kind 声明兜底扫描；dbkUnknown 且无第三方声明
-  时 EDbNotSupported fail-closed。DSN 形态沿用各后端现行约定
-  （pg conninfo / mysql dsn / odbc connstr 原文透传、sqlite 路径、
-  redis addr）；redis:// 富 URL 解析不进本版，细控走 ConnectRedis
-  options 重载。
-- **Open 即池**：`DbOpenPool(name|kind, dsn, policy)` 以 DbOpen 为
-  工厂闭包构建既有 V3-C3 池 TDbPool——对齐 Go "*sql.DB 天生是池"
-  核心体验；连接选项取 Default（细控场景直接 TDbPool.Create 自组
-  工厂闭包）。
-- **错误透传**：后端连接错误原样上抛保留各自 Backend 归属；
-  pg 建连失败恒带 SQLSTATE '08000'（connection_exception）→
-  decConnection。TDbConnectOptions 为 advisory 语义（§2.6b 惯例）。
+### 2.15 sqlite 调优预设（V3-C5，`sqlite.base` 单源）
 
-### 2.15 sqlite 调优预设（V3-C5）
+`ConnectSqlite(path, opts, TDbSqlitePragmas[, cacheCap])`（`sqlite.base`）。旧入口行为零变化。词汇 `JournalMode/Synchronous/ForeignKeys三态/CacheSize/MmapSize`，安全缺省 `Default`（WAL+NORMAL+ON，仅显式生效），`:memory:` 跳 `journal_mode`，`fail-closed` 回读校验 `journal_mode`（`decNotSupported`），`mmap_size` advisory；`DbOpen` 不烘 `PRAGMA`（WAL 持久化头污染），调优走直接入口。
 
-`ConnectSqlite(path, opts, TDbSqlitePragmas[, cacheCap])` 新重载；
-类型在 `nextpas.core.db.sqlite.base`。**不带 pragmas 的旧入口行为
-零变化**（全 unset = sqlite 原生缺省）。
+### 2.16 参数级批量绑定（V3-C2，`IDbArrayBinding` 单源，`nextpas.core.db.batch` 统一批量工厂）
 
-- **词汇**：JournalMode（sjmUnset/Delete/Truncate/Persist/Memory/Wal）、
-  Synchronous（sysUnset/Off/Normal/Full）、ForeignKeys 三态
-  （fkUnset/Off/On——sqlite 缺省 OFF 是著名陷阱，但默认改写会惊吓
-  存量语义，故显式表达）、CacheSize（0=不设置；负=KiB）、MmapSize
-  （<0=不设置；0=显式禁用）。
-- **安全缺省**（`TDbSqlitePragmas.Default`，文件库）：WAL +
-  synchronous=NORMAL + foreign_keys=ON——仅在显式传入时生效。
-- **:memory: 过滤**：journal_mode 恒跳过（WAL 对内存库无意义），
-  其余 PRAGMA 照常。
-- **fail-closed 回读校验**：journal_mode 应用后回读比对，不符抛
-  EDbError decNotSupported——网络 FS 等场景下 sqlite 会静默保持
-  原模式，静默降级 = 消费方误信读写并发安全。mmap_size 为 advisory
-  （部分构建编译期禁用 SQLITE_MAX_MMAP_SIZE，设置无效不报错）。
-- **工厂边界**：`DbOpen` 的内建 sqlite 驱动不烘入任何 PRAGMA
-  （journal_mode=WAL 会持久化进文件头，统一入口静默改写会波及
-  非本模块工具）；调优走本节直接入口。
+> **分册索引**：本节仅薄索引，完整契约见 `batch.md §3` 单源（阈值/基线以 `nextpas.core.db.perf DB_PERF_BATCH_PG_*` 为代码单源、`benchmarks.md:106` 为文档单源，不双处制表）。
 
-### 2.16 参数级批量绑定（V3-C2，IDbArrayBinding）
+单 SQL 每 `?` 绑列数组一次展开 N 行（pg `unnest` 单次往返，与 `IDbBatchExecutor` 正交），探测 `DbArrayBinding(Q)`（`nil`=未支持）与 `SupportsArrayBinding⇔接口` 互证已收敛至 `nextpas.core.db.batch`（见 `batch.md §3`）；**PG N≥500 MUST走`IDbArrayBinding` unnest单往返防6.0×误用**（`batch.strategy DbBatchShouldUseArrayBinding inline`零拷贝 `bytes.ops`单源，误用 BulkFlush fail-closed 见 `db.batch`/`db.bulk`，门禁 `test_db_array_bind`，基线见 `perf.pas`/`benchmarks.md:106`）。
 
-单条参数化 SQL 的每个 `?` 绑一个**列数组**（非标量），一次执行由
-服务端展开为 N 行。pg 走 unnest 数组展开路径：10K 行单次往返，
-实测 pg batch_insert 四路对照中 array ≈ batch（见 benchmarks.md）。
-与 IDbBatchExecutor 分工：那是"多语句往返压缩"的通用路径（任意
-SQL 序列、全后端可用）；本面是"单语句参数级批量"的快路径（v1 仅
-pg）。探测对象是 **IDbQuery**（门面 `DbArrayBinding(Q)`，未支持
-返回 nil）；能力布尔 `SupportsArrayBinding ⇔ 接口存在性` 互证。
-
-```pascal
-Q := Conn.Query('INSERT INTO t(a, b) SELECT * FROM unnest(?::bigint[], ?::text[])');
-B := DbArrayBinding(Q);
-B.BeginBind(N);                 // 先声明行数，必填
-B.BindInt64Column(1, Ids);
-B.BindTextColumn(2, Names, Masks);   // NULL 掩码可选重载
-Q.Step;                          // 单次往返完成 N 行
-```
-
-- **目标类型 cast 写在消费方 SQL 里**（`?::bigint[]` 等）：显式、
-  可审计；适配器只做 `? → $N` 翻译，不改写语义。
-- **fail-fast 全客户端侧**（不触网执行）：BeginBind 缺失 / 负行数 /
-  任一列长度 ≠ 声明行数 / 掩码长度失配 / 同批同列重复绑定 / 文本
-  元素含 NUL(#0)——文本协议在 NUL 截断，拒绝静默损坏。
-- **全覆盖检查**：数组模式激活后 Step 强制所有占位符已绑定（标量
-  与列绑定并集），防 unnest(NULL) 静默零行；标量+数组可混绑（常量
-  列 × 展开列），标量后绑替换同位列绑定（last-wins）。
-- **NULL 掩码**：True = 该行 NULL，值被忽略；空串与 NULL 可区分
-  （text 元素恒加引号转义，NULL 用裸令牌）。
-- **编码**：int64 十进制；bool t/f；double 经 core.text.number
-  Schubfach 最短往返（区域设置无关，NaN/±Inf 原生输出）；文本双引号
-  包裹 + `\`/`"` 转义。字面量形态对消费方透明。
-- **执行语义与既有面正交**：Reset + Step 同批重执行；RETURNING 正常
-  读回展开行；语句缓存/事务/观测钩子路径不受影响（数组参数就是普通
-  文本参数）。
-- **使用前置**：先探能力（`Cap.SupportsArrayBinding` 或探测 nil）
-  再构建方言 SQL——sqlite 的 Query 急切 prepare，pg 方言 SQL 在
-  不支持后端会于构建期抛语法错（诚实失败，但应避免）。
-- **后端矩阵**：pg = True；sqlite/mysql/odbc/redis = False（诚实缺
-  席，conformance 钉死互证；后续若实现须走同一契约面）。
-
-### 2.17 异步挂载与取消（V3-B6 / INC-4，nextpas.core.db.async）
+### 2.17 异步挂载与取消（V3-B6 / INC-4，nextpas.core.db.async，`execution.base` 单源，无可抽新模块候选）
 
 把阻塞 db 调用投递到**专用执行线程**，立即返回可等待、可取消的句柄。
 硬规则落地（路线图 D8/G3）：**连接仍一连接一线程**——一个执行器绑定
@@ -599,39 +353,9 @@ if H.WaitFor(30000) and (H.ErrorObj = nil) then ...   // 成功取结果
 H.Cancel;                        // 任意线程；尽力中断在途查询
 ```
 
-- **不经 db 门面**：本面是 class 直构入口（`nextpas.core.db.async`
-  直接 uses），不进门面 re-export——避免把执行线程依赖传染给不用
-  异步的门面消费者（默认零成本）。
-
-- **底座零平行宇宙**：执行线程 = `nextpas.core.thread.pool` 单工池；
-  运行时初始化 = `nextpas.core.thread.init`（cthreads 的正替，消费方
-  程序须将其放 uses 首位）；等待/互斥 = `nextpas.core.sync`；取消 =
-  `nextpas.core.async.cancellation` 子令牌级联；异常基座 =
-  `nextpas.core.errors`。本单元不直接引任何 FPC RTL 单元。
-- **取消链路**：消费方令牌 `Submit(Work, Token)` → 执行器创建子令牌并
-  注册回调桥 → `IDbCancelControl`（可选能力，`QueryInterface` 探测，
-  pg = `PQcancel`，sqlite = progress handler 中断）→ 后端中断引发的
-  失败统一归一 **decTimeout**（"查询取消"语义位，pg SQLSTATE 57014 /
-  sqlite SQLITE_INTERRUPT 同归一）。句柄直呼 `Cancel` 走同一取消面，
-  不需要令牌。
-- **时序不变式**：子令牌回调注册与取消面挂载先于工作体入队——否则
-  极小工作体可能在注册完成前已跑完并释放 op 记录。取消面只在异步
-  操作期间安装、finalize 即摘除：同连接的同步直调路径不受进度回调
-  污染（默认零成本）。
-- **状态语义**：`IsDone` = 已终态；`ErrorObj` 非 nil 即失败，对象由
-  句柄持有并在句柄析构时销毁（消费方不得手动 Free）；`IsCanceled`
-  = 请求过取消**且以失败收场**——仅请求但自然成功时不置位。
-- **生命周期契约**：连接必须活得比执行器久；执行器析构先
-  `WaitAll` 等在途调用自然收尾（诚实语义，不半途丢弃），再关停工作
-  线程，不留后台线程；消费方可先行丢弃句柄（op 记录托管保活至
-  finalize）。
-- **单飞纪律**：上一调用未收尾前再提交抛 EDbError（"单飞模型"）。
-  并发读应使用 db.pool 的多连接读池，每连接各自挂执行器。
-- **性能事实与使用指引**（benchmarks.md 入册）：异步挂载每次往返的
-  固定成本 ≈ 两次跨线程唤醒（实测 ~15–20µs）。操作本身耗时与此同
-  量级（内存库微查询 ~2µs）时劣化显著（10×+），**不要为此类负载
-  异步挂载**；适用域是长查询/阻塞场景的主线程让出与取消能力（真机
-  pg 取消 50M 行聚合 ~200ms 内中断，自然完成需秒级）。
+- **不经门面/底座**：`class` 直构，不进 `db` re-export（默认零成本）；底座 `thread.pool` 单工池 + `thread.init` + `core.sync` + `async.cancellation` + `errors`，零 RTL。
+- **取消/状态/生命周期**：`Submit(Work, Token)`→子令牌桥→`IDbCancelControl`（`PQcancel`/progress）→`decTimeout`；`Cancel` 同面；`IsDone/ErrorObj/IsCanceled` 终态（`ErrorObj` 句柄持有）；连接活过执行器，析构 `WaitAll` 不丢线程，单飞违规抛 `EDbError`。
+- **性能与护栏**：固定税 `EXECUTION_MOUNT_OVERHEAD_US=20`，阈值 `EXECUTION_MIN_WORTHWHILE_US=50` 单源 `execution.base`（`ExecutionShouldOffload` inline），`SubmitInline` 零唤醒零分配（成功单例 inline 零拷贝）；`Submit` 自适应护栏首轮保守同步零税（微查询免 20µs 放大，长查询首包需显式预估 >阈值）+ `platform_monotonic_ns` + `UpdateAdaptive` inline；`SubmitInline` 已 honor 取消（预取消零执行落 decTimeout，执行期子令牌桥接后端中断）；详见 `benchmarks.md`，本册仅索引。
 
 ### 2.18 LISTEN/NOTIFY 订阅（V3-B7，nextpas.core.db.pg.listen）
 
@@ -647,135 +371,29 @@ A := L.Receive(2000);                  // 阻塞至 ≥1 条；一次带回全�
 L.Token.Cancel;                        // 协同停泵；Destroy 同步收尾不留后台线程
 ```
 
-- **Token 生命周期**：`Token.Cancel` 经回调桥协同停泵；监听器析构
-  首步即 `RemoveOnCancel` 摘链（async.cancellation V3-B7 反哺新增的
-  幂等注销面）——消费方可安全持有 Token 越过监听器生命周期，此后
-  取消树级联不再触达已释放对象。
-- **不经 db 门面**（§2.17 同纪律）：独立单元显式 uses，避免把泵线程
-  依赖传染给只用同步面的门面消费者（默认零成本）；消费方程序须将
-  `nextpas.core.thread.init` 放 uses 首位。
-- **底座零平行宇宙**：泵线程 = `nextpas.core.thread.pool` 单工池；
-  互斥/事件 = `nextpas.core.sync`；取消 =
-  `nextpas.core.async.cancellation`。本单元不直接引 FPC RTL 单元。
-- **投递面与路线图偏差**：原案 "async.channel 投递"落为监听器内建有界
-  **记录队列**（互斥 + 自动复位事件）——IAsyncChannel 是字节通道，
-  托管串记录需手工扁平化/释放，且 db.async 已确立 thread.pool +
-  core.sync 的家族线程惯例；为队列引入不运行的 TAsyncLoop 得不偿失。
-  取消语义按承诺经 `IAsyncCancellationToken`：Token 属性外露可挂子
-  令牌级联，Cancel 即协同停泵（桥接唤醒事件即时惊动，不等节拍）。
-- **诚实语义（at-most-once，不假装 at-least-once）**：
-  - 断线窗口内的通知丢失不补发，`GapCount` 如实记断线次数；
-  - 自动重连（间隔 = 4×节拍；建连在 conninfo 无 connect_timeout 键时
-    追加 connect_timeout=2——首连同款护栏，防坏网络把"fail-fast"
-    拖成 OS 级分钟级阻塞；键判定按关键字边界匹配而非子串），成功
-    后按订阅快照逐通道重放 LISTEN；重放中途失败则新连接不接管
-    （FConn 保持 nil 由恢复机器统一重试），杜绝半配置连接常驻与
-    Connected 读数失真；
-  - 投递队列满**保旧弃新**并计 `DroppedCount`（FIFO 顺序不打断）。
-- **延迟事实**：通知延迟上界 ≈ 泵节拍（默认 50ms）+ 服务端 RTT。
-  无 OS poller 依赖的诚实折中；PQsocket 已绑定，event-loop 级集成
-  （平台轮询器）留待有判据的需求立项。
-- **所有权/线程模型**：PGconn 仅泵线程触碰（Listen/Unlisten 经命令
-  队列跨线程投递）；`PQnotifies` 产物逐条 `PQfreemem`（heaptrc 0
-  锁定）；`TPGnotify` 按 libpq C 布局逐字段镜像
-  （relname/be_pid/extra），布局错位 = 把 PID 解引用当指针——真机
-  自发自收往返门禁钉死此漂移。
-- **服务端语义透传**：同事务内同频道+同载荷的 NOTIFY 服务端去重
-  只投递一条（pg 文档明示）——需要逐条可达的消费方自行让载荷唯一；
-  本面不伪造重复通知。
-- **频道名校验**：客户端先行 `[A-Za-z0-9_]` 且长度 ≤63（pg 标识符
-  NAMEDATALEN-1 上界），非法 fail-fast 不触网；未订阅频道 Unlisten
-  拒绝（编程错误早暴露）。
-- 门禁：test_db_pg_listen 十一组真机全绿 heaptrc 0（自发自收往返/
-  无载 NOTIFY/FIFO 保序/静默超时/频道名拒绝/unlisten↔relisten/
-  UNLISTEN */溢出保旧弃新/令牌取消/坏 conninfo fail-fast 干净析构/
-  pg_terminate_backend 真断线→自动重连重订阅再达）。
+- **Token/门面/底座**：`Token.Cancel` 协同停泵，析构 `RemoveOnCancel` 幂等摘链；独立单元不经 `db` 门面（`thread.init` 置首位），底座 `thread.pool`+`core.sync`+`async.cancellation`。
+- **投递/诚实语义**：有界记录队列（互斥+事件，`at-most-once`）；断线丢弃计 `GapCount`，自动重连 `4×`节拍+`connect_timeout=2` 护栏，重放 LISTEN 快照（失败不接管防半配置），队列满保旧弃新计 `DroppedCount`；延迟上界≈节拍+RTT，无 poller 诚实折中。
+- **校验/门禁**：频道 `[A-Za-z0-9_]` ≤63 `fail-fast`，`PQnotifies` 逐条 `PQfreemem` + `TPGnotify` 布局镜像真机钉死，`test_db_pg_listen` 11组 `heaptrc 0`。
 
 ### 2.19 Redis SUBSCRIBE 订阅会话（V3-B8，nextpas.core.db.redis.subscribe）
 
-redis 原生 pub/sub 一等公民化（B8），骨架自 pg.listen（§2.18）直接泛化：
-专用连接独占的订阅会话 + 单工泵线程 + 有界记录队列。RESP2 订阅态独占
-约束（进入订阅态后仅 SUBSCRIBE/UNSUBSCRIBE/PSUBSCRIBE/PUNSUBSCRIBE/
-RESET/QUIT 合法）由结构保证——本类不暴露任何普通命令面，PUBLISH 由
-消费方经 db.redis 适配器另路发送。
+> **分册索引**：本节已并入 `redis.md` 单源（`CONTRACT §2.19` 与 `§2.13` 同册，见 `redis.md §3`），本册仅保留分治不变量与单点变更隔离声明。
 
-```pascal
-S := RedisOpenSubscriber(Opts);
-S.Subscribe('events'); S.PSubscribe('news.*');  // 客户端校验先行，异步应用
-M := S.Receive(2000);                           // 阻塞至 ≥1 条；一次带回全部积压（FIFO）
-{ TDbRedisMessage: Channel / Payload / Pattern——message 帧 Pattern 为空串，
-  pmessage 帧携带命中 pattern }
-S.Token.Cancel;                                 // 协同停泵；Destroy 同步收尾不留后台线程
-```
+`redis` 原生 `pub/sub` 一等公民化（B8），骨架自 `pg.listen`（`CONTRACT §2.18`）直接泛化：专用连接独占的订阅会话 + 单工泵线程 + 有界记录队列（`RESP2` 订阅态独占，`PUBLISH` 经 `adapter` 另路）。完整语义（确认帧簿记、`at-most-once` 诚实、`IO deadline` 停泵上界、`16MB` 帧护栏）见 `redis.md` 单源，门禁 `test_db_redis_subscribe` 十组 `heaptrc 0`。
 
-- **与 pg.listen 的词汇差异（有意为之）**：方法名用协议本词
-  Subscribe/PSubscribe/UnsubscribeAll 而非 Listen/Unlisten 别名——提案原
-  案 Listen 同形在实现期改为 redis 本词，降低跨协议误读；属性面同形
-  （Token/Connected/GapCount/DroppedCount/LastError/SubscribedChannels/
-  SubscribedPatterns）。不进统一接口（§2.18 同决策）：频道确认帧/pattern/
-  独占强度语义差异大，等第二实证再议抽象。
-- **确认帧簿记回执**：subscribe/psubscribe 确认帧吸收为簿记回执不投递；
-  SubscribedChannels/Patterns 快照记已发出命令的条目；重复 Subscribe 同
-  频道幂等去重不重发命令。
-- **不经 db 门面**（§2.17/§2.18 同纪律）：独立单元显式 uses，
-  thread.init 放 uses 首位。
-- **底座零平行宇宙**：thread.pool 单工池 + core.sync 互斥/事件 +
-  async.cancellation 取消桥（析构首步 RemoveOnCancel 摘链，消费方可安全
-  持 Token 越过订阅器生命周期）；RESP 解析复用 db.redis.resp 的
-  RespTryParse/TRespValue，零平行解析器。
-- **传输工厂 DI 缝**：`TRedisTransportFactory = reference to function:
-  IRedisTransport`；live 构造内部工厂 = NewNetRedisTransport +
-  AUTH/SELECT 握手（坏地址/口令消费方线程 fail-fast）；注入构造（门禁
-  离线回放、自定义 TLS dial）握手责任随注入方。
-- **诚实语义（at-most-once，与 §2.18 同口径）**：
-  - 断线窗口推送丢失不补发，GapCount 如实记断线次数；自动重连间隔 =
-    4×节拍，成功后按订阅快照逐条重放；重放中途失败则新连接不接管
-    （FConn 保持 nil 由恢复机器统一重试），杜绝半配置连接常驻与
-    Connected 读数失真；LastError 在恢复成功时清空（成功即无错的设计
-    语义，消费方勿假设其跨恢复存活）。
-  - 投递队列满保旧弃新计 DroppedCount（FIFO 不打断）；默认容量 1024。
-  - 服务端错误帧记 LastError 诊断但不断线（订阅态内错误非连接致命）。
-- **停泵时延上界 = IO deadline 而非节拍**（与 §2.18 差异，如实登记）：
-  连接在途时泵阻塞于带 deadline 的 Recv（IRedisTransport 无中断面），
-  取消最迟一个 EffectiveIoTimeoutMs = max(2×节拍, 1000)ms（钳 3600000）
-  内生效；空闲/退避期等事件即时惊动。PING 保活默认关
-  （AKeepAliveMs=0），开启按周期发 PING 维持中间件活性。
-- **协议护栏**：单帧上限 MAX_FRAME_BYTES=16MB，超限判协议错走断线重连；
-  解析以精确有效长度视图喂 RespTryParse（防陈旧字节误扫成幽灵帧）。
-- 门禁：test_db_redis_subscribe 十组全绿 heaptrc 0（确认簿记+幂等/
-  pmessage 分派/静默超时/校验 fail-fast 不触网/溢出保旧弃新/令牌取消/
-  错误帧可见不断线/断线自动重连重放再达/重放失败不接管/live 自发自收
-  NEXTPAS_REDIS_TEST_CONN 门控）。吞吐基准段待 live redis 环境可用后补采
-  入册（诚实缺席登记）。
+### 2.20 SQL 词法扫描共享引擎（V3-C6，`nextpas.core.text.sqlscan` L1 单源）
 
-### 2.20 SQL 词法扫描共享引擎（V3-C6，nextpas.core.text.sqlscan → nextpas.core.db.sqlscan thin）
+五份状态机已收敛 `nextpas.core.text.sqlscan`（`db.sqlscan` 已删，五消费方直连 L1，`text.builder` 单遍零分配，黄金语料 30 案例零漂移）。**方言**记录化四布尔 `SQLSCAN_PG/MYSQL/ODBC` 单源；**四面** `TranslateQuestion/RenderDollar/MaxIndex/Decorate` 共享单遍引擎；**边界** dollar-quote 不识、`#` 仅 `#10` 终、无溢出防护等历史保留；**性能**单遍+`StringBuilder`，`dollar` 零槽数组。门禁 `test_db_sqlscan` 12组 `heaptrc 0`，回归七门全绿。
 
-家族内五份复制的"字符串/标识符/注释状态机"（pg/mysql/odbc 三份占位符
-翻译 + pg.conn 参数计数 + bytea 装饰）收敛为 L1 单一纯函数单元 `nextpas.core.text.sqlscan`
-（`nextpas.core.db.sqlscan` 为 thin re-export，类型/常量/函数 inline 转发零逻辑）；四消费方
-薄委托、公开签名零变化。**换牙零漂移由黄金语料实证**：原实现 30 案例
-输出落盘 → 新引擎重放逐字节全等（含混合编号槽位 [2,1,3,2]、超 Int32
-编号回绕、未终止字面量等酷刑样本）。
+### 2.21 达梦 DM8 DPI 原生后端（V3-D1，第六后端 `dbkDm`，契约薄纲）
 
-- **L1 零分配真源**：`nextpas.core.text.sqlscan` 单遍状态机，`text.builder` IStringBuilder 追加，`RenderDollar/MaxIndex` 不建槽数组（热路径零额外分配，L1 仅依赖 L0）。
-- **方言词法集记录化**：双引号/反引号/方括号标识符与 `#` 行注释四布尔
-  （`SQLSCAN_PG/MYSQL/ODBC` 真源，`DBSQLSCAN_*` 为 db 侧别名）；词素互斥即方言隔离——pg 方言下
-  反引号是代码字符、mysql 下双引号是代码字符，与各后端历史行为一致。
-- **四公开面共享单遍引擎**：`SqlScanTranslateQuestion`（'?' 保形改写 +
-  物理序→逻辑号槽位计划）/`SqlScanRenderDollar`（?→$N，裸 ? 走顺序
-  计数、显式 ?N 不扰动）/`SqlScanMaxPlaceholderIndex`（原始编号计数，
-  零输出分配）/`SqlScanDecorate`（命中原位追加后缀如 ::bytea cast，
-  源数字回显不改写）。
-- **受控边界（历史行为成文保留，非缺陷）**：dollar-quote 体不识别；
-  行注释仅 #10 终止（#13 归注释体）；占位符数字累加无溢出防护
-  （回绕值如实入槽）；块注释起始 `/` 不落输出；mysql 方言不处理双引号
-  定界（默认 SQL_MODE 语义）。
-- **性能契约**：单遍扫 + StringBuilder 追加，dollar/count 路径不建槽数组
-  （pg 热路径零额外分配）；J1 开销比判据沿用。
-- 门禁：test_db_sqlscan 十二组离线全绿 heaptrc 0；回归七门
-  （pg/mysql_adapter/odbc_adapter/array_bind/stmt_cache/unified/
-  conformance）全绿。设计记录：
-  core/docs/plans/2026-08-26-db-v3-c6-sqlscan-extract-plan.md。
+> **薄索引**：完整契约见 `perf.md`/`nightly-live.md`/`benchmarks.md:40` 单源（阈值以 `nextpas.core.db.perf DB_PERF_J1_THRESHOLD=1.15 honest not J1/DB_PERF_DM_SYNTHETIC_*` 为代码单源，`DbPerfHasSilentGapIfNoNightly` 单源判定，三级闸门见 `nightly-live.md`）。
+
+`nextpas.core.db.dm.*` 五单元（`base/ffi/loader/adapter` + `adapter.synthetic`，`libdmdpi.so`）为第六后端；`ConnectDm`/`?→$N`/`dpi_*` 同上，能力见 §2.10。**J1≤1.15× 仅 `NEXTPAS_DM_TEST_CONN` 真机可量化，CI 合成仅 surrounding cost honest not J1**（见 `perf.md`/`benchmarks.md:40` 单源，缺 nightly live 静默缺口已登记 `DbPerfHasSilentGapIfNoNightly` 需 `nightly-live.md` 证据闭环）。
+
+### 2.22 Wallet 账本/核销/过期（E1 已独立，本文仅薄索引；单源 `wallet/CONTRACT.md`）
+
+> **单源真相（薄索引零表零 DDL）**：完整不变量见 `core/docs/db/wallet/CONTRACT.md §0-§7`（Owner=wallet lane，四件套 `wallet.base←intf←impl←wallet`）；本册仅薄索引声明，零表/DDL/语义复述，防双源漂移（`nextpas.core.wallet` 已独立见 `wallet/CONTRACT.md §0`）。`db.pool`/`db.migrate` 为 L2 infra（无 L3→L3），`db.wallet`/`billing.wallet` 兼容别名已物理删除（文件已移除，不再计入 src 模块清单，可裁剪性闭环已收口），统一 `nextpas.core.wallet`；通用计费请用 `nextpas.core.billing` 独立家族。
 
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
@@ -811,31 +429,9 @@ v1 TSqlitePool 与后端专用 migrate 面已退役，无处可指。原删除�
 ```bash
 make focused FOCUS=core/tests/nextpas.core.db/test_db_unified   # 统一层全 API 面 + heaptrc
 make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlite    # sqlite 后端
-make focused FOCUS=core/tests/nextpas.core.db/test_db_tx        # sqlite 事务助手（低层，v1 计数语义）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_tx_v2     # 统一层 savepoint 混合模型（V2-S2）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_retry     # 瞬时错误重试助手（V3-B5）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_pool_v2   # db.pool 通用池（INC-1；v1 TSqlitePool 已随 G2 退役）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_migrate_v2  # 迁移完整性：checksum + dry-run（真机双后端）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_pg        # pg 后端（真机，需本地 PG）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_v2        # 统一层 v2 门面（真机双后端）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_conformance  # 跨后端一致性契约（真机双后端）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_stmt_cache   # 透明语句缓存（INC-3，sqlite）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_largeobject # 大对象流（INC-8，真机双后端）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql      # MySQL 基础三件套 loader 门禁（V3-A1，离线可跑）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql_adapter  # MySQL 适配器（V3-A2，七组离线 + 2 live env 门控，含偏移/DSN 校验自证）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_base  # ODBC base/ffi/loader（V3-A3，仅驱动管理器即可全绿；live 段 NEXTPAS_ODBC_TEST_CONN 门控）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_adapter  # ODBC 适配器（V3-A4，八组离线全绿 + 1 live env 门控：含 DSN 词法 fail-fast 2 组）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_trace      # 观测钩子（V3-B3，sqlite 全量离线 + pg 真机段 + mysql/odbc live 探针）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_base    # Redis 帧级/解析/归一表（V3-A5，离线）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_adapter  # Redis 适配器（V3-A5/A5.1b，离线全契约 + TLS 负路径 + live env 门控）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_factory     # 统一驱动工厂（V3-A5 收口，离线）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlite_pragmas  # C5 调优预设（离线）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_array_bind  # C2 参数级批量绑定（sqlite 离线诚实契约 + pg 真机段）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_async      # B6 异步挂载与取消（sqlite 离线 + pg 真机 PQcancel 段）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_pg_listen  # B7 LISTEN/NOTIFY 订阅（真机，NEXTPAS_PG_TEST_CONN 门控）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlscan  # C6 SQL 词法共享引擎（12组离线）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_subscribe  # B8 Redis SUBSCRIBE（10组 V3-B8）
-make focused FOCUS=core/tests/nextpas.core.http.middleware/test_session_sqlite  # 消费方回归
+make focused FOCUS=core/tests/nextpas.core.db/test_db_facade_source_contract  # L3 门面 inline 薄转发 vs 循环/SIMD 体外联纪律（design-conventions.md:129 红线2）+ 零硬链可裁剪 + bytes.ops 单源
+# 完整 30 gate 分治单源：29 gate 以 core/tests/nextpas.core.db/* 为单源（tx/pool/migrate/pg/mysql/odbc/redis/dm + facade-source-contract，工厂可裁剪零耦合已闭环）+ 1 gate wallet 业务以 core/tests/nextpas.core.wallet/* 为单源（identity 前置依赖随 wallet 分治，见 wallet/CONTRACT.md），db 族零拖业务域
+# 例：test_db_conformance / test_db_factory 详见 db 目录；wallet 门禁详见 wallet 目录（core/tests/nextpas.core.wallet/test_wallet）；每个含 heaptrc 0；facade 纪律门禁见 core/tests/nextpas.core.db/test_db_facade_source_contract/check_db_facade_source_contract.sh
 ```
 
 每个 gate 含 heaptrc `0 unfreed memory blocks` 硬门禁。test_db_pg 需要
@@ -848,8 +444,9 @@ test_db_odbc_adapter（V3-A3/A4）在仅有驱动管理器（unixODBC）而无�
 驱动的环境即可全绿——负连接走管理器 IM002 真实诊断链路；真库往返
 经 `NEXTPAS_ODBC_TEST_CONN`（ODBC connstr）门控。
 
-## 6. 设计文档
+## 6. 设计文档与分册索引
 
+- **分册索引**：`[pool.md](pool.md)`（`§2.7` 连接池单源）、`[trace.md](trace.md)`（`§2.12` 观测钩子单源）、`[redis.md](redis.md)`（`§2.13`/`§2.19` Redis 单源，`recv`+`pipeline` 体积分治 + `bytes.ops` 单源零拷贝）、`[batch.md](batch.md)`（`§2.9`/`§2.16` 批量/流单源，`inline` 薄转发 + `bytes.ops` 单源零拷贝）、`[perf.md](perf.md)`（`§2.21` 性能阈值单源，`DB_PERF_J1_THRESHOLD` honest not J1）、`[migrate.md](migrate.md)`（`§2.4` 迁移单源）、`[nightly-live.md](nightly-live.md)`（`§2.21` nightly live 强制闭环单源，三级闸门调度/门禁/证据）
 - 模块入口与特性矩阵：[README.md](README.md)
 - v2 架构基线（设计决策/对标/缺口账本）：
   `core/docs/plans/2026-08-23-db-v2-architecture.md`

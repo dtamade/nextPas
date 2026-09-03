@@ -18,10 +18,42 @@ uses
   nextpas.core.exception,
   nextpas.core.db.base,
   nextpas.core.db,
+  nextpas.core.db.factory,
+  nextpas.core.db.sqlite.adapter,
+  nextpas.core.db.pg.adapter,
+  nextpas.core.db.mysql.adapter,
+  nextpas.core.db.odbc.adapter,
+  nextpas.core.db.redis.adapter,
+  nextpas.core.db.dm.adapter,
   nextpas.core.db.err;
 
 var
+  GEnsured: Boolean = False;
   T: TTestSuite;
+
+function OpenSqliteV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := ConnectSqlite(ADsn, AOptions); end;
+function OpenPgV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := ConnectPostgres(ADsn, AOptions); end;
+function OpenMysqlV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := ConnectMysql(ADsn, AOptions); end;
+function OpenOdbcV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := ConnectOdbc(ADsn, AOptions); end;
+function OpenRedisV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := ConnectRedis(ADsn, '', 0, AOptions); end;
+function OpenDmV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+begin Result := ConnectDm(ADsn, AOptions); end;
+procedure EnsureBuiltinV2; inline;
+begin
+  if GEnsured then Exit;
+  if not DbDriverExists('sqlite') then DbRegisterDriver(TBuiltinDriver.Create('sqlite', dbkSqlite, @OpenSqliteV2));
+  if not DbDriverExists('postgres') then DbRegisterDriver(TBuiltinDriver.Create('postgres', dbkPostgres, @OpenPgV2));
+  if not DbDriverExists('mysql') then DbRegisterDriver(TBuiltinDriver.Create('mysql', dbkMysql, @OpenMysqlV2));
+  if not DbDriverExists('odbc') then DbRegisterDriver(TBuiltinDriver.Create('odbc', dbkOdbc, @OpenOdbcV2));
+  if not DbDriverExists('redis') then DbRegisterDriver(TBuiltinDriver.Create('redis', dbkRedis, @OpenRedisV2));
+  if not DbDriverExists('dm') then DbRegisterDriver(TBuiltinDriver.Create('dm', dbkDm, @OpenDmV2));
+  GEnsured := True;
+end;
 
 { ==== 共享断言：两后端逐字复用（设计主张本体） ==== }
 
@@ -155,6 +187,7 @@ begin
 end;
 
 begin
+  EnsureBuiltinV2;
   T := TTestSuite.Create('nextpas.core.db.v2');
   T.Test('sqlite: constraint classification + savepoint', @TestSqliteSuite);
   T.Test('pg: same code same semantics', @TestPgSuite);

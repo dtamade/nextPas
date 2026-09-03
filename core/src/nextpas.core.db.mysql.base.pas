@@ -22,6 +22,12 @@ uses
   nextpas.core.exception;
 
 const
+  { 透明语句缓存默认容量（预留，当前 mysql 适配未启用缓存；
+    单源归本后端 owner nextpas.core.db.mysql.base，与 sqlite/pg
+    分治；Redis 等诚实缺席不设此常量）。 }
+  DEFAULT_MYSQL_STMT_CACHE_CAPACITY = 64;
+
+const
   { ===== shared-library candidates, probed in order =====
     Linux ships versioned sonames only (no dev symlinks), hence dlopen.
     Oracle libmysqlclient current soname is .so.21 (8.x); older stacks
@@ -47,6 +53,18 @@ const
   MYSQL_OPT_READ_TIMEOUT    = 11;
   MYSQL_OPT_WRITE_TIMEOUT   = 12;
   MYSQL_OPT_RECONNECT       = 20;
+  { ===== MYSQL_OPT_SSL_* (MySQL 8.0/mysql.h 单点声明，门禁钉死数值) =====
+    复用 nextpas.core.tls 标准校验，Owner=tls，缺能力先反哺 owner；
+    单源于本单元，ffi 通过常量复用不重声明，校验经 db.mysql.tls 桥接。 }
+  MYSQL_OPT_SSL_VERIFY_SERVER_CERT = 21;
+  MYSQL_OPT_SSL_KEY         = 22;
+  MYSQL_OPT_SSL_CERT        = 23;
+  MYSQL_OPT_SSL_CA          = 24;
+  MYSQL_OPT_SSL_CAPATH      = 25;
+  MYSQL_OPT_SSL_CIPHER      = 26;
+  MYSQL_OPT_SSL_CRL         = 27;
+  MYSQL_OPT_SSL_CRLPATH     = 28;
+  MYSQL_OPT_SSL_ENFORCE     = 35;
 
   { ===== CLIENT_* capability flags for mysql_real_connect ===== }
   CLIENT_LONG_PASSWORD     = 1;

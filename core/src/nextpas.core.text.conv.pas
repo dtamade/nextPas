@@ -46,7 +46,8 @@ function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
 function JsonEscape(const AValue: string): string;
 function EscapeLlvmStr(const AValue: string): string;
 
-{== Encoding — byte<->string conversions == single source is bytes.ops (zero-copy Move) ==}
+{== Encoding — byte<->string conversions == single source is bytes.ops (zero-copy Move),
+   compile-time gate BYTES_OPS_SINGLE_SOURCE — facades inline-forward, sentinel + init assert ==}
 { UTF8 pair is the encoding-intent facade; ASCII pair is subset alias — deprecated. }
 function UTF8BytesToString(const AData: TBytes): string; inline;
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
@@ -80,6 +81,10 @@ uses
   nextpas.core.text.number,
   nextpas.core.text.utils,
   nextpas.core.text.view;
+
+const
+  { compile-time single-exit gate: StringToBytes/BytesToString single source is bytes.ops }
+  TEXT_CONV_SINGLE_SOURCE = nextpas.core.bytes.ops.BYTES_OPS_SINGLE_SOURCE;
 
 {== Integer/String conversion — uses System.Str/Val ==}
 
@@ -154,8 +159,21 @@ begin
     Str(AValue:0:LDecimals, Result)
   else
     Str(AValue:0:2, Result);
-  while (Length(Result) > 0) and (Result[1] = ' ') do
-    Delete(Result, 1, 1);
+  { perf: O(n) single Move vs O(n²) Delete(Result,1,1) loop; zero extra alloc,
+    single source Move style from bytes.ops (bytes.ops.BytesToString/StringToBytes);
+    hot path batch formatting avoids repeated memmoves; not inline per red line 2 (loop body) }
+  begin
+    LI := 1;
+    while (LI <= Length(Result)) and (Result[LI] = ' ') do Inc(LI);
+    if LI > 1 then
+      if LI > Length(Result) then
+        Result := ''
+      else
+      begin
+        Move(Result[LI], Result[1], Length(Result) - LI + 1);
+        SetLength(Result, Length(Result) - LI + 1);
+      end;
+  end;
   { Normalize decimal separator to '.' }
   for LI := 1 to Length(Result) do
     if Result[LI] = ',' then
@@ -498,5 +516,9 @@ begin
   SetLength(Result, LLen);
   Move(AStr^, Result[1], SizeUInt(LLen));
 end;
+
+initialization
+  if not TEXT_CONV_SINGLE_SOURCE then
+    raise EInvariantViolation.Create('text.conv single-source gate failed');
 
 end.

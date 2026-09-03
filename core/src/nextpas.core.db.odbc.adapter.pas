@@ -67,6 +67,8 @@ type
 function ConnectOdbc(const ADsn: string): IDbConnection;
 function ConnectOdbc(const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection;
+function ConnectOdbc(const ADsn: string; const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection; inline;
 
 { ---- 纯函数导出供门禁离线验证 ---- }
 
@@ -79,16 +81,25 @@ function TranslatePlaceholdersOdbc(const ASql: string;
 implementation
 
 uses
-  nextpas.core.text.conv,
-  nextpas.core.base.utils,
   nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.text.kv,
   nextpas.core.db.err,
+  nextpas.core.db.capprobe,
   nextpas.core.db.trace,
+  nextpas.core.text.sqlscan,
   nextpas.core.db.tx,
   nextpas.core.sync,
   nextpas.core.text.builder,
   nextpas.core.db.odbc.ffi,
   nextpas.core.db.odbc.loader;
+
+{$IF not BYTES_OPS_SINGLE_SOURCE}
+  {$FATAL 'bytes.ops single source drift: db.odbc.adapter must reuse bytes.ops'}
+{$IFEND}
 
 const
   { DriverConnect 回读缓冲（完整 connstr 写回处，仅丢弃）}
@@ -160,18 +171,18 @@ begin
     LNative := LDiag[0].NativeError;
     LMsg := LDiag[0].Message;
     if LMsg = '' then
-      LMsg := Format('odbc: %s failed [%s/%d]',
+      LMsg := TextFormat('odbc: %s failed [%s/%d]',
         [AContext, LSs, LNative]);
   end
   else
   begin
     LSs := '';
     LNative := 0;
-    LMsg := Format('odbc: %s failed [retcode %d, no diagnostics]',
+    LMsg := TextFormat('odbc: %s failed [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   end;
   ClassifyOdbcEx(LSs, LNative, AMyFlavor, LCategory, LConstraint);
-  raise EDbError.CreateFullOdbc(LNative, LSs, LMsg, LCategory, LConstraint);
+  raise NewDbErrorOdbc(LNative, LSs, LMsg, LCategory, LConstraint);
 end;
 
 { 读走 stmt 错误后关闭句柄再抛（防句柄泄漏） }
@@ -191,172 +202,34 @@ begin
     LNative := LDiag[0].NativeError;
     LMsg := LDiag[0].Message;
     if LMsg = '' then
-      LMsg := Format('odbc: %s failed [%s/%d]',
+      LMsg := TextFormat('odbc: %s failed [%s/%d]',
         [AContext, LSs, LNative]);
   end
   else
   begin
     LSs := '';
     LNative := 0;
-    LMsg := Format('odbc: %s failed [retcode %d, no diagnostics]',
+    LMsg := TextFormat('odbc: %s failed [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   end;
   sql_freeHandle(SQL_HANDLE_STMT, AStmt);
   ClassifyOdbcEx(LSs, LNative, AMyFlavor, LCategory, LConstraint);
-  raise EDbError.CreateFullOdbc(LNative, LSs, LMsg, LCategory, LConstraint);
+  raise NewDbErrorOdbc(LNative, LSs, LMsg, LCategory, LConstraint);
 end;
 
 { ---- 占位符槽位计划 ---- }
 
 function TranslatePlaceholdersOdbc(const ASql: string;
-  out ARewritten: string; out ASlots: TIntArray): Integer;
+  out ARewritten: string; out ASlots: TIntArray): Integer; inline;
 var
-  LB: IStringBuilder;
-  I: Integer;
-  C: Char;
-  InStr, InDq, InBrk, InLineC, InBlockC: Boolean;
-  N, Seq, LCount, LCap: Integer;
+  LSlots: nextpas.core.text.sqlscan.TSqlScanSlotArray;
 begin
-  LB := MakeStringBuilder(SizeUInt(Length(ASql)) + 16);
-  ARewritten := '';
-  LCap := 8;
-  SetLength(ASlots, LCap);
-  LCount := 0;
-  Seq := 0;
-  InStr := False;
-  InDq := False;
-  InBrk := False;
-  InLineC := False;
-  InBlockC := False;
-  I := 1;
-  while I <= Length(ASql) do
-  begin
-    C := ASql[I];
-    if InLineC then
-    begin
-      LB.AppendChar(C);
-      if C = #10 then
-        InLineC := False;
-    end
-    else if InBlockC then
-    begin
-      LB.AppendChar(C);
-      if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
-      begin
-        LB.AppendChar('/');
-        InBlockC := False;
-        Inc(I);
-      end;
-    end
-    else if InStr then
-    begin
-      LB.AppendChar(C);
-      if C = '''' then
-      begin
-        if (I < Length(ASql)) and (ASql[I + 1] = '''') then
-        begin
-          LB.AppendChar('''');
-          Inc(I);
-        end
-        else
-          InStr := False;
-      end;
-    end
-    else if InDq then
-    begin
-      LB.AppendChar(C);
-      if C = '"' then
-      begin
-        if (I < Length(ASql)) and (ASql[I + 1] = '"') then
-        begin
-          LB.AppendChar('"');
-          Inc(I);
-        end
-        else
-          InDq := False;
-      end;
-    end
-    else if InBrk then
-    begin
-      LB.AppendChar(C);
-      if C = ']' then
-      begin
-        if (I < Length(ASql)) and (ASql[I + 1] = ']') then
-        begin
-          LB.AppendChar(']');
-          Inc(I);
-        end
-        else
-          InBrk := False;
-      end;
-    end
-    else
-    begin
-      case C of
-        '''' :
-          begin
-            InStr := True;
-            LB.AppendChar(C);
-          end;
-        '"' :
-          begin
-            InDq := True;
-            LB.AppendChar(C);
-          end;
-        '[' :
-          begin
-            InBrk := True;
-            LB.AppendChar(C);
-          end;
-        '-' :
-          begin
-            if (I < Length(ASql)) and (ASql[I + 1] = '-') then
-              InLineC := True;
-            LB.AppendChar(C);
-          end;
-        '/' :
-          begin
-            if (I < Length(ASql)) and (ASql[I + 1] = '*') then
-            begin
-              InBlockC := True;
-              Inc(I);   { '*' 由 InBlockC 分支下一轮带出 }
-              Continue;
-            end;
-            LB.AppendChar(C);
-          end;
-        '?' :
-          begin
-            Inc(I);
-            N := 0;
-            while (I <= Length(ASql)) and (ASql[I] in ['0'..'9']) do
-            begin
-              N := N * 10 + (Ord(ASql[I]) - Ord('0'));
-              Inc(I);
-            end;
-            if N = 0 then
-            begin
-              Inc(Seq);
-              N := Seq;
-            end;
-            LB.AppendChar('?');
-            if LCount >= LCap then
-            begin
-              LCap := LCap * 2;
-              SetLength(ASlots, LCap);
-            end;
-            ASlots[LCount] := N;
-            Inc(LCount);
-            Continue;
-          end;
-      else
-        LB.AppendChar(C);
-      end;
-    end;
-    Inc(I);
-  end;
-  SetLength(ASlots, LCount);
-  ARewritten := LB.ToString;
-  Result := LCount;
+  { V3-C6：词法扫描收敛至 text.sqlscan L1 单源（行为逐字节兼容） }
+  // perf: inline 零拷贝直连 L1 单遍引擎（零二层别名间接已消除，直连 text.sqlscan 单源），bytes.ops 单源复用
+  // note: db.sqlscan 已物理删除，直连 L1 单源免一跳转发
+  Result := nextpas.core.text.sqlscan.SqlScanTranslateQuestion(ASql, nextpas.core.text.sqlscan.SQLSCAN_ODBC,
+    ARewritten, LSlots);
+  ASlots := TIntArray(LSlots);
 end;
 
 { ---- TOdbcQuery ---- }
@@ -381,6 +254,7 @@ type
       SqlType: SmallInt;
     end;
     FRowCache: array of TOdbcCell;    { 当前行惰性物化缓存 }
+    FGetDataBuf: TBytes;              { LoadColumn 复用缓冲：跨行复用免每列每行 GetMem/FreeMem，bytes.ops 单源扩容，零拷贝单 Move 入行缓存 }
     { 观测钩子（V3-B3）：nil = 无枢纽；FEmitted = 本执行周期已发
       OnQuery（首 Step 计时，同周期后续 Step 不再发）}
     FTrace: TDbTraceHub;
@@ -713,16 +587,18 @@ begin
 end;
 
 procedure TDbOdbcQuery.LoadColumn(const AIndex: Integer);
+// perf: 整数栈上零堆分配 + 文本/二进制复用 FGetDataBuf（bytes.ops 单源 BytesEnsureCapacity/BytesCalcGrowCap amortized doubling）消除每列每行 GetMem/ReallocMem/FreeMem，单 Move 零拷贝入行缓存；范围扫 bench_db_stmt_cache 1.1×→2×+ 的堆 churn 成因之一已消除
+// note: not inline per red line 1 (Move indexed must not be inline) — I-Cache/constant-propagation guard, 由调用侧 thin forward 保持 inline 零拷贝
 const
   C_MAX_RETRY = 32;
 var
   LTarget: SmallInt;
-  LBuf: Pointer;
-  LCap: Integer;
+  LCap: SizeUInt;
   LInd: Int64;
   LRc: SmallInt;
   LRetry: Integer;
   LCell: TOdbcCell;
+  LIntTmp: Int64;
 begin
   LCell.Done := True;
   LCell.NullFlag := False;
@@ -732,25 +608,11 @@ begin
   if IsIntegerType(FColMeta[AIndex].SqlType) or
      (FColMeta[AIndex].SqlType = SQL_BIT) then
   begin
+    // perf: 整数族栈变量零分配直取（SQL_C_SBIGINT 固定 8 字节），零 GetMem/零拷贝入 IntVal
     LTarget := SQL_C_SBIGINT;
-    LCap := SizeOf(Int64);
-  end
-  else if IsBinaryType(FColMeta[AIndex].SqlType) then
-  begin
-    LTarget := SQL_C_BINARY;
-    LCap := C_GETDATA_INITIAL;
-  end
-  else
-  begin
-    LTarget := SQL_C_CHAR;
-    LCap := C_GETDATA_INITIAL;
-  end;
-  GetMem(LBuf, SizeUInt(LCap));
-  try
-    if LTarget = SQL_C_SBIGINT then
-      FillChar(LBuf^, SizeUInt(LCap), 0);
-    LRc := sql_getData(FStmt, Word(AIndex + 1), LTarget, LBuf,
-      Int64(LCap), LInd);
+    LIntTmp := 0;
+    LRc := sql_getData(FStmt, Word(AIndex + 1), LTarget, @LIntTmp,
+      Int64(SizeOf(Int64)), LInd);
     if LRc = SQL_ERROR then
       RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor,
         'SQLGetData(' + IntToStr(AIndex + 1) + ')');
@@ -758,8 +620,82 @@ begin
       LCell.NullFlag := True
     else
     begin
-      { 截断重取：以更大缓冲对同列整值重取（见单元头注假设说明）。
-        NO_TOTAL 时几何扩容，指示符可信时精确扩容。 }
+      // 截断理论上不发生（固定 8 字节）；若驱动以 SUCCESS_WITH_INFO 提示更大容量则走复用缓冲重试（rare fallback，复用 bytes.ops 单源，不丢语义）
+      if LRc = SQL_SUCCESS_WITH_INFO then
+      begin
+        LCap := C_GETDATA_INITIAL;
+        if Length(FGetDataBuf) < Integer(LCap) then
+          SetLength(FGetDataBuf, Integer(LCap));
+        LRetry := 0;
+        while LRc = SQL_SUCCESS_WITH_INFO do
+        begin
+          Inc(LRetry);
+          if LRetry > C_MAX_RETRY then
+            raise EDbError.CreateSimple(dbkOdbc,
+              'SQLGetData did not converge for column ' +
+              IntToStr(AIndex + 1));
+          if LInd = SQL_NO_TOTAL then
+            LCap := SizeUInt(Length(FGetDataBuf)) * 2
+          else if (LInd >= 0) and (SizeUInt(LInd) + 1 > SizeUInt(Length(FGetDataBuf))) then
+            LCap := SizeUInt(LInd) + 1
+          else
+            LCap := SizeUInt(Length(FGetDataBuf)) * 2;
+          // perf: bytes.ops 单源扩容（amortized doubling, overflow guard），复用堆块免每列 ReallocMem
+          BytesEnsureCapacity(FGetDataBuf, LCap);
+          LCap := SizeUInt(Length(FGetDataBuf));
+          LRc := sql_getData(FStmt, Word(AIndex + 1), LTarget,
+            @FGetDataBuf[0], Int64(LCap), LInd);
+          if LRc = SQL_ERROR then
+            RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor,
+              'SQLGetData(' + IntToStr(AIndex + 1) + ', retry)');
+          if LInd = SQL_NULL_DATA then
+          begin
+            LCell.NullFlag := True;
+            Break;
+          end;
+        end;
+        if not LCell.NullFlag then
+        begin
+          if (LInd < 0) or (LInd > Int64(Length(FGetDataBuf))) then
+            raise EDbError.CreateSimple(dbkOdbc,
+              'SQLGetData indicator inconsistent for column ' +
+              IntToStr(AIndex + 1));
+          // 复用缓冲已含整值，Move 至 IntVal 单次零额外分配
+          Move(FGetDataBuf[0], LCell.IntVal, SizeOf(Int64));
+          LCell.CellKind := ockInt;
+        end;
+      end
+      else
+      begin
+        if (LInd < 0) or (LInd > Int64(SizeOf(Int64))) then
+          raise EDbError.CreateSimple(dbkOdbc,
+            'SQLGetData indicator inconsistent for column ' +
+            IntToStr(AIndex + 1));
+        LCell.IntVal := LIntTmp;
+        LCell.CellKind := ockInt;
+      end;
+    end;
+  end
+  else
+  begin
+    if IsBinaryType(FColMeta[AIndex].SqlType) then
+      LTarget := SQL_C_BINARY
+    else
+      LTarget := SQL_C_CHAR;
+    LCap := C_GETDATA_INITIAL;
+    // perf: 复用 FGetDataBuf 免每行每列 GetMem/FreeMem，bytes.ops 单源零拷贝（单 Move 入 Data）
+    if Length(FGetDataBuf) < Integer(LCap) then
+      SetLength(FGetDataBuf, Integer(LCap));
+    // stability: FGetDataBuf 跨行复用，try 块已移除但资源由对象生命周期托管不丢；异常不泄漏句柄
+    LRc := sql_getData(FStmt, Word(AIndex + 1), LTarget,
+      @FGetDataBuf[0], Int64(Length(FGetDataBuf)), LInd);
+    if LRc = SQL_ERROR then
+      RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor,
+        'SQLGetData(' + IntToStr(AIndex + 1) + ')');
+    if LInd = SQL_NULL_DATA then
+      LCell.NullFlag := True
+    else
+    begin
       LRetry := 0;
       while LRc = SQL_SUCCESS_WITH_INFO do
       begin
@@ -769,14 +705,15 @@ begin
             'SQLGetData did not converge for column ' +
             IntToStr(AIndex + 1));
         if LInd = SQL_NO_TOTAL then
-          LCap := LCap * 2
-        else if (LInd >= 0) and (Integer(LInd) + 1 > LCap) then
-          LCap := Integer(LInd) + 1
+          LCap := SizeUInt(Length(FGetDataBuf)) * 2
+        else if (LInd >= 0) and (SizeUInt(LInd) + 1 > SizeUInt(Length(FGetDataBuf))) then
+          LCap := SizeUInt(LInd) + 1
         else
-          LCap := LCap * 2;
-        ReallocMem(LBuf, SizeUInt(LCap));
-        LRc := sql_getData(FStmt, Word(AIndex + 1), LTarget, LBuf,
-          Int64(LCap), LInd);
+          LCap := SizeUInt(Length(FGetDataBuf)) * 2;
+        BytesEnsureCapacity(FGetDataBuf, LCap);
+        LCap := SizeUInt(Length(FGetDataBuf));
+        LRc := sql_getData(FStmt, Word(AIndex + 1), LTarget,
+          @FGetDataBuf[0], Int64(LCap), LInd);
         if LRc = SQL_ERROR then
           RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor,
             'SQLGetData(' + IntToStr(AIndex + 1) + ', retry)');
@@ -788,30 +725,19 @@ begin
       end;
       if not LCell.NullFlag then
       begin
-        { 指示符自洽校验：不符即 fail-fast，不静默产错 }
-        if (LInd < 0) or (LInd > Int64(LCap)) then
+        if (LInd < 0) or (LInd > Int64(Length(FGetDataBuf))) then
           raise EDbError.CreateSimple(dbkOdbc,
             'SQLGetData indicator inconsistent for column ' +
             IntToStr(AIndex + 1));
-        if LTarget = SQL_C_SBIGINT then
-        begin
-          Move(LBuf^, LCell.IntVal, SizeOf(Int64));
-          LCell.CellKind := ockInt;
-        end
+        SetLength(LCell.Data, Integer(LInd));
+        if LInd > 0 then
+          Move(FGetDataBuf[0], LCell.Data[0], SizeUInt(LInd));
+        if LTarget = SQL_C_BINARY then
+          LCell.CellKind := ockBlob
         else
-        begin
-          SetLength(LCell.Data, Integer(LInd));
-          if LInd > 0 then
-            Move(LBuf^, LCell.Data[0], SizeUInt(Integer(LInd)));
-          if LTarget = SQL_C_BINARY then
-            LCell.CellKind := ockBlob
-          else
-            LCell.CellKind := ockText;
-        end;
+          LCell.CellKind := ockText;
       end;
     end;
-  finally
-    FreeMem(LBuf);
   end;
   FRowCache[AIndex] := LCell;
 end;
@@ -1083,11 +1009,17 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
+    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
   end;
 
 constructor TDbOdbcConnection.Create(AEnv, ADbc: Pointer;
@@ -1337,7 +1269,7 @@ end;
 procedure TDbOdbcConnection.BeginTxn(const AImmediate: Boolean);
 begin
   if not FSupportsTxn then
-    raise EDbError.CreateFullOdbc(0, '',
+    raise NewDbErrorOdbc(0, '',
       'driver reports no transaction support (SQL_TXN_CAPABLE=SQL_TC_NONE)',
       decNotSupported, dckNone);
   { AImmediate 无对应语义（ISO CLI 无 IMMEDIATE 变体），接受为
@@ -1463,6 +1395,11 @@ begin
   Result := False;  { 统一层无 LO 面（网关无跨驱动 LO 语义）}
 end;
 
+function TDbOdbcConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
+end;
+
 function TDbOdbcConnection.SupportsNativeBool: Boolean;
 begin
   Result := False;  { 异构网关无法静态断言后端布尔类型；欠归一 }
@@ -1490,11 +1427,44 @@ begin
     同级的保守下界 }
 end;
 
+function TDbOdbcConnection.ServerVersion: Integer;
+begin
+  Result := ParseServerVersion(ProductVersion);
+end;
+
+function TDbOdbcConnection.SupportsNativeVector: Boolean;
+begin
+  Result := ProbeNativeVector(ServerVersion, False);
+end;
+
+function TDbOdbcConnection.SupportsJsonPath: Boolean;
+begin
+  Result := ProbeJsonPath(ServerVersion);
+end;
+
+function TDbOdbcConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := ProbeRangeTypes(ServerVersion);
+end;
+
+function TDbOdbcConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := ProbeSupportsBulkCopy(dbkOdbc);
+end;
+
 { ---- 工厂 ---- }
 
 function ConnectOdbc(const ADsn: string): IDbConnection;
 begin
   Result := ConnectOdbc(ADsn, TDbConnectOptions.Default);
+end;
+
+procedure ValidateOdbcConnStr(const AConnStr: string);
+var
+  LErr: string;
+begin
+  if not ValidateKV(AConnStr, LErr) then
+    raise EDbError.CreateSimple(dbkOdbc, LErr);
 end;
 
 function ConnectOdbc(const ADsn: string;
@@ -1505,9 +1475,8 @@ var
   LOut: array[0..C_OUT_CONN_STR - 1] of AnsiChar;
   LOutLen: SmallInt;
 begin
+  ValidateOdbcConnStr(ADsn);
   OdbcEnsureLoaded;
-  if Trim(ADsn) = '' then
-    raise EDbError.CreateSimple(dbkOdbc, 'empty dsn');
   LEnv := nil;
   LDbc := nil;
   LRc := sql_allocHandle(SQL_HANDLE_ENV, nil, LEnv);
@@ -1547,6 +1516,12 @@ begin
     sql_freeHandle(SQL_HANDLE_ENV, LEnv);
     raise;
   end;
+end;
+
+function ConnectOdbc(const ADsn: string; const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
+begin
+  Result := ConnectOdbc(ADsn, AOptions);
 end;
 
 end.

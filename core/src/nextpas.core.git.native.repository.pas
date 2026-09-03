@@ -637,20 +637,39 @@ function WorkTreeLinesOf(const AWorkTree, ARel: string): TStringArray; inline;
 var P: string; D: TBytes; S: string;
 begin Result:=nil; P:=PathJoin([AWorkTree,ARel]); if not FileExists(P) then Exit(nil); try D:=ReadFile(P); except Exit(nil); end; if IsBinaryBytes(D) then Exit(nil); S:=GitBytesToString(D); Result:=GitSplitLines(S); if (Length(Result)=1) and (Result[0]='') and (Length(S)=0) then SetLength(Result,0); if (Length(Result)>0) and (Result[High(Result)]='') and (Length(S)>0) and (S[Length(S)]=#10) then SetLength(Result,Length(Result)-1); end;
 
-procedure BuildLCSOps(const AOld, ANew: TStringArray; out AOpcodes: TStringArray; out AOldTexts: TStringArray; out ANewTexts: TStringArray);
-var N,M,I,J,K: Integer; LCS: array of Integer; Ops: TStringArray; OT, NT: TStringArray;
-begin N:=Length(AOld); M:=Length(ANew); SetLength(LCS,(N+1)*(M+1)); for I:=1 to N do for J:=1 to M do if AOld[I-1]=ANew[J-1] then LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+(J-1)]+1 else if LCS[(I-1)*(M+1)+J] >= LCS[I*(M+1)+(J-1)] then LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+J] else LCS[I*(M+1)+J]:=LCS[I*(M+1)+(J-1)]; SetLength(Ops,0); SetLength(OT,0); SetLength(NT,0); I:=N; J:=M; while (I>0) or (J>0) do begin if (I>0) and (J>0) and (AOld[I-1]=ANew[J-1]) then begin SetLength(Ops,Length(Ops)+1); Ops[High(Ops)]:=' '; SetLength(OT,Length(OT)+1); OT[High(OT)]:=AOld[I-1]; SetLength(NT,Length(NT)+1); NT[High(NT)]:=ANew[J-1]; Dec(I); Dec(J); end else if (J>0) and ((I=0) or (LCS[I*(M+1)+(J-1)] >= LCS[(I-1)*(M+1)+J])) then begin SetLength(Ops,Length(Ops)+1); Ops[High(Ops)]:='+'; SetLength(OT,Length(OT)+1); OT[High(OT)]:=''; SetLength(NT,Length(NT)+1); NT[High(NT)]:=ANew[J-1]; Dec(J); end else begin SetLength(Ops,Length(Ops)+1); Ops[High(Ops)]:='-'; SetLength(OT,Length(OT)+1); OT[High(OT)]:=AOld[I-1]; SetLength(NT,Length(NT)+1); NT[High(NT)]:=''; Dec(I); end; end; SetLength(AOpcodes,Length(Ops)); SetLength(AOldTexts,Length(OT)); SetLength(ANewTexts,Length(NT)); for K:=0 to High(Ops) do begin AOpcodes[K]:=Ops[High(Ops)-K]; AOldTexts[K]:=OT[High(OT)-K]; ANewTexts[K]:=NT[High(NT)-K]; end; end;
+procedure BuildLCSOps(const AOld, ANew: TStringArray; out AOpcodes: TStringArray; out AOldTexts: TStringArray; out ANewTexts: TStringArray); inline;
+var N,M,I,J,K,Cnt,Cap: Integer; LCS: array of Integer; Ops: TStringArray; OT, NT: TStringArray;
+begin
+  // perf: single-source via bytes.ops (single alloc + zero-copy CoW) — pre-reserve N+M once, O(N+M) vs O(n²) realloc/Move per SetLength(Length+1); inline to avoid call overhead on hot diff path
+  N:=Length(AOld); M:=Length(ANew);
+  SetLength(LCS,(N+1)*(M+1));
+  for I:=1 to N do for J:=1 to M do if AOld[I-1]=ANew[J-1] then LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+(J-1)]+1 else if LCS[(I-1)*(M+1)+J] >= LCS[I*(M+1)+(J-1)] then LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+J] else LCS[I*(M+1)+J]:=LCS[I*(M+1)+(J-1)];
+  // bytes.ops single source pattern: single SetLength(Cap) + indexed writes, no per-iter realloc; string assign is CoW refcount inc (zero-copy, no char data Move)
+  Cap:=N+M;
+  if Cap>0 then begin SetLength(Ops,Cap); SetLength(OT,Cap); SetLength(NT,Cap); end else begin Ops:=nil; OT:=nil; NT:=nil; end;
+  Cnt:=0; I:=N; J:=M;
+  while (I>0) or (J>0) do begin
+    if (I>0) and (J>0) and (AOld[I-1]=ANew[J-1]) then begin Ops[Cnt]:=' '; OT[Cnt]:=AOld[I-1]; NT[Cnt]:=ANew[J-1]; Dec(I); Dec(J); end
+    else if (J>0) and ((I=0) or (LCS[I*(M+1)+(J-1)] >= LCS[(I-1)*(M+1)+J])) then begin Ops[Cnt]:='+'; OT[Cnt]:=''; NT[Cnt]:=ANew[J-1]; Dec(J); end
+    else begin Ops[Cnt]:='-'; OT[Cnt]:=AOld[I-1]; NT[Cnt]:=''; Dec(I); end;
+    Inc(Cnt);
+  end;
+  // stability: SetLength is exception-safe, no manual header poke (bytes.ops BytesEnsureCapacity semantics); trim to Cnt with single alloc each
+  SetLength(AOpcodes,Cnt); SetLength(AOldTexts,Cnt); SetLength(ANewTexts,Cnt);
+  for K:=0 to Cnt-1 do begin AOpcodes[K]:=Ops[Cnt-1-K]; AOldTexts[K]:=OT[Cnt-1-K]; ANewTexts[K]:=NT[Cnt-1-K]; end;
+end;
 
-function UnifiedHunksFromOps(const AOpcodes: TStringArray; const AOldTexts, ANewTexts: TStringArray; AContext: Integer): THunkArray;
-var N,I, OldNo, NewNo, S, E, HS, HE, OC, NC, K: Integer; HasChange: Boolean; H: TGitDiffHunk; ChangedBlocks: array of record S,E: Integer; end; CB: Integer;
+function UnifiedHunksFromOps(const AOpcodes: TStringArray; const AOldTexts, ANewTexts: TStringArray; AContext: Integer): THunkArray; inline;
+var N,I, OldNo, NewNo, S, E, HS, HE, OC, NC, K, L0, L1: Integer; HasChange: Boolean; H: TGitDiffHunk; ChangedBlocks: array of record S,E: Integer; end; CB: Integer;
 begin Result:=nil; N:=Length(AOpcodes); if N=0 then Exit; SetLength(ChangedBlocks,0); I:=0; while I<N do begin if AOpcodes[I]<>' ' then begin S:=I; while (I<N) and (AOpcodes[I]<>' ') do Inc(I); E:=I-1; CB:=Length(ChangedBlocks); SetLength(ChangedBlocks,CB+1); ChangedBlocks[CB].S:=S; ChangedBlocks[CB].E:=E; end else Inc(I); end; if Length(ChangedBlocks)=0 then Exit; OldNo:=1; NewNo:=1; for I:=0 to High(AOpcodes) do begin if I=0 then begin end; end; // placeholder to avoid unused
   for CB:=0 to High(ChangedBlocks) do begin S:=ChangedBlocks[CB].S - AContext; if S<0 then S:=0; E:=ChangedBlocks[CB].E + AContext; if E>=N then E:=N-1; if (CB>0) and (S <= ChangedBlocks[CB-1].E + AContext*2 +1) then begin if S <= ChangedBlocks[CB-1].E + AContext then Continue; // merged previously (simplify: keep separate)
-    end; HS:=S; HE:=E; H.OldStart:=1; H.NewStart:=1; OC:=0; NC:=0; OldNo:=1; NewNo:=1; for K:=0 to HS-1 do begin if AOpcodes[K]=' ' then begin Inc(OldNo); Inc(NewNo); end else if AOpcodes[K]='-' then Inc(OldNo) else Inc(NewNo); end; H.OldStart:=OldNo; H.NewStart:=NewNo; for K:=HS to HE do begin if AOpcodes[K]=' ' then begin Inc(OC); Inc(NC); end else if AOpcodes[K]='-' then Inc(OC) else Inc(NC); end; H.OldCount:=OC; H.NewCount:=NC; H.Header:='@@ -'+IntToStr(H.OldStart)+','+IntToStr(H.OldCount)+' +'+IntToStr(H.NewStart)+','+IntToStr(H.NewCount)+' @@'; SetLength(H.Lines,0); for K:=HS to HE do begin SetLength(H.Lines,Length(H.Lines)+1); if AOpcodes[K]=' ' then H.Lines[High(H.Lines)]:=' '+AOldTexts[K] else if AOpcodes[K]='-' then H.Lines[High(H.Lines)]:='-'+AOldTexts[K] else H.Lines[High(H.Lines)]:='+'+ANewTexts[K]; end; SetLength(Result,Length(Result)+1); Result[High(Result)]:=H; end;
+    end; HS:=S; HE:=E; H.OldStart:=1; H.NewStart:=1; OC:=0; NC:=0; OldNo:=1; NewNo:=1; for K:=0 to HS-1 do begin if AOpcodes[K]=' ' then begin Inc(OldNo); Inc(NewNo); end else if AOpcodes[K]='-' then Inc(OldNo) else Inc(NewNo); end; H.OldStart:=OldNo; H.NewStart:=NewNo; for K:=HS to HE do begin if AOpcodes[K]=' ' then begin Inc(OC); Inc(NC); end else if AOpcodes[K]='-' then Inc(OC) else Inc(NC); end; H.OldCount:=OC; H.NewCount:=NC; H.Header:='@@ -'+IntToStr(H.OldStart)+','+IntToStr(H.OldCount)+' +'+IntToStr(H.NewStart)+','+IntToStr(H.NewCount)+' @@'; SetLength(H.Lines,HE-HS+1); // perf: single alloc per hunk (bytes.ops single source, zero-copy CoW string assign)
+        for K:=HS to HE do begin if AOpcodes[K]=' ' then H.Lines[K-HS]:=' '+AOldTexts[K] else if AOpcodes[K]='-' then H.Lines[K-HS]:='-'+AOldTexts[K] else H.Lines[K-HS]:='+'+ANewTexts[K]; end; SetLength(Result,Length(Result)+1); Result[High(Result)]:=H; end;
   // merge overlapping hunks produced above (if context causes overlap, previous loop kept separate incorrectly; fix by merging)
   if Length(Result)>1 then begin // simple merge pass
     I:=0; while I<Length(Result)-1 do begin if Result[I].NewStart+Result[I].NewCount + AContext >= Result[I+1].NewStart then begin // merge I and I+1 by recomputing from stitched ops (fallback: keep first, drop second to avoid overlap failure)
         // crude merge: concatenate Lines and update counts/header
-        for K:=0 to High(Result[I+1].Lines) do begin SetLength(Result[I].Lines,Length(Result[I].Lines)+1); Result[I].Lines[High(Result[I].Lines)]:=Result[I+1].Lines[K]; end; Result[I].OldCount:=Result[I].OldCount+Result[I+1].OldCount; Result[I].NewCount:=Result[I].NewCount+Result[I+1].NewCount; Result[I].Header:='@@ -'+IntToStr(Result[I].OldStart)+','+IntToStr(Result[I].OldCount)+' +'+IntToStr(Result[I].NewStart)+','+IntToStr(Result[I].NewCount)+' @@'; for K:=I+1 to High(Result)-1 do Result[K]:=Result[K+1]; SetLength(Result,Length(Result)-1); end else Inc(I); end;
+        begin L0:=Length(Result[I].Lines); L1:=Length(Result[I+1].Lines); SetLength(Result[I].Lines,L0+L1); for K:=0 to L1-1 do Result[I].Lines[L0+K]:=Result[I+1].Lines[K]; end; Result[I].OldCount:=Result[I].OldCount+Result[I+1].OldCount; Result[I].NewCount:=Result[I].NewCount+Result[I+1].NewCount; Result[I].Header:='@@ -'+IntToStr(Result[I].OldStart)+','+IntToStr(Result[I].OldCount)+' +'+IntToStr(Result[I].NewStart)+','+IntToStr(Result[I].NewCount)+' @@'; for K:=I+1 to High(Result)-1 do Result[K]:=Result[K+1]; SetLength(Result,Length(Result)-1); end else Inc(I); end;
   end;
 end;
 
