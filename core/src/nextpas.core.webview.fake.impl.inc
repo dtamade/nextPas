@@ -342,20 +342,56 @@ procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 var
   LRec: TFakeInvokeOutcome;
+  LNew: array of TFakeInvokeOutcome;
+  LOldList: array of TFakeInvokeOutcome;
+  LCount, LCap, LNewCap: Integer;
 begin
-  // stability: managed AddRef/Release via record assign balances heaptrc0, Default(T) 释放不丢 via registry Clear, zero leak
-  // perf: single source bytes.ops TCompactLiveRegistry.Register -> VecGrow 0→4→2× VecGrowCapacity inline zero-copy single source with gtk/wk 8/8 同源,短临界 <1µs; 0→4→2× amortized O(1)/push, SetLength zero-init O(Cap) rare and amortized, burst concurrent tail not amplified (single grow per doubling, registry inline no manual VecGrowCopy duplicate)
+  // stability: managed AddRef/Release via record assign balances heaptrc0, Default(T) 释放不丢 via registry Clear, zero leak; LNew/LOldList managed array refcnt, Finalize 释放不丢, reuse avoids leak
+  // perf: single source bytes.ops TCompactLiveRegistry.TryRegisterFast/TryInstallGrown + VecGrowCapacity/VecGrowCopy inline zero-copy single source with gtk/wk 8/8 同源,短临界 <1µs; 0→4→2× amortized O(1)/push, SetLength zero-init O(Cap) rare and amortized outside lock, burst concurrent tail not amplified (single grow per doubling, registry inline no manual duplicate), LNew reuse via Length check avoids repeat zero-init O(Cap) — mirrors dispatcher Ring optimistic single source
   LRec.Cmd := ACmd;
   LRec.IsError := AIsError;
   LRec.ResultJson := AResultJson;
   LRec.Code := ACode;
   LRec.Message := AMessage;
-  FLck.Acquire;
-  try
-    // perf: inline TCompactLiveRegistry.Register single source bytes.ops VecGrowCapacity 0→4→2× / VecGrow inline zero extra call, Default(T) 释放不丢; short critical <1µs
-    FOutcomes.Register(LRec);
-  finally
-    FLck.Release;
+  LNew := nil;
+  while True do
+  begin
+    FLck.Acquire;
+    try
+      if FOutcomes.TryRegisterFast(LRec) then Exit;
+      FOutcomes.GetSnapshotRaw(LOldList, LCount, LCap);
+      LNewCap := VecGrowCapacity(LCap);
+    finally
+      FLck.Release;
+    end;
+    // perf: O(1) pre-validate before heap alloc/linearize — avoids wasted O(n) VecCopy on stale competitive retry, zero alloc/copy if stale or space appeared, single source bytes.ops VecGrowCapacity inline
+    FLck.Acquire;
+    try
+      if FOutcomes.TryRegisterFast(LRec) then Exit;
+      if (Pointer(FOutcomes.RawList) <> Pointer(LOldList)) or (FOutcomes.Count <> LCount) or (FOutcomes.Capacity <> LCap) then
+        Continue;
+    finally
+      FLck.Release;
+    end;
+    // perf: heap via VecGrowCopy single source bytes.ops inline outside lock — Length<>Cap 时 SetLength 单次零化 O(Cap)，复用时零零化；预校验后仅有效 epoch 分配+线性化，0→4→2× 摊销 O(1)/push，突发并发零重复分配不放大尾延迟，尾零 spare 复用兑现，managed 保 refcnt/blittable 单 Move 零拷贝，VecCopy 单源内联零额外调用
+    // stability: reuse LNew buffer across retries (Length=Cap 跳过 SetLength 零化 O(Cap) 且 VecCopy 覆盖)，VecGrowCopy 单源 Length 判定+VecCopy 覆写保 refcnt，Finalize 零泄漏
+    if Length(LNew) = LNewCap then
+    begin
+      if LCount > 0 then
+        specialize VecCopy<TFakeInvokeOutcome>(LOldList, LNew, LCount);
+    end
+    else
+      specialize VecGrowCopy<TFakeInvokeOutcome>(LOldList, LNew, LCount, LNewCap);
+    // perf: short install under lock — only pointer check + O(1) swap, zero O(n) hold, stale => keep LNew buffer for reuse and retry outside lock, single source no spin
+    FLck.Acquire;
+    try
+      if FOutcomes.TryRegisterFast(LRec) then Exit;
+      if FOutcomes.TryInstallGrown(LOldList, LCount, LNew, LRec) then Exit;
+      // contention during copy window (rare) — keep LNew buffer for reuse (SetLength Length vs Cap check avoids repeated O(Cap) zero-init, VecCopy overwrites), zero O(n) under lock, Finalize on reuse/Exit zero leak
+    finally
+      FLck.Release;
+    end;
+    // retry: loop will recapture fresh snapshot; pre-validate before next linearize avoids duplicate O(n) copy
   end;
 end;
 

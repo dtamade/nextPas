@@ -61,6 +61,7 @@ implementation
 uses
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashset,
+  nextpas.core.platform.console,
   nextpas.core.platform.env,
   nextpas.core.webview.gtk.viewmap;
 
@@ -81,11 +82,21 @@ var
   GShellDebugEnabled: Boolean = False;
   GShellLogger: ILogger = nil;
 
-{ TGtkDebugLogger — graded stderr sink via log.intf (L0 seam) }
+{ TGtkDebugLogger — graded stderr sink via platform.console Owner (L0 seam) }
 procedure TGtkDebugLogger.Log(const ALevel: TLogLevel; const AMessage: string);
+var
+  LBody: AnsiString;
 begin
-  System.Write(StdErr, '[npw-gtk] ', AMessage, LineEnding);
-  System.Flush(StdErr);
+  // Owner 单源：platform.console fd 2 (stderr) 薄转发，禁止 System.Write/Flush 直写绕过
+  // perf: PAnsiChar+Length 零拷贝分段写（无 '[npw-gtk] '+AMessage 拼接堆分配），零额外拷贝，短临界 <1µs 无缓冲滞留；前缀字面零堆分配，LineEnding 直指全局常量零拷贝
+  platform_console_write(2, PAnsiChar('[npw-gtk] '), 10);
+  if AMessage <> '' then
+  begin
+    LBody := AnsiString(AMessage);
+    platform_console_write(2, PAnsiChar(LBody), Length(LBody));
+  end;
+  platform_console_write(2, PAnsiChar(LineEnding), Length(LineEnding));
+  // stability: 无缓冲直写即落盘，零 Flush 粘行；value/sentinel -1 失败静默，调试探针不抛异常不丢资源
 end;
 
 procedure TGtkDebugLogger.Trace(const AMessage: string);

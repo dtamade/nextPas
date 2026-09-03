@@ -22,19 +22,21 @@ uses
 
 type
   // 单源别名：后端 PEvalRec 统一经本 Owner 类型岛收口，消除 Pointer 硬转；实际 Slab 仍由 pool 承载，eval 仅薄转发 owner 语义（Done+Snapshot 单源）
+  // perf: registry holds Pointer to TEvalSlot/TEvalRec (both Pointer-sized, layout identical Callback/OnError/Done/Cancel/Owner) via bytes.ops TCompactLiveRegistry<Pointer> single source inline zero-copy (VecGrow 0→4→2×), thin-forward via Pointer avoids generic duplication, inline zero extra call
   PEvalSlot = ^TEvalSlot;
   TEvalSlot = record
     Callback: TWebviewEvalCallback;
     OnError: TWebviewEvalErrorCallback;
     Done: Boolean;
-    Owner: Pointer;
     Cancel: Pointer;
+    Owner: Pointer;
   end;
-  TEvalRegistry = specialize TCompactLiveRegistry<PEvalSlot>;
+  TEvalRegistry = specialize TCompactLiveRegistry<Pointer>;
 
-procedure EvalRegisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: PEvalSlot); inline;
-procedure EvalUnregisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: PEvalSlot); inline;
-function EvalSnapshotInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: array of PEvalSlot): Integer; inline;
+procedure EvalRegisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: Pointer); inline;
+procedure EvalUnregisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: Pointer); inline;
+function EvalSnapshotInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: array of Pointer): Integer; inline;
+function EvalSnapshotAndMarkDoneInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: array of Pointer): Integer; inline;
 function EvalTryMarkDoneInline(ASlot: PEvalSlot): Boolean; inline;
 procedure EvalSettleInline(ASlot: PEvalSlot; AOk: Boolean; const AText: string); inline;
 procedure EvalClearRegistryInline(AReg: TEvalRegistry; ALock: TMutex); inline;

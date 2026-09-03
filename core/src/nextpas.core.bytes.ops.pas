@@ -117,6 +117,12 @@ type
     procedure Snapshot(var ADest: array of T); inline;
     procedure Trim; inline;
     procedure Clear;
+    // perf: single source capacity/raw snapshot for optimistic lock-bypassing grow (zero alloc inside lock, O(1) fast-path, VecGrowCapacity/VecGrowCopy single source outside), inline zero-copy, reuse LNew Length check avoids repeat SetLength zero-init O(Cap) — mirrors dispatcher Ring optimistic
+    function Capacity: Integer; inline;
+    function RawList: array of T; inline;
+    procedure GetSnapshotRaw(out AList: array of T; out ACount, ACap: Integer); inline;
+    function TryRegisterFast(const AValue: T): Boolean; inline;
+    function TryInstallGrown(const AOldList: array of T; AOldCount: Integer; var ANew: array of T; const AValue: T): Boolean; inline;
     destructor Destroy; override;
   end;
 
@@ -1004,6 +1010,42 @@ begin
     FList[FCount] := Default(T);
   end;
   SetLength(FList, 0);
+end;
+
+generic function TCompactLiveRegistry.Capacity: Integer; inline;
+begin
+  Result := Length(FList);
+end;
+
+generic function TCompactLiveRegistry.RawList: array of T; inline;
+begin
+  Result := FList;
+end;
+
+generic procedure TCompactLiveRegistry.GetSnapshotRaw(out AList: array of T; out ACount, ACap: Integer); inline;
+begin
+  AList := FList;
+  ACount := FCount;
+  ACap := Length(FList);
+end;
+
+generic function TCompactLiveRegistry.TryRegisterFast(const AValue: T): Boolean; inline;
+begin
+  if FCount < Length(FList) then
+  begin
+    FList[FCount] := AValue;
+    Inc(FCount);
+    Result := True;
+  end else Result := False;
+end;
+
+generic function TCompactLiveRegistry.TryInstallGrown(const AOldList: array of T; AOldCount: Integer; var ANew: array of T; const AValue: T): Boolean; inline;
+begin
+  if (Pointer(FList) <> Pointer(AOldList)) or (FCount <> AOldCount) then Exit(False);
+  FList := ANew;
+  FList[FCount] := AValue;
+  Inc(FCount);
+  Result := True;
 end;
 
 generic destructor TCompactLiveRegistry.Destroy;

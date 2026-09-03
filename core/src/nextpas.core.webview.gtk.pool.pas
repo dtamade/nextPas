@@ -95,12 +95,6 @@ var
   GEvalLock: TMutex = nil;
   GCancelLock: TMutex = nil;
   GStreamLock: TMutex = nil;
-  GIdleOnce: IOnce = nil;
-  GCompletionOnce: IOnce = nil;
-  GAssetHolderOnce: IOnce = nil;
-  GEvalOnce: IOnce = nil;
-  GCancelOnce: IOnce = nil;
-  GStreamOnce: IOnce = nil;
   GPoolFinalized: Int32 = 0;
 
 function LazyLock(var ALock: TMutex): TMutex;
@@ -366,25 +360,5 @@ begin
   DrainCancelSlab(GCancelPool, GCancelPoolCount, GCancelLock);
   DrainCancelSlab(GStreamPool, GStreamPoolCount, GStreamLock);
 end;
-
-initialization
-  GIdleOnce := Once;
-  GCompletionOnce := Once;
-  GAssetHolderOnce := Once;
-  GEvalOnce := Once;
-  GCancelOnce := Once;
-  GStreamOnce := Once;
-
-finalization
-  GIdleOnce := nil;
-  GCompletionOnce := nil;
-  GAssetHolderOnce := nil;
-  GEvalOnce := nil;
-  GCancelOnce := nil;
-  GStreamOnce := nil;
-  GCompletionOnce := nil;
-  GAssetHolderOnce := nil;
-  GEvalOnce := nil;
-  GCancelOnce := nil;
 
 end.

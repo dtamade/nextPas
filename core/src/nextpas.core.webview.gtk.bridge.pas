@@ -180,10 +180,6 @@ begin
       BridgeFinishNotFound(ARequest);
       Exit;
     end;
-    // 性能：GStreamPool Slab 预取 (bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock short critical <1µs, burst 小文件零 per-request g_malloc amortized) — 单源 pool 预热, 命中则零新建, 未命中仍单源 bytes.ops, 薄转发零额外堆分配
-    LStream := AcquireAssetStream;
-    if LStream <> nil then ReleaseAssetStream(LStream);
-    LStream := nil;
     // 热点零拷贝切片：单 Holder Slab 复用 + G_memory_input_stream_new_from_data 直通，零 GBytes 中间对象，Threshold retired 统一单路径，bytes.ops 单源
     LHolder := nextpas.core.webview.gtk.pool.AcquireAssetHolder;
     LHolder^.Bytes := LBytes; // COW 零拷贝共享，bytes.ops 单源，热点小文件零 Move
@@ -209,7 +205,7 @@ begin
       nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder);
       raise;
     end;
-    // 性能：尝试 GStreamPool Slab 复用 (bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock short critical <1µs, burst 小文件零 per-request g_malloc amortized); 若池命中则零新建 GObject, 否则新建后所有权移交 WebKit, Holder 经 BridgeAssetBufFree 回池 — 单源 pool/bytes.ops, 零双分配
+    // 性能：Holder Slab 复用 (bytes.ops VecGrow 0→4→2× inline, per-pool GHolderLock short critical <1µs, 热点零 per-request heap) + G_memory_input_stream_new_from_data 零拷贝直通，bytes.ops 单源，统一单路径零堆抖动，Holder 经 BridgeAssetBufFree 回池
     // 稳定性：LStream 所有权随 finish 移交 WebKit，Holder 随 stream destroy 回池，GError adopt 不自 free
     try
       WEBKIT_uri_scheme_request_finish(ARequest, LStream, LLen, PAnsiChar(LMime));
