@@ -118,6 +118,10 @@ function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean = 
 function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer; inline;
 procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean = False); inline;
 
+{ ---- Capacity helpers (single source via bytes.ops) ---- }
+procedure AudioEnsureBytesCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+procedure AudioEnsureCapacity(var ACap: Integer; const ARequired: Integer; const AMinGrow: Integer = 4); inline;
+
 { ---- Realtime helpers (zero-alloc, lock-free, no IO) ---- }
 // 字节预算：统一溢出守卫，供 FillRealtime 入口复用；非 inline 避免索引元素喂 untyped Var 参常量传播污染（设计规范红线）
 function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64;
@@ -340,6 +344,19 @@ begin
   if AFrames <= 0 then Exit(0);
   if not AFormat.IsValid then Exit(0);
   Result := Int64(AFrames) * Int64(AFormat.BlockAlign);
+end;
+
+procedure AudioEnsureBytesCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+begin
+  // perf: inline + single source via bytes.ops.BytesEnsureCapacity (doubling, zero-copy, amortized O(1) steady)
+  BytesEnsureCapacity(ADest, ARequired);
+end;
+
+procedure AudioEnsureCapacity(var ACap: Integer; const ARequired: Integer; const AMinGrow: Integer); inline;
+begin
+  // perf: single source via bytes.ops.BytesGrowCapacityIntWithMin (geometric 0→64→2× / Webview 0→4→2× reuse, amortized O(1)), inline thin-forward zero extra call
+  if ACap >= ARequired then Exit;
+  ACap := BytesGrowCapacityIntWithMin(ACap, ARequired, AMinGrow);
 end;
 
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;

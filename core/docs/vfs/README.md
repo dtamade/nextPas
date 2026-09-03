@@ -63,7 +63,7 @@ VfsWalk(Fs, '.',
   end);
 
 // 后端装配视角
-FsEmbedded := CreateEmbeddedVfs(@Blob[0], Length(Blob), False); // 嵌入包（或 CreateEmbeddedVfsBorrowed；ResPackOpen 返回 TResPack，非 PByte）
+FsEmbedded := CreateEmbeddedVfsBorrowed(@Blob[0], Length(Blob)); // 嵌入包 Borrowed const 段零 Free，Owned 则归 VFS（布尔陷阱已移除）
 FsDisk     := CreateOsVfs('/srv/app');                                 // 真实目录
 FsMem      := CreateMemTreeVfs(Tree);                                  // 测试替身
 
@@ -97,15 +97,18 @@ nextpas.core.vfs.errors.pas     ← EVfsError(含 Op/Path) 及子类
 nextpas.core.vfs.memtree.pas    ← 内存不可变树（embedded 底座 + 测试替身）+ Builder
 nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片
 nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转换在此收口）
+nextpas.core.vfs.backends.pas   ← 后端族聚合：memtree/embedded/os 单缝收口（门面经 backends 单缝收敛 12→10）
 nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装
 nextpas.core.vfs.mount.pas      ← CreateMountedVfs：多 IVfs 前缀最长匹配挂载复合（P2 完整性， surpass Go fs）
 nextpas.core.vfs.overlay.pas    ← CreateOverlayVfs：多 IVfs 同根优先级叠加（游戏 patch>dlc>base 热更，去重合并，ETag优先透传）
-nextpas.core.vfs.transform.pas  ← L3 单缝通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc/TVfsHeaderPredicateFunc` 三谓词 + `TRANSFORM_HEADER_PEEK=4K` 单源决策器（单流 4K peek，Header假回 FInner.Stat/零物化直透，命中则单流 Move 复用 4K 头+同流 IReaderAt/Seek 补读免二次 OpenRead，小文件零二次 IO），压缩/加密共用模板，inline+try-finally 零拷贝（L3 单缝寄居正名，Registry 单缝白名单过渡，长期聚合为 nextpas.core.vfs.decorator 独立 L3 族到期移除白名单）
-nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名）：经 transform 单源决策器承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，复用 `TRANSFORM_HEADER_PEEK` + `bytes.ops` 单源魔数，STORE 零拷贝与 32MiB 防 bomb 由 transform 承载）
+nextpas.core.vfs.cache.pas      ← L2热点List缓存单源 helper：SwissTable 16槽 + RWLock 读并发零争用 + 阻塞写 + 零拷贝 COW 共享（mount/overlay 单源 via vfs.cache，SwissTable/RWLock/bytes.ops 单源 inline 零拷贝，Put 侧 Copy 隔离，TryGet 零拷贝 O(1) 共享只读契约防篡改 Move 仅在篡改路径，try-finally 资源不丢）
+nextpas.core.vfs.transform.pas  ← L3 通用字节变换装饰器（独立族 via vfs.decorator，L3→L2 单向固化，Registry 白名单已移除，复用 io.prefix 可复用前缀旁路流）：`TVfsTransformFunc/TVfsShouldTransformFunc/TVfsHeaderPredicateFunc` 三谓词 + `TRANSFORM_HEADER_PEEK=4K` impl 私有单源决策器（单流 4K peek，接口不暴露封装收口，大文件栈上 2 字节探针栈零堆分配 PByte 单源免 4K/TBytes 堆分配，Header假回 FInner.Stat/零物化直透，命中则单流 Move 复用 4K 头+同流 64K 分块 IReaderAt/Seek 补读免二次 OpenRead，小文件零二次 IO，Stat/OpenRead 大文件解压一致性 via 单源，泛型路径输入/输出双 32MiB 限幅防 bomb 并发峰值受控，chunked streaming 已落地 64K 分块 + BytesNextCapacity 预估容量，峰值受控可被泛型/压缩复用），压缩/加密共用模板，inline+try-finally 零拷贝，薄转发分层（LightProbe/HeaderRead/LargeFill 三阶段 inline 单一职责）（L3 独立族 via decorator 聚合，L3→L2 单向固化，io.prefix 独立可复用）
+nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名，Registry 白名单过渡，L7 聚合拆分为 decorator）：经 transform 单源决策器承载 gzip（`VFS_DECOMPRESS_MAX_BYTES` 链式单源 alias vfs.base→compress.base GZIP_MAX 32MiB canonical 无字面量（source-contract 单源 alias 锁定） + `daAuto/daGzip` 语义，4K HeaderPred 统一（impl 私有 4096 单源，接口不暴露，compressed 数值对齐无别名） + `bytes.ops` inline 零拷贝单源魔数，STORE 零拷贝与 32MiB 防 bomb 由 transform 统一承载（泛型/压缩一致））
+nextpas.core.vfs.decorator.pas  ← L3装饰器族聚合：transform+compressed 单点收口（门面扇出收敛 13→12，双族合计 12→10）
 ```
 
-依赖方向：`base/errors ← intf ← memtree/embedded/os/sub ← 门面`；
-`embedded` 额外依赖 `respack.reader`；`os` 额外依赖 `nextpas.core.fs`。
+依赖方向：`base/errors ← intf ← memtree/embedded/os ← backends ← 门面`；`sub/mount/overlay/cache/util` 纯复合/工具经 backends 族间接复用；
+`embedded` 额外依赖 `respack.reader` 与 `os` 额外依赖 `nextpas.core.fs` 双缝已经 `vfs.backends` 单缝聚合收口（L7 已落地），`bytes.ops` 单源 inline 零拷贝 + striped SpinLock 16 shards 分片发布 10k 首击 16×降争 双重校验保留 try-finally 资源不丢；门面仅经 `backends`+`decorator` 双族单缝收敛（扇出 12→10）。
 
 ### 依赖白名单
 
@@ -113,10 +116,12 @@ nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名）�
 |------|----------|------|
 | `base` | L0 | 自有 `TEntryInfo/TStatInfo`，**不复用 `fs.base` 类型** |
 | `intf` | `base` + `io.intf`（IStream） | 流词汇唯一来源是 io |
-| `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader`） | |
-| `transform` | `intf/base` + `io.memory` + `vfs.util` | L3 单缝通用装饰器（单缝寄居 L2 家族，Registry 单缝白名单过渡，长期待 L3 族聚合拆分）：任意 `TBytes→TBytes` + `HeaderPred(4K)` 单源决策器 TryResolveViaHeaderSingleStream（Stat/OpenRead 共用，inline 单流 Move 零拷贝，Header假回 FInner.Stat/零物化直透，命中大文件同流补读免二次 OpenRead），零 `SysUtils` 直引（`QueryInterface`） |
-| `compressed` | `transform` + `compress` (`compress.base` + `compress.gzip`) + `bytes.ops` | L3 薄门面（单缝寄居正名，长期待拆分）：仅策略（`daAuto/daGzip`、`IsGzipHeaderPred` 4K 头部谓词 `bytes.ops` 单源、`GZIP_MAX` 单源），模板复用 `transform` 单源决策器承载 32MiB 防 bomb |
-| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **唯一的 L2→L2 seam**，registry 记录 |
+| `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader` L2→L2 seam 已经 `backends` 单缝聚合收口，bytes.ops 单源 inline 零拷贝 + striped SpinLock 16 shards 分片发布 10k 首击 16×降争 双重校验保留 try-finally 资源不丢，L7 已落地单缝理想） | |
+| `transform` | `intf/base` + `bytes.ops` + `io.memory` + `io.prefix` + `vfs.base` + `vfs.util` + `exception`（L0-L1；bytes.ops HeaderPred/BytesNextCapacity/BytesCopy 单源 inline 零拷贝，vfs.base 32MiB 字面量对齐，io.prefix 可复用前缀旁路流独立，exception EVfsError 根） | L3 通用装饰器（独立族 via vfs.decorator，L3→L2 单向固化，Registry 白名单已移除，复用 io.prefix 可复用前缀旁路流独立模块；impl 私有 4K/64K 常量接口不暴露封装收口，HeaderPred PByte 单源零堆 inline 零拷贝，OpenRead 免前置 Stat 单流直达，大文件输入/输出双 32MiB 限幅防 bomb 并发峰值受控（chunked streaming 已落地 64K 分块 + BytesNextCapacity 预估容量，峰值受控可被泛型/压缩复用，bytes.ops 单源 inline 零拷贝，try-finally 不丢））：任意 `TBytes→TBytes` + `HeaderPred(4K)` 单源决策器 TryResolveViaHeaderSingleStream 薄转发分层（LightProbe/HeaderRead/LargeFill 三阶段 inline 单一职责，Stat/OpenRead 共用，BytesCopy/Move 零拷贝，大文件栈上 2 字节探针栈零堆 PByte 单源免 4K/TBytes 堆分配，Header假回 FInner.Stat/零物化直透，命中大文件 64K 分块同流补读免二次 OpenRead，Stat/OpenRead 大文件解压一致性，泛型路径输入/输出双 32MiB 防 bomb 统一），零 `SysUtils` 直引（`QueryInterface`） |
+| `compressed` | `transform` + `compress.gzip` + `bytes.ops` + `vfs.base` | L3 薄门面（单缝寄居正名，Registry 白名单过渡，L7 聚合拆分为 decorator，经 vfs.base 链式单源 alias 压缩 canonical 无字面量（vfs.base→compress.base GZIP_MAX 32MiB，链式别名复用无二次字面量双写，L3→L2 合法）：仅策略（`daAuto/daGzip`、`IsGzipHeaderPred` 4K 头部谓词 `bytes.ops` inline 零拷贝单源、4K HeaderPred 统一（impl 私有 4096 单源，接口不暴露，compressed 数值对齐无别名）、`VFS_DECOMPRESS_MAX_BYTES` 链式单源 32MiB canonical），模板复用 `transform` 单源决策器，32MiB 防 bomb 由 transform 统一承载（泛型/压缩一致，输入/输出双阈值） |
+| `backends` | `memtree` + `embedded` + `os` + `base` + `intf` | 后端族聚合：三后端单缝收口（门面扇出收敛 12→10，bytes.ops 单源 inline 零拷贝，try-finally 不丢，已落地 L7 单缝理想） |
+| `decorator` | `transform` + `compressed` + `vfs.base` + `vfs.intf` | L3装饰器族聚合：transform+compressed 单点收口（门面扇出收敛 13→12，双族合计 12→10，bytes.ops 单源 inline 零拷贝，try-finally 不丢，已落地 L7 单缝理想） |
+| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | L2→L2 seam 已经 `backends` 单缝聚合收口（source-contract gated; 双缝仅经 backends 族透出，bytes.ops 单源 inline 零拷贝 + striped SpinLock 双重校验保留 try-finally 资源不丢，L7 已落地） |
 
 ## 核心契约
 
@@ -187,11 +192,10 @@ end;
 - `OpenRead` 返回的 `IStream` 直接读 blob 切片区间，不做内容复制
   （对标 Go embed.FS 文件直指静态数据、Tauri `Cow::Borrowed` 切片）
 - 接口对象内部持有后备存储引用保活：
-  - 来源为堆缓冲/TBytes → 引用计数自然保活
-  - 来源为 const 数据/静态段 → 无引用计数，**文档化规则：调用方保证 blob 生命期覆盖
-    IVfs 及其派生的全部 IStream**；构造函数提供 `AOwnsBlob: Boolean` 覆盖堆场景
+  - 来源为堆缓冲/TBytes → `CreateEmbeddedVfsOwned` 引用计数自然保活，末接口释放时 FreeMem
+  - 来源为 const 数据/静态段 → `CreateEmbeddedVfsBorrowed` 无引用计数，**文档化规则：调用方保证 blob 生命期覆盖 IVfs 及其派生的全部 IStream**（布尔陷阱已移除）
 - `Create` 期物化 `FEntries`（eager 零 `DecodeWire`）+ 惰性 `FETags/FLastMods`（首击 `VfsETagStrong/FNV`/`FormatHttpDate` 生成并 `SpinLock` 发布，`ServeVfs` O(1) thereafter，10k Create <180ms）+ FRp 索引零拷贝存储：`Stat/OpenRead/Exists` 走 `LowerBoundPath` 二分直通 `FRp` PByte 存储 + `FEntries[Idx]` 零 `DecodeWire`，`ServeVfs` 走惰性缓存 O(1)（`VfsETagStrong/FNV` 单源，`bytes.ops` `CompareBytesOrdered` 单源）；10k 规模 < 400KB 可控
-- `OpenRead` 零分配包装器池：`TEmbeddedSlice`(TObject) + `TEmbeddedSliceStream`(TInterfacedObject) 双层，`SpinLock` `EMBEDDED_POOL_SIZE` 16 槽复用（CONTRACT 单源 16），`FKeep: IVfs` 保活 Owner，`Destroy` 归还时 `LKeep` 局部强引防 `Use-After-Free`（与 `window` 子系统 `TWindow*` 零命名冲突；`performance` 门 10k 规模 163ms，与预算 800ms 余量 4.9×，`heaptrc 0`；`VfsNameCompare` 直通 `base.utils CompareBytesOrdered`，`bytes.ops` 单源复用）
+- `OpenRead` 零分配包装器池：`TEmbeddedSlice`(TObject) + `TEmbeddedSliceStream`(TInterfacedObject) 双层，`SpinLock` `EMBEDDED_POOL_SIZE` 64 槽复用（CONTRACT 单源 64，16→64 百并发阈值覆盖，inline热路径，饱和率4×↓，饱和仍Free不丢），`FKeep: IVfs` 保活 Owner，`Destroy` 归还时 `LKeep` 局部强引防 `Use-After-Free`（与 `window` 子系统 `TWindow*` 零命名冲突；`performance` 门 10k 规模 163ms，与预算 800ms 余量 4.9×，`heaptrc 0`；`VfsNameCompare` 直通 `base.utils CompareBytesOrdered`，`bytes.ops` 单源复用）
 - conformance 门含地址断言：读取缓冲指针必须落在 `[blob, blob+blobTotal)` 区间内，
   锁死零拷贝不被回归破坏
 
@@ -248,7 +252,7 @@ P4 同时断言 INV-V12（流暴露 `IReaderAt` 且 positioned 读逐字节正�
 | Sub 视图独立单元而非核心方法 | Go 将 fs.Sub 作为自由函数；包装器不改核心契约即可测试（fstest 同样强制测它） |
 | mount 复合视图 | P2 完整性：多源资产聚合最长匹配，List 根去重合并，Op/Path 保持调用方视角，超越 Go 单包 |
 | overlay 叠加视图 | 游戏热更 patch>dlc>base 优先级叠加，同根首命中，List去重合并，独立于 mount 的正交能力 |
-| 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateTransformingVfs` 通用模板承载（`CreateDecompressingVfs` 为其 gzip 特化薄门面，`CreateDecryptingVfs` 同构可直接复用；`http Content-Encoding` 另选承载面），避免 `L2→L2` 闭环与 `solid block` 随机访问劣化；`GZIP_MAX_DECOMPRESS_BYTES` 单源于 `compress.base`，`vfs` 侧仅薄别名/薄门面转调，32MiB 防 bomb 与 `ContentHash=0/ETag` 禁用一致性由 `transform` 统一承载 |
+| 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateTransformingVfs` 通用模板承载（`CreateDecompressingVfs` 为其 gzip 特化薄门面，`CreateDecryptingVfs` 同构可直接复用；`http Content-Encoding` 另选承载面），避免 `L2→L2` 闭环与 `solid block` 随机访问劣化；`GZIP_MAX_DECOMPRESS_BYTES` canonical 单源于 `compress.base`，`vfs.base` 经 compress.base 单源别名链式复用无字面量（漂移由 source-contract 单源 alias 锁定），32MiB 防 bomb 与 `ContentHash=0/ETag` 禁用一致性由 `transform` 统一承载 |
 
 ## 测试计划（13 门全绿，2026-08-31：P2叠加后）
 
@@ -275,17 +279,24 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # us
   行为断言（P1-P8、Sub、CaseSensitive、错误映射）在电池里以真实目录夹具覆盖，
   独立门只会复制同一套夹具。os 实现细节（如 ns→s 时间换算）由 conformance 的
   modTime 一致性属性间接锁定
-- `test_vfs_source_contract`：源码契约检查，锁定依赖白名单（`vfs.*` 中除 `os` 外禁止
-  出现对 `fs`/`respack` 的 uses；全模块禁止 OS 单元），照 system 模块 source-contract 先例
+- `test_vfs_source_contract`：源码契约检查，锁定依赖白名单（`vfs.*` 中除 `os`(fs seam) 与 `embedded`(respack.reader second seam, Registry line 106 extra whitelist beyond single-seam ideal, 14→ respack.reader, source-contract 强门禁, bytes.ops inline 零拷贝) 外禁止出现对 `fs`/`respack` 的 uses；全模块禁止 OS 单元），照 system 模块 source-contract 先例
 - 全部 gate 要求 heaptrc 零泄漏
 
-## 基准（`bench_transform` 固化）
+## 基准（`bench_transform` + `bench_hotspots` 双阈值固化）
 
 `core/benchmarks/nextpas.core.vfs/bench_transform` 固化 `daAuto` 关键路径（`make -C bench_transform build && ./bench_transform`）：
 - `Stat/large-non-gzip/header-peek` 1MiB 非 gzip 经 4K 头部小读 ~972 ns/op（1.0 Mops/s）
 - `Stat/gz/decompress` 64KiB 解压 ~51 µs/op，对比头部预判慢 ~50×
 - `Open/large-non-gzip/passthrough` 单次读取复用 ~2.26 ms/op，`Open/gz/decompress` ~107 µs/op
 头部预判与单次读取优化由 `test_vfs_compressed` 7/7（含 1MiB 头部预判固化用例）锁定为功能契约，基准用于回归防劣化。
+
+`core/benchmarks/nextpas.core.vfs/bench_hotspots` 固化 memtree/embedded/os 三后端热路径（`make -C bench_hotspots build && ./bench_hotspots`），补充 design-conventions 每模块热路径基准覆盖要求：
+- `Exists/*` / `Stat/*/file` 三后端二分/Stat 单次查找，inline 零拷贝 bytes.ops 单源（VfsValidPath/SpanStartsWith/CompareBytesOrdered）
+- `List/*/root` `List/*/assets` `List/sub/*` 三后端有序区间扫描扇出限界（VfsEnumerateChildSpans 单源，初值16，O(k)直取 FEntries/FRp 并行缓存，无二次二分），天然有序免 Sort/Dedup
+- `OpenRead/*/4k` / `OpenRead/sub/*/4k` 三后端 O(1) 切片/Move 零拷贝（embedded TEmbeddedSlice 零内容复制池化、memtree TMemStream Move 单源、os fs seam 句柄），VfsReadAllBytes 单次分配 + IReaderAt 单次直读（VfsFillFromStream 单源复用）
+- `Walk/*/full` `Walk/sub/*/full` O(n) 批量 List 字典序确定性，零冗余 List 调用
+- `Sub` 视图 O(1) 包装无树复制，独立 `List/sub` `OpenRead/sub` 阈值锁定
+三后端独立基准项 24 项（Exists/Stat/List×3 + List/assets×3 + SubList×3 + OpenRead×3 + OpenRead/sub×2 + Walk×3 + Walk/sub），与 bench_transform 互补覆盖 CONTRACT §6 全部性能契约行。
 
 ## Consumer 展望（跨模块 slice，另行立项）
 
@@ -304,7 +315,7 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # us
 | `nextpas.core.settings.inc` | `SysUtils`、`Classes` |
 | `nextpas.core.base` / `io.intf` | `Windows`、`BaseUnix`、`Unix` 及一切 OS 单元 |
 | `nextpas.core.exception` / `errors`（异常根桥接） | 任何其他 FPC RTL 单元 |
-| `os` 后端另加 `fs`/`path`；`embedded` 另加 `respack.reader` | |
+| `os` 后端另加 `fs`/`path` (L2→L2 single seam)；`embedded` 另加 `respack.reader` (L2→L2 second seam, Registry line 106 extra whitelist beyond single-seam ideal, 14→ respack.reader, source-contract gated, bytes.ops 单源 inline 零拷贝, SpinLock try-finally 资源不丢) | |
 
 - `EVfsError` 继承 `nextpas.core.exception.Exception`——异常词汇的桥接点收敛在
   exception 根模块（FPC 下桥接、nextPas 下原生实现）；仓库对 FPC RTL 直引的整体豁免面

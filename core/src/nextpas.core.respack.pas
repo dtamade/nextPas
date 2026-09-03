@@ -9,6 +9,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.respack.base,
+  nextpas.core.respack.limits,
   nextpas.core.respack.reader,
   nextpas.core.respack.writer,
   nextpas.core.respack.writer.stream,
@@ -47,7 +48,9 @@ const
   RESPACK_FLAG_ALGO_SHIFT = nextpas.core.respack.base.RESPACK_FLAG_ALGO_SHIFT;
   RESPACK_DIGEST_ALGO_SHA256 = nextpas.core.respack.base.RESPACK_DIGEST_ALGO_SHA256;
   RESPACK_INC_DEFAULT_BYTES_PER_LINE =
-    nextpas.core.respack.embed.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
+    nextpas.core.respack.limits.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
+  RESPACK_INC_MAX_BLOB_BYTES =
+    nextpas.core.respack.limits.RESPACK_INC_MAX_BLOB_BYTES;
 
 function ResPackOpen(const AData: PByte; const ASize: SizeUInt): TResPack; inline;
 function ResPackBuild(const AEntries: array of TResPackInputEntry;

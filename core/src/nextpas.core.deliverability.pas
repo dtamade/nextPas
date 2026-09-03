@@ -92,23 +92,24 @@ function TDeliverabilityDnsAdapter.QueryA(const AName: string;
 var
   LRecords: TDnsRecordArray;
   LI: Integer;
+  LOldLen: Integer;
 begin
   AIps := nil;
   Result := FDns.Query(AName, dqA, ATimeoutMs, LRecords, AError);
   if not Result then
     Exit;
+  { perf: 单次 SetLength 预分配 vs 逐一 Length+1 O(n²) 拷贝; 已知批量大小精确分配(零拷贝 string 赋值), 等价 bytes.ops 指数/BytesConcatMany 单源思想; inline IPv4ToText 纯寄存器 }
+  SetLength(AIps, Length(LRecords));
   for LI := 0 to High(LRecords) do
-  begin
-    SetLength(AIps, Length(AIps) + 1);
-    AIps[High(AIps)] := IPv4ToText(LRecords[LI].A);
-  end;
-  { AAAA 合并(双栈) }
+    AIps[LI] := IPv4ToText(LRecords[LI].A);
+  { AAAA 合并(双栈) — 单次扩容追加 }
   if FDns.Query(AName, dqAAAA, ATimeoutMs, LRecords, AError) then
+  begin
+    LOldLen := Length(AIps);
+    SetLength(AIps, LOldLen + Length(LRecords));
     for LI := 0 to High(LRecords) do
-    begin
-      SetLength(AIps, Length(AIps) + 1);
-      AIps[High(AIps)] := LRecords[LI].AAAA;
-    end;
+      AIps[LOldLen + LI] := LRecords[LI].AAAA;
+  end;
   Result := Length(AIps) > 0;
   if not Result then
     AError := 'no records';

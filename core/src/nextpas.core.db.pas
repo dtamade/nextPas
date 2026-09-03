@@ -223,7 +223,7 @@ function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
   const AStmtCacheCapacity: Integer): IDbConnection;
 begin
   Result := nextpas.core.db.sqlite.adapter.ConnectSqlite(APath, AOptions,
-    APragmas, AStmtCacheCapacity);
+    AStmtCacheCapacity);
 end;
 
 function ConnectPostgres(const AConnInfo: string): IDbConnection;
@@ -260,7 +260,7 @@ function ConnectMysql(const ADsn: string;
   const AOptions: TDbConnectOptions;
   const AStmtCacheCapacity: Integer): IDbConnection;
 begin
-  Result := nextpas.core.db.mysql.adapter.ConnectMysql(ADsn, AOptions, AStmtCacheCapacity);
+  Result := nextpas.core.db.mysql.adapter.ConnectMysql(ADsn, AOptions);
 end;
 
 function ConnectOdbc(const ADsn: string): IDbConnection;
@@ -278,7 +278,7 @@ function ConnectOdbc(const ADsn: string;
   const AOptions: TDbConnectOptions;
   const AStmtCacheCapacity: Integer): IDbConnection;
 begin
-  Result := nextpas.core.db.odbc.adapter.ConnectOdbc(ADsn, AOptions, AStmtCacheCapacity);
+  Result := nextpas.core.db.odbc.adapter.ConnectOdbc(ADsn, AOptions);
 end;
 
 function ConnectRedis(const AAddr: string): IDbConnection;

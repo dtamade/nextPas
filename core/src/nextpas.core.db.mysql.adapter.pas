@@ -549,6 +549,12 @@ type
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
   end;
@@ -1466,6 +1472,36 @@ end;
 function TDbMyConnection.SupportsStatementTimeout: Boolean;
 begin
   Result := FSupportsStmtTimeout;
+end;
+
+function TDbMyConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbMyConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 function TDbMyConnection.CaseSensitiveIdentifiers: Boolean;

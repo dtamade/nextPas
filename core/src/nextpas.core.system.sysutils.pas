@@ -29,8 +29,8 @@ type
   TBytes = nextpas.core.base.TBytes;
   TStringArray = nextpas.core.base.TStringArray;
 
-{ Text formatting }
-function Format(const AFmt: string; const AArgs: array of const): string;
+{ Text formatting — single source text.format owner, inline thin forward (INV-5) }
+function Format(const AFmt: string; const AArgs: array of const): string; inline;
 function CompareStr(const A, B: string): Integer;
 function SameText(const A, B: string): Boolean;
 
@@ -51,7 +51,7 @@ function FloatToStr(const AValue: Double): string;
 function CurrToStr(const AValue: Currency): string;
 function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): string;
 
-{ Bytes helpers (SysUtils-compat for tests / facades) — single source via bytes.ops }
+{ Bytes helpers (SysUtils-compat for tests / facades) — single source via bytes.ops through text.conv (encoding-intent owner); inline thin-forward, zero-copy TByteSpan view, no duplicate Move }
 function BytesOf(const AStr: string): TBytes; inline;
 function StringOf(const ABytes: TBytes): string; inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
@@ -65,8 +65,8 @@ function TrimRight(const AStr: string): string;
 function UpperCase(const AStr: string): string;
 function LowerCase(const AStr: string): string;
 
-{ String search }
-function Pos(const ASubStr, AStr: string): Integer;
+{ String search — single source bytes.ops SpanIndexOfSpan SIMD }
+function Pos(const ASubStr, AStr: string): Integer; inline;
 
 { Date/Time }
 function Now: TDateTime;
@@ -134,69 +134,25 @@ function ExceptFrameAt(const AIndex: LongInt): CodePointer;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.bytes.ops,
+  nextpas.core.exception,
   nextpas.core.path,
   nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.os.env,
+  nextpas.core.platform.error,
   nextpas.core.base.utils,
   nextpas.core.text.compare,
   nextpas.core.text.utils,
   nextpas.core.time;
 
-{ Returns True when AFmt uses any specifier outside the TextFormat safe set
-  (%% %[-][0][width][.precision](s|d|u|x|X|f), including %f with no explicit
-  precision). Such format strings fall back to the RTL SysUtils implementation,
-  whose printf-style surface (e/g/c/m/n/p, indexed args, dynamic * width, ...)
-  TextFormat does not cover. }
-function FormatNeedsSysUtilsFallback(const AFmt: string): Boolean;
-var
-  LIdx, LLen: Integer;
+{ Text formatting — single source via text.format owner (INV-5, L1 text owns formatting)
+  perf: inline thin forward to TextFormat (single source zero-copy Move via TStringBuilder
+  single SetLength+Move in owner, not inline per red-line 1/2); stub elegance: FPC SysUtils
+  stub not used, nextPas stub bridges via units/<target>/, no IFDEF fork }
+function Format(const AFmt: string; const AArgs: array of const): string; inline;
 begin
-  Result := False;
-  LLen := Length(AFmt);
-  LIdx := 1;
-  while LIdx <= LLen do
-  begin
-    if AFmt[LIdx] <> '%' then
-    begin
-      Inc(LIdx);
-      Continue;
-    end;
-    Inc(LIdx);
-    if LIdx > LLen then Exit(False);
-    if AFmt[LIdx] = '%' then
-    begin
-      Inc(LIdx);
-      Continue;
-    end;
-    if AFmt[LIdx] = '-' then Inc(LIdx);
-    if (LIdx <= LLen) and (AFmt[LIdx] = '0') then Inc(LIdx);
-    while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
-      Inc(LIdx);
-    if (LIdx <= LLen) and (AFmt[LIdx] = '.') then
-    begin
-      Inc(LIdx);
-      while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
-        Inc(LIdx);
-    end;
-    if LIdx > LLen then Exit(False);
-    case AFmt[LIdx] of
-      'd', 'u', 'x', 'X', 's', 'f': ;
-    else
-      Exit(True);
-    end;
-    Inc(LIdx);
-  end;
-end;
-
-{ Text formatting }
-
-function Format(const AFmt: string; const AArgs: array of const): string;
-begin
-  if FormatNeedsSysUtilsFallback(AFmt) then
-    Result := SysUtils.Format(AFmt, AArgs)
-  else
-    Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
+  Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
 end;
 
 function SameText(const A, B: string): Boolean;
@@ -296,14 +252,16 @@ begin
     Result := '0';
 end;
 
-function BytesOf(const AStr: string): TBytes;
+function BytesOf(const AStr: string): TBytes; inline;
 begin
-  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
+  { perf: inline thin forward to text.conv.StringToUTF8Bytes -> bytes.ops.StringToBytes (single source, zero-copy PAnsiChar(AText)^ Move, single SetLength+Move in owner); no duplicate Move, owner alloc not inline per red-line 1/2 }
+  Result := nextpas.core.text.conv.StringToUTF8Bytes(AStr);
 end;
 
-function StringOf(const ABytes: TBytes): string;
+function StringOf(const ABytes: TBytes): string; inline;
 begin
-  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
+  { perf: inline thin forward to text.conv.UTF8BytesToString -> bytes.ops.BytesToString (single source, zero-copy TByteSpan view, single Move in owner) }
+  Result := nextpas.core.text.conv.UTF8BytesToString(ABytes);
 end;
 
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
@@ -350,48 +308,63 @@ begin
   Result := nextpas.core.text.conv.LowerCase(AStr);
 end;
 
-{ String search }
+{ String search — single source bytes.ops SpanIndexOfSpan SIMD (INV-5, L1 text owns search via bytes.ops) }
 
-function Pos(const ASubStr, AStr: string): Integer;
+function Pos(const ASubStr, AStr: string): Integer; inline;
+var
+  LNeedle, LHaystack: TByteSpan;
+  LIdx: SizeInt;
 begin
-  Result := System.Pos(ASubStr, AStr);
+  { perf: inline thin-forward to bytes.ops.SpanIndexOfSpan SIMD single source — zero-copy TByteSpan view (PByte+Len, no alloc/Move), inline, single source stays in bytes.ops/simd, hot path vectorized;
+    stability: empty-needle guard matches FPC 0 (owner returns 0 for Len=0), bounds via owner, no resource leak }
+  if ASubStr = '' then
+    Exit(0);
+  if AStr = '' then
+    Exit(0);
+  LNeedle := TByteSpan.Create(PByte(PAnsiChar(ASubStr)), SizeUInt(Length(ASubStr)));
+  LHaystack := TByteSpan.Create(PByte(PAnsiChar(AStr)), SizeUInt(Length(AStr)));
+  LIdx := nextpas.core.bytes.ops.SpanIndexOfSpan(LHaystack, LNeedle);
+  if LIdx < 0 then
+    Result := 0
+  else
+    Result := Integer(LIdx) + 1;
 end;
 
-{ Date/Time — delegates to platform }
+{ Date/Time — delegates to time owner (platform/time boundary, inline zero-copy) }
 
-function Now: TDateTime;
+function Now: TDateTime; inline;
 begin
-  Result := SysUtils.Now;
+  Result := nextpas.core.time.DateTimeNow;
 end;
 
-function Date: TDateTime;
+function Date: TDateTime; inline;
 begin
-  Result := SysUtils.Date;
+  Result := Trunc(nextpas.core.time.DateTimeNow);
 end;
 
-function Time: TDateTime;
+function Time: TDateTime; inline;
 begin
-  Result := SysUtils.Time;
+  Result := Frac(nextpas.core.time.DateTimeNow);
 end;
 
-function DateTimeToStr(const AValue: TDateTime): string;
+function DateTimeToStr(const AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.DateTimeToStr(AValue);
+  Result := nextpas.core.time.DateTimeToStr(AValue);
 end;
 
-function DateToStr(const AValue: TDateTime): string;
+function DateToStr(const AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.DateToStr(AValue);
+  Result := nextpas.core.time.DateToStr(AValue);
 end;
 
-function TimeToStr(const AValue: TDateTime): string;
+function TimeToStr(const AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.TimeToStr(AValue);
+  Result := nextpas.core.time.FormatDateTime('%H:%M:%S', AValue);
 end;
 
-function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
+function FormatDateTime(const AFmt: string; AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.FormatDateTime(AFmt, AValue);
+  Result := nextpas.core.time.FormatDateTime(AFmt, AValue);
 end;
 
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
@@ -445,7 +418,12 @@ end;
 
 function RenameFile(const AOldName, ANewName: string): Boolean;
 begin
-  Result := SysUtils.RenameFile(AOldName, ANewName);
+  try
+    nextpas.core.fs.Rename(AOldName, ANewName);
+    Result := True;
+  except
+    Result := False;
+  end;
 end;
 
 function CopyFile(const ASrcName, ADestName: string): Boolean;
@@ -517,16 +495,21 @@ begin
   Result := SizeUInt(System.GetProcessID);
 end;
 
-{ Working directory — delegates to platform }
+{ Working directory — delegates to fs owner }
 
-function GetCurrentDir: string;
+function GetCurrentDir: string; inline;
 begin
-  Result := SysUtils.GetCurrentDir;
+  Result := nextpas.core.fs.GetCurrentDir;
 end;
 
 function SetCurrentDir(const ADir: string): Boolean;
 begin
-  Result := SysUtils.SetCurrentDir(ADir);
+  try
+    nextpas.core.fs.util.FsSetCwd(ADir);
+    Result := True;
+  except
+    Result := False;
+  end;
 end;
 
 { Command line — delegates to System }
@@ -541,45 +524,57 @@ begin
   Result := System.ParamStr(AIndex);
 end;
 
-{ Environment — delegates to platform }
+{ Environment — delegates to os.env owner }
 
-function GetEnvironmentVariable(const AName: string): string;
+function GetEnvironmentVariable(const AName: string): string; inline;
 begin
-  Result := SysUtils.GetEnvironmentVariable(AName);
+  Result := nextpas.core.os.env.GetEnvironmentVariable(AName);
 end;
 
-{ Timing — delegates to platform }
+{ Timing — delegates to time owner }
 
-procedure Sleep(AMilliseconds: Cardinal);
+procedure Sleep(AMilliseconds: Cardinal); inline;
 begin
-  SysUtils.Sleep(AMilliseconds);
+  nextpas.core.time.MsSleep(AMilliseconds);
 end;
 
-{ Error handling — delegates to SysUtils }
+{ Error handling — delegates to platform.error owner }
 
 function SysErrorMessage(AErrorCode: Integer): string;
+var
+  LBuf: array[0..255] of AnsiChar;
+  LLen: Int32;
 begin
-  Result := SysUtils.SysErrorMessage(AErrorCode);
+  LLen := platform_error_message(AErrorCode, @LBuf[0], SizeOf(LBuf));
+  if LLen > 0 then
+    SetString(Result, PAnsiChar(@LBuf[0]), LLen)
+  else if LLen = 0 then
+    Result := ''
+  else
+    Result := 'unknown error ' + nextpas.core.text.conv.IntToStr(AErrorCode);
 end;
 
-function GetLastOSError: Integer;
+function GetLastOSError: Integer; inline;
 begin
-  Result := SysUtils.GetLastOSError;
+  Result := platform_get_last_os_error;
 end;
 
-function ExceptAddr: Pointer;
+{ Exception backtrace — inline thin forward to exception owner L0 (single source via bytes.ops text, INV-5)
+  perf: inline zero-copy forward to nextpas.core.exception (single source RTL raiseframe chain, stub elegance);
+  stability: bounds-checked via owner (ExceptFrameAt returns nil out-of-range), no resource leak }
+function ExceptAddr: Pointer; inline;
 begin
-  Result := SysUtils.ExceptAddr;
+  Result := nextpas.core.exception.ExceptAddr;
 end;
 
-function ExceptFrameCount: LongInt;
+function ExceptFrameCount: LongInt; inline;
 begin
-  Result := SysUtils.ExceptFrameCount;
+  Result := nextpas.core.exception.ExceptFrameCount;
 end;
 
-function ExceptFrameAt(const AIndex: LongInt): CodePointer;
+function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 begin
-  Result := SysUtils.ExceptFrames[AIndex];
+  Result := nextpas.core.exception.ExceptFrameAt(AIndex);
 end;
 
 end.

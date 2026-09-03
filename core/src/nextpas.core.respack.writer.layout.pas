@@ -49,19 +49,13 @@ uses
 
 const
   BUCKET_MIN = 256;
-  BUCKET_MAX = 65536;
+  BUCKET_MAX = 65536; { 去重桶上限 64K：BucketsHead 64K*SizeInt≈256KB + SlotNext N*SizeInt，峰值受控；原 4M 桶双数组最高 32MB(4M*8)，大去重集热点 SpanEqual 逐字节回验叠加 O(n) 期望外最坏拷贝开销，收敛至 64K 控热点 }
 
 function CmpPath(const AEntries: array of TResPackInputEntry;
   const ALens: array of Word; AI, AJ: SizeUInt): Integer; inline;
-var
-  LA, LB: SizeUInt;
-  PA, PB: PByte;
 begin
-  LA := SizeUInt(ALens[AI]);
-  LB := SizeUInt(ALens[AJ]);
-  if LA > 0 then PA := PByte(@AEntries[AI].Path[1]) else PA := nil;
-  if LB > 0 then PB := PByte(@AEntries[AJ].Path[1]) else PB := nil;
-  Result := ResPackCmpPath(PA, LA, PB, LB);
+  // 单源视图: TByteSpan.FromStr 零拷贝工厂 inline 零分配, 复用 bytes.ops.SpanCompare 单源, 消 PByte(@Str[1]) 裸指针重复
+  Result := SpanCompare(TByteSpan.FromStr(AEntries[AI].Path), TByteSpan.FromStr(AEntries[AJ].Path));
 end;
 
 type
@@ -78,15 +72,10 @@ type
 function CompareOrder(const A, B: SizeUInt; Data: Pointer): SizeInt;
 var
   D: POrderSortData;
-  LA, LB: SizeUInt;
-  PA, PB: PByte;
 begin
   D := POrderSortData(Data);
-  LA := SizeUInt(D^.Lens^[A]);
-  LB := SizeUInt(D^.Lens^[B]);
-  if LA > 0 then PA := PByte(@D^.Entries^[A].Path[1]) else PA := nil;
-  if LB > 0 then PB := PByte(@D^.Entries^[B].Path[1]) else PB := nil;
-  Result := ResPackCmpPath(PA, LA, PB, LB);
+  // 单源视图: TByteSpan.FromStr 零拷贝 inline, 复用 bytes.ops.SpanCompare, 消裸指针算术
+  Result := SpanCompare(TByteSpan.FromStr(D^.Entries^[A].Path), TByteSpan.FromStr(D^.Entries^[B].Path));
 end;
 
 function AlignUpU64(const AValue, AAlign: UInt64): UInt64; inline;
@@ -203,12 +192,20 @@ begin
   Cur := DataStart;
   if AOpts.Deduplicate then
   begin
-    BucketCount := BUCKET_MIN;
     Target := 0;
     if not TryMulSizeUInt(N, 2, Target) then
       Target := High(SizeUInt);
-    while (BucketCount < Target) and (BucketCount < BUCKET_MAX) do
-      BucketCount := BucketCount shl 1;
+    { 容量策略单源：bytes.ops.BytesNextCapacity inline 零拷贝，替代手写 while shl，单源防漂移；BUCKET_MAX 64K 封顶控 32MB 热点 }
+    if Target > BUCKET_MAX then
+      Target := BUCKET_MAX;
+    if Target <= BUCKET_MIN then
+      BucketCount := BUCKET_MIN
+    else
+      BucketCount := BytesNextCapacity(BUCKET_MIN, Target);
+    if BucketCount > BUCKET_MAX then
+      BucketCount := BUCKET_MAX;
+    if BucketCount < BUCKET_MIN then
+      BucketCount := BUCKET_MIN;
     { 去重分桶：单次扁平分配，无逐桶 SetLength*2 小堆 churn。
       BucketsHead[BucketIdx] 为链头(-1=空)，SlotNext 串链(slot 索引)，平均 0.5 槽/桶，O(1) 期望。 }
     SetLength(BucketsHead, BucketCount);
@@ -225,6 +222,7 @@ begin
         while Probe <> -1 do
         begin
           K := SizeUInt(Probe);
+          { 去重回验：bytes.ops.SpanEqual inline 零拷贝 TByteSpan 视图→MemEqual SIMD 单源，fnv+size 双重预滤后才逐字节比对，O(1) 期望；零堆拷贝，无最坏 O(n) 拷贝开销 }
           if (ALayout.Slots[K].Fnv = ALayout.FnvBuf[J])
             and (AEntries[J].DataSize = AEntries[ALayout.Slots[K].SrcIdx].DataSize)
             and ((AEntries[J].DataSize = 0)

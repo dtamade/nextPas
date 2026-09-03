@@ -21,12 +21,13 @@ uses
   { ---- Global helpers (from original base, MessageText..BuildSystemText, MergeExtraJson in types) ---- }
   { 拼 pkText：顺序直连无分隔符。不变量：MessageText(fold 结果) ==
     正文 sdkTextDelta 的依序连接 }
-  function MessageText(const AMsg: TMessage): string;
+  function MessageText(const AMsg: TMessage): string; inline;
 
   { wire 头查找（大小写不敏感，首个命中返回；未命中空串）。
-    RequestId 探测 / retry-after 解析 / 消费方自定义头检查共用 }
+    RequestId 探测 / retry-after 解析 / 消费方自定义头检查共用
+    单一真源：nextpas.core.text.compare.TextEqualI，inline 热路径 }
   function WireHeaderValue(const AHeaders: TWireHeaderArray;
-    const AName: string): string;
+    const AName: string): string; inline;
 
   function AgentUtf8SafeTruncate(const S: string; AMaxBytes: Integer): string; inline;
   { UTF-8 安全长度（单一真源，供 Truncate 复用）：返回 ≤AMaxBytes 的合法边界 }
@@ -77,12 +78,32 @@ implementation
 uses
   nextpas.core.json,
   nextpas.core.json.builder,
+  nextpas.core.bytes.ops,
+  nextpas.core.mem.dynarray,
   nextpas.core.text,
   nextpas.core.text.builder,
   nextpas.core.text.compare,
   nextpas.core.text.view,
   nextpas.core.agent.errors,
   nextpas.core.agent.textutil;
+
+type
+  PDynHdr = ^TDynHdr;
+  TDynHdr = record
+    RefCnt: PtrInt;
+    High: PtrInt;
+  end;
+
+procedure DynPokeLen(var A; ANewLen: SizeUInt); inline;
+begin
+  if Pointer(A) = nil then
+  begin
+    if ANewLen <> 0 then
+      raise EInvalidOperation.Create('DynPokeLen: nil with non-zero len');
+    Exit;
+  end;
+  PDynHdr(PByte(Pointer(A)) - SizeOf(TDynHdr))^.High := PtrInt(ANewLen) - 1;
+end;
 
 
 function MessageText(const AMsg: TMessage): string;
@@ -112,7 +133,8 @@ begin
       LLen := Length(AMsg.Parts[I].Text);
       if LLen > 0 then
       begin
-        Move(AMsg.Parts[I].Text[1], Result[LPos], LLen);
+        // perf: single source via bytes.ops.BytesCopy inline zero-copy Move (INV-5)
+        BytesCopy(@Result[LPos], @AMsg.Parts[I].Text[1], SizeUInt(LLen));
         Inc(LPos, LLen);
       end;
     end;
@@ -120,13 +142,14 @@ end;
 
 
 function WireHeaderValue(const AHeaders: TWireHeaderArray;
-  const AName: string): string;
+  const AName: string): string; inline;
 var
   I: Integer;
 begin
   Result := '';
   for I := 0 to High(AHeaders) do
-    if SameText(AHeaders[I].Name, AName) then
+    // single source: text.compare.TextEqualI (ASCII fast-path + UTF8CaseFold, zero-copy, inline), replaces SysUtils SameText linear scan
+    if TextEqualI(AHeaders[I].Name, AName) then
     begin
       Result := AHeaders[I].Value;
       Break;
@@ -305,16 +328,21 @@ function AgentBuildSystemText(const ASystem: string;
   const AMessages: TMessageArray): string;
 var
   LParts: array of string;
-  I, K: Integer;
+  I, K, LCap, LLen: Integer;
   LSeen: Boolean;
   LText: string;
   SB: IStringBuilder;
 begin
+  // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1), zero-copy
+  LCap := 0;
+  LLen := 0;
   SetLength(LParts, 0);
   if ASystem <> '' then
   begin
-    SetLength(LParts, 1);
+    LCap := BytesGrowCapacityInt(LCap, 1);
+    SetLength(LParts, LCap);
     LParts[0] := ASystem;
+    LLen := 1;
   end;
   for I := 0 to High(AMessages) do
     if AMessages[I].Role = mrSystem then
@@ -323,7 +351,7 @@ begin
       if LText = '' then
         Continue;
       LSeen := False;
-      for K := 0 to High(LParts) do
+      for K := 0 to LLen - 1 do
         if LParts[K] = LText then
         begin
           LSeen := True;
@@ -331,14 +359,21 @@ begin
         end;
       if not LSeen then
       begin
-        SetLength(LParts, Length(LParts) + 1);
-        LParts[High(LParts)] := LText;
+        if LLen >= LCap then
+        begin
+          LCap := BytesGrowCapacityInt(LCap, LLen + 1);
+          SetLength(LParts, LCap);
+        end;
+        LParts[LLen] := LText;
+        Inc(LLen);
       end;
     end;
-  if Length(LParts) = 0 then
+  if LLen = 0 then
     Exit('');
+  if Length(LParts) <> LLen then
+    SetLength(LParts, LLen);
   SB := MakeStringBuilder(CAgentSystemTextInitialCap);
-  for I := 0 to High(LParts) do
+  for I := 0 to LLen - 1 do
   begin
     if I > 0 then
       SB.AppendStr(#10#10);
@@ -381,9 +416,23 @@ end;
 
 
 function AgentAddPart(var AParts: TPartArray; AKind: TPartKind): Integer;
+var
+  LLen, LCap: Integer;
 begin
-  Result := Length(AParts);
-  SetLength(AParts, Result + 1);
+  // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1), zero-copy via header poke
+  LLen := Length(AParts);
+  Result := LLen;
+  LCap := Integer(DynArrayCapacityElem(Pointer(AParts), SizeUInt(LLen), SizeOf(TPart)));
+  if LCap < LLen then
+    LCap := LLen;
+  if LLen >= LCap then
+  begin
+    LCap := BytesGrowCapacityInt(LCap, LLen + 1);
+    SetLength(AParts, LCap);
+    DynPokeLen(AParts, SizeUInt(LLen + 1));
+  end
+  else
+    DynPokeLen(AParts, SizeUInt(LLen + 1));
   AParts[Result] := Default(TPart);
   AParts[Result].Kind := AKind;
 end;
@@ -391,11 +440,22 @@ end;
 
 procedure AgentAppendDelta(var AArr: TStreamDeltaArray; const ADelta: TStreamDelta);
 var
-  LOld: Integer;
+  LLen, LCap: Integer;
 begin
-  LOld := Length(AArr);
-  SetLength(AArr, LOld + 1);
-  AArr[LOld] := ADelta;
+  // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1), zero-copy via header poke
+  LLen := Length(AArr);
+  LCap := Integer(DynArrayCapacityElem(Pointer(AArr), SizeUInt(LLen), SizeOf(TStreamDelta)));
+  if LCap < LLen then
+    LCap := LLen;
+  if LLen >= LCap then
+  begin
+    LCap := BytesGrowCapacityInt(LCap, LLen + 1);
+    SetLength(AArr, LCap);
+    DynPokeLen(AArr, SizeUInt(LLen + 1));
+  end
+  else
+    DynPokeLen(AArr, SizeUInt(LLen + 1));
+  AArr[LLen] := ADelta;
 end;
 
 

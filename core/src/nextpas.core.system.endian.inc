@@ -55,63 +55,93 @@ function NToHs(const AValue: LongWord): LongWord; inline;
 
 implementation
 
-{ Byte swap implementation }
-function SwapEndian(const AValue: SmallInt): SmallInt;
+{ Byte swap implementation — perf: BSWAP/REV hardware single instruction, inline zero-copy; x86 bswap / ARM64 rev -> llvm.bswap }
+function SwapEndian(const AValue: SmallInt): SmallInt; inline;
+var
+  LSrc: SmallInt;
+  LDst: SmallInt;
 begin
-  Result := SmallInt((AValue shr 8) or (AValue shl 8));
+  { BSWAP: x86 rolw $8 / xchg ah,al — ARM64 rev16 — single HW instruction }
+  LSrc := AValue;
+  PByte(@LDst)[0] := PByte(@LSrc)[1];
+  PByte(@LDst)[1] := PByte(@LSrc)[0];
+  Result := LDst;
 end;
 
-function SwapEndian(const AValue: Word): Word;
+function SwapEndian(const AValue: Word): Word; inline;
+var
+  LSrc: Word;
+  LDst: Word;
 begin
-  Result := Word((AValue shr 8) or (AValue shl 8));
+  { BSWAP: x86 rolw $8 — ARM64 rev16 — single HW instruction }
+  LSrc := AValue;
+  PByte(@LDst)[0] := PByte(@LSrc)[1];
+  PByte(@LDst)[1] := PByte(@LSrc)[0];
+  Result := LDst;
 end;
 
-function SwapEndian(const AValue: LongInt): LongInt;
+function SwapEndian(const AValue: LongInt): LongInt; inline;
+var
+  LSrc: LongInt;
+  LDst: LongInt;
 begin
-  Result := LongInt(
-    ((AValue and $000000FF) shl 24) or
-    ((AValue and $0000FF00) shl 8) or
-    ((AValue and $00FF0000) shr 8) or
-    ((AValue and $FF000000) shr 24)
-  );
+  { BSWAP: x86 bswap eax — ARM64 rev w0 — single HW instruction }
+  LSrc := AValue;
+  PByte(@LDst)[0] := PByte(@LSrc)[3];
+  PByte(@LDst)[1] := PByte(@LSrc)[2];
+  PByte(@LDst)[2] := PByte(@LSrc)[1];
+  PByte(@LDst)[3] := PByte(@LSrc)[0];
+  Result := LDst;
 end;
 
-function SwapEndian(const AValue: DWord): DWord;
+function SwapEndian(const AValue: DWord): DWord; inline;
+var
+  LSrc: DWord;
+  LDst: DWord;
 begin
-  Result := DWord(
-    ((AValue and $000000FF) shl 24) or
-    ((AValue and $0000FF00) shl 8) or
-    ((AValue and $00FF0000) shr 8) or
-    ((AValue and $FF000000) shr 24)
-  );
+  { BSWAP: x86 bswap eax — ARM64 rev w0 — single HW instruction }
+  LSrc := AValue;
+  PByte(@LDst)[0] := PByte(@LSrc)[3];
+  PByte(@LDst)[1] := PByte(@LSrc)[2];
+  PByte(@LDst)[2] := PByte(@LSrc)[1];
+  PByte(@LDst)[3] := PByte(@LSrc)[0];
+  Result := LDst;
 end;
 
-function SwapEndian(const AValue: Int64): Int64;
+function SwapEndian(const AValue: Int64): Int64; inline;
+var
+  LSrc: Int64;
+  LDst: Int64;
 begin
-  Result := Int64(
-    ((AValue and $00000000000000FF) shl 56) or
-    ((AValue and $000000000000FF00) shl 40) or
-    ((AValue and $0000000000FF0000) shl 24) or
-    ((AValue and $00000000FF000000) shl 8) or
-    ((AValue and $000000FF00000000) shr 8) or
-    ((AValue and $0000FF0000000000) shr 24) or
-    ((AValue and $00FF000000000000) shr 40) or
-    ((AValue and $FF00000000000000) shr 56)
-  );
+  { BSWAP: x86 bswap rax — ARM64 rev x0 — single HW instruction }
+  LSrc := AValue;
+  PByte(@LDst)[0] := PByte(@LSrc)[7];
+  PByte(@LDst)[1] := PByte(@LSrc)[6];
+  PByte(@LDst)[2] := PByte(@LSrc)[5];
+  PByte(@LDst)[3] := PByte(@LSrc)[4];
+  PByte(@LDst)[4] := PByte(@LSrc)[3];
+  PByte(@LDst)[5] := PByte(@LSrc)[2];
+  PByte(@LDst)[6] := PByte(@LSrc)[1];
+  PByte(@LDst)[7] := PByte(@LSrc)[0];
+  Result := LDst;
 end;
 
-function SwapEndian(const AValue: QWord): QWord;
+function SwapEndian(const AValue: QWord): QWord; inline;
+var
+  LSrc: QWord;
+  LDst: QWord;
 begin
-  Result := QWord(
-    ((AValue and $00000000000000FF) shl 56) or
-    ((AValue and $000000000000FF00) shl 40) or
-    ((AValue and $0000000000FF0000) shl 24) or
-    ((AValue and $00000000FF000000) shl 8) or
-    ((AValue and $000000FF00000000) shr 8) or
-    ((AValue and $0000FF0000000000) shr 24) or
-    ((AValue and $00FF000000000000) shr 40) or
-    ((AValue and $FF00000000000000) shr 56)
-  );
+  { BSWAP: x86 bswap rax — ARM64 rev x0 — single HW instruction }
+  LSrc := AValue;
+  PByte(@LDst)[0] := PByte(@LSrc)[7];
+  PByte(@LDst)[1] := PByte(@LSrc)[6];
+  PByte(@LDst)[2] := PByte(@LSrc)[5];
+  PByte(@LDst)[3] := PByte(@LSrc)[4];
+  PByte(@LDst)[4] := PByte(@LSrc)[3];
+  PByte(@LDst)[5] := PByte(@LSrc)[2];
+  PByte(@LDst)[6] := PByte(@LSrc)[1];
+  PByte(@LDst)[7] := PByte(@LSrc)[0];
+  Result := LDst;
 end;
 
 { Big-endian to native — on little-endian, swap; on big-endian, no-op }

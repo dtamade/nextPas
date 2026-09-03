@@ -1,10 +1,10 @@
-# nextpas.core.graphics 代码契约（S0 冻结草案）
+# nextpas.core.graphics 代码契约（S2 冻结，source-contract + bench 门禁）
 
 **家族**：`graphics(L1) + image/vector/canvas/effect(L2) + gpu.canvas(L3)`
 **层级**：见 `core/docs/core-module-registry.md` 拟新增行
 **Owner**：graphics lane（`codex/core-graphics`）
-**最后更新**：2026-08-31
-**版本**：S0 0.1.0-draft（AL1 Skeleton，文档定版，源码未落地，`SemVer`；`draft → focused-runtime` 需 source-contract + bench 门禁，见 `ROADMAP`）
+**最后更新**：2026-09-02
+**版本**：S2 0.2.0-source-contract focused-runtime preparation（自 S0 0.1.0-draft 提升：已落地 `graphics.base/color/path + image.base/vector.tess/canvas.raster/effect.graph`；L1/L2 四件套 `base←intf←实现←门面` + `errors` 闭环 `EGraphicsError→EColorError/EImageError(EImageDecodeError)/EVectorError/ECanvasError/EEffectError` + `bench` 门禁 `nextpas.core.bench`（`bench_raster/bench_image` 单次调用 `ns/op + MB/s`，锁 `Go1.22/tiny-skia0.11`）已齐并由 `source-contract` 锁定，层级 `graphics L1 + image/vector/canvas/effect L2 + gpu.canvas L3` 已在 `core/docs/core-module-registry.md` 冻结；`draft → focused-runtime` 升档待 `source-contract` 全绿，见 `ROADMAP Gates`）
 
 ---
 
@@ -30,17 +30,21 @@ TMat2D = record A,B,C,D,Tx,Ty: Single; // 3x2 仿射，Single 外部
   function IsInvertible: Boolean; inline; function Inverse: TMat2D;
 end;
 
-// graphics.path — 路径（COW 值类型，内部 array of TVec2/Byte，不依赖 TBytes）
+// graphics.path — 路径（COW 值类型，内部 array of TVec2/Byte，不依赖 TBytes；批量 Append/AppendPath 单次 Reserve+Move 零拷贝，复用 bytes.ops 单源；邻近 Move 折叠）
 TPathVerb = (Move, Line, Quad, Cubic, Close);
 TPath = record
   class function New: TPath; static;
   function MoveTo(X,Y: Single): TPath; function LineTo(X,Y: Single): TPath;
   function QuadTo(CX,CY,X,Y: Single): TPath; function CubicTo(C1X,C1Y,C2X,C2Y,X,Y: Single): TPath;
-  function Close: TPath; function IsEmpty: Boolean; inline;
+  function Close: TPath; function Append(const AOther: TPath): TPath; inline; // 批量零拷贝 Move，邻近 Move 折叠
+  function IsEmpty: Boolean; inline;
 end;
+TPathBuilder = record procedure AppendPath(const AOther: TPath); inline; end; // Builder 批量零拷贝
 TStrokeOptions = record Width: Single; Cap: TLineCap; Join: TLineJoin; MiterLimit: Single; end;
 TGradient = record Kind: TGradientKind; Colors: array of TColor32; Stops: array of Single; Transform: TMat2D;
-  function WithTransform(const M: TMat2D): TGradient; function WithOpacity(A: Single): TGradient; end;
+  function WithTransform(const M: TMat2D): TGradient; function WithOpacity(A: Single): TGradient;
+  // Colors/Stops 防御性 Copy（不可变，冷路径）；高频用 ColorCount/StopCount/GetColor/GetStop/ColorsView/StopsView inline 零拷贝
+  end;
 ```
 
 不变量：
@@ -52,7 +56,7 @@ TGradient = record Kind: TGradientKind; Colors: array of TColor32; Stops: array 
 ### 1.2 L2 `nextpas.core.image.base`（含 TBitmap）
 
 ```pascal
-TBitmapFormat = (RGBA, BGRA, Gray8);
+TBitmapFormat = (bfRGBA, bfBGRA, bfGray8);
 TBitmap = record // COW，TBytes 持有像素，Stride 64B 对齐（AVX cacheline）
   Width, Height, Stride: Integer; // Stride = AlignUp(Width*4, 64)
   Format: TBitmapFormat;
@@ -61,7 +65,7 @@ TBitmap = record // COW，TBytes 持有像素，Stride 64B 对齐（AVX cachelin
   function IsEmpty: Boolean; inline;
   procedure Premultiply; procedure Unpremultiply;
 end;
-TImageFormat = (Png, Jpeg, WebP, Bmp, Gif);
+TImageFormat = (ifUnknown, ifPng, ifJpeg, ifWebP, ifBmp, ifGif); // ifUnknown 为探测/空输入哨兵，Gif 仅保留枚举位暂无编解码
 TImageInfo = record Width,Height: Integer; Format: TImageFormat; HasAlpha: Boolean; end;
 
 function ImageDecode(const AData: TBytes; out AInfo: TImageInfo): TBitmap;
@@ -106,6 +110,19 @@ TBrush = record // Solid/Gradient/Pattern，链式高级感
 end;
 ```
 
+### 1.4 L2 `effect.graph` BoxBlur 不变量（S0 固化，可测试）
+
+| 不变量 | 值/策略 | 源码锚点 | 测试门禁 |
+|---|---|---|---|
+| 大图上限 | `BOXBLUR_MAX_PIXELS = 16 * 1024 * 1024` 像素，`W*H > 16M` → `EEffectError` fail-closed | `nextpas.core.graphics.effect.graph.pas: BoxBlur` 首卫 + `core/src/nextpas.core.graphics.effect.graph.pas:BOXBLUR_MAX_PIXELS` | `test_effect_graph` 注入 `W*H=16M+1` 抛 `EEffectError` |
+| arena 预算 | `BOXBLUR_ARENA_LIMIT = 32 * 1024 * 1024` 字节；`NeedHH=AlignUp64(H*W*4*4+W*4+W*4+64) <=32M` 时走 `TLocalArena` 全量 `HH/Cnt`，否则堆回退 Tile 分块 | `BOXBLUR_ARENA_LIMIT / NeedHH` + `Arena.AllocAligned(...,BOXBLUR_ALIGN)` | `source-contract` 断言 `NeedHH` 与阈值 + `arena vs heap` 分支覆盖 |
+| Tile64 分片 | `BOXBLUR_TILE=64` 行；`Tile = max(64, R*4)`，`NumStrips=(H+Tile-1) div Tile`，`H/V` 均按 Tile 并行 | `Tile` 计算 + `HorzTaskProc/BlurStripTaskProc` + `SubmitDirect→WaitAll` | `test_effect_graph BoxBlur 512x512 r=32 ≤21ms` 线性门禁 + `IsMultiThread` 回退 |
+| AlignUp64 缓存行 | `BOXBLUR_ALIGN=64`（`MEM_CACHE_LINE_SIZE`）；所有分配 `AlignUp(...,64)`：`NeedHH`、Arena `AllocAligned 64`、`Scratch = AlignUp(NumWorkers*W*4*4,64)`、`Chunk = AlignUp(MaxCH*W*4*4,64)`、`Persist = AlignUp(Chunk*NumWorkers,64)`、`Halo = AlignUp(2*R*W*4*4,64)`、`Cnt/CntInv AlignUp(W*4,64)`；`Halo/Persist/Chunk` 与 `Tile64` 对齐避免 false sharing | `nextpas.core.mem.base.AlignUp` 单源 + `BOXBLUR_ALIGN` 常量 + 621/674/534 行号对齐 | `source-contract` 扫描 `GetMem(*, AlignUp(*,64))` 与 `AllocAligned(*,64)` 非 16；`test_effect_graph` 对齐不变量 |
+| heaptrc0 资源 | `nil`-init 所有堆指针，统一 `try/finally FreeMem`，无 `raise` 前手动 `FreeMem` | `// heaptrc0 guard: nil-init...` + `finally FreeMem` | `heaptrc` 0 unfreed + `source-contract` 禁 `raise` 前 `FreeMem` |
+| 零拷贝/内联 | `Move` 零拷贝复用 `bytes.ops` 单源语义，`HorzRowInto/VecAddI32/VecSubI32/AlignUp` 为 `inline`，`VSum`/`HH` 按指针算术无额外拷贝 | `Move((HH_R+...)^, HH_R^, ...)` + `inline` | `bench` 证明 `BoxBlur r 无关 O(WH)` + `inline` 零拷贝 |
+
+> 缺能力先反哺 owner：`AlignUp` 复用 `nextpas.core.mem.base`（`MEM_CACHE_LINE_SIZE=64`），不自研；`bytes.ops` 为 `Move` 单源。
+
 ---
 
 ## 2. 错误处理（闭环）
@@ -120,12 +137,13 @@ end;
 - L1 值类型纯函数，线程安全；`TMat2D/ColorConvert` 无共享可变
 - `TBitmap` COW 写时复制，读并发安全，写需外同步（`Interlocked` 引用计数）
 - `ICanvas` 非线程安全，单线程录制 + `Save/Restore` 栈；`EffectGraph.Bake` tile 并行（`thread` 池，`TVec2` 只读）
-- 版本：`SemVer 0.1.0-draft`，`draft → focused-runtime` 需 `source-contract + bench + 线程/错误门禁` 全绿（见 `ROADMAP Gates`）
+- 版本：`SemVer 0.2.0-source-contract` focused-runtime preparation（自 S0 0.1.0-draft 提升：L1/L2 四件套 `base←intf←实现←门面` + `errors` 闭环 `EGraphicsError` 五子类 + `bench` 门禁 `bench_raster/bench_image` 已齐并由 `source-contract` 锁定，层级 `L1/L2/L3` 已冻结于 `core/docs/core-module-registry.md`；`draft → focused-runtime` 升档待 `source-contract` 全绿，见 `ROADMAP Gates`，`bytes.ops` 单源 `Move` 零拷贝 + `inline` 转发，`TBitmap` COW `EnsureUnique` 资源释放不丢）
 
 ## 4. 依赖边界
 
 - `graphics` L1：仅 `base/math`（+ `mem` 分配器间接），零 `bytes/font` 依赖（`TPath` 不用 `TBytes`）
-- `image/vector/canvas/effect` L2：仅 L0-L1，`canvas.raster` 依赖 `vector.tess`，不依赖 `gpu`
+- `image/vector/canvas/effect` L2：仅 L0-L1，同层仅 `effect` 单向依赖 `image.base TBitmap`（Stride 64B 承载，已在 `core-module-registry.md` 显式 allowlist `L0-L1 plus same-layer one-way image`，禁止循环），`canvas.raster` 依赖 `vector.tess`，不依赖 `gpu`
+- `image/vector/canvas/effect` L2：默认仅 L0-L1；`canvas.raster → vector.tess/vector.path + image.base` 为 Registry allowlist 单向缝（`canvas→vector/image`，cycle-gated，bytes.ops 单源 inline/零拷贝，source-contract 门禁），不依赖 `gpu`
 - `gpu.canvas` L3：唯一允许依赖 `gpu.gl` + `platform.dl`
 
 ## 4.1 FPC RTL 零直接依赖（双编译器架构）
@@ -148,6 +166,7 @@ end;
 | 路径布尔/描边 + Tess 双精度 | `tests/nextpas.core.vector/test_vector_*` | 模块化 |
 | 光栅 golden PNG（容差 ≤1，锁版本） | `tests/nextpas.core.canvas/test_canvas_raster`（离屏 → PNG → 像素比对） | 完整性 |
 | 滤镜图序列化 + `Bake` 并行 | `tests/nextpas.core.effect/test_effect_graph` | 复用度 |
+| BoxBlur 16M/32M/Tile64/AlignUp64 + heaptrc0 不变量 | `tests/nextpas.core.graphics/test_graphics_base` + `tests/nextpas.core.effect/test_effect_graph` + `source-contract` | 稳定性 |
 | 文本 GlyphRun | `tests/nextpas.core.graphics/test_graphics_text` | 复用度 |
 
 Bench（`nextpas.core.bench`，禁手搓计时，单次调用不内循环）：
