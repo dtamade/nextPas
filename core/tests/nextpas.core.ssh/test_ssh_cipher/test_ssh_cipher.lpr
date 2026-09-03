@@ -8,7 +8,6 @@ program test_ssh_cipher;
  * 篡改检测、RFC 4231 HMAC-SHA2 向量。}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -18,7 +17,7 @@ uses
   nextpas.core.crypto.hmac,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.text.conv;
 
 function HexToBytes(const AHex: string): TBytes;
 var

@@ -9,11 +9,8 @@ program test_ssh_proxyjump;
   Heaptrc 0: manual MemPipe (_AddRef=-1) + BeginThread sync + explicit Free,
   mirrors test_ssh_session zero-leak pattern (owner boundary: io.intf/bytes). }
 
-uses
-  cthreads,
-  Classes, SysUtils,
+uses nextpas.core.thread.init,
   nextpas.core.bytes.ops,
-  nextpas.core.system.sysutils,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -37,7 +34,7 @@ uses
   nextpas.core.crypto.random,
   nextpas.core.ssh.compress,
   ssh_rsa_kat,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv, nextpas.core.time;
 
 { ── MemPipe (manual lifetime, zero-copy Move) ─────────────────── }
 
@@ -181,7 +178,7 @@ begin
       LW:=TsshWriter.Create(16+Length(LNeedFwd)); try LW.PutByte(SSH_MSG_CHANNEL_DATA); LW.PutUInt32(FClientChannelId); LW.PutUInt32(UInt32(Length(LNeedFwd))); LW.PutRaw(LNeedFwd); ReplyPayload(LW.ToBytes); finally LW.Free; end;
     end;
     if FEnd.Closed or FSc^.FwdPipe.Closed then begin end;
-    Sleep(5);
+    MsSleep(5);
   end;
 end;
 
@@ -209,10 +206,10 @@ begin
     SSH_FXP_INIT: begin LW:=TsshWriter.Create(8); try LW.PutByte(SSH_FXP_VERSION); LW.PutUInt32(3); LInner:=LW.ToBytes; finally LW.Free; end; end;
     SSH_FXP_REALPATH: begin LPath:=LR.ReadStringText; LW:=TsshWriter.Create(64); try LW.PutByte(SSH_FXP_NAME); LW.PutUInt32(LId); LW.PutUInt32(1); LW.PutStringText('/resolved'+LPath); LW.PutStringText('drwxr-xr-x'); PutAttrs(LW, Default(TSftpAttrs)); LInner:=LW.ToBytes; finally LW.Free; end; end;
     SSH_FXP_STAT, SSH_FXP_LSTAT: begin LPath:=LR.ReadStringText; if Pos('notfound',LPath)>0 then begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_FXP_STATUS); LW.PutUInt32(LId); LW.PutUInt32(SSH_FX_NO_SUCH_FILE); LW.PutStringText('not found'); LW.PutStringText('en'); LInner:=LW.ToBytes; finally LW.Free; end; end else begin LW:=TsshWriter.Create(64); try LW.PutByte(SSH_FXP_ATTRS); LW.PutUInt32(LId); PutAttrs(LW, AttrsWithSizeAndPerms(1234,$81A4)); LInner:=LW.ToBytes; finally LW.Free; end; end; end;
-    SSH_FXP_OPENDIR: begin LR.ReadStringText; LW:=TsshWriter.Create(16); try LHandle:=BytesOf('hdl1'); LW.PutByte(SSH_FXP_HANDLE); LW.PutUInt32(LId); LW.PutStringBytes(LHandle); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    SSH_FXP_OPENDIR: begin LR.ReadStringText; LW:=TsshWriter.Create(16); try LHandle:=StringToUTF8Bytes('hdl1'); LW.PutByte(SSH_FXP_HANDLE); LW.PutUInt32(LId); LW.PutStringBytes(LHandle); LInner:=LW.ToBytes; finally LW.Free; end; end;
     SSH_FXP_READDIR: begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_FXP_STATUS); LW.PutUInt32(LId); LW.PutUInt32(SSH_FX_EOF); LW.PutStringText(''); LW.PutStringText('en'); LInner:=LW.ToBytes; finally LW.Free; end; end;
-    SSH_FXP_OPEN: begin LPath:=LR.ReadStringText; LR.ReadUInt32; try ReadAttrs(LR); except end; LW:=TsshWriter.Create(16); try LHandle:=BytesOf('hdl1'); LW.PutByte(SSH_FXP_HANDLE); LW.PutUInt32(LId); LW.PutStringBytes(LHandle); LInner:=LW.ToBytes; finally LW.Free; end; end;
-    SSH_FXP_READ: begin LR.ReadStringBytes; LR.ReadUInt64; LR.ReadUInt32; LW:=TsshWriter.Create(16); try LW.PutByte(SSH_FXP_DATA); LW.PutUInt32(LId); LW.PutStringBytes(BytesOf('hello sftp via proxy')); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    SSH_FXP_OPEN: begin LPath:=LR.ReadStringText; LR.ReadUInt32; try ReadAttrs(LR); except end; LW:=TsshWriter.Create(16); try LHandle:=StringToUTF8Bytes('hdl1'); LW.PutByte(SSH_FXP_HANDLE); LW.PutUInt32(LId); LW.PutStringBytes(LHandle); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    SSH_FXP_READ: begin LR.ReadStringBytes; LR.ReadUInt64; LR.ReadUInt32; LW:=TsshWriter.Create(16); try LW.PutByte(SSH_FXP_DATA); LW.PutUInt32(LId); LW.PutStringBytes(StringToUTF8Bytes('hello sftp via proxy')); LInner:=LW.ToBytes; finally LW.Free; end; end;
     SSH_FXP_WRITE, SSH_FXP_CLOSE, SSH_FXP_REMOVE, SSH_FXP_MKDIR, SSH_FXP_RMDIR, SSH_FXP_RENAME: begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_FXP_STATUS); LW.PutUInt32(LId); LW.PutUInt32(SSH_FX_OK); LW.PutStringText(''); LW.PutStringText('en'); LInner:=LW.ToBytes; finally LW.Free; end; end;
     else begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_FXP_STATUS); LW.PutUInt32(LId); LW.PutUInt32(SSH_FX_OK); LW.PutStringText(''); LW.PutStringText('en'); LInner:=LW.ToBytes; finally LW.Free; end; end;
   end; finally LR.Free; end;
@@ -262,7 +259,7 @@ begin
     LSyncTarget^.ServerEnd:=LFwdB; LSyncTarget^.Scenario:=LScTarget; LSyncTarget^.Done:=False; LSyncTarget^.DoneEvent:=RTLEventCreate;
     BeginThread(@ProxyServerMain, Pointer(LSyncTarget), LTargetTid);
     BeginThread(@ProxyServerMain, Pointer(LSyncJump), LJumpTid);
-    Sleep(20);
+    MsSleep(20);
     LJumpOpts:=DefaultSshConnectOptions('jump'); LJumpOpts.Host:='jump'; LJumpOpts.User:='u'; LJumpOpts.Password:='p'; LJumpOpts.ExecTimeoutMs:=5000;
     LTargetOpts:=DefaultSshConnectOptions('target'); LTargetOpts.Host:='target'; LTargetOpts.Port:=22; LTargetOpts.User:='u'; LTargetOpts.Password:='p'; LTargetOpts.ExecTimeoutMs:=5000;
     LJumpSess:=nil; LProxySess:=nil; LJcIO:=LJumpClient;
@@ -320,7 +317,7 @@ begin
     LSyncJump^.ServerEnd:=LJumpServer; LSyncJump^.Scenario:=LScJump; LSyncJump^.Done:=False; LSyncJump^.DoneEvent:=RTLEventCreate;
     LSyncTarget^.ServerEnd:=LFwdB; LSyncTarget^.Scenario:=LScTarget; LSyncTarget^.Done:=False; LSyncTarget^.DoneEvent:=RTLEventCreate;
     BeginThread(@ProxyServerMain, Pointer(LSyncTarget), LTargetTid);
-    BeginThread(@ProxyServerMain, Pointer(LSyncJump), LJumpTid); Sleep(20);
+    BeginThread(@ProxyServerMain, Pointer(LSyncJump), LJumpTid); MsSleep(20);
     LJumpOpts:=DefaultSshConnectOptions('jump'); LJumpOpts.Host:='jump'; LJumpOpts.User:='u'; LJumpOpts.Password:='p'; LJumpOpts.ExecTimeoutMs:=5000;
     LJumpSess:=nil; LJcIO:=LJumpClient;
     try SshConnectOn(LJcIO, LJumpOpts, LJumpSess); Result:=True;
@@ -357,7 +354,7 @@ begin
     LSyncJump^.ServerEnd:=LJumpServer; LSyncJump^.Scenario:=LScJump; LSyncJump^.Done:=False; LSyncJump^.DoneEvent:=RTLEventCreate;
     LSyncTarget^.ServerEnd:=LFwdB; LSyncTarget^.Scenario:=LScTarget; LSyncTarget^.Done:=False; LSyncTarget^.DoneEvent:=RTLEventCreate;
     BeginThread(@ProxyServerMain, Pointer(LSyncTarget), LTargetTid);
-    BeginThread(@ProxyServerMain, Pointer(LSyncJump), LJumpTid); Sleep(20);
+    BeginThread(@ProxyServerMain, Pointer(LSyncJump), LJumpTid); MsSleep(20);
     JO:=DefaultSshConnectOptions('jump'); JO.Host:='jump'; JO.User:='u'; JO.Password:='p'; JO.ExecTimeoutMs:=5000;
     TO2:=DefaultSshConnectOptions('target'); TO2.Host:='target'; TO2.User:='u'; TO2.Password:='p'; TO2.ExecTimeoutMs:=5000;
     S1:=nil; S2:=nil; FS:=nil; LJcIO:=LJumpClient;

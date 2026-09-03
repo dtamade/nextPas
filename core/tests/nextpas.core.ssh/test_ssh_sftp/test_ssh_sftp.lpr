@@ -10,14 +10,13 @@ program test_ssh_sftp;
  * ESSHError(sekSftp) 的映射。}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.channel,
   nextpas.core.ssh.sftp,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.text, nextpas.core.text.conv;
 
 type
   { 已发送请求捕获 }
@@ -159,7 +158,7 @@ var
 begin
   LW := TsshWriter.Create(16);
   try
-    LW.PutStringBytes(BytesOf(string(AHandle)));
+    LW.PutStringBytes(StringToUTF8Bytes(string(AHandle)));
     Result := RespPkt(SSH_FXP_HANDLE, AId, LW.ToBytes);
   finally
     LW.Free;
@@ -346,13 +345,13 @@ begin
     LFfs := NewFfs([
       VersionPkt(3),
       HandlePkt(1, 'fh1'),
-      DataPkt(2, BytesOf('hello ')),
-      DataPkt(3, BytesOf('sftp')),
+      DataPkt(2, StringToUTF8Bytes('hello ')),
+      DataPkt(3, StringToUTF8Bytes('sftp')),
       StatusPkt(4, SSH_FX_EOF, ''),
       StatusPkt(5, SSH_FX_OK, '')
     ]);
     LGot := LFfs.ReadFile('/tmp/greet');
-    CheckEqual(BytesOf('hello sftp'), LGot);
+    CheckEqual(StringToUTF8Bytes('hello sftp'), LGot);
     CheckEqual(Int64(SSH_FXP_OPEN), Int64(LWire.SentTyp(1)));
     CheckEqual(Int64(SSH_FXP_READ), Int64(LWire.SentTyp(2)));
   end);

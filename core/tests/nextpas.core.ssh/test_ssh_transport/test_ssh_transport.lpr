@@ -9,8 +9,6 @@ program test_ssh_transport;
  * DISCONNECT 行为与关闭后 IO 错误。}
 
 uses
-  SysUtils,
-  nextpas.core.system.sysutils,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.time.deadline,
@@ -27,7 +25,7 @@ uses
   nextpas.core.ssh.kex,
   nextpas.core.ssh.transport,
   nextpas.core.ssh.transport.async,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text.conv, nextpas.core.time;
 
 type
   TMemPipeEnd = class(TInterfacedObject, IReadWriteCloser)
@@ -590,7 +588,7 @@ begin
       LTr.ApplyNewKeys(LNeg, nil,LKey,nil, nil,LKey,nil);
       LTr.ConfigureRekey(0, 100);
       CheckFalse(LTr.ShouldRekey, 'immediately after reset');
-      Sleep(150);
+      MsSleep(150);
       CheckTrue(LTr.ShouldRekey, 'after interval exceeded');
       LTr.ConfigureRekey(SSH_REKEY_BYTES, SSH_REKEY_INTERVAL_MS);
     finally LTr.Free; LClientEnd.Free; LServerEnd.Free; end;
@@ -685,7 +683,7 @@ begin
         Loop.Poll; CheckTrue(Done, 'async ignore callback invoked');
         CheckTrue(Tr.ShouldRekey, 'async at boundary after ignore (14>10)');
         Tr.ConfigureRekey(0, 100); CheckFalse(Tr.ShouldRekey, 'async immediately after reset');
-        Sleep(150); CheckTrue(Tr.ShouldRekey, 'async after interval');
+        MsSleep(150); CheckTrue(Tr.ShouldRekey, 'async after interval');
         Done:=False; Tr.AsyncSendIgnore(nil, procedure(AErr: ESSHError; AContext: Pointer) begin PBoolean(AContext)^:=True; end, @Done);
         Loop.Poll; CheckTrue(Done, 'async empty ignore none overhead');
       finally Tr.Free; end;

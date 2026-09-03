@@ -8,7 +8,6 @@ program test_ssh_kex;
  * draft-ietf-curdle-ssh-curves §4 输入序的独立 H 重算。}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.bytes.ops,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -19,7 +18,7 @@ uses
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.bigint,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text.conv;
 
 function HexToBytes(const AHex: string): TBytes;
 var

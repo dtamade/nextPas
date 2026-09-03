@@ -9,8 +9,6 @@ program test_ssh_keys;
 
 uses
   nextpas.core.bytes.ops,
-  SysUtils,
-  nextpas.core.system.sysutils,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -23,7 +21,7 @@ uses
   nextpas.core.encoding.base64,
   ssh_rsa_kat,
   ssh_bcrypt_kat,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.time;
 
 function PatternBytes(APattern: Byte; ACount: Integer): TBytes;
 begin
@@ -407,19 +405,19 @@ begin
   begin
     LN := CrtKatN; LD := CrtKatD; LP := CrtKatP; LQ := CrtKatQ; LIq := CrtKatIqmp;
     LIter := 32;
-    T0 := SysUtils.GetTickCount64;
+    T0 := GetTickCount64;
     for I := 1 to LIter do
       CheckTrue(RsaSignPkcs1v15(LN, LD, SHA512(KatMsg), DIGEST_INFO_SHA512, LSig));
-    T1 := SysUtils.GetTickCount64;
+    T1 := GetTickCount64;
     TNaive := T1 - T0;
     if TNaive = 0 then TNaive := 1;
-    T0 := SysUtils.GetTickCount64;
+    T0 := GetTickCount64;
     for I := 1 to LIter do
       CheckTrue(RsaSignPkcs1v15Crt(LN, LD, LP, LQ, LIq, SHA512(KatMsg), DIGEST_INFO_SHA512, LSig));
-    T1 := SysUtils.GetTickCount64;
+    T1 := GetTickCount64;
     TCrt := T1 - T0;
     if TCrt = 0 then TCrt := 1;
-    WriteLn(Format('  [bench] rsa-sha512 x%d naive=%d ms crt=%d ms speedup=%.2fx',
+    WriteLn(TextFormat('  [bench] rsa-sha512 x%d naive=%d ms crt=%d ms speedup=%.2fx',
       [LIter, TNaive, TCrt, TNaive / TCrt]));
     { CRT 必须与 naive 等价已在前序用例保证；此处只断言 CRT 不显著更慢（>2x 回退即视为回归）}
     CheckTrue(TCrt * 2 <= TNaive * 3 + 20, 'crt should not be much slower than naive');

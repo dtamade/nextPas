@@ -1,6 +1,6 @@
 program test_ssh_compress;
 {$I nextpas.core.settings.inc}
-uses nextpas.core.system.sysutils, nextpas.core.base, nextpas.core.ssh.compress, nextpas.core.ssh.errors, nextpas.core.test;
+uses  nextpas.core.base, nextpas.core.ssh.compress, nextpas.core.ssh.errors, nextpas.core.test, nextpas.core.base.utils;
 var Runner: TSuiteRunner; Suite: TTestSuite;
 function StrToBytes(const s:string):TBytes; var i:integer; begin SetLength(Result,length(s)); for i:=1 to length(s) do Result[i-1]:=Byte(s[i]); end;
 begin

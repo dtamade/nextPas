@@ -10,7 +10,6 @@ program test_ssh_hostkey;
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.system.sysutils,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -24,7 +23,7 @@ uses
   nextpas.core.encoding.base64,
   nextpas.core.platform.files.text,
   ssh_rsa_kat,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.fs, nextpas.core.text.conv;
 
 function HexToBytes(const AHex: string): TBytes;
 var
@@ -399,7 +398,7 @@ begin
       LKH.LoadFromFile('/nonexistent/known_hosts_for_ssh_test');
       CheckEqual(Int64(0), Int64(LKH.Count));
 
-      LPath := GetTempDir(False) + 'nextpas_ssh_known_hosts_test';
+      LPath := GetTempDir() + 'nextpas_ssh_known_hosts_test';
       LBlob := PatternBytes($CC, 40);
       LContent := '# test' + #10
         + 'tmp.example.com ssh-ed25519 ' + Base64Encode(LBlob) + #10;

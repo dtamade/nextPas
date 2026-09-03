@@ -10,10 +10,8 @@ program test_ssh_session;
  * 覆盖：密码认证正/负路径、publickey 签名认证、known_hosts 策略（严格模式
  * 未知拒绝 / 文件命中放行）、窗口回补帧容忍、stdout/stderr/exit-code 收集。}
 
-uses
-  cthreads,
+uses nextpas.core.thread.init,
   nextpas.core.bytes.ops,
-  nextpas.core.system.sysutils,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -41,7 +39,7 @@ uses
   nextpas.core.ssh.agent,
   nextpas.core.ssh.compress,
   ssh_rsa_kat,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.fs, nextpas.core.text, nextpas.core.text.conv, nextpas.core.time;
 
 { ── 线程安全阻塞内存管道 ───────────────────────────────────────── }
 
@@ -1914,7 +1912,7 @@ begin
     LSyncRec.Scenario:=LSc; LSyncRec.DoneEvent:=RTLEventCreate; LSyncRec.ThreadDone:=False; LSync:=@LSyncRec;
     MakePipe(LClientEnd, LServerEnd, LShared); LSync^.ServerEnd:=LServerEnd; BeginThread(@ServerThreadMain, Pointer(LSync), LThreadId);
     LOpts:=DefaultSshConnectOptions(CLIENT_HOST_NAME); LOpts.User:=CLIENT_USER; LOpts.Password:=CLIENT_PASSWORD; LOpts.RekeyBytes:=100; LOpts.RekeyIntervalMs:=0;
-    try LSess:=SshConnectOn(LClientEnd, LOpts); CheckFalse(LSess.ShouldRekey, 'below threshold after kex'); for I:=1 to 10 do LSess.SendKeepAlive; CheckTrue(LSess.ShouldRekey, 'at boundary after keepalives'); LSess.Close; LSess:=nil; LWait:=0; while (not LSync^.ThreadDone) and (LWait<1000) do begin Sleep(20); Inc(LWait); end; finally LClientEnd.Free; LServerEnd.Free; DoneCriticalSection(LShared^.Lock); Dispose(LShared); RTLEventDestroy(LSync^.DoneEvent); Finalize(LScRec); Finalize(LSyncRec); Finalize(LOpts); end;
+    try LSess:=SshConnectOn(LClientEnd, LOpts); CheckFalse(LSess.ShouldRekey, 'below threshold after kex'); for I:=1 to 10 do LSess.SendKeepAlive; CheckTrue(LSess.ShouldRekey, 'at boundary after keepalives'); LSess.Close; LSess:=nil; LWait:=0; while (not LSync^.ThreadDone) and (LWait<1000) do begin MsSleep(20); Inc(LWait); end; finally LClientEnd.Free; LServerEnd.Free; DoneCriticalSection(LShared^.Lock); Dispose(LShared); RTLEventDestroy(LSync^.DoneEvent); Finalize(LScRec); Finalize(LSyncRec); Finalize(LOpts); end;
   end);
 
   GSuite.Test('session ShouldRekey time boundary via loopback', procedure
@@ -1924,7 +1922,7 @@ begin
     LSyncRec.Scenario:=LSc; LSyncRec.DoneEvent:=RTLEventCreate; LSyncRec.ThreadDone:=False; LSync:=@LSyncRec;
     MakePipe(LClientEnd, LServerEnd, LShared); LSync^.ServerEnd:=LServerEnd; BeginThread(@ServerThreadMain, Pointer(LSync), LThreadId);
     LOpts:=DefaultSshConnectOptions(CLIENT_HOST_NAME); LOpts.User:=CLIENT_USER; LOpts.Password:=CLIENT_PASSWORD; LOpts.RekeyBytes:=0; LOpts.RekeyIntervalMs:=100;
-    try LSess:=SshConnectOn(LClientEnd, LOpts); CheckFalse(LSess.ShouldRekey, 'immediately after reset'); Sleep(150); CheckTrue(LSess.ShouldRekey, 'after interval'); LSess.Close; LSess:=nil; LWait:=0; while (not LSync^.ThreadDone) and (LWait<1000) do begin Sleep(20); Inc(LWait); end; finally LClientEnd.Free; LServerEnd.Free; DoneCriticalSection(LShared^.Lock); Dispose(LShared); RTLEventDestroy(LSync^.DoneEvent); Finalize(LScRec); Finalize(LSyncRec); Finalize(LOpts); end;
+    try LSess:=SshConnectOn(LClientEnd, LOpts); CheckFalse(LSess.ShouldRekey, 'immediately after reset'); MsSleep(150); CheckTrue(LSess.ShouldRekey, 'after interval'); LSess.Close; LSess:=nil; LWait:=0; while (not LSync^.ThreadDone) and (LWait<1000) do begin MsSleep(20); Inc(LWait); end; finally LClientEnd.Free; LServerEnd.Free; DoneCriticalSection(LShared^.Lock); Dispose(LShared); RTLEventDestroy(LSync^.DoneEvent); Finalize(LScRec); Finalize(LSyncRec); Finalize(LOpts); end;
   end);
 
   GSuite.Test('session SendKeepAlive roundtrip', procedure
@@ -1934,7 +1932,7 @@ begin
     LSyncRec.Scenario:=LSc; LSyncRec.DoneEvent:=RTLEventCreate; LSyncRec.ThreadDone:=False; LSync:=@LSyncRec;
     MakePipe(LClientEnd, LServerEnd, LShared); LSync^.ServerEnd:=LServerEnd; BeginThread(@ServerThreadMain, Pointer(LSync), LThreadId);
     LOpts:=DefaultSshConnectOptions(CLIENT_HOST_NAME); LOpts.User:=CLIENT_USER; LOpts.Password:=CLIENT_PASSWORD;
-    try LSess:=SshConnectOn(LClientEnd, LOpts); LSess.SendKeepAlive; LRes:=LSess.Exec('echo hi'); CheckEqual('ka-ok', BytesToText(LRes.StdOut), 'keepalive roundtrip preserves exec'); LSess.Close; LSess:=nil; LWait:=0; while (not LSync^.ThreadDone) and (LWait<1000) do begin Sleep(20); Inc(LWait); end; finally LClientEnd.Free; LServerEnd.Free; DoneCriticalSection(LShared^.Lock); Dispose(LShared); RTLEventDestroy(LSync^.DoneEvent); Finalize(LScRec); Finalize(LSyncRec); Finalize(LOpts); Finalize(LRes); end;
+    try LSess:=SshConnectOn(LClientEnd, LOpts); LSess.SendKeepAlive; LRes:=LSess.Exec('echo hi'); CheckEqual('ka-ok', BytesToText(LRes.StdOut), 'keepalive roundtrip preserves exec'); LSess.Close; LSess:=nil; LWait:=0; while (not LSync^.ThreadDone) and (LWait<1000) do begin MsSleep(20); Inc(LWait); end; finally LClientEnd.Free; LServerEnd.Free; DoneCriticalSection(LShared^.Lock); Dispose(LShared); RTLEventDestroy(LSync^.DoneEvent); Finalize(LScRec); Finalize(LSyncRec); Finalize(LOpts); Finalize(LRes); end;
   end);
 
   GRunner := TSuiteRunner.Create('nextpas.core.ssh.session');

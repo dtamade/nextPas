@@ -7,9 +7,7 @@ program test_ssh_agent;
   ListIdentities 编解码、Sign (ed25519/rsa-sha2-512) 与验签、
   多身份枚举、失败路径、以及会话层 AuthenticateWithAgentOn 回环。 }
 
-uses
-  cthreads,
-  nextpas.core.system.sysutils,
+uses nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.ssh.buffer,
@@ -27,7 +25,7 @@ uses
   nextpas.core.crypto.random,
   nextpas.core.crypto.bigint,
   ssh_rsa_kat,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base.utils;
 
 type
   TMemPipeShared = record Lock: TRTLCriticalSection; end;

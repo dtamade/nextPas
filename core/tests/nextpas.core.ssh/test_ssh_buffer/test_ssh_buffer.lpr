@@ -7,11 +7,10 @@ program test_ssh_buffer;
  * wire 精确字节、越界错误（ESSHError/sekind protocol）。}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text.conv;
 
 function HexToBytes(const AHex: string): TBytes;
 var
