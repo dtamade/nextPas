@@ -28,12 +28,13 @@ type
     ReturnedTick: QWord;
   end;
   TPoolIdleVec = specialize TSmallVec<TPoolIdleEntry, 16>;
+  TPoolIdleArray = array of TPoolIdleEntry;
 
 function PoolIdleGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline;
 function PoolStale(const ACreatedTick, ANow: QWord; const APolicy: TDbPoolPolicy): Boolean; inline;
 function PoolIdleStale(const AEntry: TPoolIdleEntry; const ANow: QWord; const APolicy: TDbPoolPolicy): Boolean; inline;
 function PoolNeedValidate(const AEntry: TPoolIdleEntry; const ANow: QWord; const APolicy: TDbPoolPolicy): Boolean; inline;
-procedure PoolIdlePush(var AEntries: array of TPoolIdleEntry; var ACount: Integer; const AEntry: TPoolIdleEntry);
+procedure PoolIdlePush(var AEntries: TPoolIdleArray; var ACount: Integer; const AEntry: TPoolIdleEntry);
 function PoolIdlePop(var AEntries: array of TPoolIdleEntry; var ACount: Integer; var AEntry: TPoolIdleEntry): Boolean; inline;
 procedure PoolIdleEvictColdStale(var AEntries: array of TPoolIdleEntry; var ACount: Integer; const ANow: QWord; const APolicy: TDbPoolPolicy);
 function PoolIdleTryPopUsable(var AEntries: array of TPoolIdleEntry; var ACount: Integer; const ANow: QWord; const APolicy: TDbPoolPolicy; out AEntry: TPoolIdleEntry): Boolean; inline;
@@ -70,7 +71,7 @@ begin
   Result := APolicy.ValidateOnAcquire and (ANow >= AEntry.ReturnedTick + 500000000);
 end;
 
-procedure PoolIdlePush(var AEntries: array of TPoolIdleEntry; var ACount: Integer; const AEntry: TPoolIdleEntry);
+procedure PoolIdlePush(var AEntries: TPoolIdleArray; var ACount: Integer; const AEntry: TPoolIdleEntry);
 var
   LCap, LNewCap: Integer;
 begin

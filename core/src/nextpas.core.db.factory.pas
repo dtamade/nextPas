@@ -167,16 +167,9 @@ begin
 end;
 
 function FindInsertPosBin(const ASnap: array of TDbDriverEntry; const AName: string): Integer; inline;
-var
-  LFound: Integer;
-  LPos: Integer;
 begin
-  // O(log n) ordered binary, inline.
-  LFound := RegistryOrderedSearch(ASnap, AName, LPos);
-  if LFound >= 0 then
-    Result := LFound
-  else
-    Result := LPos;
+  // 有序插入点必须用 lower_bound：BinarySearch 未命中回 -1 非插入点（空表亦 -1，越界写堆）。
+  Result := Integer(DbRegistryLowerBound(ASnap, AName));
 end;
 
 function TryGetDriverFast(const AName: string; out ADriver: IDbDriver): Boolean;

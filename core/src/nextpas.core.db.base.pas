@@ -221,12 +221,12 @@ type
       ABackendCode, AExtendedCode: Integer;
       const ASqlState, ASeverity, ADetail: string;
       const ACategory: TDbErrorCategory; const AConstraint: TDbConstraintKind;
-      const AMessage: string); overload; inline;
+      const AMessage: string); overload;
     constructor CreateFull(const ABackend: TDbKind;
       ABackendCode, AExtendedCode: Integer;
       const ASqlState, ASeverity, ADetail: string;
       const ACategory: TDbErrorCategory; const AConstraint: TDbConstraintKind;
-      const ASchemaName, ATableName, AColumnName, AMessage: string); overload; inline;
+      const ASchemaName, ATableName, AColumnName, AMessage: string); overload;
     constructor CreateWithCategory(const ABackend: TDbKind;
       const ACategory: TDbErrorCategory; const AConstraint: TDbConstraintKind;
       const AMessage: string); overload;
@@ -500,7 +500,7 @@ constructor EDbError.CreateFull(const ABackend: TDbKind;
   ABackendCode, AExtendedCode: Integer;
   const ASqlState, ASeverity, ADetail: string;
   const ACategory: TDbErrorCategory; const AConstraint: TDbConstraintKind;
-  const AMessage: string); inline;
+  const AMessage: string);
 begin
   inherited Create(AMessage);
   InitPayload(ABackend, ABackendCode, AExtendedCode, ASqlState, ASeverity, ADetail);
@@ -512,7 +512,7 @@ constructor EDbError.CreateFull(const ABackend: TDbKind;
   ABackendCode, AExtendedCode: Integer;
   const ASqlState, ASeverity, ADetail: string;
   const ACategory: TDbErrorCategory; const AConstraint: TDbConstraintKind;
-  const ASchemaName, ATableName, AColumnName, AMessage: string); inline;
+  const ASchemaName, ATableName, AColumnName, AMessage: string);
 begin
   inherited Create(AMessage);
   InitPayload(ABackend, ABackendCode, AExtendedCode, ASqlState, ASeverity, ADetail);

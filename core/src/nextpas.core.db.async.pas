@@ -577,7 +577,7 @@ begin
     begin
       if AUpdateAdaptive then
         LStart := TInstant.Now;
-      LErr := EDbError.CreateSimple(decTimeout, 'db async: canceled');
+      LErr := EDbError.CreateWithCategory(dbkUnknown, decTimeout, dckNone, 'db async: canceled');
       LHandle := TDbAsyncHandle.Create(FCtrl);
       LHeld := LHandle;
       LHandle.MarkRunning;

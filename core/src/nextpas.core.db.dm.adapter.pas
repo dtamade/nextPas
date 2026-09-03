@@ -33,9 +33,9 @@ function ConnectDm(const ADsn: string; const AOptions: TDbConnectOptions; const 
 // bulk reuse (heap churn fix 已收敛): 10k 行经 DmSyntheticDpiProxyReuse(var ADest)/DmSyntheticBatchBuild 复用 ADest/Builder 预分配 amortized 1 堆分配（10k heap→1 via BytesCalcGrowCap doubling，bytes.ops 单源 AnsiEnsureCapacity+AnsiSetLogicalLenNoRealloc+2×Move 零拷贝，单源于 synthetic；单行 DmSyntheticDpiProxy/E2EProxy per-row 单分配历史债务已物理删除于门面，synthetic 内部 deprecated 仅兼容，facade 零暴露，批量仅 var ADest reuse amortized 1 alloc 彻底收敛）
 function DmSyntheticTranslate(const ASql: string): string; inline;
 procedure DmSyntheticDpiProxyReuse(var ADest: AnsiString; const ASql: string; const AValue: string); overload;
-procedure DmSyntheticDpiProxyReuse(var ADest: AnsiString; const LTranslated: string; const AValue: string); overload;
+procedure DmSyntheticDpiProxyReuseTranslated(var ADest: AnsiString; const LTranslated: string; const AValue: string); overload;
 procedure DmSyntheticE2EProxyReuse(var ADest: AnsiString; const ASql: string; const AValue: string); overload;
-procedure DmSyntheticE2EProxyReuse(var ADest: AnsiString; const LTranslated: string; const AValue: string); overload;
+procedure DmSyntheticE2EProxyReuseTranslated(var ADest: AnsiString; const LTranslated: string; const AValue: string); overload;
 function DmSyntheticBatchBuild(const ASql: string; const AValues: array of string): AnsiString;
 procedure DmSyntheticCacheClear; inline;
 procedure DmSyntheticCacheInvalidate(const ASql: string); inline;
@@ -55,7 +55,9 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.db.dm.base,
   nextpas.core.db.dm.ffi,
-  nextpas.core.db.dm.loader;
+  nextpas.core.db.dm.loader,
+  nextpas.core.db.dm.adapter.synthetic,
+  nextpas.core.db.err;
 
 {$IF not BYTES_OPS_SINGLE_SOURCE}
   {$FATAL 'bytes.ops single source drift: db.dm.adapter must reuse bytes.ops'}
@@ -71,9 +73,9 @@ begin
   nextpas.core.db.dm.adapter.synthetic.DmSyntheticDpiProxyReuse(ADest, ASql, AValue);
 end;
 
-procedure DmSyntheticDpiProxyReuse(var ADest: AnsiString; const LTranslated: string; const AValue: string);
+procedure DmSyntheticDpiProxyReuseTranslated(var ADest: AnsiString; const LTranslated: string; const AValue: string);
 begin
-  nextpas.core.db.dm.adapter.synthetic.DmSyntheticDpiProxyReuse(ADest, LTranslated, AValue);
+  nextpas.core.db.dm.adapter.synthetic.DmSyntheticDpiProxyReuseTranslated(ADest, LTranslated, AValue);
 end;
 
 procedure DmSyntheticE2EProxyReuse(var ADest: AnsiString; const ASql: string; const AValue: string);
@@ -81,9 +83,9 @@ begin
   nextpas.core.db.dm.adapter.synthetic.DmSyntheticE2EProxyReuse(ADest, ASql, AValue);
 end;
 
-procedure DmSyntheticE2EProxyReuse(var ADest: AnsiString; const LTranslated: string; const AValue: string);
+procedure DmSyntheticE2EProxyReuseTranslated(var ADest: AnsiString; const LTranslated: string; const AValue: string);
 begin
-  nextpas.core.db.dm.adapter.synthetic.DmSyntheticE2EProxyReuse(ADest, LTranslated, AValue);
+  nextpas.core.db.dm.adapter.synthetic.DmSyntheticE2EProxyReuseTranslated(ADest, LTranslated, AValue);
 end;
 
 function DmSyntheticBatchBuild(const ASql: string; const AValues: array of string): AnsiString;

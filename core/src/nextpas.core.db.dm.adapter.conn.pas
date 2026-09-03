@@ -101,8 +101,7 @@ uses
   nextpas.core.db.capprobe,
   nextpas.core.db.dm.ffi,
   nextpas.core.db.dm.adapter.common,
-  nextpas.core.collections.lrucache,
-  nextpas.core.sync;
+  nextpas.core.collections.lrucache;
 
 {$IF not BYTES_OPS_SINGLE_SOURCE}
   {$FATAL 'bytes.ops single source drift: db.dm.adapter.conn must reuse bytes.ops'}

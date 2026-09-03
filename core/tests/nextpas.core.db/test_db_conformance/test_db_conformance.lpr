@@ -40,18 +40,18 @@ var
   GEnsuredConf: Boolean = False;
   T: TTestSuite;
 
-function OpenSqliteC(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectSqlite(ADsn, AOptions); end;
-function OpenPgC(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectPostgres(ADsn, AOptions); end;
-function OpenMysqlC(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectMysql(ADsn, AOptions); end;
-function OpenOdbcC(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectOdbc(ADsn, AOptions); end;
-function OpenRedisC(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+function OpenSqliteC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectSqlite(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenPgC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectPostgres(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenMysqlC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectMysql(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenOdbcC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectOdbc(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenRedisC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
 begin Result := ConnectRedis(ADsn, '', 0, AOptions); end;
-function OpenDmC(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectDm(ADsn, AOptions); end;
+function OpenDmC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectDm(ADsn, AOptions, AStmtCacheCapacity); end;
 procedure EnsureBuiltinConf; inline;
 begin
   if GEnsuredConf then Exit;

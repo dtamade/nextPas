@@ -15,6 +15,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.db.base,
   nextpas.core.db.redis.base,
   nextpas.core.db.redis.transport;
 

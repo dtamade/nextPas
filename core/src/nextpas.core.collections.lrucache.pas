@@ -450,22 +450,34 @@ procedure TLruCache.Clear;
 var
   LKeys: array of K;
   LNode: PNode;
+  LPrevCtx: Pointer;
   i: SizeInt;
 begin
   // 获取所有Keys的快照
   LKeys := FMap.GetKeys;
 
-  // 逐个处理：从HashMap移除，然后释放PNode内存
-  for i := 0 to High(LKeys) do
+  // 自定义哈希/相等经 GLruCacheActive 路由（与 Get/Put/Remove/TryTake 一致），缺之查不到节点致泄漏
+  if FUseCustomLookup then
   begin
-    if FMap.TryGetValue(LKeys[i], LNode) then
+    LPrevCtx := GLruCacheActive;
+    GLruCacheActive := Self;
+  end;
+  try
+    // 逐个处理：从HashMap移除，然后释放PNode内存
+    for i := 0 to High(LKeys) do
     begin
-      // 从HashMap移除（会调用Finalize）
-      FMap.Remove(LKeys[i]);
+      if FMap.TryGetValue(LKeys[i], LNode) then
+      begin
+        // 从HashMap移除（会调用Finalize）
+        FMap.Remove(LKeys[i]);
 
-      // 使用DestroyNode来释放PNode内存
-      DestroyNode(LNode);
+        // 使用DestroyNode来释放PNode内存
+        DestroyNode(LNode);
+      end;
     end;
+  finally
+    if FUseCustomLookup then
+      GLruCacheActive := LPrevCtx;
   end;
 
   // 重置所有状态

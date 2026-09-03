@@ -50,6 +50,7 @@ function DbProbeCapabilities(const AConn: IDbConnection): IDbCapabilities; inlin
 implementation
 
 uses
+  SysUtils,
   nextpas.core.bytes.ops,
   nextpas.core.text.view;
 
@@ -87,7 +88,7 @@ begin
         { LToken/LRest already split }
       else
       begin
-        LToken := LRest;
+        { 未命中时 SplitFirst 已置 LToken=剩余整体、LRest=空；勿再用 LRest 回盖 LToken }
         LRest := TStringView.Empty;
       end;
       LToken := LToken.Trim;
@@ -96,7 +97,7 @@ begin
       while (LToken.Len > 0) and (LToken.Data[0] = '(') do
         LToken := LToken.Slice(1, LToken.Len - 1);
       // strip trailing ')', ',', ';'
-      while (LToken.Len > 0) and ((LToken.Data[LToken.Len - 1] = Byte(')')) or (LToken.Data[LToken.Len - 1] = Byte(',')) or (LToken.Data[LToken.Len - 1] = Byte(';'))) do
+      while (LToken.Len > 0) and ((LToken.Data[LToken.Len - 1] = ')') or (LToken.Data[LToken.Len - 1] = ',') or (LToken.Data[LToken.Len - 1] = ';')) do
         LToken := LToken.Slice(0, LToken.Len - 1);
       LToken := LToken.Trim;
       if LToken.IsEmpty then Continue;

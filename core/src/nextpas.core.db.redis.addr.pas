@@ -122,6 +122,7 @@ var
   LKvPort: string;
   LKvDb: string;
   LHasKvKey: Boolean;
+  LOpts: TDbRedisConnectOptions;
 begin
   AOpts := TDbRedisConnectOptions.Default;
   AOpts.Host := '';
@@ -133,6 +134,10 @@ begin
     LKvPort := '';
     LKvDb := '';
     LHasKvKey := False;
+    { out 参数不可被匿名闭包捕获：经局部 LOpts 中转，ScanKV 后回写 }
+    LOpts.Password := AOpts.Password;
+    LOpts.UseTls := AOpts.UseTls;
+    LOpts.TlsServerName := AOpts.TlsServerName;
     try
       ScanKV(AAddr,
         procedure(const AKey, AValue: string)
@@ -155,20 +160,23 @@ begin
           end
           else if SameText(AKey, 'password') or SameText(AKey, 'pass') then
           begin
-            AOpts.Password := AValue;
+            LOpts.Password := AValue;
             LHasKvKey := True;
           end
           else if SameText(AKey, 'tls') or SameText(AKey, 'usetls') then
           begin
-            AOpts.UseTls := SameText(Trim(AValue), '1') or SameText(Trim(AValue), 'true') or SameText(Trim(AValue), 'yes');
+            LOpts.UseTls := SameText(Trim(AValue), '1') or SameText(Trim(AValue), 'true') or SameText(Trim(AValue), 'yes');
             LHasKvKey := True;
           end
           else if SameText(AKey, 'tlsservername') or SameText(AKey, 'servername') then
           begin
-            AOpts.TlsServerName := AValue;
+            LOpts.TlsServerName := AValue;
             LHasKvKey := True;
           end;
         end);
+      AOpts.Password := LOpts.Password;
+      AOpts.UseTls := LOpts.UseTls;
+      AOpts.TlsServerName := LOpts.TlsServerName;
     except
       on E: Exception do
         raise EDbError.CreateSimple(dbkRedis, E.Message);

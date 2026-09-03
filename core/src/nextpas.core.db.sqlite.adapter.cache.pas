@@ -65,6 +65,7 @@ function CreateSqliteStmtCache(const ACapacity: Integer): ISqliteStmtCache;
 function SqliteStmtCacheHash(const AKey: string; AData: Pointer): UInt64; inline;
 function SqliteStmtCacheEquals(const ALeft, ARight: string; AData: Pointer): Boolean; inline;
 
+type
   TDbSqliteQuery = class(TInterfacedObject, IDbQuery)
   private
     FHome: ISqliteStmtHome;   { 归还通道；nil = 无缓存直通路径 }

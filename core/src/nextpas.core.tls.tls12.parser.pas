@@ -48,6 +48,7 @@ function TryParseTLS12Finished(const AData: TBytes; AOffset: Integer; ALength: I
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.tls.tls12.wire;
 
@@ -59,13 +60,6 @@ end;
 function ReadUInt24(const AData: TBytes; AOffset: Integer): Integer; inline;
 begin
   Result := (Integer(AData[AOffset]) shl 16) or (Integer(AData[AOffset+1]) shl 8) or Integer(AData[AOffset+2]);
-end;
-
-function BytesToString(const AData: TBytes; AOffset, ALength: Integer): string;
-begin
-  SetLength(Result, ALength);
-  if ALength > 0 then
-    Move(AData[AOffset], Result[1], ALength);
 end;
 
 function TryParseTLS12ServerHello(const AData: TBytes; AOffset: Integer;

@@ -127,8 +127,7 @@ implementation
 uses
   nextpas.core.bytes.ops,
   nextpas.core.text.ansi,
-  nextpas.core.text.scan,
-  nextpas.core.text.view;
+  nextpas.core.text.scan;
 
 {$IF not BYTES_OPS_SINGLE_SOURCE}
   {$FATAL 'bytes.ops single source drift: sqlite.conn must reuse bytes.ops'}

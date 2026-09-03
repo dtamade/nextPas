@@ -46,7 +46,6 @@ uses
   nextpas.core.time.timezone,
   nextpas.core.text.utils,
   nextpas.core.text.conv,
-  nextpas.core.db.intf,
   nextpas.core.identity,
   nextpas.core.identity.base,
   nextpas.core.wallet.state,

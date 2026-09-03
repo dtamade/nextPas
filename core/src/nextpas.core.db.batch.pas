@@ -54,6 +54,7 @@ function DbBatchBlobUseStream(const ASize: Int64): Boolean; inline;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.text.builder,
   nextpas.core.text.sql,
   nextpas.core.db.tx.template;

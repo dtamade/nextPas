@@ -69,9 +69,6 @@ const
   PG_TRANSLATE_CACHE_BYTES_CAP = 512 * 1024; // 512KB 字节上限，防 2M*64=128MB堆放大（计数+字节双限）
   PG_TRANSLATE_CACHE_ENTRY_MAX = 32 * 1024; // 32KB 单条上限，超限不入缓存零拷贝跳过
 
-function PgTransHash(const AKey: string; AData: Pointer): UInt64; inline;
-function PgTransEquals(const ALeft, ARight: string; AData: Pointer): Boolean; inline;
-
 procedure RaisePgAsDb(const AE: EPgError);
 var
   LCategory: TDbErrorCategory;
@@ -529,9 +526,10 @@ begin
 end;
 
 procedure TDbPgQuery.SetParamLiteral(const AIndex: Integer;
-  const ALiteral: string); inline;
+  const ALiteral: string);
 begin
-  // perf: inline 薄转发零额外分配，直连 TPgQuery.BindText 单源（bytes.ops 单源文本门禁已守卫），无二次拷贝
+  // 非 inline 薄转发：inline + except on 变量作实参（RaisePgAsDb(E)）触发 FPC trunk
+  // 内部错误（Symbol E 跨模块注册）；直连 TPgQuery.BindText 单源，无二次拷贝
   try
     FQuery.BindText(AIndex, ALiteral);
   except

@@ -16,6 +16,7 @@ unit nextpas.core.db.dm.adapter.query;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.db.base,
   nextpas.core.db.intf,
   nextpas.core.db.dm.base,

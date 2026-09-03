@@ -17,6 +17,7 @@ uses
   nextpas.core.db.intf,
   nextpas.core.db.pool.base,
   nextpas.core.db.pool.intf,
+  nextpas.core.exception,
   nextpas.core.log.intf;
 
 const

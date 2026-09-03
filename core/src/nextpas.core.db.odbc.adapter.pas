@@ -1013,7 +1013,6 @@ type
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
-    function SupportsArrayBinding: Boolean;
     function ServerVersion: Integer;
     function SupportsNativeVector: Boolean;
     function SupportsJsonPath: Boolean;
@@ -1021,11 +1020,6 @@ type
     function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
-    function ServerVersion: Integer;
-    function SupportsNativeVector: Boolean;
-    function SupportsJsonPath: Boolean;
-    function SupportsRangeTypes: Boolean;
-    function SupportsBulkCopy: Boolean;
   end;
 
 constructor TDbOdbcConnection.Create(AEnv, ADbc: Pointer;
@@ -1420,36 +1414,6 @@ function TDbOdbcConnection.SupportsStatementTimeout: Boolean;
 begin
   Result := True;   { SQL_ATTR_QUERY_TIMEOUT 逐语句应用（秒粒度）；
     个别驱动拒绝属环境降级 }
-end;
-
-function TDbOdbcConnection.SupportsArrayBinding: Boolean;
-begin
-  Result := False;
-end;
-
-function TDbOdbcConnection.ServerVersion: Integer;
-begin
-  Result := 0;
-end;
-
-function TDbOdbcConnection.SupportsNativeVector: Boolean;
-begin
-  Result := False;
-end;
-
-function TDbOdbcConnection.SupportsJsonPath: Boolean;
-begin
-  Result := False;
-end;
-
-function TDbOdbcConnection.SupportsRangeTypes: Boolean;
-begin
-  Result := False;
-end;
-
-function TDbOdbcConnection.SupportsBulkCopy: Boolean;
-begin
-  Result := False;
 end;
 
 function TDbOdbcConnection.CaseSensitiveIdentifiers: Boolean;

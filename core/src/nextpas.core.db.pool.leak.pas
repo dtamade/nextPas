@@ -31,6 +31,7 @@ type
     FrameCount: Integer;
   end;
   TPoolOutstandingVec = specialize TSmallVec<TPoolOutstanding, 8>;
+  TPoolOutstandingArray = array of TPoolOutstanding;
 
   TPoolLeakSnap = record
     HeldMs: QWord;
@@ -44,7 +45,7 @@ type
 
 function PoolLeakGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline;
 
-procedure PoolLeaseRegisterLocked(var AOutstanding: array of TPoolOutstanding; var ACount: Integer;
+procedure PoolLeaseRegisterLocked(var AOutstanding: TPoolOutstandingArray; var ACount: Integer;
   var ALeakNextDue: QWord; AObj: TObject; const ATick: QWord;
   const AIsWriter: Boolean; const AFrames: PCodePointer; const ACountFrames: Integer;
   const APolicy: TDbPoolPolicy);
@@ -81,7 +82,7 @@ begin
   Result := BytesCalcGrowCapWithMin(AOld, ARequired, 4);
 end;
 
-procedure PoolLeaseRegisterLocked(var AOutstanding: array of TPoolOutstanding; var ACount: Integer;
+procedure PoolLeaseRegisterLocked(var AOutstanding: TPoolOutstandingArray; var ACount: Integer;
   var ALeakNextDue: QWord; AObj: TObject; const ATick: QWord;
   const AIsWriter: Boolean; const AFrames: PCodePointer; const ACountFrames: Integer;
   const APolicy: TDbPoolPolicy);

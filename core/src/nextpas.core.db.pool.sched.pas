@@ -29,9 +29,6 @@ const
 
 {$I nextpas.core.bytes.ops.single_source.inc}
 
-{ 热路径单 tick 批量合并：89k ops/s 锤压下 AcquireRead/Writer 复用同一 ns tick 批内 16 合并省 15/16 syscall，stale 批内 <0.3ms（阈值 60s/1s 零影响），线程局部 16 批 + 全局 1ms 窗口双重控 stale，inline 零 I-Cache 膨胀，零拷贝单 Move }
-function PoolSchedCoalescedNowTick: QWord; inline;
-
 { 调度：读租约获取（节流驱逐1s=1000000000ns + 单 tick(ns 单源 PoolSchedCoalescedNowTick 批量复用)缓存 + 零额外 syscall/threshold=0 零 tick(ns 0)），inline 薄封装零 I-Cache 膨胀，资源释放 finally 配对 }
 function PoolSchedAcquireRead(
   const ACore: IDbPoolCore;
@@ -41,7 +38,7 @@ function PoolSchedAcquireRead(
   const AReadSlots: ISemaphore;
   var AIdle: array of TPoolIdleEntry;
   var AIdleCount: Integer;
-  var AOutstanding: array of TPoolOutstanding;
+  var AOutstanding: TPoolOutstandingArray;
   var AOutstandingCount: Integer;
   var APending: TDbPoolLeakReports;
   var ALeakNextDue: QWord;
@@ -57,7 +54,7 @@ function PoolSchedAcquireWriter(
   const AWriterSlot: ISemaphore;
   var AWriterConn: IDbConnection;
   var AWriterCreatedTick: QWord;
-  var AOutstanding: array of TPoolOutstanding;
+  var AOutstanding: TPoolOutstandingArray;
   var AOutstandingCount: Integer;
   var APending: TDbPoolLeakReports;
   var ALeakNextDue: QWord;
@@ -68,7 +65,7 @@ procedure PoolSchedReturnProxy(
   const ACore: IDbPoolCore;
   AProxy: TObject;
   const ALock: INativeMutex;
-  var AIdle: array of TPoolIdleEntry;
+  var AIdle: TPoolIdleArray;
   var AIdleCount: Integer;
   var AWriterConn: IDbConnection;
   var AOutstanding: array of TPoolOutstanding;
@@ -81,7 +78,7 @@ procedure PoolSchedReturnProxy(
 
 { 聚合转发：impl 薄委托专用（收敛跨叶变更，零额外分配 inline 零拷贝） }
 function PoolSchedGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline;
-procedure PoolSchedIdlePush(var AEntries: array of TPoolIdleEntry; var ACount: Integer; const AEntry: TPoolIdleEntry); inline;
+procedure PoolSchedIdlePush(var AEntries: TPoolIdleArray; var ACount: Integer; const AEntry: TPoolIdleEntry); inline;
 function PoolSchedIdlePop(var AEntries: array of TPoolIdleEntry; var ACount: Integer; var AEntry: TPoolIdleEntry): Boolean; inline;
 procedure PoolSchedFlushSafePoint(var AOutstanding: array of TPoolOutstanding; var AOutstandingCount: Integer; var APending: TDbPoolLeakReports; var ALeakNextDue: QWord; const APolicy: TDbPoolPolicy; const ALock: INativeMutex); inline;
 // collections 小容器复用：Vec 单源（TPoolIdleVec/TPoolOutstandingVec，经 smallvec 栈内联+堆增长，零手算 GrowCap）
@@ -142,7 +139,7 @@ begin
 end;
 
 { 单源复用：泄漏栈采样+租约登记（FillChar+CaptureBacktrace 单次分配零 bytes 双转换，inline 零 I-Cache 膨胀，零拷贝单 Move） }
-procedure PoolLeaseRegisterWithStack(var AOutstanding: array of TPoolOutstanding; var AOutstandingCount: Integer;
+procedure PoolLeaseRegisterWithStack(var AOutstanding: TPoolOutstandingArray; var AOutstandingCount: Integer;
   var ALeakNextDue: QWord; AObj: TObject; const ATick: QWord; const AIsWriter: Boolean;
   const APolicy: TDbPoolPolicy); inline;
 var
@@ -324,7 +321,7 @@ function PoolSchedAcquireRead(
   const AReadSlots: ISemaphore;
   var AIdle: array of TPoolIdleEntry;
   var AIdleCount: Integer;
-  var AOutstanding: array of TPoolOutstanding;
+  var AOutstanding: TPoolOutstandingArray;
   var AOutstandingCount: Integer;
   var APending: TDbPoolLeakReports;
   var ALeakNextDue: QWord;
@@ -359,7 +356,7 @@ begin
     // 锁内节流驱逐(ns 单源)：仅当配置超时且到达节流阈（1s=1000000000ns，LNow=platform_monotonic_ns(ns)）才全量扫描，常规单次栈顶 O(1) 丢弃，缩短持锁；双端 8 探针快路径已过滤热端 MaxLifetime 滞留，无需 5s 长节流放大 TryPopUsable 循环持锁；单 tick 缓存复用（NeedTick 单次 platform_monotonic_ns(ns)，阈值全零零 syscall 内无额外调用，阈值侧 *1e9 零 div）
     ALock.Acquire;
     try
-      if NeedTick and (APolicy.IdleTimeoutSec > 0 or APolicy.MaxLifetimeSec > 0) then
+      if NeedTick and ((APolicy.IdleTimeoutSec > 0) or (APolicy.MaxLifetimeSec > 0)) then
       begin
         if (ANextEvictDue = 0) or (LNow >= ANextEvictDue) then
         begin
@@ -405,7 +402,7 @@ function PoolSchedAcquireWriter(
   const AWriterSlot: ISemaphore;
   var AWriterConn: IDbConnection;
   var AWriterCreatedTick: QWord;
-  var AOutstanding: array of TPoolOutstanding;
+  var AOutstanding: TPoolOutstandingArray;
   var AOutstandingCount: Integer;
   var APending: TDbPoolLeakReports;
   var ALeakNextDue: QWord;
@@ -469,7 +466,7 @@ procedure PoolSchedReturnProxy(
   const ACore: IDbPoolCore;
   AProxy: TObject;
   const ALock: INativeMutex;
-  var AIdle: array of TPoolIdleEntry;
+  var AIdle: TPoolIdleArray;
   var AIdleCount: Integer;
   var AWriterConn: IDbConnection;
   var AOutstanding: array of TPoolOutstanding;
@@ -568,7 +565,7 @@ begin
   try
     ALock.Acquire;
     try
-      if NeedTick and (APolicy.IdleTimeoutSec > 0 or APolicy.MaxLifetimeSec > 0) then
+      if NeedTick and ((APolicy.IdleTimeoutSec > 0) or (APolicy.MaxLifetimeSec > 0)) then
       begin
         if (ANextEvictDue = 0) or (LNow >= ANextEvictDue) then
         begin
@@ -734,7 +731,7 @@ begin
 end;
 
 function PoolSchedGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline; begin Result := PoolGrowCap(AOld, ARequired); end;
-procedure PoolSchedIdlePush(var AEntries: array of TPoolIdleEntry; var ACount: Integer; const AEntry: TPoolIdleEntry); inline; begin PoolIdlePush(AEntries, ACount, AEntry); end;
+procedure PoolSchedIdlePush(var AEntries: TPoolIdleArray; var ACount: Integer; const AEntry: TPoolIdleEntry); inline; begin PoolIdlePush(AEntries, ACount, AEntry); end;
 function PoolSchedIdlePop(var AEntries: array of TPoolIdleEntry; var ACount: Integer; var AEntry: TPoolIdleEntry): Boolean; inline; begin Result := PoolIdlePop(AEntries, ACount, AEntry); end;
 procedure PoolSchedFlushSafePoint(var AOutstanding: array of TPoolOutstanding; var AOutstandingCount: Integer; var APending: TDbPoolLeakReports; var ALeakNextDue: QWord; const APolicy: TDbPoolPolicy; const ALock: INativeMutex); inline; begin PoolObsFlushSafePoint(AOutstanding, AOutstandingCount, APending, ALeakNextDue, APolicy, ALock); end;
 procedure PoolSchedIdlePushVec(var AVec: TPoolIdleVec; const AEntry: TPoolIdleEntry); inline; begin PoolIdlePushVec(AVec, AEntry); end;

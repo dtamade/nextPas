@@ -428,7 +428,7 @@ begin
       服务端 prepared statement 一并被撤销 }
     Raised := False;
     try
-      WithTransaction(Conn, procedure
+      WithTransaction(Conn, procedure(const C: IDbConnection)
       begin
         Q := Conn.Query('UPDATE t_sc_heal SET v = v + ? WHERE id = ?');
         Q.BindInt64(1, 5); Q.BindInt64(2, 1);

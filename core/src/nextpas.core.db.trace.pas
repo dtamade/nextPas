@@ -67,6 +67,7 @@ function DbProbeTraceControl(const AConn: IDbConnection): IDbTraceControl; inlin
 implementation
 
 uses
+  SysUtils,
   nextpas.core.platform.time;
 
 function TDbTraceHub.SnapshotListener: IDbTraceListener;

@@ -46,6 +46,7 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.text.ansi,
   nextpas.core.text.conv,
   nextpas.core.db.sqlite.ffi,
   nextpas.core.db.sqlite.adapter.observe,

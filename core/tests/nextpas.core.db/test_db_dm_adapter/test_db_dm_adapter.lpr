@@ -240,7 +240,7 @@ begin
   P := '';
   T0 := platform_monotonic_ns;
   for I := 1 to 10000 do
-    DmSyntheticDpiProxyReuse(P, LTranslated, 'v' + IntToStr(I mod 100));
+    DmSyntheticDpiProxyReuseTranslated(P, LTranslated, 'v' + IntToStr(I mod 100));
   T1 := platform_monotonic_ns;
   Ms := (T1 - T0) div 1000000;
   if Ms = 0 then Ms := 1;
@@ -264,7 +264,7 @@ begin
   P := '';
   T0 := platform_monotonic_ns;
   for I := 1 to 10000 do
-    DmSyntheticE2EProxyReuse(P, LTranslated, 'v' + IntToStr(I mod 100));
+    DmSyntheticE2EProxyReuseTranslated(P, LTranslated, 'v' + IntToStr(I mod 100));
   T1 := platform_monotonic_ns;
   Ms := (T1 - T0) div 1000000;
   if Ms = 0 then Ms := 1;

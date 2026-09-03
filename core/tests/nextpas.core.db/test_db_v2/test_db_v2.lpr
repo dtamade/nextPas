@@ -31,18 +31,18 @@ var
   GEnsured: Boolean = False;
   T: TTestSuite;
 
-function OpenSqliteV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectSqlite(ADsn, AOptions); end;
-function OpenPgV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectPostgres(ADsn, AOptions); end;
-function OpenMysqlV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectMysql(ADsn, AOptions); end;
-function OpenOdbcV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectOdbc(ADsn, AOptions); end;
-function OpenRedisV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
+function OpenSqliteV2(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectSqlite(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenPgV2(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectPostgres(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenMysqlV2(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectMysql(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenOdbcV2(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectOdbc(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenRedisV2(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
 begin Result := ConnectRedis(ADsn, '', 0, AOptions); end;
-function OpenDmV2(const ADsn: string; const AOptions: TDbConnectOptions): IDbConnection; inline;
-begin Result := ConnectDm(ADsn, AOptions); end;
+function OpenDmV2(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectDm(ADsn, AOptions, AStmtCacheCapacity); end;
 procedure EnsureBuiltinV2; inline;
 begin
   if GEnsured then Exit;
@@ -137,7 +137,7 @@ begin
 
   AConn.Exec('DROP TABLE IF EXISTS ' + APrefix + '_sp');
   AConn.Exec('CREATE TABLE ' + APrefix + '_sp (tag TEXT)');
-  WithTransaction(AConn, procedure
+  WithTransaction(AConn, procedure(const C: IDbConnection)
   begin
     AConn.Exec('INSERT INTO ' + APrefix + '_sp VALUES (''keep'')');
     Sp.Savepoint('inner1');

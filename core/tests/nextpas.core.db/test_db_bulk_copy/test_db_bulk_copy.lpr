@@ -3,6 +3,7 @@ program test_db_bulk_copy;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.test,
   nextpas.core.base.utils,
   nextpas.core.db.base,

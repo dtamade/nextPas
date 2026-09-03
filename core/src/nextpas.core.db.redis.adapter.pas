@@ -57,7 +57,6 @@ uses
   nextpas.core.db.redis.addr,
   nextpas.core.db.redis.pipeline,
   nextpas.core.db.redis.recv,
-  nextpas.core.text.conv,
   nextpas.core.text.number;
 
 { 单源分治：地址/流水线/接收缓冲已抽 addr/pipeline/recv（CONTRACT §2.13）；DB_REDIS_READ_* 单源，bytes.ops 单源零拷贝。 }
@@ -76,7 +75,7 @@ type
     procedure Handshake(const APassword: string; const ADbIndex: Integer);
     procedure ProbeInfo;
     function LockedExecute(const AArgs: TRespArgs): TRespValue;
-    function ReadReply: TRespValue; inline;
+    function ReadReply: TRespValue; { not inline: passed as TReadReplyFunc method reference to RedisExecuteBatch }
   public
     constructor Create(const ATransport: IRedisTransport;
       const APassword: string; const ADbIndex: Integer;
@@ -360,7 +359,7 @@ begin
   end;
 end;
 
-function TDbRedisConnection.ReadReply: TRespValue; inline;
+function TDbRedisConnection.ReadReply: TRespValue;
 begin
   // delegate to recv ring buffer single source (bytes.ops zero-copy, amortized Move)
   Result := FRing.ReadReply;
@@ -523,7 +522,7 @@ end;
 procedure TDbRedisConnection.ExecuteBatch(const ASteps: TDbSqlSteps);
 begin
   // 体积分治：流水线见 pipeline 单源 bytes.ops/text.conv 零拷贝（CONTRACT §2.13）
-  RedisExecuteBatch(FTransport, ASteps, FTrace, Self.ReadReply);
+  RedisExecuteBatch(FTransport, ASteps, FTrace, @Self.ReadReply);
 end;
 
 function TDbRedisConnection.ProductName: string;

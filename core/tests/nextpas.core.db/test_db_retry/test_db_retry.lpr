@@ -147,7 +147,7 @@ begin
   LObj := TFakeFlakyConn.Create;
   Conn := LObj;
   try
-    WithTransactionRetry(Conn, procedure
+    WithTransactionRetry(Conn, procedure(const C: IDbConnection)
     begin
       LObj.Pending := LObj.Pending + 1;
     end);
@@ -176,7 +176,7 @@ begin
     Policy.MaxDelayMs := 1000;
 
     T0 := GetTickCount64;
-    WithTransactionRetry(Conn, procedure
+    WithTransactionRetry(Conn, procedure(const C: IDbConnection)
     begin
       LObj.Pending := LObj.Pending + 1;
     end, Policy);
@@ -203,7 +203,7 @@ begin
   try
     Raised := False;
     try
-      WithTransactionRetry(Conn, procedure
+      WithTransactionRetry(Conn, procedure(const C: IDbConnection)
       begin
         LObj.Pending := LObj.Pending + 1;
         raise Exception.Create('business boom');
@@ -292,7 +292,7 @@ begin
     end;
 
     { 谓词生效路径验证：回调内首次抛约束错误一次，重试后成功 }
-    WithTransactionRetry(Conn, procedure
+    WithTransactionRetry(Conn, procedure(const C: IDbConnection)
     begin
       if FailLeft > 0 then
       begin
@@ -326,7 +326,7 @@ begin
 
     Raised := False;
     try
-      WithTransactionRetry(Conn, procedure
+      WithTransactionRetry(Conn, procedure(const C: IDbConnection)
       begin
         LObj.Pending := LObj.Pending + 1;
       end, Policy);
@@ -350,10 +350,10 @@ begin
   Conn := ConnectSqlite(':memory:');
   try
     Conn.Exec('CREATE TABLE t_r (v INTEGER)');
-    WithTransaction(Conn, procedure
+    WithTransaction(Conn, procedure(const C: IDbConnection)
     begin
       { 外层内嵌套：助手走 savepoint 路径，重试包装透明 }
-      WithTransactionRetry(Conn, procedure
+      WithTransactionRetry(Conn, procedure(const C: IDbConnection)
       begin
         Conn.Exec('INSERT INTO t_r VALUES (42)');
       end);
