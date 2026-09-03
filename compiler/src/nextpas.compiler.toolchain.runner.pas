@@ -6,6 +6,7 @@ unit nextpas.compiler.toolchain.runner;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.process,
   nextpas.core.time.base,
   nextpas.core.async.cancellation,

@@ -275,7 +275,7 @@ function ValidateObjectFreeSequenceContinuation(
 implementation
 
 uses
-  SysUtils, nextpas.core.text.conv;
+  nextpas.core.text.conv;
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
 begin
