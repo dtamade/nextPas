@@ -3,7 +3,6 @@ program test_reflect;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.reflect.base,
   nextpas.core.reflect.intf,
   nextpas.core.reflect;

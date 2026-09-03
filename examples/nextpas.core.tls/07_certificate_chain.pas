@@ -20,7 +20,6 @@ program certificate_chain;
   ============================================================================ }
 
 uses
-  SysUtils,
   fafafa.ssl;
 
 procedure ExplainCertificateChain;

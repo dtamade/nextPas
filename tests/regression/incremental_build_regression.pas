@@ -3,7 +3,7 @@ program incremental_build_regression;
 
 { 增量编译回归测试：验证增量编译与全量编译产物一致 }
 
-uses SysUtils;
+{ uses-free: only System intrinsics (Halt/WriteLn); no FPC RTL units. }
 
 var
   I, Sum: Integer;

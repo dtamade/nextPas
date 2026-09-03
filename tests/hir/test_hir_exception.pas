@@ -3,7 +3,7 @@ program test_hir_exception;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model,
+  nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model,
   nextpas.compiler.ir.hir.builder, nextpas.compiler.ir.hir.printer, nextpas.compiler.ir.hir.llvm_emitter;
 
 procedure Fail(const AMsg: string);

@@ -3,7 +3,7 @@ program core_text_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_base_types, np_text_primitives;
+  np_base_types, np_text_primitives;
 
 var
   CanonicalPath: string;

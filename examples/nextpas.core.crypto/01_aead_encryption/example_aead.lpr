@@ -3,7 +3,8 @@ program example_aead;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.aesgcm;
 
 var
@@ -23,10 +24,10 @@ begin
   for I := 0 to 11 do LNonce[I] := Byte(I + $A0);
 
   // Message to encrypt
-  LPlaintext := TEncoding.UTF8.GetBytes(UnicodeString('Hello, nextPas crypto!'));
+  LPlaintext := StringToUTF8Bytes('Hello, nextPas crypto!');
 
   // Additional authenticated data (not encrypted, but integrity-protected)
-  LAAD := TEncoding.UTF8.GetBytes(UnicodeString('metadata'));
+  LAAD := StringToUTF8Bytes('metadata');
 
   // Encrypt
   if PurePascalAESGCMEncrypt(LKey, LNonce, LPlaintext, LAAD, LCiphertext, LTag) then
@@ -39,7 +40,7 @@ begin
 
   // Decrypt
   if PurePascalAESGCMDecrypt(LKey, LNonce, LCiphertext, LTag, LAAD, LDecrypted) then
-    WriteLn('Decrypted: ', TEncoding.UTF8.GetString(LDecrypted))
+    WriteLn('Decrypted: ', UTF8BytesToString(LDecrypted))
   else
   begin
     WriteLn('ERROR: decryption failed (tampered?)');

@@ -3,7 +3,7 @@ program test_hir;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.printer, nextpas.compiler.ir.hir.verifier;
+  nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.printer, nextpas.compiler.ir.hir.verifier;
 
 var
   Module: THIRModule;
