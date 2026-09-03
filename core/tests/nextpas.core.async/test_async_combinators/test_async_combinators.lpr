@@ -5,7 +5,7 @@ program test_async_combinators;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.async.base,

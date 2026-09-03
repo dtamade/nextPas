@@ -3,8 +3,10 @@ program test_async_timeout;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -913,17 +915,10 @@ var
   function LoadTaskSource: string;
   var
     LSourcePath: string;
-    LLines: TStringList;
   begin
     LSourcePath := ExpandFileName('../../../src/nextpas.core.async.task.pas');
     Check(FileExists(LSourcePath), 'task source should exist');
-    LLines := TStringList.Create;
-    try
-      LLines.LoadFromFile(LSourcePath);
-      Result := LowerCase(LLines.Text);
-    finally
-      LLines.Free;
-    end;
+    Result := LowerCase(ReadFileText(LSourcePath));
   end;
 
   procedure CheckTerminalBody(const ABody, AName: string);
@@ -988,17 +983,10 @@ var
   function LoadLoopSource: string;
   var
     LSourcePath: string;
-    LLines: TStringList;
   begin
     LSourcePath := ExpandFileName('../../../src/nextpas.core.async.loop.pas');
     Check(FileExists(LSourcePath), 'async loop source should exist');
-    LLines := TStringList.Create;
-    try
-      LLines.LoadFromFile(LSourcePath);
-      Result := LowerCase(LLines.Text);
-    finally
-      LLines.Free;
-    end;
+    Result := LowerCase(ReadFileText(LSourcePath));
   end;
 
   procedure CheckDetachBody(const ABody: string);

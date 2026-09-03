@@ -2,7 +2,7 @@ program test_async_buffer;
 {$mode ObjFPC}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.text.conv,
   nextpas.core.base, nextpas.core.errors,
   nextpas.core.async.buffer;
 

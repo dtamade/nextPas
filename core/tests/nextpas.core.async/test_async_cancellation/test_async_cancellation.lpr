@@ -2,7 +2,6 @@ program test_async_cancellation;
 {$mode ObjFPC}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
   nextpas.core.base, nextpas.core.errors,
   nextpas.core.async.base,
   nextpas.core.async.cancellation;

@@ -4,7 +4,7 @@ program test_async_bench;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,

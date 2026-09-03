@@ -3,7 +3,6 @@ program test_async_advanced;
 {$H+}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.async.base,

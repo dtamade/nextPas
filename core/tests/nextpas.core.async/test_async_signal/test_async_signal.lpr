@@ -2,7 +2,7 @@ program test_async_signal;
 {$mode ObjFPC}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.platform.thread,
   nextpas.core.base, nextpas.core.errors,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
@@ -142,7 +142,7 @@ begin
   kill(LPid, SIGUSR1);
 
   { Small delay for signal delivery }
-  Sleep(10);
+  platform_thread_sleep_ms(10);
 
   { Process signals }
   Check(LHandler.ProcessSignals = 1, 'processed 1 signal');
@@ -167,7 +167,7 @@ begin
   LPid := getpid;
   kill(LPid, SIGUSR1);
   kill(LPid, SIGUSR2);
-  Sleep(10);
+  platform_thread_sleep_ms(10);
 
   { Process signals }
   Check(LHandler.ProcessSignals >= 1, 'processed signals');
@@ -191,7 +191,7 @@ begin
   { Send signal }
   LPid := getpid;
   kill(LPid, SIGUSR1);
-  Sleep(10);
+  platform_thread_sleep_ms(10);
 
   { Process signals }
   Check(LHandler.ProcessSignals = 1, 'processed 1 signal');

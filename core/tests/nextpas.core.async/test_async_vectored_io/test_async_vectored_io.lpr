@@ -2,7 +2,7 @@ program test_async_vectored_io;
 {$mode ObjFPC}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.text.conv,
   nextpas.core.base, nextpas.core.errors, nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.pipe,

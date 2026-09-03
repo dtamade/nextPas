@@ -5,7 +5,6 @@ program test_async_retry;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.async.base,
