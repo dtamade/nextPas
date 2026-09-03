@@ -15,11 +15,7 @@ interface
 uses
   nextpas.core.bytes.ops;
 
-const
-  PERF_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  PERF_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 const
   DB_PERF_J1_THRESHOLD = 1.15; // J1 业务不变量，仅 NEXTPAS_DM_TEST_CONN 真机可量化（honest not 合成，CI 合成不覆盖 dpi_prepare/bind_param/execute 往返）

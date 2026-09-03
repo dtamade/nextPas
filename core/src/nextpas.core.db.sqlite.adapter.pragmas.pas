@@ -37,9 +37,6 @@ uses
   nextpas.core.db.err,
   nextpas.core.db.sqlite.ffi;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter.pragmas must reuse bytes.ops'}
-{$IFEND}
 
 function SqlitePragmasUnset: TDbSqlitePragmas; inline;
 begin

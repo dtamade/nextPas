@@ -24,15 +24,8 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.db.factory;
 
-const
-  FACTORY_FACADE_REDIS_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  FACTORY_FACADE_REDIS_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: factory.facade.redis must reuse bytes.ops'}
-{$IFEND}
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 { ---- redis facade pure re-export inline thin forward via Kind-driven table, zero adapter hard link ---- }
 

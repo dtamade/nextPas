@@ -48,10 +48,16 @@ fi
 require_token "$FACTORY_MK" "heaptrc"
 require_token "$FACTORY_MK" "check_pool_lease_source_contract.sh"
 
-# 5. bytes.ops single source invariant still holds (owner=bytes.ops)
-require_token "$FACADE" "BYTES_OPS_SINGLE_SOURCE"
-require_token "$SRC/nextpas.core.db.pool.pas" "POOL_FACADE_BYTES_SINGLE_SOURCE"
-require_token "$SRC/nextpas.core.db.pool.impl.pas" "POOL_IMPL_BYTES_SINGLE_SOURCE"
+# 5. bytes.ops single source invariant still holds (owner=bytes.ops):
+#    哨兵常量已随 bytes.ops 新版退役，门禁改为检查真实机制——实现层必须
+#    uses bytes.ops，且门面三文件零裸 Move（拷贝经 BytesCopy、增长经
+#    BytesGrowCapacity 单源，不自建副本）。
+forbid_token "$FACADE" "Move("
+forbid_token "$SRC/nextpas.core.db.pool.pas" "Move("
+forbid_token "$SRC/nextpas.core.db.pool.impl.pas" "Move("
+require_token "$SRC/nextpas.core.db.pool.pas" "nextpas.core.bytes.ops"
+require_token "$SRC/nextpas.core.db.pool.impl.pas" "nextpas.core.bytes.ops"
+require_token "$FACADE" "nextpas.core.db.bulk"
 
 # 6. stability: pool ScopedLease must be try..finally nil return (resource not lost)
 require_token "$SRC/nextpas.core.db.pool.impl.pas" "try"

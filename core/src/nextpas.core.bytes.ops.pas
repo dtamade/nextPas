@@ -107,6 +107,11 @@ function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
 function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
 function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
 function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
+{ Builder capacity estimates — thin forward to bytes.ops.capacity single source, inline. }
+function BuilderCapForTwo(const ALen1, ALen2: SizeUInt): SizeUInt; inline;
+function BuilderCapAdd(const A, B: SizeUInt): SizeUInt; inline;
+function BuilderCapForJoin(const ATotal, ACount, ADelimLen: SizeUInt): SizeUInt; inline;
+function BuilderCapWithMin(const AEstimate: SizeUInt; const AMin: SizeUInt = 32): SizeUInt; inline;
 // dynarray probe/poke single source for non-TBytes arrays — lifecycle/pure.value unified entry via bytes.ops, inline zero-copy, amortized O(1) (owner L1 bytes.ops, probes via L0 mem.dynarray)
 function BytesDynCapacityElem(APtr: Pointer; ALen: SizeUInt; AElemSize: SizeUInt): SizeUInt; inline;
 function BytesDynCapacityGeneric(var A; AElemSize: SizeUInt): SizeUInt; inline;
@@ -375,6 +380,26 @@ end;
 function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
 begin
   Result := nextpas.core.bytes.ops.capacity.BytesGrowCapacityInt(ACurrent, ARequired);
+end;
+
+function BuilderCapForTwo(const ALen1, ALen2: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BuilderCapForTwo(ALen1, ALen2);
+end;
+
+function BuilderCapAdd(const A, B: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BuilderCapAdd(A, B);
+end;
+
+function BuilderCapForJoin(const ATotal, ACount, ADelimLen: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BuilderCapForJoin(ATotal, ACount, ADelimLen);
+end;
+
+function BuilderCapWithMin(const AEstimate: SizeUInt; const AMin: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BuilderCapWithMin(AEstimate, AMin);
 end;
 
 function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;

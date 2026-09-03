@@ -54,11 +54,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.text.view;
 
-const
-  CAPPROBE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  CAPPROBE_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 function ParseServerVersion(const AVersion: string): Integer; inline;
 var

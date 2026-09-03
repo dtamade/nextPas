@@ -16,7 +16,7 @@ type
   private
     FTable: string;
     FCols: array of string;
-    FFlat: TDbStringArray; // single flat single source via bytes.ops BytesCalcGrowCapWithMin (single alloc amortized O(log N), eliminates 10k per-row StringArrayCopy + dual FRows alloc)
+    FFlat: TDbStringArray; // single flat single source via bytes.ops BytesGrowCapacityWithMin (single alloc amortized O(log N), eliminates 10k per-row StringArrayCopy + dual FRows alloc)
     FRowCount: Integer;
     FActive: Boolean;
     FBackend: TDbKind;
@@ -124,21 +124,21 @@ procedure DbBulkEndCopy(var ABuffer: TDbBulkBuffer; AMaxPlaceholders: Integer;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.db.batch.strategy,
   nextpas.core.db.savepoint,
   nextpas.core.db.tx.template,
   nextpas.core.exception,
+  nextpas.core.text.ansi,
   nextpas.core.text.sql;
 
 const
-  BULK_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  BULK_ROWS_DEFAULT_CAP = SizeUInt(8); { micro-batch friendly initial cap, bytes.ops single source via BytesCalcGrowCapWithMin }
+  BULK_ROWS_DEFAULT_CAP = SizeUInt(8); { micro-batch friendly initial cap, bytes.ops single source via BytesGrowCapacityWithMin }
   BULK_OVERESTIMATE_Q8_THRESHOLD = 512; { 2.0*256 CI gate: per-chunk overestimate ratio ceiling; single source via db.bulk }
   BULK_MAX_CHUNK_BYTES = 2 * 1024 * 1024; { 2MB retained for compat monitoring; per-chunk exact SqlLiteralTextLen via text.sql eliminates overestimate peak and Dec(LRemain) cutting loop, bytes.ops single source via BULK_BYTES_SINGLE_SOURCE }
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 var
   GBulkLastEstimated: Integer = 0;
@@ -190,7 +190,7 @@ end;
 
 { Dialect — direct via text.sql SqlDialectOf/Sql*For single source, inline zero-copy; no BulkDialect/BulkQuotedIdentLen thin wrappers, single mapping via SqlDialectQuote table. }
 
-{ Row cap — single source via bytes.ops BytesCalcGrowCapWithMin + BULK_ROWS_DEFAULT_CAP const alias (inline, zero-copy, no wrapper indirection). }
+{ Row cap — single source via bytes.ops BytesGrowCapacityWithMin + BULK_ROWS_DEFAULT_CAP const alias (inline, zero-copy, no wrapper indirection). }
 
 { Bulk SQL stitch — single source via text.sql SqlStitch* + SqlC* literals (bytes.ops, zero SysUtils, inline zero-copy). }
 procedure BulkWritePrefix(var P: PAnsiChar; const ATable: string; const ABackend: TDbKind); inline;
@@ -347,7 +347,7 @@ begin
   FCapRows := 0;
   if AExpectedRows > 0 then
   begin
-    // single flat pre-reserve single alloc amortized via bytes.ops BytesCalcGrowCapWithMin (eliminates 10k per-row alloc, O(log N) vs O(N), single source no dual FRows)
+    // single flat pre-reserve single alloc amortized via bytes.ops BytesGrowCapacityWithMin (eliminates 10k per-row alloc, O(log N) vs O(N), single source no dual FRows)
     // SetLength zero-initializes managed strings (''/nil), redundant O(N) FillChar loop removed (10k rows * cols saved)
     // stability: fail-fast overflow guard RowCount*ColCount before SetLength (prevents negative/ OOM, decCapacity)
     if SizeUInt(AExpectedRows) > High(SizeUInt) div SizeUInt(Length(FCols)) then
@@ -363,7 +363,7 @@ begin
     SetLength(FFlat, 0);
     FCapRows := 0;
   end;
-  // on-demand growth at WriteRow via BytesCalcGrowCapWithMin + BULK_ROWS_DEFAULT_CAP (bytes.ops single source, inline zero-copy)
+  // on-demand growth at WriteRow via BytesGrowCapacityWithMin + BULK_ROWS_DEFAULT_CAP (bytes.ops single source, inline zero-copy)
   FRowCount := 0;
   FBackend := ABackend;
   FActive := True;
@@ -383,7 +383,7 @@ begin
   else if (FExpectedRows <= 0) and (LCapRows = 0) then LNeedRows := BULK_ROWS_DEFAULT_CAP;
   if LCapRows < LNeedRows then
   begin
-    LGrowRows := BytesCalcGrowCapWithMin(LCapRows, LNeedRows, BULK_ROWS_DEFAULT_CAP);
+    LGrowRows := BytesGrowCapacityWithMin(LCapRows, LNeedRows, BULK_ROWS_DEFAULT_CAP);
     // stability: fail-fast overflow guard RowCount*ColCount before SetLength (SizeUInt mul + High(Integer) check, decCapacity)
     if LGrowRows > High(SizeUInt) div SizeUInt(LCol) then
       raise EDbError.CreateWithCategory(ABackend, decCapacity, dckNone, 'BulkCopy capacity overflow');
@@ -418,14 +418,29 @@ end;
 
 function TDbBulkBuffer.Rows: TDbBulkRows;
 var I, C: Integer;
+  procedure BulkStringArrayCopyRange(var ADest: TDbStringArray;
+    const ASrc: TDbStringArray; const AStart, ACount: Integer);
+  var J: Integer;
+  begin
+    if ACount <= 0 then
+    begin
+      SetLength(ADest, 0);
+      Exit;
+    end;
+    if (AStart < 0) or (AStart + ACount > Length(ASrc)) then
+      raise EOutOfRange.Create('BulkStringArrayCopyRange: range out of bounds');
+    SetLength(ADest, ACount);
+    for J := 0 to ACount - 1 do
+      ADest[J] := ASrc[AStart + J];
+  end;
 begin
-  // compat synthesis only via bytes.ops StringArrayCopyRange (zero string data copy, refcount share); hot path disabled — flush uses FFlat+RowCount via BulkExecChunkFlat zero-copy, no per-row alloc
+  // compat synthesis only via local BulkStringArrayCopyRange (managed per-elem copy, refcount share); hot path disabled — flush uses FFlat+RowCount via BulkExecChunkFlat zero-copy, no per-row alloc
   if FRowCount = 0 then Exit(nil);
   C := Length(FCols);
   if Length(FFlat) < FRowCount * C then Exit(nil);
   SetLength(Result, FRowCount);
   for I := 0 to FRowCount - 1 do
-    StringArrayCopyRange(Result[I], FFlat, I * C, C);
+    BulkStringArrayCopyRange(Result[I], FFlat, I * C, C);
 end;
 
 function TDbBulkBuffer.ColumnCount: Integer;
@@ -892,7 +907,7 @@ begin
   if ABuffer.RowCount = 0 then Exit;
   LCols := ABuffer.Columns;
   LColCount := Length(LCols);
-  // perf: single flat single source (FRows dual track removed), zero-copy flush eliminates 10k per-row StringArrayCopy heap (bytes.ops single source BytesCalcGrowCapWithMin, inline Move+AddRef), single alloc amortized O(log N) + per-chunk spool reuse via LMaxCap (single heap block, avoids 20× alloc/free for 10k/500), stability try..finally via BulkExecChunkFlat spool
+  // perf: single flat single source (FRows dual track removed), zero-copy flush eliminates 10k per-row StringArrayCopy heap (bytes.ops single source BytesGrowCapacityWithMin, inline Move+AddRef), single alloc amortized O(log N) + per-chunk spool reuse via LMaxCap (single heap block, avoids 20× alloc/free for 10k/500), stability try..finally via BulkExecChunkFlat spool
   LChunk := DbBulkChunkRows(AMaxPlaceholders, LColCount, ABuffer.RowCount);
   BulkFlushCoreFlat(ABuffer.TableName, LCols, ABuffer.FFlat, LColCount, ABuffer.RowCount, LChunk, AInTxn, ASupportsSavepoints, AExec, ABeginTxn, ACommitTxn, ARollbackTxn, ABuffer.FBackend);
 end;

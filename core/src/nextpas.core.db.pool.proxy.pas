@@ -20,10 +20,7 @@ uses
   nextpas.core.exception,
   nextpas.core.log.intf;
 
-const
-  POOL_PROXY_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 type
   { 池代理：核心面转发内层；能力面经 QueryInterface 委托真实连接；

@@ -18,11 +18,7 @@ uses
   nextpas.core.db.base,
   nextpas.core.bytes.ops;
 
-const
-  BATCH_STRATEGY_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  BATCH_STRATEGY_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 type
   TDbBatchKind = (bkBulkCopy, bkBatchExecutor, bkBulkFlush);

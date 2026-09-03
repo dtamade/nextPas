@@ -25,11 +25,8 @@ uses
   nextpas.core.db.pool.state,  // 状态容器单源：Idle/Outstanding/Pending/阈值聚合+类型载体再导出(TStateIdleEntry/TStateOutstanding 等)经 state 单入口零直连 idle/leak，Init/Done 单源（sched 单核聚合逻辑 6→1 叶收敛）
   nextpas.core.db.pool.sched; // 调度核单核聚合 idle/leak/obs/concurrency+硬回收 1.2×72s，impl 经 FState 单入口零直连跨叶调度
 
-const
   { 单源门禁：串/字节零拷贝单源为 bytes.ops，空闲队列热路径单 Move 不自建副本；时钟单源为 platform_monotonic_ns (ns 零 div，阈值侧换算，零 GetTickCount64 漂移) }
-  POOL_IMPL_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 type
   { 核心态：状态核（FState 单源容器聚合 Idle/Outstanding/Pending/阈值，Init/Done 单源于 pool.state，sched 单核内聚 idle/leak/obs/concurrency，proxy 代理侧，impl 薄委托收敛跨叶同步；小容器 TSmallVec 单源，零手算 GrowCap，硬回收 1.2×阈值(72s)兜底裸租约较 2×120s缩短阻塞） }
@@ -68,7 +65,7 @@ type
 function CreatePoolCore(const AConnect: TDbConnectFunc;
   const APolicy: TDbPoolPolicy): IDbPoolCore; inline;
 
-{ bytes.ops 单源泄漏串→字节零拷贝单 Move（PoolLeakToBytes inline 薄转发，BYTES_OPS_SINGLE_SOURCE 编译期钉死，不自建副本） }
+{ bytes.ops 单源泄漏串→字节零拷贝单 Move（PoolLeakToBytes inline 薄转发，门禁钉死见 check_pool_lease_source_contract.sh §5，不自建副本） }
 function PoolLeakToBytes(const AReport: string): TBytes; inline;
 
 implementation

@@ -34,11 +34,7 @@ uses
   nextpas.core.db.factory,
   nextpas.core.db.intf;
 
-const
-  FACTORY_POOL_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  FACTORY_POOL_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 function DbOpenPool(const ADriver: string; const ADsn: string;
   const APolicy: TDbPoolPolicy): TDbPool; overload; inline;

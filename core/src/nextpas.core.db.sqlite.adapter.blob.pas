@@ -52,9 +52,6 @@ uses
   nextpas.core.db.sqlite.adapter.observe,
   nextpas.core.db.err;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter.blob must reuse bytes.ops'}
-{$IFEND}
 
 { blob I/O 结果码检查：从原生句柄取诊断并走统一错误模型。
   注意必须单次直接构造并 raise——若先建 ESqliteError 再转抛 EDbError，

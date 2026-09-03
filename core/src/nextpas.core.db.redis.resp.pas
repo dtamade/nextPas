@@ -268,13 +268,13 @@ var
   LSeq, LLogical: Integer;
   LArgCount, LSlotCount: Integer;
 
-  // perf: amortized doubling via bytes.ops BytesCalcGrowCap single source (MIN_GROW 64,*2) — avoids O(n²) SetLength Move in 999-placeholder pipeline; single SetLength to Cap, zero-copy Move
+  // perf: amortized doubling via bytes.ops BytesGrowCapacity single source (MIN_GROW 64,*2) — avoids O(n²) SetLength Move in 999-placeholder pipeline; single SetLength to Cap, zero-copy Move
   procedure EnsureArgs(const ARequired: Integer); inline;
   var
     LCap: SizeUInt;
   begin
     if ARequired <= Length(AArgs) then Exit;
-    LCap := BytesCalcGrowCap(SizeUInt(Length(AArgs)), SizeUInt(ARequired));
+    LCap := BytesGrowCapacity(SizeUInt(Length(AArgs)), SizeUInt(ARequired));
     SetLength(AArgs, Integer(LCap));
   end;
 
@@ -283,13 +283,13 @@ var
     LCap: SizeUInt;
   begin
     if ARequired <= Length(LSlots) then Exit;
-    LCap := BytesCalcGrowCap(SizeUInt(Length(LSlots)), SizeUInt(ARequired));
+    LCap := BytesGrowCapacity(SizeUInt(Length(LSlots)), SizeUInt(ARequired));
     SetLength(LSlots, Integer(LCap));
   end;
 
   procedure EmitToken(const ATxt: string);
   begin
-    // perf: pre-reserve via BytesCalcGrowCap single source, not per-token SetLength(Len+1) O(n²) Move
+    // perf: pre-reserve via BytesGrowCapacity single source, not per-token SetLength(Len+1) O(n²) Move
     EnsureArgs(LArgCount + 1);
     AArgs[LArgCount] := StrToBytes(ATxt);
     Inc(LArgCount);
@@ -373,7 +373,7 @@ begin
     else
       EmitToken(LTok);
   end;
-  // stability: trim over-reserved cap to logical count (single SetLength, FPC shrink keeps block no Move if still fits); capacity via BytesCalcGrowCap single source
+  // stability: trim over-reserved cap to logical count (single SetLength, FPC shrink keeps block no Move if still fits); capacity via BytesGrowCapacity single source
   if Length(AArgs) <> LArgCount then
     SetLength(AArgs, LArgCount);
   Result := LArgCount;

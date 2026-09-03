@@ -95,6 +95,7 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.text.ansi,
   nextpas.core.text.conv,
   nextpas.core.db.err,
   nextpas.core.db.savepoint,
@@ -103,9 +104,6 @@ uses
   nextpas.core.db.dm.adapter.common,
   nextpas.core.collections.lrucache;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db.dm.adapter.conn must reuse bytes.ops'}
-{$IFEND}
 
 constructor TDbDmConnection.Create(AEnv: TDmEnv; AConn: TDmConn; const AStmtCacheCapacity: Integer);
 begin
@@ -149,7 +147,7 @@ begin
   LCode := dpi_create_stmt(FConn, @Stmt);
   CheckDpi(LCode, FConn, DPI_HANDLE_DBC);
   try
-    LSql := nextpas.core.bytes.ops.StringToAnsiString(ASql);
+    LSql := nextpas.core.text.ansi.StrToAnsi(ASql);
     LCode := dpi_prepare(Stmt, PAnsiChar(LSql), Length(LSql));
     CheckDpi(LCode, Stmt, DPI_HANDLE_STMT);
     LCode := dpi_execute(Stmt);

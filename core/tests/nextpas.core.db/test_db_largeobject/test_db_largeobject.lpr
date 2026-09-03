@@ -22,7 +22,9 @@ uses
   nextpas.core.db,
   nextpas.core.db.base,
   nextpas.core.db.intf,
-  nextpas.core.db.tx;
+  nextpas.core.db.tx,
+  nextpas.core.db.factory.register.sqlite,
+  nextpas.core.db.factory.register.pg;
 
 const
   BLOB_SIZE = 1048576;                   { 1MB：跨多块写入 }
@@ -332,6 +334,7 @@ begin
 end;
 
 begin
+  RegisterSqliteDriver;
   GPgConn := GetEnvironmentVariable('NEXTPAS_PG_TEST_CONN');
   T := TTestSuite.Create('nextpas.core.db.largeobject');
   T.Test('capability split', @TestCapabilitySplit);

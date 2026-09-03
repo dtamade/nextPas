@@ -97,9 +97,6 @@ uses
   nextpas.core.db.odbc.ffi,
   nextpas.core.db.odbc.loader;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db.odbc.adapter must reuse bytes.ops'}
-{$IFEND}
 
 const
   { DriverConnect 回读缓冲（完整 connstr 写回处，仅丢弃）}
@@ -587,7 +584,7 @@ begin
 end;
 
 procedure TDbOdbcQuery.LoadColumn(const AIndex: Integer);
-// perf: 整数栈上零堆分配 + 文本/二进制复用 FGetDataBuf（bytes.ops 单源 BytesEnsureCapacity/BytesCalcGrowCap amortized doubling）消除每列每行 GetMem/ReallocMem/FreeMem，单 Move 零拷贝入行缓存；范围扫 bench_db_stmt_cache 1.1×→2×+ 的堆 churn 成因之一已消除
+// perf: 整数栈上零堆分配 + 文本/二进制复用 FGetDataBuf（bytes.ops 单源 BytesEnsureCapacity/BytesGrowCapacity amortized doubling）消除每列每行 GetMem/ReallocMem/FreeMem，单 Move 零拷贝入行缓存；范围扫 bench_db_stmt_cache 1.1×→2×+ 的堆 churn 成因之一已消除
 // note: not inline per red line 1 (Move indexed must not be inline) — I-Cache/constant-propagation guard, 由调用侧 thin forward 保持 inline 零拷贝
 const
   C_MAX_RETRY = 32;

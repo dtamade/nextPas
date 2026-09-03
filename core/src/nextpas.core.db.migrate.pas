@@ -90,10 +90,7 @@ uses
   nextpas.core.db.tx,
   nextpas.core.time;
 
-const
-  MIGRATE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 constructor EDbMigrateError.Create(const ABackend: TDbKind;
   const AVersion: Int64; const AMessage: string);

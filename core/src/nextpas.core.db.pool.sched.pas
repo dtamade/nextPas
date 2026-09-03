@@ -24,10 +24,7 @@ uses
   nextpas.core.db.pool.obs,
   nextpas.core.db.pool.concurrency;
 
-const
-  POOL_SCHED_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 { 调度：读租约获取（节流驱逐1s=1000000000ns + 单 tick(ns 单源 PoolSchedCoalescedNowTick 批量复用)缓存 + 零额外 syscall/threshold=0 零 tick(ns 0)），inline 薄封装零 I-Cache 膨胀，资源释放 finally 配对 }
 function PoolSchedAcquireRead(
@@ -182,6 +179,16 @@ var
   LReports, LPending: TDbPoolLeakReports;
 begin
   if APolicy.LeakDetectionThresholdMs <= 0 then Exit;
+  { 入口安全点：先冲刷归还路径积压（return 只入账不触发用户回调），
+    再按 due 采集新增——否则已 Warned 积压在 due=High 时永不触发。 }
+  ALock.Acquire;
+  try
+    PoolLeakTakePendingLocked(APending, LPending);
+  finally
+    ALock.Release;
+  end;
+  if Length(LPending) > 0 then
+    PoolLeakFireReports(LPending, APolicy);
   if ALeakNextDue = High(QWord) then Exit;
   if AOutstandingCount = 0 then Exit;
   if ANow < ALeakNextDue then Exit;
@@ -214,6 +221,16 @@ var
   LReports, LPending: TDbPoolLeakReports;
 begin
   if APolicy.LeakDetectionThresholdMs <= 0 then Exit;
+  { 入口安全点：先冲刷归还路径积压（return 只入账不触发用户回调），
+    再按 due 采集新增——否则已 Warned 积压在 due=High 时永不触发。 }
+  ALock.Acquire;
+  try
+    PoolLeakTakePendingLocked(APending, LPending);
+  finally
+    ALock.Release;
+  end;
+  if Length(LPending) > 0 then
+    PoolLeakFireReports(LPending, APolicy);
   if ALeakNextDue = High(QWord) then Exit;
   if AVec.Count = 0 then Exit;
   if ANow < ALeakNextDue then Exit;

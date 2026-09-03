@@ -537,6 +537,7 @@ begin
   HitBefore := Ctrl.HitRate;
   Check(HitBefore > 0.99, 'hit before ~1.0');
   Supports(Conn, IDbBulkCopy, Bulk);
+  Conn.Exec('CREATE TABLE t_cache_bulk (id INTEGER, v TEXT)');
   Bulk.BeginCopy('t_cache_bulk', ['id', 'v']);
   for K := 1 to 1000 do
     Bulk.WriteRow([IntToStr(K), 'v' + IntToStr(K)]);

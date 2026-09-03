@@ -49,9 +49,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.text.builder;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db.savepoint must reuse bytes.ops'}
-{$IFEND}
 
 function DbSavepointSqlOf(const APrefix, AName: string): string;
 var

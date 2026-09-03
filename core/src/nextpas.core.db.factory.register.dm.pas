@@ -16,17 +16,13 @@ uses
   nextpas.core.db.factory,
   nextpas.core.db.dm.adapter;
 
-const
-  FACTORY_REGISTER_DM_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: factory.register.dm must reuse bytes.ops'}
-{$IFEND}
 
 implementation
 
 uses
-  nextpas.core.db.base;
+  nextpas.core.db.base,
+  nextpas.core.db.intf;
 
 function OpenDmForRegister(const ADsn: string;
   const AOptions: TDbConnectOptions;

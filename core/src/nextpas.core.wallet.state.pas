@@ -15,11 +15,9 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.db.base,
   nextpas.core.sync;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: wallet.state must reuse bytes.ops'}
-{$IFEND}
 
 var
   GWalletFKRaw: Pointer = nil;

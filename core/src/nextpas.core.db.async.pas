@@ -56,10 +56,7 @@ type
   end;
 
 { 编译期单源门禁：串/字节零拷贝单源完全由 bytes.ops/execution.base 单源承载，不设 DB_ASYNC_* 薄别名
-  （BYTES_OPS_SINGLE_SOURCE 哨兵，execution.base 阈值单源；bytes 单源 owner=bytes.ops，阈值 owner=execution.base，L1 纯净） }
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-{$MESSAGE FATAL 'bytes single source drift: BYTES_OPS_SINGLE_SOURCE must be True (owner=bytes.ops)'}
-{$ENDIF}
+  （bytes 单源 owner=bytes.ops，阈值 owner=execution.base，L1 纯净；漂移由 uses 链 + 编译器保证） }
 
   {** 执行器：一连接一实例一单工池。Submit 单飞——上一调用未收尾前
       再提交抛 EDbError。析构先等在途调用自然收尾（WaitAll），再由池
@@ -112,6 +109,8 @@ type
       procedure FinalizeOp(AOp: PDbAsyncOp; AErr: Exception);
       procedure UpdateAdaptive(const AStart, AEnd: TInstant); inline;
       function ShouldOffloadAdaptive: Boolean; inline;
+      function SubmitEnqueued(const AWork: TDbAsyncWork;
+        const AToken: IAsyncCancellationToken): IDbAsyncHandle;
     public
       constructor Create(const AConn: IDbConnection);
       destructor Destroy; override;
@@ -398,6 +397,18 @@ end;
 
 function TDbAsyncExecutor.Submit(const AWork: TDbAsyncWork;
   const AToken: IAsyncCancellationToken): IDbAsyncHandle;
+begin
+  { 自适应护栏（无预估路径）：基于上一执行实测耗时自动退避，inline 薄包装、零拷贝，
+    阈值单源 ExecutionShouldOffload（= execution.base，L1 纯净；阈值 50µs >2×固定税 20µs）；
+    首轮未知保守同步零税（微查询免 20µs 固定税放大），长查询首包需显式预估 >阈值或 SubmitInline/同步直调；次轮起按实测退避。
+    判据与 EstimatedUs 重载同源单点（http/tui 共享 execution 单源）。 }
+  if not ShouldOffloadAdaptive then
+    Exit(SubmitInline(AWork, AToken));
+  Result := SubmitEnqueued(AWork, AToken);
+end;
+
+function TDbAsyncExecutor.SubmitEnqueued(const AWork: TDbAsyncWork;
+  const AToken: IAsyncCancellationToken): IDbAsyncHandle;
 var
   LOp: PDbAsyncOp;
   LHandle: TDbAsyncHandle;
@@ -411,15 +422,24 @@ begin
   if AWork = nil then
     raise EDbError.CreateSimple(dbkUnknown,
       'db async: 工作体不能为空');
-  { 自适应护栏（无预估路径）：基于上一执行实测耗时自动退避，inline 薄包装、零拷贝，
-    阈值单源 ExecutionShouldOffload（= execution.base，L1 纯净；阈值 50µs >2×固定税 20µs）；
-    首轮未知保守同步零税（微查询免 20µs 固定税放大），长查询首包需显式预估 >阈值或 SubmitInline/同步直调；次轮起按实测退避。
-    判据与 EstimatedUs 重载同源单点（http/tui 共享 execution 单源）。 }
-  if not ShouldOffloadAdaptive then
-    Exit(SubmitInline(AWork, AToken));
+  { 调用方已裁决 offload（自适应护栏或显式预估）：此处不再复检，避免首轮显式预估被自适应吞掉致同步。 }
   LCtrl := FCtrl;
   LSelf := Self;
-  { 零堆分配嵌入槽：LOp=@FOp，无 New/Dispose，首轮微查询亦零堆分配（共享模式见 execution.single，FPC workaround 集中）。全部装配先行，最后才入队可见 }
+  { 单飞槽先占后装：嵌入槽 @FOp 与在途记录同一实例，并发第二提交若先装配再判冲突会覆写在途记录（HandleRaw/Work）致 worker UAF。
+    此处锁内检查+预留、冲突在锁外抛（FPC 工具链坑：锁持 try-finally 内 raise 泄漏调用方临时接口——工厂 DbRegisterDriver 同款规避），
+    槽权在装配前已独占，后续装配/入队零污染在途记录。 }
+  FLk.Acquire;
+  try
+    LConflict := FPending <> nil;
+    if not LConflict then
+      FPending := @FOp;
+  finally
+    FLk.Release;
+  end;
+  if LConflict then
+    raise EDbError.CreateSimple(dbkUnknown,
+      'db async: 上一调用仍在途（单飞模型，禁止并发提交）');
+  { 零堆分配嵌入槽：LOp=@FOp，无 New/Dispose，首轮微查询亦零堆分配（共享模式见 execution.single，FPC workaround 集中）。槽已预留独占，全部装配先行，最后才入队可见 }
   LOp := @FOp;
   { 嵌入槽在空闲时托管字段已清零（Finalize 置 nil），此处防御性清零 }
   LOp^.HandleRaw := nil;
@@ -447,6 +467,13 @@ begin
     if LCtrl <> nil then
       LCtrl.ArmCancel;
   except
+    FLk.Acquire;
+    try
+      if FPending = LOp then
+        FPending := nil;
+    finally
+      FLk.Release;
+    end;
     if LOp^.Child <> nil then
     begin
       LOp^.Child.DetachFromParent;
@@ -467,35 +494,6 @@ begin
     LOp^.HandleRaw := nil;
     LOp^.Work := nil;
     raise;
-  end;
-  { 锁内单出口置位，冲突在锁外抛（FPC 工具链坑：锁持 try-finally 内
-    raise 泄漏调用方临时接口——工厂 DbRegisterDriver 同款规避） }
-  FLk.Acquire;
-  try
-    LConflict := FPending <> nil;
-    if not LConflict then
-      FPending := LOp;
-  finally
-    FLk.Release;
-  end;
-  if LConflict then
-  begin
-    if LOp^.Child <> nil then
-    begin
-      LOp^.Child.DetachFromParent;
-      LOp^.Child := nil;
-    end;
-    if LCtrl <> nil then
-      try
-        LCtrl.DisarmCancel;
-      except
-      end;
-    { 零堆分配：清零托管引用即释放，无 Dispose }
-    LOp^.HandleRef := nil;
-    LOp^.HandleRaw := nil;
-    LOp^.Work := nil;
-    raise EDbError.CreateSimple(dbkUnknown,
-      'db async: 上一调用仍在途（单飞模型，禁止并发提交）');
   end;
   { 任务体捕获 Self 与 LOp：匿名闭包经 pool 投递到单工线程。
     槽即队列——worker 取件即清槽，无第二层缓冲。入队失败则整体
@@ -544,7 +542,7 @@ begin
   if not ExecutionShouldOffload(AEstimatedUs) then
     Result := SubmitInline(AWork, AToken)
   else
-    Result := Submit(AWork, AToken);
+    Result := SubmitEnqueued(AWork, AToken);
 end;
 
 function TDbAsyncExecutor.SubmitInline(const AWork: TDbAsyncWork;

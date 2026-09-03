@@ -31,31 +31,26 @@ for f in "$FACTORY_FACADE_SQLITE" "$FACTORY_FACADE_PG" "$FACTORY_FACADE_MYSQL" "
   require_file "$f"
 done
 
-# --- 1. bytes.ops single source sentinel (owner=bytes.ops) + perf single source (owner=bytes.ops via db.perf) ---
-require_token "$FACADE" 'DB_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE'
-require_token "$FACADE" 'DB_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION'
-require_token "$FACADE" 'DB_PERF_SINGLE_SOURCE = PERF_BYTES_SINGLE_SOURCE'
-require_token "$FACADE" 'DB_PERF_SINGLE_SOURCE_VERSION = PERF_BYTES_SINGLE_SOURCE_VERSION'
-require_token "$FACADE" "BYTES_OPS_SINGLE_SOURCE"
-require_token "$FACADE" "PERF_BYTES_SINGLE_SOURCE"
-require_token "$FACADE" "bytes.ops single source drift"
-require_token "$FACTORY_FACADE" 'FACTORY_FACADE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE'
-require_token "$FACTORY_FACADE" "BYTES_OPS_SINGLE_SOURCE"
-# per-backend分治单源哨兵
-require_token "$FACTORY_FACADE_SQLITE" 'FACTORY_FACADE_SQLITE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE'
-require_token "$FACTORY_FACADE_PG" 'FACTORY_FACADE_PG_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE'
-require_token "$FACTORY_FACADE_MYSQL" 'FACTORY_FACADE_MYSQL_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE'
-require_token "$FACTORY_FACADE_ODBC" 'FACTORY_FACADE_ODBC_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE'
-require_token "$FACTORY_FACADE_REDIS" 'FACTORY_FACADE_REDIS_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE'
-require_token "$FACTORY_FACADE_DM" 'FACTORY_FACADE_DM_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE'
-require_token "$FACTORY_FACADE_POOL" 'FACTORY_FACADE_POOL_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE'
-for f in "$FACTORY_FACADE_SQLITE" "$FACTORY_FACADE_PG" "$FACTORY_FACADE_MYSQL" "$FACTORY_FACADE_ODBC" "$FACTORY_FACADE_REDIS" "$FACTORY_FACADE_DM" "$FACTORY_FACADE_POOL"; do
-  require_token "$f" "BYTES_OPS_SINGLE_SOURCE"
-  require_token "$f" "bytes.ops single source drift"
-done
-# perf/bytes.ops direct link is single-source sentinel only, not adapter hard link; guard via sentinel not via hard link
+# --- 1. bytes.ops single source (owner=bytes.ops): uses-link + zero direct Move/SetLength ---
+# NOTE (2026-09-03 consolidation): compile-time {$IF} sentinel aliases retired — the
+# sentinel symbol no longer exists in bytes.ops. Single-source is enforced by uses-link
+# (FPC resolves the single owner unit) + forbidding direct Move/SetLength in thin
+# facade implementations (all bulk copy/alloc lives in the owner) + FPC compile itself.
 require_token "$FACADE" 'nextpas.core.bytes.ops'
 require_token "$FACADE" 'nextpas.core.db.perf'
+require_token "$FACTORY_FACADE" 'nextpas.core.bytes.ops'
+for f in "$FACTORY_FACADE_SQLITE" "$FACTORY_FACADE_PG" "$FACTORY_FACADE_MYSQL" "$FACTORY_FACADE_ODBC" "$FACTORY_FACADE_REDIS" "$FACTORY_FACADE_DM" "$FACTORY_FACADE_POOL"; do
+  require_token "$f" 'nextpas.core.bytes.ops'
+done
+for f in "$FACADE" "$FACTORY_FACADE" "$FACTORY_FACADE_SQLITE" "$FACTORY_FACADE_PG" "$FACTORY_FACADE_MYSQL" "$FACTORY_FACADE_ODBC" "$FACTORY_FACADE_REDIS" "$FACTORY_FACADE_DM" "$FACTORY_FACADE_POOL"; do
+  IMPL_USES_BODY=$(sed -n '/^implementation/,/^end\./p' "$f")
+  if echo "$IMPL_USES_BODY" | rg -n -- '\bMove\s*\(' >/dev/null; then
+    fail "facade implementation must not contain direct Move (single source belongs to bytes.ops): $(basename "$f")"
+  fi
+  if echo "$IMPL_USES_BODY" | rg -n -- '\bSetLength\s*\(' >/dev/null; then
+    fail "facade implementation must not contain direct SetLength (single source belongs to bytes.ops): $(basename "$f")"
+  fi
+done
 
 # --- 1b. 体积分治软阈 800 行隔离（聚合门面 <150，每后端 <100） ---
 for f in "$FACTORY_FACADE_SQLITE" "$FACTORY_FACADE_PG" "$FACTORY_FACADE_MYSQL" "$FACTORY_FACADE_ODBC" "$FACTORY_FACADE_REDIS" "$FACTORY_FACADE_DM" "$FACTORY_FACADE_POOL"; do
@@ -74,7 +69,7 @@ require_token "$FACADE" 'Facade pure re-export: inline thin forward via factory.
 require_token "$FACADE" 'nextpas.core.db.factory.facade'
 # 分治聚合注释
 require_token "$FACTORY_FACADE" '体积分治'
-require_token "$FACTORY_FACADE" 'soft threshold'
+require_token "$FACTORY_FACADE" '软阈'
 # implementation uses must not hard link adapters (trimmable invariant)
 IMPL_USES=$(sed -n '/^implementation/,/^end\./p' "$FACADE")
 for unit in 'nextpas.core.db.sqlite.adapter' 'nextpas.core.db.pg.adapter' 'nextpas.core.db.mysql.adapter' 'nextpas.core.db.odbc.adapter' 'nextpas.core.db.redis.adapter' 'nextpas.core.db.dm.adapter' 'nextpas.core.db.factory.register'; do
@@ -107,21 +102,24 @@ if rg -n '^[[:space:]]*nextpas\.core\.db\.(sqlite|pg|mysql|odbc|redis|dm)\.adapt
 fi
 
 # --- 3. inline thin forward surface ---
+# NOTE: declarations may span lines — join newlines before regex (FPC multiline decl style).
+FACADE_SINGLE=$(tr '\n' ' ' < "$FACADE")
+FACTORY_SINGLE=$(tr '\n' ' ' < "$FACTORY_FACADE")
 # All 6-backend Connect* + pool/capabilities/tx/migrate declarations must be inline (factory facade is the only coupling)
 for fn in 'ConnectSqlite' 'ConnectPostgres' 'ConnectMysql' 'ConnectOdbc' 'ConnectRedis' 'ConnectDm' 'OpenSqlitePool' 'DbCapabilities' 'DbArrayBinding' 'DbTraceControl' 'WithTransaction' 'WithTransactionRetry' 'DbRetryableDefault' 'MakeMigrations' 'Migrate' 'MigrateDryRun' 'MigrationVersion'; do
-  if ! rg -n "(function|procedure) ${fn}\b.*inline;" "$FACADE" >/dev/null; then
+  if ! echo "$FACADE_SINGLE" | rg -n "(function|procedure) ${fn}\b.*inline;" >/dev/null; then
     fail "facade declaration must be inline thin forward: $fn"
   fi
 done
 # Factory facade itself must be inline thin forward (Kind-driven DbOpen) — aggregator + per-backend
 for fn in 'ConnectSqlite' 'ConnectPostgres' 'ConnectMysql' 'ConnectOdbc' 'ConnectRedis' 'ConnectDm' 'OpenSqlitePool'; do
-  if ! rg -n "function ${fn}\b.*inline;" "$FACTORY_FACADE" >/dev/null; then
+  if ! echo "$FACTORY_SINGLE" | rg -n "function ${fn}\b.*inline;" >/dev/null; then
     fail "factory.facade aggregator declaration must be inline: $fn"
   fi
 done
 for f in "$FACTORY_FACADE_SQLITE" "$FACTORY_FACADE_PG" "$FACTORY_FACADE_MYSQL" "$FACTORY_FACADE_ODBC" "$FACTORY_FACADE_REDIS" "$FACTORY_FACADE_DM" "$FACTORY_FACADE_POOL"; do
   # each subunit at least one inline function
-  if ! rg -n "function (Connect|Open).*inline;" "$f" >/dev/null; then
+  if ! tr '\n' ' ' < "$f" | rg -n "function (Connect|Open).*inline;" >/dev/null; then
     fail "per-backend facade subunit must have inline thin forward: $(basename "$f")"
   fi
 done
@@ -198,13 +196,20 @@ if sed -n '/^interface/,/^implementation/p' "$FACADE" | rg -n "procedure WithTra
 fi
 require_token "$FACADE" "source-contract 硬门禁"
 
-# --- 6. nightly live CI hard gate (L3) + trimmable boundary hard gate ---
+# --- 6. nightly live discipline (honest: scheduled CI + env-gated live + silent-gap forbids) ---
+# NOTE (2026-09-03 consolidation): earlier revisions required CONTRACT to assert
+# 'CI 硬门禁' for DM live. Truth: CI has a daily schedule trigger and the live path
+# is env-gated (NEXTPAS_DM_TEST_CONN) with honest-skip logging; there is no DM-live
+# evidence-upload workflow. The gate therefore checks the honest mechanism —
+# schedule trigger + env-gate + honest-skip + silent-gap forbids — not the slogan.
 CONTRACT="$CORE_ROOT/docs/db/CONTRACT.md"
 NIGHTLY="$CORE_ROOT/docs/db/nightly-live.md"
 PERF="$SRC/nextpas.core.db.perf.pas"
+CI_YML="$(cd "$CORE_ROOT/.." && pwd)/.github/workflows/ci.yml"
 require_file "$CONTRACT"
 require_file "$NIGHTLY"
 require_file "$PERF"
+require_file "$CI_YML"
 # CONTRACT must not remain in doc-only silent-gap state
 if rg -F --quiet -- "仅文档调度未在 CI 硬门禁实证" "$CONTRACT"; then
   fail "CONTRACT must not contain doc-only silent gap phrase (L3 nightly live must be CI hard gated)"
@@ -212,8 +217,11 @@ fi
 if rg -F --quiet -- "仅文档调度未在 CI 硬门禁实证" "$NIGHTLY"; then
   fail "nightly-live.md must not contain doc-only silent gap phrase"
 fi
-require_token "$CONTRACT" 'CI 硬门禁'
-require_token "$NIGHTLY" 'CI 硬门禁已落地'
+require_token "$CONTRACT" 'nightly-live.md'
+require_token "$CONTRACT" '硬门禁锁定'
+require_token "$NIGHTLY" 'NEXTPAS_DM_TEST_CONN'
+require_token "$NIGHTLY" 'honest skip'
+require_token "$CI_YML" 'schedule:'
 require_token "$CONTRACT" 'test_db_facade_source_contract'
 require_token "$CONTRACT" 'test_db_dm_adapter'
 require_token "$NIGHTLY" 'test_db_dm_adapter'

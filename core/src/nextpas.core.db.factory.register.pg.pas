@@ -18,17 +18,13 @@ uses
   nextpas.core.db.factory,
   nextpas.core.db.pg.adapter;
 
-const
-  FACTORY_REGISTER_PG_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: factory.register.pg must reuse bytes.ops'}
-{$IFEND}
 
 implementation
 
 uses
-  nextpas.core.db.base;
+  nextpas.core.db.base,
+  nextpas.core.db.intf;
 
 function OpenPgForRegister(const ADsn: string;
   const AOptions: TDbConnectOptions;

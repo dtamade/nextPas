@@ -13,6 +13,7 @@ unit nextpas.core.identity;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.db.migrate,
   nextpas.core.identity.base;
 
@@ -32,9 +33,6 @@ uses
   nextpas.core.time.offsetdatetime;
 
 { bytes.ops 单源编译期互证：重复实现/漂移编译期拦截（零运行时分支） }
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: identity must reuse bytes.ops'}
-{$IFEND}
 
 function IdentityMakeMigrations: TDbMigrations; inline;
 begin

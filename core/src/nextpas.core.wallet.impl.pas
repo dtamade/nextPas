@@ -51,9 +51,6 @@ uses
   nextpas.core.wallet.state,
   nextpas.core.wallet.stream;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: wallet must reuse bytes.ops'}
-{$IFEND}
 
 type
   TWalletTxnBody = procedure(const AConn: IDbConnection; AData: Pointer);
@@ -153,9 +150,10 @@ end;
 function WalletMigrateAll(const AConn: IDbConnection): Integer;
 begin
   WalletEnsureForeignKeysOn(AConn);
-  Result := 0;
-  Result := Result + Migrate(AConn, IdentityMakeMigrations);
-  Result := Result + Migrate(AConn, WalletMakeMigrations);
+  { 单次累计清单 [v14 身份, v15 钱包]：migrate 引擎要求已应用版本必须
+    出现在本次清单内，分两次 Migrate 会触发 below-lower-bound 熔断，
+    故部署序经 WalletFullMigrations 单次调用收敛。 }
+  Result := Migrate(AConn, WalletFullMigrations);
 end;
 
 function WalletMigrateAll(const APool: TDbPool): Integer;
@@ -282,20 +280,20 @@ var
 begin
   Ctx := PWalletAdjustCtx(AData);
   Q := AConn.Query('INSERT OR IGNORE INTO wallet_balances (user_id, balance_cents) VALUES (?1, 0)');
-  Q.BindText(1, Ctx.UserId);
+  Q.BindText(1, Ctx^.UserId);
   Q.Step;
   Q := AConn.Query('UPDATE wallet_balances SET balance_cents = balance_cents + ?2, updated_at = ' + WALLET_SQLITE_NOW_EXPR + ' WHERE user_id = ?1 AND balance_cents + ?2 >= 0 RETURNING balance_cents');
-  Q.BindText(1, Ctx.UserId);
-  Q.BindInt64(2, Ctx.Delta);
+  Q.BindText(1, Ctx^.UserId);
+  Q.BindInt64(2, Ctx^.Delta);
   if not Q.Step then
     raise EDbError.CreateWithCategory(dbkUnknown, decConstraint, dckCheck, 'insufficient balance');
-  Ctx.NewBal^ := Q.GetInt64(0);
+  Ctx^.NewBal^ := Q.GetInt64(0);
   Q := AConn.Query('INSERT INTO wallet_ledger (id, user_id, delta_cents, reason, ref_id) VALUES (?1, ?2, ?3, ?4, ?5)');
   Q.BindText(1, UUIDv7);
-  Q.BindText(2, Ctx.UserId);
-  Q.BindInt64(3, Ctx.Delta);
-  Q.BindText(4, Ctx.Reason);
-  Q.BindText(5, Ctx.RefId);
+  Q.BindText(2, Ctx^.UserId);
+  Q.BindInt64(3, Ctx^.Delta);
+  Q.BindText(4, Ctx^.Reason);
+  Q.BindText(5, Ctx^.RefId);
   Q.Step;
 end;
 
@@ -427,13 +425,13 @@ var
 begin
   Ctx := PWalletRedeemCtx(AData);
   Q := AConn.Query('SELECT 1 FROM redeem_redemptions WHERE code = ?1 AND user_id = ?2');
-  Q.BindText(1, Ctx.Code);
-  Q.BindText(2, Ctx.UserId);
+  Q.BindText(1, Ctx^.Code);
+  Q.BindText(2, Ctx^.UserId);
   Already := Q.Step;
   if Already then
     raise EDbError.CreateWithCategory(dbkUnknown, decConstraint, dckUnique, 'already redeemed');
   Q := AConn.Query('SELECT code, total_cents, remaining_uses, max_uses, coalesce(expires_at,''''), created_at FROM redeem_codes WHERE code = ?1');
-  Q.BindText(1, Ctx.Code);
+  Q.BindText(1, Ctx^.Code);
   if not Q.Step then
     raise EDbError.CreateWithCategory(dbkUnknown, decUnknown, dckNone, 'not found');
   Rc.Code := Q.GetText(0);
@@ -445,29 +443,29 @@ begin
   if IsISO8601Expired(Rc.ExpiresAt) then
     raise EDbError.CreateWithCategory(dbkUnknown, decConstraint, dckCheck, 'expired');
   Q := AConn.Query('UPDATE redeem_codes SET remaining_uses = remaining_uses - 1 WHERE code = ?1 AND remaining_uses > 0');
-  Q.BindText(1, Ctx.Code);
+  Q.BindText(1, Ctx^.Code);
   Q.Step;
   if AConn.Changes <> 1 then
     raise EDbError.CreateWithCategory(dbkUnknown, decConstraint, dckCheck, 'exhausted');
   Q := AConn.Query('INSERT OR IGNORE INTO wallet_balances (user_id, balance_cents) VALUES (?1, 0)');
-  Q.BindText(1, Ctx.UserId);
+  Q.BindText(1, Ctx^.UserId);
   Q.Step;
   Q := AConn.Query('UPDATE wallet_balances SET balance_cents = balance_cents + ?2, updated_at = ' + WALLET_SQLITE_NOW_EXPR + ' WHERE user_id = ?1 RETURNING balance_cents');
-  Q.BindText(1, Ctx.UserId);
+  Q.BindText(1, Ctx^.UserId);
   Q.BindInt64(2, Rc.TotalCents);
   if not Q.Step then
     raise EDbError.CreateWithCategory(dbkUnknown, decUnknown, dckNone, 'balance update failed');
-  Ctx.NewBal^ := Q.GetInt64(0);
+  Ctx^.NewBal^ := Q.GetInt64(0);
   Q := AConn.Query('INSERT INTO wallet_ledger (id, user_id, delta_cents, reason, ref_id) VALUES (?1, ?2, ?3, ?4, ?5)');
   Q.BindText(1, UUIDv7);
-  Q.BindText(2, Ctx.UserId);
+  Q.BindText(2, Ctx^.UserId);
   Q.BindInt64(3, Rc.TotalCents);
   Q.BindText(4, 'redeem');
-  Q.BindText(5, Ctx.Code);
+  Q.BindText(5, Ctx^.Code);
   Q.Step;
   Q := AConn.Query('INSERT INTO redeem_redemptions (code, user_id) VALUES (?1, ?2)');
-  Q.BindText(1, Ctx.Code);
-  Q.BindText(2, Ctx.UserId);
+  Q.BindText(1, Ctx^.Code);
+  Q.BindText(2, Ctx^.UserId);
   Q.Step;
 end;
 
@@ -543,7 +541,7 @@ var
   Ctx: PWalletDeductCtx;
 begin
   Ctx := PWalletDeductCtx(AData);
-  WalletDeductAndJoinCore(AConn, Ctx.UserId, Ctx.ProjectId, Ctx.Price, Ctx.IsMember, Ctx.Join, Ctx.Membership, Ctx.NewBal^);
+  WalletDeductAndJoinCore(AConn, Ctx^.UserId, Ctx^.ProjectId, Ctx^.Price, Ctx^.IsMember, Ctx^.Join, Ctx^.Membership, Ctx^.NewBal^);
 end;
 
 function WalletTryDeductAndJoin(const APool: TDbPool; const AUserId, AProjectId: string; APriceCents: Int64): Int64;

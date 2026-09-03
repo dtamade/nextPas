@@ -19,10 +19,21 @@ function AnsiPtrToStr(const P: PAnsiChar): string; inline;
 function HoldAnsi(const S: string; out Hold: AnsiString): PAnsiChar; inline;
 function StrToPAnsi(const S: string; out Hold: AnsiString): PAnsiChar; inline;
 
+{ 容量与拼接：复用 bytes.ops 几何增长单源，避免逐次 SetLength O(n²)。 }
+procedure AnsiSetLogicalLenNoRealloc(var S: AnsiString; const ANewLen: SizeUInt); inline;
+procedure StringSetLengthNoRealloc(var S: string; const ANewLen: SizeUInt); inline;
+procedure AnsiEnsureCapacity(var ADest: AnsiString; const ARequired: SizeUInt);
+procedure StringEnsureCapacity(var ADest: string; const ARequired: SizeUInt);
+function StringConcatToAnsi(const A, B: string): AnsiString;
+procedure StringConcatToAnsiReuse(var ADest: AnsiString; const A, B: string);
+{ ASCII 大写：nil/空安全，单次分配 + SIMD 原地大写（sqlite 声明类型解析等 ASCII 关键字场景）。 }
+function AnsiToUpperStr(const AData: PAnsiChar; const ALen: SizeUInt): string;
+
 implementation
 
 uses
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.simd;
 
 function StrToAnsi(const S: string): AnsiString;
 begin
@@ -49,6 +60,92 @@ end;
 function StrToPAnsi(const S: string; out Hold: AnsiString): PAnsiChar;
 begin
   Result := HoldAnsi(S, Hold);
+end;
+
+procedure AnsiSetLogicalLenNoRealloc(var S: AnsiString; const ANewLen: SizeUInt); inline;
+var
+  PLen: PSizeInt;
+begin
+  if (S = '') or (Pointer(S) = nil) then Exit;
+  if SizeUInt(Length(S)) = ANewLen then Exit;
+  PLen := PSizeInt(Pointer(S));
+  Dec(PLen);
+  PLen^ := SizeInt(ANewLen);
+  PByte(PAnsiChar(S) + ANewLen)^ := 0;
+end;
+
+procedure StringSetLengthNoRealloc(var S: string; const ANewLen: SizeUInt); inline;
+var
+  PLen: PSizeInt;
+begin
+  if (S = '') or (Pointer(S) = nil) then Exit;
+  if SizeUInt(Length(S)) = ANewLen then Exit;
+  PLen := PSizeInt(Pointer(S));
+  Dec(PLen);
+  PLen^ := SizeInt(ANewLen);
+  PByte(PAnsiChar(S) + ANewLen)^ := 0;
+end;
+
+procedure AnsiEnsureCapacity(var ADest: AnsiString; const ARequired: SizeUInt);
+var
+  LOld, LCap: SizeUInt;
+begin
+  LOld := SizeUInt(Length(ADest));
+  if ARequired <= LOld then
+    Exit;
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacity(LOld, ARequired);
+  SetLength(ADest, LCap);
+  if LCap <> ARequired then
+    AnsiSetLogicalLenNoRealloc(ADest, ARequired);
+end;
+
+procedure StringEnsureCapacity(var ADest: string; const ARequired: SizeUInt);
+var
+  LOld, LCap: SizeUInt;
+begin
+  LOld := SizeUInt(Length(ADest));
+  if ARequired <= LOld then
+    Exit;
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacity(LOld, ARequired);
+  SetLength(ADest, LCap);
+  if LCap <> ARequired then
+    StringSetLengthNoRealloc(ADest, ARequired);
+end;
+
+function StringConcatToAnsi(const A, B: string): AnsiString;
+var
+  LLenA, LLenB: SizeUInt;
+begin
+  LLenA := SizeUInt(Length(A));
+  LLenB := SizeUInt(Length(B));
+  SetLength(Result, LLenA + LLenB);
+  if LLenA > 0 then
+    Move(PAnsiChar(A)^, Result[1], LLenA);
+  if LLenB > 0 then
+    Move(PAnsiChar(B)^, Result[1 + LLenA], LLenB);
+end;
+
+procedure StringConcatToAnsiReuse(var ADest: AnsiString; const A, B: string);
+var
+  LLenA, LLenB, LNeed: SizeUInt;
+begin
+  LLenA := SizeUInt(Length(A));
+  LLenB := SizeUInt(Length(B));
+  LNeed := LLenA + LLenB;
+  AnsiEnsureCapacity(ADest, LNeed);
+  AnsiSetLogicalLenNoRealloc(ADest, LNeed);
+  if LLenA > 0 then Move(PAnsiChar(A)^, ADest[1], LLenA);
+  if LLenB > 0 then Move(PAnsiChar(B)^, ADest[1 + LLenA], LLenB);
+end;
+
+function AnsiToUpperStr(const AData: PAnsiChar; const ALen: SizeUInt): string;
+begin
+  if (AData = nil) or (ALen = 0) then
+    Exit('');
+  SetLength(Result, ALen);
+  Move(AData^, Result[1], ALen);
+  if ALen > 0 then
+    ToUpperAscii(@Result[1], ALen);
 end;
 
 end.

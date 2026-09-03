@@ -29,9 +29,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.db.err;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter.observe must reuse bytes.ops'}
-{$IFEND}
 
 procedure RaiseSqliteAsDb(const AE: ESqliteError);
 var

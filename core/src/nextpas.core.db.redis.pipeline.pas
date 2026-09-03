@@ -4,7 +4,7 @@ unit nextpas.core.db.redis.pipeline;
        由 redis.adapter 抽离以满足 800 行软阈值：执行批量命令的
        RESP 编码→分块→单次/分块 Send→逐条 ReadReply 循环。
        复用 bytes.ops 单源（BytesEnsureCapacity 单次 SetLength+header poke
-       经 BytesCalcGrowCap MIN_GROW 64*2 inline 零拷贝直接缓冲 Move，零虚分发）、
+       经 BytesGrowCapacity MIN_GROW 64*2 inline 零拷贝直接缓冲 Move，零虚分发）、
        text.conv 单源 IntToStr（无 SysUtils）、redis.resp 单源编解码、
        db.trace 观测同构。自适应分块 4K→64K 复用 DB_REDIS_READ_* 单源。
        L2 基础设施（仅依赖 L0-L2 单向，无上向）；owner = db.redis。 *}
@@ -48,12 +48,7 @@ uses
   nextpas.core.db.redis.resp,
   nextpas.core.text.conv;
 
-const
-  PIPELINE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: redis.pipeline must reuse bytes.ops'}
-{$IFEND}
 
 procedure RedisExecuteBatch(const ATransport: IRedisTransport;
   const ASteps: TDbSqlSteps; const ATrace: TDbTraceHub;
@@ -72,7 +67,7 @@ var
 
   procedure AdvanceChunk; inline;
   begin
-    // perf: inline hot path, amortized doubling MIN_GROW 64*2 单源 BytesCalcGrowCap (bytes.ops)
+    // perf: inline hot path, amortized doubling MIN_GROW 64*2 单源 BytesGrowCapacity (bytes.ops)
     if LChunkCap < REDIS_PIPELINE_CHUNK_MAX then
     begin
       LChunkCap := LChunkCap shl 1;
@@ -83,14 +78,14 @@ var
 
   procedure EnsureBufCap(const ANeeded: SizeUInt); inline;
   begin
-    // perf: inline BytesEnsureCapacity 单源复用 (BytesCalcGrowCap MIN_GROW 64*2 amortized doubling 单次 SetLength+header poke)，零拷贝 Move 由调用方单 Move 完成，避免 10k 次虚分发，10k batch 零二次拷贝
+    // perf: inline BytesEnsureCapacity 单源复用 (BytesGrowCapacity MIN_GROW 64*2 amortized doubling 单次 SetLength+header poke)，零拷贝 Move 由调用方单 Move 完成，避免 10k 次虚分发，10k batch 零二次拷贝
     BytesEnsureCapacity(LBuf, LLen + ANeeded);
   end;
 
   procedure FlushChunk; inline;
   begin
     // perf: inline hot path, zero-copy slice direct Send @LBuf/LLen (no per-chunk SetLength+Move O(chunk) copy/alloc)
-    // bytes.ops single source BytesEnsureCapacity cap复用 (MIN_GROW 64*2 amortized via BytesCalcGrowCap), 10k batch 零虚分发
+    // bytes.ops single source BytesEnsureCapacity cap复用 (MIN_GROW 64*2 amortized via BytesGrowCapacity), 10k batch 零虚分发
     // stability: Send 前已编码校验，异常路径 trace/释放不丢；LLen=0 保留堆块零再分配 (BytesEnsureCapacity header poke 保持 Cap)
     if LLen = 0 then
       Exit;
@@ -104,7 +99,7 @@ begin
     raise EDbError.CreateSimple(dbkRedis, 'empty batch');
   // perf: 自适应分块 4K→64K（DB_REDIS_READ_CHUNK_* 单源），小批量单次 syscall 收敛；
   // 大批量 64K 有界峰值 O(chunk+maxFrame)，amortized 单分配+Move 零拷贝
-  // bytes.ops 单源 inline BytesEnsureCapacity (BytesCalcGrowCap MIN_GROW 64*2 单次 SetLength+header poke) + 直接缓冲 Move，
+  // bytes.ops 单源 inline BytesEnsureCapacity (BytesGrowCapacity MIN_GROW 64*2 单次 SetLength+header poke) + 直接缓冲 Move，
   // 10k 批量零虚分发（原 IBytesBuilder.AppendBytes 10k 虚分发），~log 扩容；inline 热路径零 I-Cache 膨胀
   // stability: Send 前已编码校验，异常路径 trace/释放不丢；LLen 保留容量
   LChunkCap := REDIS_PIPELINE_CHUNK_INIT;

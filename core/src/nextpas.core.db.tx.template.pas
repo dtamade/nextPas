@@ -37,10 +37,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.db.savepoint;
 
-const
-  TEMPLATE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 procedure DbTemplateRunWithSavepointFallback(
   const AInTxn, ASupportsSavepoints: Boolean;

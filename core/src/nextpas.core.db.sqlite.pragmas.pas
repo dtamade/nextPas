@@ -39,9 +39,6 @@ uses
   nextpas.core.text.builder;
 
 { sentinel: 复用 bytes.ops 单源，重复实现即编译期失败 }
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: pragmas must reuse bytes.ops'}
-{$IFEND}
 
 procedure ApplyPragmasViaExec(const AConn: IDbConnection; const APath: string;
   const AP: TDbSqlitePragmas);

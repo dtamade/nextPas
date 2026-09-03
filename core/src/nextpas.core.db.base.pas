@@ -20,7 +20,6 @@ uses
   nextpas.core.exception,
   nextpas.core.bytes.ops;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 { bytes.ops single source central gate (owner=bytes.ops, L0): per-unit DB_* aliases retired → settings.inc/single_source.inc, inline thin forward + single Move zero-copy, drift compile-time }
 
 type  { 数据库后端种类 }

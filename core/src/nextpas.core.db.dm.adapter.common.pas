@@ -33,11 +33,11 @@ procedure RaiseDmAsDb(const AE: EDmError);
 procedure CheckDpi(const ACode: Integer; AHandle: Pointer; AHandleType: Integer);
 function TranslatePlaceholders(const ASql: string): string; inline;
 function DmSyntheticTranslate(const ASql: string): string; inline;
-// 单行每行单次分配仅单条语义 via StringConcatToAnsi 单源 single-alloc 零拷贝（10k 误用 10k heap 属单行语义必然，非热点；bulk 显式选用 Reuse(var ADest) amortized 1 alloc via BytesCalcGrowCap，10k heap→1，bytes.ops 单源 AnsiEnsureCapacity+2×Move 零拷贝 inline 薄转发高级感，见 Reuse 重载）
+// 单行每行单次分配仅单条语义 via StringConcatToAnsi 单源 single-alloc 零拷贝（10k 误用 10k heap 属单行语义必然，非热点；bulk 显式选用 Reuse(var ADest) amortized 1 alloc via BytesGrowCapacity，10k heap→1，bytes.ops 单源 AnsiEnsureCapacity+2×Move 零拷贝 inline 薄转发高级感，见 Reuse 重载）
 function DmSyntheticDpiProxy(const ASql: string; const AValue: string): AnsiString; inline;
 function DmSyntheticE2EProxy(const ASql: string; const AValue: string): AnsiString; inline;
 function DmNativeDirectBench(const ASql: string): string; inline;
-// bulk 最优：var ADest 复用 amortized 单次堆分配（1 次 via BytesCalcGrowCap doubling，10k heap→1，bytes.ops 单源 AnsiEnsureCapacity+AnsiSetLogicalLenNoRealloc+2×Move 零拷贝 inline 薄转发证据，稳定性 try..finally Done 不丢），显式 LTranslated 重载零 TLS/锁 thread-safe，调用方批量显式选用 Reuse 高级感收敛（单行仅单条，不 deprecated）
+// bulk 最优：var ADest 复用 amortized 单次堆分配（1 次 via BytesGrowCapacity doubling，10k heap→1，bytes.ops 单源 AnsiEnsureCapacity+AnsiSetLogicalLenNoRealloc+2×Move 零拷贝 inline 薄转发证据，稳定性 try..finally Done 不丢），显式 LTranslated 重载零 TLS/锁 thread-safe，调用方批量显式选用 Reuse 高级感收敛（单行仅单条，不 deprecated）
 procedure DmSyntheticDpiProxyReuse(var ADest: AnsiString; const ASql: string; const AValue: string); overload;
 procedure DmSyntheticDpiProxyReuseTranslated(var ADest: AnsiString; const LTranslated: string; const AValue: string); overload;
 procedure DmSyntheticE2EProxyReuse(var ADest: AnsiString; const ASql: string; const AValue: string); overload;
@@ -52,6 +52,7 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
+  nextpas.core.text.ansi,
   nextpas.core.text.kv,
   nextpas.core.text.conv,
   nextpas.core.db.base,
@@ -59,9 +60,6 @@ uses
   nextpas.core.db.dm.ffi,
   nextpas.core.db.dm.adapter.synthetic;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db.dm.adapter.common must reuse bytes.ops'}
-{$IFEND}
 
 procedure RaiseDmAsDb(const AE: EDmError);
 var
@@ -150,7 +148,7 @@ end;
 
 function DsnToDpiConnStr(const ADsn: string): AnsiString;
 begin
-  Result := nextpas.core.bytes.ops.StringToAnsiString(ADsn);
+  Result := nextpas.core.text.ansi.StrToAnsi(ADsn);
 end;
 
 procedure CheckDpi(const ACode: Integer; AHandle: Pointer; AHandleType: Integer);

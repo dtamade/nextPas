@@ -117,9 +117,6 @@ uses
   nextpas.core.collections.lrucache,
   nextpas.core.db.sqlite.adapter.observe;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter.cache must reuse bytes.ops'}
-{$IFEND}
 
 { ---- TSqliteStmtHolder ---- }
 
@@ -273,6 +270,12 @@ begin
       FTrace.NotifyQuery(LT0, FSql);
     end;
   except
+    on E: ESqliteError do
+    begin
+      if LTimed then
+        FTrace.NotifyError(SqliteCategoryOf(E), FSql);
+      RaiseSqliteAsDb(E);
+    end;
     on E: EDbError do
     begin
       if LTimed then

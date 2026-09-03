@@ -3,7 +3,7 @@ unit nextpas.core.db.redis.recv;
 {** @desc Redis 接收环形缓冲抽离（V3-A5 体积分治）。
        由 redis.adapter 抽离以满足 800 行软阈值（CONTRACT §2.13 体积分治）：
        复用 bytes.ops 单源（BytesEnsureCapacity 单 Move 零拷贝，
-       MIN_GROW 64*2 inline BytesCalcGrowCap 单次 SetLength+header poke）、
+       MIN_GROW 64*2 inline BytesGrowCapacity 单次 SetLength+header poke）、
        redis.resp 单源零拷贝视图（TByteSpan）、DB_REDIS_READ_* 单源上界。
        环形偏移视图 FOff 滑动窗口 amortized 零拷贝，仅阈值压实一次 Move；
        4K 守稳 + 满利用率按需指数扩容至 64K（碎片化小帧禁盲目翻倍）+ RespPeekFrameLength 预分配单次 Recv。
@@ -42,12 +42,7 @@ uses
   nextpas.core.db.err,
   nextpas.core.db.redis.resp;
 
-const
-  RECV_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: redis.recv must reuse bytes.ops'}
-{$IFEND}
 
 constructor TRedisRecvBuffer.Create(const ATransport: IRedisTransport);
 begin
@@ -89,7 +84,7 @@ begin
   // fragmented small-frame guard: LEff clamps inflated chunk to 4*MIN (16 KiB) for
   // compaction decision, so 64K over-allocated chunk does not prematurely trigger Move (amortized O(1))
   // zero-copy evidence: TryConsume via RespTryParse(TByteSpan.FromBytes) zero-copy view (bytes.ops single source, inline thin forwarder),
-  // only compaction does single Move; growth via inline BytesCalcGrowCap/BytesEnsureCapacity single source (inline zero-cost)
+  // only compaction does single Move; growth via inline BytesGrowCapacity/BytesEnsureCapacity single source (inline zero-cost)
   LLen := Length(FBuf);
   if FOff <= DB_REDIS_READ_COMPACTION_MIN then
     Exit;
@@ -137,7 +132,7 @@ begin
   // perf: inline hot path, conditional doubling — only when previous Recv filled chunk (high utilization)
   // fragmented RESP small-frame guard: AReceived < AChunk means transport under-filled (fragmented/Tiny frame),
   // keep chunk steady at 4K to avoid exponential 4K→8K→16K→32K→64K over-allocation + threshold compaction Move amplification
-  // growth via bytes.ops single source (BytesCalcGrowCap MIN_GROW 64*2 amortized; single Move compaction)
+  // growth via bytes.ops single source (BytesGrowCapacity MIN_GROW 64*2 amortized; single Move compaction)
   // stability: ALarge pre-allocation path frozen and capped to DB_REDIS_READ_CHUNK_MAX (64K)
   if ALarge then
   begin

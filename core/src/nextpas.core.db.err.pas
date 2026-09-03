@@ -161,9 +161,6 @@ implementation
 uses
   nextpas.core.bytes.ops;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db.err must reuse bytes.ops'}
-{$IFEND}
 
 procedure ClassifySqlite(const ACode, AExtended: Integer;
   out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);

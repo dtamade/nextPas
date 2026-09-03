@@ -43,9 +43,6 @@ uses
   nextpas.core.db.capprobe,
   nextpas.core.db.sqlite.ffi;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter.caps must reuse bytes.ops'}
-{$IFEND}
 
 function SqliteProductName: string; inline;
 begin

@@ -12,9 +12,12 @@ uses
   nextpas.core.wallet.base;
 
 type
-  { 身份域只读探针：wallet 仅需判定 user 已存在性，写入归 identity Owner。 }
+  { 身份域只读探针：wallet 仅需判定 user 已存在性，写入归 identity Owner。
+    IsReady 判定身份表已迁移（缺表即未就绪，供 WalletRequireIdentityReady
+    先决门禁；lane 语义，impl/facade/test 皆需）。 }
   IWalletIdentity = interface
     ['{A1B2C3D4-1111-4B2E-9F00-AAAABBBBCCCC}']
+    function IsReady(const AConn: IDbConnection): Boolean;
     function UserExists(const AConn: IDbConnection; const AUserId: string): Boolean;
   end;
 

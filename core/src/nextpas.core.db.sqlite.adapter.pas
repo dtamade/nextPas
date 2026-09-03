@@ -15,6 +15,7 @@ uses
   nextpas.core.db.base,        // L2 家族依赖根（仅 L0；L3 同层单向，无上向）
   nextpas.core.db.intf,        // L2 契约（同层单向）
   nextpas.core.db.trace,       // L2 观测（同层单向）
+  nextpas.core.db.bulk,        // L3 行缓冲（DM 同体裁，薄转发单源）
   nextpas.core.db.sqlite.base, // L2 后端基
   nextpas.core.db.sqlite.conn; // L2 后端实现
 
@@ -67,15 +68,12 @@ uses
   nextpas.core.db.sqlite.adapter.caps,
   nextpas.core.db.sqlite.adapter.factory;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter must reuse bytes.ops'}
-{$IFEND}
 
 type
   TDbSqliteConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
     IDbSavepointControl, IDbBatchExecutor, IDbStmtCacheControl,
     IDbRowBlobControl, IDbCapabilities, IDbTraceControl, ISqliteStmtHome,
-    IDbCancelControl, IDbForeignKeysControl)
+    IDbCancelControl, IDbForeignKeysControl, IDbBulkCopy)
   private
     FDb: TSqliteDb;
     { 适配-事务 owner 边界：深度计数收敛至 adapter.tx 单源委托
@@ -92,6 +90,9 @@ type
     FCache: ISqliteStmtCache;
     { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
     FTrace: TDbTraceHub;
+    { Bulk 行缓冲（DM 同体裁：TDbBulkBuffer + DbBulk* 薄转发，flush 经
+      BulkExecChunkFlat 零拷贝，bulk.pas 单源） }
+    FBulk: TDbBulkBuffer;
     { Holder 壳复用池：冷启动预填零分配， miss/复位失败路径零新建堆分配
       （Attach 复用壳，LRU 满时偷 victim 壳，bytes.ops 单源 inline） }
     FHolderPool: array of ISqliteStmtHolder;
@@ -174,6 +175,13 @@ type
     { IDbForeignKeysControl：句柄内标记零锁去重 }
     function ForeignKeysOn: Boolean;
     procedure SetForeignKeysOn(const AValue: Boolean);
+
+    { IDbBulkCopy（DM 同体裁：TDbBulkBuffer + DbBulk* 单源薄转发） }
+    procedure BeginCopy(const ATable: string; const AColumns: array of string);
+    procedure WriteRow(const AValues: array of string);
+    procedure EndCopy;
+    procedure AbortCopy;
+    procedure BulkExec(const ASql: string);
   end;
 
 { ---- TDbSqliteConnection ---- }
@@ -548,6 +556,31 @@ end;
 function TDbSqliteConnection.SupportsBulkCopy: Boolean; inline;
 begin
   Result := SqliteSupportsBulkCopy;
+end;
+
+procedure TDbSqliteConnection.BeginCopy(const ATable: string; const AColumns: array of string);
+begin
+  DbBulkBeginCopy(FBulk, dbkSqlite, ATable, AColumns);
+end;
+
+procedure TDbSqliteConnection.WriteRow(const AValues: array of string);
+begin
+  DbBulkWriteRow(FBulk, dbkSqlite, AValues);
+end;
+
+procedure TDbSqliteConnection.BulkExec(const ASql: string);
+begin
+  Exec(ASql);
+end;
+
+procedure TDbSqliteConnection.EndCopy;
+begin
+  DbBulkEndCopy(FBulk, MaxPlaceholders, InTransaction, @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn, SupportsSavepoints);
+end;
+
+procedure TDbSqliteConnection.AbortCopy;
+begin
+  DbBulkAbortCopy(FBulk);
 end;
 
 { ---- IDbCancelControl（V3-B6）---- }

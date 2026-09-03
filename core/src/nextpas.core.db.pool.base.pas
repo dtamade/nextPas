@@ -53,11 +53,8 @@ implementation
 uses
   nextpas.core.bytes.ops;
 
-const
   { 编译期单源门禁：串/字节零拷贝单源为 bytes.ops（BYTES_OPS_SINGLE_SOURCE），漂移编译期拦截 }
-  POOL_BASE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 class function TDbPoolPolicy.CreateDefault: TDbPoolPolicy; inline;
 begin

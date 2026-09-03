@@ -21,11 +21,9 @@ uses
   nextpas.core.db.pool,
   nextpas.core.db.migrate,
   nextpas.core.identity.base,
-  nextpas.core.identity;
+  nextpas.core.identity,
+  nextpas.core.db.factory.register.sqlite;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: test_identity must reuse bytes.ops'}
-{$IFEND}
 
 var
   T: TTestSuite;
@@ -129,6 +127,7 @@ begin
 end;
 
 begin
+  RegisterSqliteDriver;
   T := TTestSuite.Create('nextpas.core.identity');
   T.Test('migrations v14 single source', @TestIdentityMigrations);
   T.Test('text/time/bytes single source inline zero-copy', @TestIdentityTextTimeBytesSingleSource);

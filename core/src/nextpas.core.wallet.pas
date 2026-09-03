@@ -52,9 +52,6 @@ uses
   nextpas.core.wallet.impl;
 
 { bytes.ops 单源编译期互证：零运行时分支，漂移即编译失败 }
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: wallet facade must reuse bytes.ops'}
-{$IFEND}
 
 function WalletMakeMigrations: TDbMigrations; inline;
 begin

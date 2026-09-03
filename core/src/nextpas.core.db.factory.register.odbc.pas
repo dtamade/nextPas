@@ -15,17 +15,13 @@ uses
   nextpas.core.db.factory,
   nextpas.core.db.odbc.adapter;
 
-const
-  FACTORY_REGISTER_ODBC_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: factory.register.odbc must reuse bytes.ops'}
-{$IFEND}
 
 implementation
 
 uses
-  nextpas.core.db.base;
+  nextpas.core.db.base,
+  nextpas.core.db.intf;
 
 function OpenOdbcForRegister(const ADsn: string;
   const AOptions: TDbConnectOptions;

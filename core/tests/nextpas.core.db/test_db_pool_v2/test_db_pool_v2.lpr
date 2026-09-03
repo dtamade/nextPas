@@ -36,7 +36,9 @@ uses
   nextpas.core.db.base,
   nextpas.core.db.intf,
   nextpas.core.db.pool,
-  nextpas.core.db.tx;
+  nextpas.core.db.tx,
+  nextpas.core.db.factory.register.sqlite,
+  nextpas.core.db.factory.register.pg;
 
 var
   T: TTestSuite;
@@ -460,7 +462,10 @@ var
   LLog: string;
 begin
   P := TDbPoolPolicy.Default;
-  P.LeakDetectionThresholdMs := 60;
+  { 阈值 500ms / 睡 550ms：落在软告警(500)与硬回收(1.2×=600)之间——
+    读检查点已报告但未达硬回收，写槽仍被泄漏租约占用（文档 pool.md §2）。
+    阈值过小（如 60ms/睡 100ms）会越过 1.2× 硬回收线，槽位被强制释放。 }
+  P.LeakDetectionThresholdMs := 500;
   P.AcquireTimeoutMs := 0;          { 写槽耗尽快速失败，不拖测试时长 }
   P.OnLeakDetected := procedure(const S: string)
   begin
@@ -469,7 +474,7 @@ begin
   Pool := TDbPool.Create(SqliteFactory, P);
   try
     W := Pool.Writer;               { 写租约长期持有 }
-    Sleep(100);
+    Sleep(550);
     R := Pool.Acquire;              { 读路径检查点发现写泄漏 }
     Check(Pos('writer lease', LLog) > 0,
       'leak: writer role in report, got: ' + LLog);
@@ -738,6 +743,8 @@ begin
 end;
 
 begin
+  { 显式注册 sqlite 驱动（factory.builtin 已物理删除，Kind 分发需显式注册见 CONTRACT §2.14） }
+  RegisterSqliteDriver;
   GPgConn := GetEnvironmentVariable('NEXTPAS_PG_TEST_CONN');
   T := TTestSuite.Create('nextpas.core.db.pool.v2');
   T.Test('reuse identity', @TestReuseIdentity);

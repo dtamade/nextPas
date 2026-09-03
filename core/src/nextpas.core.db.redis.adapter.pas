@@ -24,10 +24,7 @@ uses
   nextpas.core.db.redis.resp,
   nextpas.core.db.redis.transport;
 
-const
-  REDIS_ADAPTER_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 { 连接 Redis 并完成握手（AUTH → SELECT → INFO 探测）。AAddr 形如
   'host[:port][/db]'；APassword 空 = 不发 AUTH；ADbIndex 0 = 不发

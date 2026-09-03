@@ -11,13 +11,7 @@ uses
   nextpas.core.db.mysql.base,
   nextpas.core.tls.base;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: mysql.tls must reuse bytes.ops'}
-{$IFEND}
 
-const
-  MYSQL_TLS_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  MYSQL_TLS_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
 
 type
   { MySQL sslmode 词汇（对齐 libpq/mysql 5.7+ 约定） }

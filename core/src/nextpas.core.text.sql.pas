@@ -84,14 +84,10 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.text.ansi,
   nextpas.core.text.number;
 
-const
-  TEXT_SQL_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: text.sql stitch must reuse bytes.ops'}
-{$IFEND}
 
 class function ESqlError.DefaultCategory: TErrorCategory;
 begin

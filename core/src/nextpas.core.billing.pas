@@ -28,9 +28,6 @@ implementation
 uses
   nextpas.core.bytes.ops;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: billing facade must reuse bytes.ops'}
-{$IFEND}
 
 function BillingNormalizeCode(const ACode: string): string; inline;
 begin

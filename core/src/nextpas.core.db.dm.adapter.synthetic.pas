@@ -18,7 +18,7 @@ const
   DBSQLSCAN_DM_SYNTHETIC: TSqlScanDialect = (DoubleQuoteIdents: True; BacktickIdents: False; BracketIdents: False; HashComments: False);
 
 function DmSyntheticTranslate(const ASql: string): string; inline;
-// 单行每行单次分配仅单条语义 via StringConcatToAnsi 单次分配零拷贝 bytes.ops 单源（10k 误用非Reuse 10k heap 属单行语义必然非热点；bulk 显式选用 Reuse var ADest amortized 1 alloc via BytesCalcGrowCap doubling，10k heap→1，bytes.ops 单源 AnsiEnsureCapacity+AnsiSetLogicalLenNoRealloc+2×Move 零拷贝 inline 薄转发高级感；单行不 deprecated，批量显式选用 Reuse 高级感收敛）
+// 单行每行单次分配仅单条语义 via StringConcatToAnsi 单次分配零拷贝 bytes.ops 单源（10k 误用非Reuse 10k heap 属单行语义必然非热点；bulk 显式选用 Reuse var ADest amortized 1 alloc via BytesGrowCapacity doubling，10k heap→1，bytes.ops 单源 AnsiEnsureCapacity+AnsiSetLogicalLenNoRealloc+2×Move 零拷贝 inline 薄转发高级感；单行不 deprecated，批量显式选用 Reuse 高级感收敛）
 function DmSyntheticDpiProxy(const ASql: string; const AValue: string): AnsiString; inline;
 function DmSyntheticE2EProxy(const ASql: string; const AValue: string): AnsiString; inline;
 function DmNativeDirectBench(const ASql: string): string; inline;
@@ -36,13 +36,11 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.text.ansi,
   nextpas.core.bytes.ops,
   nextpas.core.db.dm.base,
   nextpas.core.db.dm.adapter.synthetic.cache;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db.dm.adapter.synthetic must reuse bytes.ops'}
-{$IFEND}
 
 { L3 薄胶合：翻译/缓存已收敛至 L1 text.sqlscan + synthetic.cache（per-thread TinyLRU）。
   本单元零全局锁；容量/词法/bytes.ops 均单源复用（见 dm.base/text.sqlscan/bytes.ops）。 }
@@ -80,22 +78,22 @@ begin
 end;
 
 { 单源复用：单行 DmSyntheticSharedProxy(StringConcatToAnsi 单次分配)与批量 Reuse(StringConcatToAnsiReuse 复用)均 bytes.ops 单源 helper（BYTES_OPS_SINGLE_SOURCE，手工2×Move已收敛至单源helper），Dpi/E2E 仅 inline 薄转发。
-  性能：单行单次分配零拷贝单条语义；批量 10k 显式选用 Reuse(var ADest) amortized 1 alloc via BytesCalcGrowCap doubling（10k heap→1），零二次分配。 }
+  性能：单行单次分配零拷贝单条语义；批量 10k 显式选用 Reuse(var ADest) amortized 1 alloc via BytesGrowCapacity doubling（10k heap→1），零二次分配。 }
 function DmSyntheticSharedProxy(const ASql, AValue: string): AnsiString;
 begin
-  // not inline per red line 1: Move(Result[1], indexed) 禁 inline；bytes.ops 单源 StringConcatToAnsi 单次分配零拷贝（单行每行单次分配仅单条语义，10k 批量误用此路径 10k heap vs Reuse var ADest amortized 1 alloc via BytesCalcGrowCap doubling 10k heap→1，bytes.ops 单源零拷贝单次分配必然非热点）
-  Result := nextpas.core.bytes.ops.StringConcatToAnsi(DmCachedTranslate(ASql), AValue);
+  // not inline per red line 1: Move(Result[1], indexed) 禁 inline；bytes.ops 单源 StringConcatToAnsi 单次分配零拷贝（单行每行单次分配仅单条语义，10k 批量误用此路径 10k heap vs Reuse var ADest amortized 1 alloc via BytesGrowCapacity doubling 10k heap→1，bytes.ops 单源零拷贝单次分配必然非热点）
+  Result := nextpas.core.text.ansi.StringConcatToAnsi(DmCachedTranslate(ASql), AValue);
 end;
 
 function DmSyntheticDpiProxy(const ASql: string; const AValue: string): AnsiString; inline;
 begin
-  // 单行单次分配仅单条语义 via StringConcatToAnsi 单次分配零拷贝 bytes.ops 单源（10k 误用 10k heap 属单条语义必然非热点）；批量显式用 Reuse(var ADest) amortized 1 alloc via BytesCalcGrowCap doubling 10k heap→1 零拷贝高级感
+  // 单行单次分配仅单条语义 via StringConcatToAnsi 单次分配零拷贝 bytes.ops 单源（10k 误用 10k heap 属单条语义必然非热点）；批量显式用 Reuse(var ADest) amortized 1 alloc via BytesGrowCapacity doubling 10k heap→1 零拷贝高级感
   Result := DmSyntheticSharedProxy(ASql, AValue);
 end;
 
 function DmSyntheticE2EProxy(const ASql: string; const AValue: string): AnsiString; inline;
 begin
-  // 单行单次分配仅单条语义 via StringConcatToAnsi 单次分配零拷贝（10k 误用 10k heap 属单条语义必然非热点）；批量显式用 Reuse(var ADest) amortized 1 alloc via BytesCalcGrowCap doubling 10k heap→1 零拷贝高级感
+  // 单行单次分配仅单条语义 via StringConcatToAnsi 单次分配零拷贝（10k 误用 10k heap 属单条语义必然非热点）；批量显式用 Reuse(var ADest) amortized 1 alloc via BytesGrowCapacity doubling 10k heap→1 零拷贝高级感
   Result := DmSyntheticSharedProxy(ASql, AValue);
 end;
 
@@ -108,8 +106,8 @@ end;
 
 procedure DmSyntheticDpiProxyReuseTranslated(var ADest: AnsiString; const LTranslated: string; const AValue: string); overload;
 begin
-  // perf: bytes.ops single source StringConcatToAnsiReuse(AnsiEnsureCapacity+AnsiSetLogicalLenNoRealloc+2×Move)零拷贝（not inline per red line 1: Move(ADest[1], indexed)禁 inline，避免 I-Cache 膨胀），批量 10k amortized 1 次堆分配 via BytesCalcGrowCap doubling（10k heap→1 次，BYTES_OPS_SINGLE_SOURCE 单源收敛，手工2×Move已收敛至helper零二次分配）；稳定性：纯函数无句柄，批量经 try..finally LB.Done/ADest 复用不丢（见 DmSyntheticBatchBuild）
-  nextpas.core.bytes.ops.StringConcatToAnsiReuse(ADest, LTranslated, AValue);
+  // perf: bytes.ops single source StringConcatToAnsiReuse(AnsiEnsureCapacity+AnsiSetLogicalLenNoRealloc+2×Move)零拷贝（not inline per red line 1: Move(ADest[1], indexed)禁 inline，避免 I-Cache 膨胀），批量 10k amortized 1 次堆分配 via BytesGrowCapacity doubling（10k heap→1 次，BYTES_OPS_SINGLE_SOURCE 单源收敛，手工2×Move已收敛至helper零二次分配）；稳定性：纯函数无句柄，批量经 try..finally LB.Done/ADest 复用不丢（见 DmSyntheticBatchBuild）
+  nextpas.core.text.ansi.StringConcatToAnsiReuse(ADest, LTranslated, AValue);
 end;
 
 procedure DmSyntheticE2EProxyReuse(var ADest: AnsiString; const ASql: string; const AValue: string); overload;

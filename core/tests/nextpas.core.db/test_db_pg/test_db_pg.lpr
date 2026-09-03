@@ -13,7 +13,8 @@ uses
   nextpas.core.base,
   nextpas.core.db.pg,
   nextpas.core.db,
-  nextpas.core.db.base;
+  nextpas.core.db.base,
+  nextpas.core.db.factory.register.pg;
 
 var
   T: TTestSuite;

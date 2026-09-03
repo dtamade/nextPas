@@ -25,12 +25,7 @@ uses
   nextpas.core.db.pg.loader,
   nextpas.core.text.sqlscan;
 
-const
-  PG_CONN_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db.pg.conn must reuse bytes.ops'}
-{$IFEND}
 
 type
   TPgConn = class;
@@ -216,7 +211,7 @@ end;
 function PgStmtGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline;
 begin
   // perf: inline 零拷贝指数扩容单源（MIN_GROW 4, *2），64 容量下摊还 O(1) 避免 O(N^2) 搬移；复用 bytes.ops 单源
-  Result := BytesCalcGrowCapWithMin(AOld, ARequired, 4);
+  Result := BytesGrowCapacityWithMin(AOld, ARequired, 4);
 end;
 
 { ===== TPgConn ===== }

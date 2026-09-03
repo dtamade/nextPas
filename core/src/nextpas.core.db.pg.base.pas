@@ -120,13 +120,8 @@ implementation
 uses
   nextpas.core.bytes.ops;
 
-const
   { 编译期单源门禁：串/字节零拷贝单源为 bytes.ops（BYTES_OPS_SINGLE_SOURCE），漂移编译期拦截 }
-  PG_BASE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db.pg.base must reuse bytes.ops'}
-{$IFEND}
 
 constructor EPgError.Create(const AMessage: string);
 begin

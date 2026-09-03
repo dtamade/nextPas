@@ -134,15 +134,6 @@ implementation
 uses
   nextpas.core.bytes.ops;
 
-const
-  { 编译期单源门禁：串/字节零拷贝单源为 bytes.ops（BYTES_OPS_SINGLE_SOURCE），漂移编译期拦截 }
-  SQLITE_BASE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  SQLITE_BASE_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
-
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.base must reuse bytes.ops'}
-{$IFEND}
-
 { C5 安全缺省（文件库）：WAL + synchronous=NORMAL + 外键强制。
   逐字段显式赋值；仅在消费方显式传入 pragmas 重载时生效——
   不经此入口的连接保持 sqlite 原生缺省，行为零变化。 }

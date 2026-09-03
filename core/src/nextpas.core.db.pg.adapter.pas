@@ -50,10 +50,7 @@ uses
   nextpas.core.collections.lrucache.intf,
   nextpas.core.collections.lrucache.base;
 
-const
-  PG_ADAPTER_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 type
   TPgTranslateEntry = record { legacy: 保留类型兼容，实际已由 O(1) LRU (IPgTranslateCache) 替代，避免 O(Cap) 搬移 }
@@ -96,8 +93,8 @@ end;
 
 function PgTranslateGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline;
 begin
-  // perf: inline 指数扩容单源（MIN_GROW 4, *2，经 bytes.ops 单源 BytesCalcGrowCapWithMin），64 容量下摊还 O(1) 零搬移放大，单 Move 零拷贝；legacy 保留（O(1) LRU 后不再用于翻译缓存）
-  Result := BytesCalcGrowCapWithMin(AOld, ARequired, 4);
+  // perf: inline 指数扩容单源（MIN_GROW 4, *2，经 bytes.ops 单源 BytesGrowCapacityWithMin），64 容量下摊还 O(1) 零搬移放大，单 Move 零拷贝；legacy 保留（O(1) LRU 后不再用于翻译缓存）
+  Result := BytesGrowCapacityWithMin(AOld, ARequired, 4);
 end;
 
 function PgTransHash(const AKey: string; AData: Pointer): UInt64; inline;

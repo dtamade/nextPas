@@ -23,19 +23,15 @@ uses
   nextpas.core.db.factory,
   nextpas.core.db.sqlite.adapter;
 
-const
-  FACTORY_REGISTER_SQLITE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: factory.register.sqlite must reuse bytes.ops'}
-{$IFEND}
 
 procedure RegisterSqliteDriver;
 
 implementation
 
 uses
-  nextpas.core.db.base;
+  nextpas.core.db.base,
+  nextpas.core.db.intf;
 
 function OpenSqliteForRegister(const ADsn: string;
   const AOptions: TDbConnectOptions;

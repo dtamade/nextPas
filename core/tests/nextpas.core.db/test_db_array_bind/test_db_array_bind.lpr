@@ -27,7 +27,9 @@ uses
   nextpas.core.base,
   nextpas.core.db,
   nextpas.core.db.base,
-  nextpas.core.db.intf;
+  nextpas.core.db.intf,
+  nextpas.core.db.factory.register.sqlite,
+  nextpas.core.db.factory.register.pg;
 
 type
   { fail-fast 用例种类 }
@@ -695,6 +697,7 @@ begin
 end;
 
 begin
+  RegisterSqliteDriver;
   GPgConn := GetEnvironmentVariable('NEXTPAS_PG_TEST_CONN');
   T := TTestSuite.Create('nextpas.core.db.array.bind');
   T.Test('sqlite honest absence', @TestSqliteHonestAbsence);

@@ -43,9 +43,6 @@ uses
   nextpas.core.db.sqlite.ffi,
   nextpas.core.db.sqlite.adapter.observe;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter.tx must reuse bytes.ops'}
-{$IFEND}
 
 constructor TSqliteTx.Create(ADb: TSqliteDb);
 begin

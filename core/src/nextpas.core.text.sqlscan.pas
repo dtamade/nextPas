@@ -93,11 +93,6 @@ type
     ssmCount,     { 零输出，原始编号入槽（供取最大） }
     ssmDecorate); { 保形回显 + 命中原位追加后缀 }
 
-const
-  { 编译期单源门禁：串/字节零拷贝单源为 bytes.ops（BYTES_OPS_SINGLE_SOURCE），
-    本单元零拷贝 Move 语义与 bytes.ops 单源一致。 }
-  TEXT_SQLSCAN_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-
 {** 单遍引擎：四消费面共享的唯一状态机副本。词素分派与五个
     被替换实现逐分支一致（含 '-' 无论是否起注释都回显、块注
    释起始 '/' 不落 builder 由下一轮带出等细节）。

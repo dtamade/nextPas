@@ -31,9 +31,6 @@ uses
   nextpas.core.db.sqlite.adapter.observe,
   nextpas.core.db.sqlite.adapter.pragmas;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter.factory must reuse bytes.ops'}
-{$IFEND}
 
 function NewSqliteDb(const APath: string; const AOptions: TDbConnectOptions;
   const APragmas: TDbSqlitePragmas): TSqliteDb;

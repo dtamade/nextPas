@@ -166,6 +166,12 @@ end;
 
 procedure WithTransaction(const AConn: IDbConnection; const ABody: TDbConnProc);
 begin
+  { nil 先判：包装闭包恒非 nil，延后会绕过 RunTransaction 的回调守卫致 AV。判序与 RunTransaction 一致（先连接后回调）。 }
+  if AConn = nil then
+    raise EDbError.CreateSimple(dbkUnknown,
+      'WithTransaction on a nil connection');
+  if ABody = nil then
+    raise EDbError.CreateSimple(AConn.Kind, 'nil transaction callback');
   { 包装闭包只捕获 ABody（调用方所给参数体），不捕获连接——租约
     随本语句结束归还（B13）。 }
   RunTransaction(AConn,
@@ -216,6 +222,12 @@ end;
 procedure WithTransactionRetry(const AConn: IDbConnection;
   const ABody: TDbConnProc; const APolicy: TDbRetryPolicy);
 begin
+  { nil 先判：同 WithTransaction/ABody 重载，包装闭包恒非 nil 会绕过守卫致 AV。 }
+  if AConn = nil then
+    raise EDbError.CreateSimple(dbkUnknown,
+      'WithTransaction on a nil connection');
+  if ABody = nil then
+    raise EDbError.CreateSimple(AConn.Kind, 'nil transaction callback');
   { 包装闭包生命周期 = 本例程 = 重试循环全程：租约最迟在重试结束
     归还，语义正确（B13）。零参字面量只匹配 TDbTxProc 重载。 }
   WithTransactionRetry(AConn,

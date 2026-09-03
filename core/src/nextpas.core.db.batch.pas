@@ -17,11 +17,8 @@ uses
   nextpas.core.bytes.ops;
 
 const
-  BATCH_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  BATCH_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
   DB_BLOB_STREAM_THRESHOLD = 65536; { §2.9 大对象流阈值，命名常量语义单源，bytes.ops 单源 inline 零拷贝，fail-closed }
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 { ---- 能力探测统一面（inline 薄转发，零拷贝；capprobe/intf 单源互证，batch 仅统一入口不自建成矩阵） ---- }
 { 单源：SupportsBulkCopy 等布尔与 IDbBulkCopy 等接口存在性由 intf/capprobe 单源定义（ProbeSupportsBulkCopy/Capabilities），batch 仅 inline 转发；API 面 5+4 薄转发为诚实分面收口，已与 capprobe 双处单源索引互证，零重复实现。 }

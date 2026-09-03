@@ -90,14 +90,12 @@ implementation
 uses
   nextpas.core.bytes.ops,
   nextpas.core.text.conv,
+  nextpas.core.text.ansi,
   nextpas.core.text.number,
   nextpas.core.db.err,
   nextpas.core.db.dm.ffi,
   nextpas.core.db.dm.adapter.common;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db.dm.adapter.query must reuse bytes.ops'}
-{$IFEND}
 
 constructor TDmStmtHolder.Create(AStmt: TDmStmt);
 begin
@@ -163,7 +161,7 @@ begin
   LCode := dpi_create_stmt(FConn, @FStmt);
   CheckDpi(LCode, FConn, DPI_HANDLE_DBC);
   LStr := TranslatePlaceholders(FSql);
-  LSql := nextpas.core.bytes.ops.StringToAnsiString(LStr);
+  LSql := nextpas.core.text.ansi.StrToAnsi(LStr);
   LCode := dpi_prepare(FStmt, PAnsiChar(LSql), Length(LSql));
   if LCode <> DPI_SUCCESS then
   begin
@@ -203,7 +201,7 @@ begin
     SetLength(FParamIsNull, AIndex);
     SetLength(FIsNullInt, AIndex);
   end;
-  FParamAnsi[AIndex-1] := nextpas.core.bytes.ops.StringToAnsiString(AValue);
+  FParamAnsi[AIndex-1] := nextpas.core.text.ansi.StrToAnsi(AValue);
   FParamIsNull[AIndex-1] := False;
 end;
 
@@ -222,8 +220,8 @@ begin
   LLen := nextpas.core.text.number.IntToBuffer(AValue, @LBuf[0]);
   // perf: not inline per red line 1 (Move(LBuf[0]) 索引元素作 untyped 源参禁 inline，避免常量传播污染与 I-Cache 复制膨胀)；
   // Schubfach 栈缓冲→Ansi 单 Move 零拷贝复用（bytes.ops 单源 BYTES_OPS_SINGLE_SOURCE）；批量路径单次堆分配（AnsiEnsureCapacity 复用 Cap + 单 Move），消除双倍堆分配
-  nextpas.core.bytes.ops.AnsiEnsureCapacity(FParamAnsi[AIndex-1], SizeUInt(LLen));
-  nextpas.core.bytes.ops.AnsiSetLogicalLenNoRealloc(FParamAnsi[AIndex-1], SizeUInt(LLen));
+  nextpas.core.text.ansi.AnsiEnsureCapacity(FParamAnsi[AIndex-1], SizeUInt(LLen));
+  nextpas.core.text.ansi.AnsiSetLogicalLenNoRealloc(FParamAnsi[AIndex-1], SizeUInt(LLen));
   if LLen > 0 then
     Move(LBuf[0], PAnsiChar(FParamAnsi[AIndex-1])^, SizeUInt(LLen));
   FParamIsNull[AIndex-1] := False;
@@ -243,8 +241,8 @@ begin
   end;
   LLen := nextpas.core.text.number.FloatToBuffer(AValue, @LBuf[0]);
   // perf: not inline per red line 1 (Move(LBuf[0]) 索引元素作 untyped 源参禁 inline)；Schubfach 栈缓冲→Ansi 单 Move 零拷贝复用（bytes.ops 单源）；批量路径单次堆分配复用，消除双倍分配
-  nextpas.core.bytes.ops.AnsiEnsureCapacity(FParamAnsi[AIndex-1], SizeUInt(LLen));
-  nextpas.core.bytes.ops.AnsiSetLogicalLenNoRealloc(FParamAnsi[AIndex-1], SizeUInt(LLen));
+  nextpas.core.text.ansi.AnsiEnsureCapacity(FParamAnsi[AIndex-1], SizeUInt(LLen));
+  nextpas.core.text.ansi.AnsiSetLogicalLenNoRealloc(FParamAnsi[AIndex-1], SizeUInt(LLen));
   if LLen > 0 then
     Move(LBuf[0], PAnsiChar(FParamAnsi[AIndex-1])^, SizeUInt(LLen));
   FParamIsNull[AIndex-1] := False;
@@ -263,8 +261,8 @@ begin
     SetLength(FIsNullInt, AIndex);
   end;
   LLen := SizeUInt(Length(AValue));
-  nextpas.core.bytes.ops.AnsiEnsureCapacity(FParamAnsi[AIndex-1], LLen);
-  nextpas.core.bytes.ops.AnsiSetLogicalLenNoRealloc(FParamAnsi[AIndex-1], LLen);
+  nextpas.core.text.ansi.AnsiEnsureCapacity(FParamAnsi[AIndex-1], LLen);
+  nextpas.core.text.ansi.AnsiSetLogicalLenNoRealloc(FParamAnsi[AIndex-1], LLen);
   if LLen > 0 then
     Move(AValue[0], PAnsiChar(FParamAnsi[AIndex-1])^, LLen);
   FParamIsNull[AIndex-1] := False;
@@ -378,13 +376,13 @@ begin
     else
       Exit(0);
   end;
-  nextpas.core.bytes.ops.AnsiEnsureCapacity(FFetchAnsi, SizeUInt(LLen)+1);
-  nextpas.core.bytes.ops.AnsiSetLogicalLenNoRealloc(FFetchAnsi, SizeUInt(LLen));
+  nextpas.core.text.ansi.AnsiEnsureCapacity(FFetchAnsi, SizeUInt(LLen)+1);
+  nextpas.core.text.ansi.AnsiSetLogicalLenNoRealloc(FFetchAnsi, SizeUInt(LLen));
   LLen := 0;
   dpi_get_data(FStmt, AIndex, DPI_TYPE_VARCHAR, PAnsiChar(FFetchAnsi), Length(FFetchAnsi)+1, @LLen);
   if LLen < 0 then Exit(0);
   if SizeUInt(LLen) < SizeUInt(Length(FFetchAnsi)) then
-    nextpas.core.bytes.ops.AnsiSetLogicalLenNoRealloc(FFetchAnsi, SizeUInt(LLen));
+    nextpas.core.text.ansi.AnsiSetLogicalLenNoRealloc(FFetchAnsi, SizeUInt(LLen));
   if nextpas.core.text.number.ParseInt64(PAnsiChar(FFetchAnsi), SizeUInt(Length(FFetchAnsi)), LV) then
     Result := LV
   else
@@ -408,13 +406,13 @@ begin
     else
       Exit(0);
   end;
-  nextpas.core.bytes.ops.AnsiEnsureCapacity(FFetchAnsi, SizeUInt(LLen)+1);
-  nextpas.core.bytes.ops.AnsiSetLogicalLenNoRealloc(FFetchAnsi, SizeUInt(LLen));
+  nextpas.core.text.ansi.AnsiEnsureCapacity(FFetchAnsi, SizeUInt(LLen)+1);
+  nextpas.core.text.ansi.AnsiSetLogicalLenNoRealloc(FFetchAnsi, SizeUInt(LLen));
   LLen := 0;
   dpi_get_data(FStmt, AIndex, DPI_TYPE_VARCHAR, PAnsiChar(FFetchAnsi), Length(FFetchAnsi)+1, @LLen);
   if LLen < 0 then Exit(0);
   if SizeUInt(LLen) < SizeUInt(Length(FFetchAnsi)) then
-    nextpas.core.bytes.ops.AnsiSetLogicalLenNoRealloc(FFetchAnsi, SizeUInt(LLen));
+    nextpas.core.text.ansi.AnsiSetLogicalLenNoRealloc(FFetchAnsi, SizeUInt(LLen));
   if nextpas.core.text.number.ParseDouble(PAnsiChar(FFetchAnsi), SizeUInt(Length(FFetchAnsi)), LV) then
     Result := LV
   else
@@ -426,7 +424,7 @@ var
   Buf: array[0..4095] of AnsiChar; Len: Integer;
   LRem: Integer;
 begin
-  // perf: not inline per red line 1 (Move(Buf[0]) indexed untyped)；小文本栈4K单Move零拷贝+大文本单次分配流式直写Result零拷贝复用（bytes.ops 单源 BYTES_OPS_SINGLE_SOURCE，垂直与 AnsiEnsureCapacity 同源 BytesCalcGrowCap，去 AnsiString 中间物化与 AnsiPtrToStr 扫描，128KB+单往返 amortized，首片4K复用零二次往返重传，inline 薄转发零 I-Cache 膨胀）
+  // perf: not inline per red line 1 (Move(Buf[0]) indexed untyped)；小文本栈4K单Move零拷贝+大文本单次分配流式直写Result零拷贝复用（bytes.ops 单源 BYTES_OPS_SINGLE_SOURCE，垂直与 AnsiEnsureCapacity 同源 BytesGrowCapacity，去 AnsiString 中间物化与 AnsiPtrToStr 扫描，128KB+单往返 amortized，首片4K复用零二次往返重传，inline 薄转发零 I-Cache 膨胀）
   Buf[0] := #0; Len := 0;
   dpi_get_data(FStmt, AIndex, DPI_TYPE_VARCHAR, @Buf[0], SizeOf(Buf), @Len);
   if Len < 0 then Exit('');
@@ -437,9 +435,9 @@ begin
       Move(Buf[0], Result[1], SizeUInt(Len));
     Exit;
   end;
-  // 大字段：首片4K已在Buf，单次 StringEnsureCapacity(BytesCalcGrowCap 几何扩容) 直写 Result 单 Move 复用，避免整串二次往返重传 bandwidth 2×；剩余尾片直写 Result 尾部，剩余语义/整值重取语义双兼容
-  nextpas.core.bytes.ops.StringEnsureCapacity(Result, SizeUInt(Len));
-  nextpas.core.bytes.ops.StringSetLengthNoRealloc(Result, SizeUInt(Len));
+  // 大字段：首片4K已在Buf，单次 StringEnsureCapacity(BytesGrowCapacity 几何扩容) 直写 Result 单 Move 复用，避免整串二次往返重传 bandwidth 2×；剩余尾片直写 Result 尾部，剩余语义/整值重取语义双兼容
+  nextpas.core.text.ansi.StringEnsureCapacity(Result, SizeUInt(Len));
+  nextpas.core.text.ansi.StringSetLengthNoRealloc(Result, SizeUInt(Len));
   Move(Buf[0], Result[1], SizeOf(Buf));
   LRem := Len - SizeOf(Buf);
   if LRem <= 0 then Exit;
@@ -451,29 +449,29 @@ begin
   begin
     if SizeUInt(Len) > SizeUInt(Length(Result)) then
     begin
-      nextpas.core.bytes.ops.StringEnsureCapacity(Result, SizeUInt(Len));
-      nextpas.core.bytes.ops.StringSetLengthNoRealloc(Result, SizeUInt(Len));
+      nextpas.core.text.ansi.StringEnsureCapacity(Result, SizeUInt(Len));
+      nextpas.core.text.ansi.StringSetLengthNoRealloc(Result, SizeUInt(Len));
     end;
     Len := 0;
     dpi_get_data(FStmt, AIndex, DPI_TYPE_VARCHAR, PAnsiChar(Result), Length(Result)+1, @Len);
     if Len < 0 then Exit('');
     if SizeUInt(Len) < SizeUInt(Length(Result)) then
-      nextpas.core.bytes.ops.StringSetLengthNoRealloc(Result, SizeUInt(Len))
+      nextpas.core.text.ansi.StringSetLengthNoRealloc(Result, SizeUInt(Len))
     else if Len > Length(Result) then
     begin
-      // 极端截断：几何扩容重试（amortized BytesCalcGrowCap 单源，128KB+单往返）
-      nextpas.core.bytes.ops.StringEnsureCapacity(Result, SizeUInt(Len));
-      nextpas.core.bytes.ops.StringSetLengthNoRealloc(Result, SizeUInt(Len));
+      // 极端截断：几何扩容重试（amortized BytesGrowCapacity 单源，128KB+单往返）
+      nextpas.core.text.ansi.StringEnsureCapacity(Result, SizeUInt(Len));
+      nextpas.core.text.ansi.StringSetLengthNoRealloc(Result, SizeUInt(Len));
       Len := 0;
       dpi_get_data(FStmt, AIndex, DPI_TYPE_VARCHAR, PAnsiChar(Result), Length(Result)+1, @Len);
       if Len < 0 then Exit('');
       if SizeUInt(Len) < SizeUInt(Length(Result)) then
-        nextpas.core.bytes.ops.StringSetLengthNoRealloc(Result, SizeUInt(Len));
+        nextpas.core.text.ansi.StringSetLengthNoRealloc(Result, SizeUInt(Len));
     end;
     Exit;
   end;
   if SizeUInt(Len) < SizeUInt(LRem) then
-    nextpas.core.bytes.ops.StringSetLengthNoRealloc(Result, SizeUInt(SizeOf(Buf) + Len));
+    nextpas.core.text.ansi.StringSetLengthNoRealloc(Result, SizeUInt(SizeOf(Buf) + Len));
   // 剩余语义下 Len==LRem 时已完整，无需二次整串往返
 end;
 

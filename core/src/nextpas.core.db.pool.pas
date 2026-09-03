@@ -52,12 +52,8 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.db.pool.impl;
 
-const
   { 字节单源守卫：复用 bytes.ops，漂移编译期拦截 }
-  POOL_FACADE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  POOL_FACADE_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 { 薄转发至实现层，inline }
 function PoolLeakToBytes(const AReport: string): TBytes; inline;

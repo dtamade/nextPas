@@ -16,10 +16,7 @@ uses
   nextpas.core.db.pool.idle,
   nextpas.core.db.pool.leak;
 
-const
-  POOL_STATE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 type
   { 池状态容器：Idle 热队 + Outstanding 簿记 + Pending/阈值节流聚合单源（sched 单核唯一操作面，impl 仅持此容器） }

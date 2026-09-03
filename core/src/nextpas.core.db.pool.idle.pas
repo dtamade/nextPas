@@ -3,7 +3,7 @@ unit nextpas.core.db.pool.idle;
 {** @desc db.pool 空闲队列子模块（L2 基础设施，CONTRACT §2.7）。
        职责：LIFO 热队、惰性驱逐、探活节流判断与容量增长。
        归属：idle 拥有 TPoolIdleEntry 与队列操作，impl 仅薄委托；
-       复用 bytes.ops 单源（PoolGrowCap 经 BytesCalcGrowCapWithMin 单 Move 零拷贝），性能 inline 热路径零拷贝。 *}
+       复用 bytes.ops 单源（PoolGrowCap 经 BytesGrowCapacityWithMin 单 Move 零拷贝），性能 inline 热路径零拷贝。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -16,10 +16,7 @@ uses
   nextpas.core.db.intf,
   nextpas.core.db.pool.base;
 
-const
-  POOL_IDLE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 type
   TPoolIdleEntry = record
@@ -48,7 +45,7 @@ implementation
 
 function PoolIdleGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline;
 begin
-  Result := BytesCalcGrowCapWithMin(AOld, ARequired, 4);
+  Result := BytesGrowCapacityWithMin(AOld, ARequired, 4);
 end;
 
 function PoolStale(const ACreatedTick, ANow: QWord; const APolicy: TDbPoolPolicy): Boolean; inline;

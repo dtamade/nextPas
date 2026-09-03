@@ -23,9 +23,6 @@ uses
   nextpas.core.text.utils,
   nextpas.core.text.conv;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: billing must reuse bytes.ops'}
-{$IFEND}
 
 function BillingNormalizeCode(const ACode: string): string; inline;
 begin

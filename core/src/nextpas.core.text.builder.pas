@@ -68,7 +68,7 @@ type
 
 { Unified TBuf capacity estimate — single source via bytes.ops BuilderCap* (owner=bytes.ops, L1 text.builder re-export).
   Sinks dispersed `Length(A)+Length(B)+N` / `Join total+delim*(n-1)` hand estimates into one inline helper;
-  growth itself already via BytesCalcGrowCap. inline zero-cost, overflow fail-closed. }
+  growth itself already via BytesGrowCapacity. inline zero-cost, overflow fail-closed. }
 function TBufEstimateForTwo(const ALen1, ALen2: SizeUInt): SizeUInt; inline;
 function TBufEstimateForJoin(const ATotal, ACount, ADelimLen: SizeUInt): SizeUInt; inline;
 function TBufEstimateWithMin(const AEstimate: SizeUInt; const AMin: SizeUInt = 256): SizeUInt; inline;

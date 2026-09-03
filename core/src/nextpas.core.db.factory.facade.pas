@@ -69,15 +69,8 @@ uses
   nextpas.core.db.factory.facade.dm,
   nextpas.core.db.factory.facade.pool;
 
-const
-  FACTORY_FACADE_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  FACTORY_FACADE_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: factory.facade must reuse bytes.ops'}
-{$IFEND}
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 { ---- factory facade aggregator: inline thin forward to per-backend single-source units, zero adapter hard link ---- }
 { Perf inline/bytes.ops single-source single Move zero-copy; stability interface refcount auto, pool lease try..finally. See CONTRACT §2.14. }

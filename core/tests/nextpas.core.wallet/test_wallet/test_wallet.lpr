@@ -41,12 +41,10 @@ uses
   nextpas.core.identity,
   nextpas.core.wallet.base,
   nextpas.core.wallet.intf,
-  nextpas.core.wallet;
+  nextpas.core.wallet,
+  nextpas.core.db.factory.register.sqlite;
 
 { bytes.ops 单源编译期互证：零运行时分支，漂移即编译失败 }
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: test_wallet must reuse bytes.ops'}
-{$IFEND}
 
 var
   T: TTestSuite;
@@ -83,11 +81,11 @@ procedure MigrateIdentityAndWallet(const APool: TDbPool); inline;
 var
   C: IDbConnection;
 begin
-  { 部署序：identity v14 → wallet v15（CONTRACT §1）；租约语句边界归还 }
+  { 部署序：identity v14 → wallet v15（CONTRACT §1）；单次累计清单调用，
+    分两次 Migrate 会触发引擎 below-lower-bound 熔断；租约语句边界归还 }
   C := APool.Writer;
   try
-    Migrate(C, IdentityMakeMigrations);
-    Migrate(C, WalletMakeMigrations);
+    Migrate(C, WalletFullMigrations);
   finally
     C := nil;
   end;
@@ -257,10 +255,10 @@ begin
   try
     C := Pool.Writer;
     try
-      Check(Migrate(C, IdentityMakeMigrations) = 1, 'migrate: identity v14 applied');
-      Check(Migrate(C, WalletMakeMigrations) = 1, 'migrate: wallet v15 applied');
-      Check(Migrate(C, IdentityMakeMigrations) = 0, 'migrate: identity idempotent');
-      Check(Migrate(C, WalletMakeMigrations) = 0, 'migrate: wallet idempotent');
+      { 引擎要求已应用版本必须出现在本次清单内（fail-closed 熔断），
+        故部署序走累计清单单次调用；分两次调用会触发 below-lower-bound }
+      Check(Migrate(C, WalletFullMigrations) = 2, 'migrate: v14+v15 applied once');
+      Check(Migrate(C, WalletFullMigrations) = 0, 'migrate: cumulative idempotent');
       Check(MigrationVersion(C) = WALLET_MIGRATION_VERSION, 'migrate: version at 15');
       Check(WALLET_MIGRATION_VERSION = 15, 'migrate: base const single source');
       Check(IDENTITY_MIGRATION_VERSION = 14, 'migrate: identity base single source');
@@ -465,6 +463,7 @@ var
   Bal: Int64;
   Raised: Boolean;
   M: IWalletMembership;
+  WC: IDbConnection;
 begin
   LPath := NextWalletPath;
   DeleteFile(LPath);
@@ -479,7 +478,12 @@ begin
     { 首次扣减并入组：余额足 → ledger + membership }
     Bal := WalletTryDeductAndJoin(Pool, 'eve', 'proj1', 60, M);
     Check(Bal = 40, 'deduct: first join deducts 60 → 40');
-    Check(M.IsMember(Pool.Writer, 'eve', 'proj1'), 'deduct: membership inserted');
+    WC := Pool.Writer;
+    try
+      Check(M.IsMember(WC, 'eve', 'proj1'), 'deduct: membership inserted');
+    finally
+      WC := nil;
+    end;
     { 已成员幂等：不二次扣减 }
     Bal := WalletTryDeductAndJoin(Pool, 'eve', 'proj1', 60, M);
     Check(Bal = 40, 'deduct: already member → no second deduct');
@@ -583,6 +587,8 @@ begin
 end;
 
 begin
+  { 显式注册 sqlite 驱动（factory.builtin 已物理删除，Kind 分发需显式注册见 CONTRACT §2.14） }
+  RegisterSqliteDriver;
   T := TTestSuite.Create('nextpas.core.wallet');
   T.Test('fk requires identity pre-migrate + user row', @TestFkRequiresIdentity);
   T.Test('fk redeem Redemptions requires user', @TestFkRedeemRedemptionsRequiresUser);

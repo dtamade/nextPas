@@ -3,7 +3,7 @@ unit nextpas.core.db.pool.leak;
 {** @desc db.pool 泄漏检测与簿记子模块（L2 基础设施，CONTRACT §2.7）。
        职责：Outstanding 租约簿记、到期扫描、快照格式化与 pending 积压。
        归属：leak 拥有 TPoolOutstanding/TPoolLeakSnap/TPoolLeakSnaps 与全部簿记原语，impl 仅薄委托；
-       复用 bytes.ops 单源（GrowCap 经 BytesCalcGrowCapWithMin 单源；格式化冷路径纯串拼接单次分配零 bytes 双转换/BytesAppend）与统一日志质感（ILogger.Warn 零 StdErr 裸写），性能 inline 零拷贝。 *}
+       复用 bytes.ops 单源（GrowCap 经 BytesGrowCapacityWithMin 单源；格式化冷路径纯串拼接单次分配零 bytes 双转换/BytesAppend）与统一日志质感（ILogger.Warn 零 StdErr 裸写），性能 inline 零拷贝。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -16,10 +16,7 @@ uses
   nextpas.core.log.intf,
   nextpas.core.db.pool.base;
 
-const
-  POOL_LEAK_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 type
   TPoolOutstanding = record
@@ -79,7 +76,7 @@ uses
 
 function PoolLeakGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline;
 begin
-  Result := BytesCalcGrowCapWithMin(AOld, ARequired, 4);
+  Result := BytesGrowCapacityWithMin(AOld, ARequired, 4);
 end;
 
 procedure PoolLeaseRegisterLocked(var AOutstanding: TPoolOutstandingArray; var ACount: Integer;

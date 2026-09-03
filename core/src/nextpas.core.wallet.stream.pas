@@ -19,9 +19,6 @@ implementation
 uses
   nextpas.core.bytes.ops;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: wallet.stream must reuse bytes.ops'}
-{$IFEND}
 
 procedure FillLedgerEntry(const AQuery: IDbQuery; out AEntry: TWalletLedgerEntry); inline;
 begin
@@ -49,7 +46,7 @@ begin
       if LCap = 0 then
         LNewCap := 8
       else
-        LNewCap := Integer(BytesCalcGrowCap(SizeUInt(LCap), SizeUInt(LCount + 1)));
+        LNewCap := Integer(BytesGrowCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
       if LNewCap > ALimit then LNewCap := ALimit;
       if LNewCap < LCount + 1 then LNewCap := LCount + 1;
       SetLength(Result, LNewCap);

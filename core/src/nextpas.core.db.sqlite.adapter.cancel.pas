@@ -36,9 +36,6 @@ uses
   nextpas.core.atomic,
   nextpas.core.db.sqlite.ffi;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter.cancel must reuse bytes.ops'}
-{$IFEND}
 
 { progress handler 桩：探测取消标志（非零=中断）。
   sqlite 在执行线程回调；RequestCancel 可从任意线程写标志。 }

@@ -79,11 +79,7 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.rwlock;
 
-const
-  FACTORY_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  FACTORY_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 type
   TDbDriverEntry = record

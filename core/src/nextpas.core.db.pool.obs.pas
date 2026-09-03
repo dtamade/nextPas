@@ -18,10 +18,7 @@ uses
   nextpas.core.db.pool.base,
   nextpas.core.db.pool.leak;
 
-const
-  POOL_OBS_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
 
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 { 安全点冲刷：扫描到期租约→格式化→积压→锁外回调，锁内零用户代码，inline 薄转发 }
 procedure PoolObsFlushSafePoint(var AOutstanding: array of TPoolOutstanding;

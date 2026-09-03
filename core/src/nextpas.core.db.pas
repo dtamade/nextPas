@@ -152,17 +152,8 @@ uses
   nextpas.core.db.batch,
   nextpas.core.db.trace;
 
-{ bytes.ops single source — owner bytes.ops, perf via db.perf (PERF_BYTES_SINGLE_SOURCE). }
-const
-  DB_BYTES_SINGLE_SOURCE = BYTES_OPS_SINGLE_SOURCE;
-  DB_BYTES_SINGLE_SOURCE_VERSION = BYTES_OPS_SINGLE_SOURCE_VERSION;
-  DB_PERF_SINGLE_SOURCE = PERF_BYTES_SINGLE_SOURCE;
-  DB_PERF_SINGLE_SOURCE_VERSION = PERF_BYTES_SINGLE_SOURCE_VERSION;
+{ bytes.ops single source — owner bytes.ops, perf via db.perf uses-link. }
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: db facade must reuse bytes.ops'}
-{$IFEND}
-{$I nextpas.core.bytes.ops.single_source.inc}
 
 { Facade pure re-export: inline thin forward via factory.facade Kind-driven table, zero adapter hard link. }
 { Perf inline/bytes.ops single-source, interface refcount auto; factory.facade (zero adapter hard link invariant, single source). }

@@ -156,7 +156,8 @@ begin
   // perf: inline 薄转发，零拷贝接口引用计数自动归还，nil 安全；bytes.ops 单源由 trace 单元继承
   Result := nil;
   if AConn = nil then Exit;
-  Supports(AConn, IDbTraceControl, Result);
+  if AConn.QueryInterface(IDbTraceControl, Result) <> 0 then
+    Result := nil;
 end;
 
 function DbTraceSqlSummary(const ASql: string): string;

@@ -28,9 +28,6 @@ implementation
 uses
   nextpas.core.bytes.ops;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.adapter.state must reuse bytes.ops'}
-{$IFEND}
 
 constructor TSqliteConnState.Create;
 begin

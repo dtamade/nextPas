@@ -33,7 +33,9 @@ uses
   nextpas.core.db.base,
   nextpas.core.db.intf,
   nextpas.core.db.async,
-  nextpas.core.async.cancellation;
+  nextpas.core.async.cancellation,
+  nextpas.core.db.factory.register.sqlite,
+  nextpas.core.db.factory.register.pg;
 
 const
   { 中等时长递归 CTE：门禁节奏 ~0.5s，够取消窗口也够析构等待 }
@@ -65,10 +67,11 @@ var
 begin
   LExec := NewSqliteExec(LConn);
   try
+    { 首轮显式预估强制异步（首轮未知保守同步零税下无预估默认同步）；短 INSERT 的异步往返由 worker 两次唤醒保证 IsDone 竞争窗口站在断言侧 }
     LH := LExec.Submit(procedure
       begin
         LConn.Exec('INSERT INTO t VALUES (7)');
-      end);
+      end, 1000000);
     Check(not LH.IsDone, 'fresh handle not done');
     Check(LH.WaitFor(5000), 'roundtrip completes');
     Check(LH.IsDone, 'done after wait');
@@ -495,6 +498,7 @@ begin
 end;
 
 begin
+  RegisterSqliteDriver;
   GPgConn := GetEnvironmentVariable('NEXTPAS_PG_TEST_CONN');
   T := TTestSuite.Create('nextpas.core.db.async');
   T.Test('sqlite submit wait roundtrip', @TestRoundtrip);
