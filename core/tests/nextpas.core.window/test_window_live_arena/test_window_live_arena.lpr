@@ -7,13 +7,12 @@ uses
   {$ifdef unix}
   nextpas.core.thread.init,
   {$endif}
-  SysUtils,
   nextpas.core.test,
   nextpas.core.window.impl,
   nextpas.core.window.live.arena,
   nextpas.core.bytes.base,
   nextpas.core.stopwatch,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread, nextpas.core.text.conv;
 
 procedure TestPoolCapacity;
 var

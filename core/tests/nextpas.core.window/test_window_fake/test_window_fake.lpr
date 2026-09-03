@@ -5,7 +5,6 @@ program test_window_fake;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.window.base,

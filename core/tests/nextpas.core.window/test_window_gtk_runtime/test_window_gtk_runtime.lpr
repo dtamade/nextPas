@@ -6,12 +6,11 @@ program test_window_gtk_runtime;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.factory,
-  nextpas.core.window.gtk3;
+  nextpas.core.window.gtk3, nextpas.core.exception, nextpas.core.os.env;
 
 var
   GRequired: Boolean;

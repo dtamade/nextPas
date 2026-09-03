@@ -8,13 +8,12 @@ uses
   {$ifdef unix}
   nextpas.core.thread.init,
   {$endif}
-  SysUtils,
   nextpas.core.test,
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.fake,
   nextpas.core.window.factory,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread, nextpas.core.text.conv;
 
 var
   GCounter: Integer = 0;

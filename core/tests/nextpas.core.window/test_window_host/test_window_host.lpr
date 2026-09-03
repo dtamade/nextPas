@@ -10,12 +10,11 @@ program test_window_host;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.fake,
-  nextpas.core.window.factory;
+  nextpas.core.window.factory, nextpas.core.base.utils;
 
 var
   GLast: TWindowEvent;

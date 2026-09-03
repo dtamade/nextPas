@@ -4,12 +4,11 @@ program test_window_qt_runtime;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.factory,
-  nextpas.core.window.qt;
+  nextpas.core.window.qt, nextpas.core.exception, nextpas.core.os.env;
 
 procedure Skip(const AMsg: string);
 begin

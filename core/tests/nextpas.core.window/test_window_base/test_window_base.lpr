@@ -5,11 +5,10 @@ program test_window_base;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.window.base,
-  nextpas.core.window.impl;
+  nextpas.core.window.impl, nextpas.core.exception;
 
 procedure TestDefaultsSnapshot;
 var

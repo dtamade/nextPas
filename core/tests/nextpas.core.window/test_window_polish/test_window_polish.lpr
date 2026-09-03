@@ -7,7 +7,6 @@ program test_window_polish;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.window.base,
   nextpas.core.window.intf,
@@ -16,7 +15,7 @@ uses
   nextpas.core.window.gtk3,
   nextpas.core.window.sdl2,
   nextpas.core.text.ansi,
-  nextpas.core.diagnostics;
+  nextpas.core.diagnostics, nextpas.core.base.utils, nextpas.core.text, nextpas.core.text.conv;
 
 procedure TestFactoryLifecycleViaShippedAPI;
 var
@@ -89,7 +88,7 @@ begin
     if K = wkFake then
       Check(Av, 'wkFake must be available');
     // probing must not crash even when unavailable
-    Check(True, 'probing ' + IntToStr(Ord(K)) + ' no crash, avail=' + BoolToStr(Av, True));
+    Check(True, 'probing ' + IntToStr(Ord(K)) + ' no crash, avail=' + BoolToStr(Av));
   end;
   Diag := '';
   try Diag := WindowBackendDiagnostics; except Check(False, 'diagnostics crashed'); end;

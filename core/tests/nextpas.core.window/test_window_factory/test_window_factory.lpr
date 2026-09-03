@@ -7,8 +7,6 @@ program test_window_factory;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  TypInfo,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.window.base,
@@ -28,7 +26,7 @@ uses
   nextpas.core.window.android,
   nextpas.core.window.android.loader,
   nextpas.core.window.uikit,
-  nextpas.core.window.uikit.loader;
+  nextpas.core.window.uikit.loader, nextpas.core.exception;
 
 procedure TestBackendAvailabilityFacts;
 var
