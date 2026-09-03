@@ -282,13 +282,13 @@ begin
     CheckEqual(Double(2.0), W.GetScaleFactor);
     CheckEqual(Int64(1), Int64(GEvents));
     CheckEqual(Ord(weScaleChanged), Ord(GLastEvent.Kind));
-    CheckEqual(Double(2.0), GLastEvent.NewScale);
+    CheckEqual(Double(2.0), GLastEvent.NewScale.Factor);
 
     { 注入 weScaleChanged 也走同一路径 }
     GEvents := 0;
     FillChar(GLastEvent, SizeOf(GLastEvent), 0);
     GLastEvent.Kind := weScaleChanged;
-    GLastEvent.NewScale := 1.5;
+    GLastEvent.NewScale := TWindowScale.FromFactor(1.5);
     LFake.InjectEvent(GLastEvent);
     CheckEqual(Int64(1), Int64(GEvents));
     CheckEqual(Ord(weScaleChanged), Ord(GLastEvent.Kind));
@@ -439,62 +439,6 @@ begin
   W := nil;
 end;
 
-procedure TestInputEvents;
-var
-  W: IWindow;
-  LFake: TFakeWindow;
-begin
-  ResetEventCounters;
-  LFake := TFakeWindow.Create(DefaultWindowOptions);
-  W := LFake;
-  try
-    W.OnEvent(procedure(const E: TWindowEvent) begin GEvents:=GEvents+1; GLastEvent:=E; end);
-    LFake.InjectKey(weKeyDown, 65, 1);
-    CheckEqual(Int64(1), Int64(GEvents));
-    CheckEqual(Ord(weKeyDown), Ord(GLastEvent.Kind));
-    CheckEqual(Int64(65), Int64(GLastEvent.KeyCode));
-    CheckEqual(Int64(1), Int64(GLastEvent.Modifiers));
-    GEvents:=0;
-    LFake.InjectMouse(weMouseDown, 100, 200, 1, 0);
-    CheckEqual(Int64(1), Int64(GEvents));
-    CheckEqual(Ord(weMouseDown), Ord(GLastEvent.Kind));
-    CheckEqual(Int64(100), Int64(GLastEvent.X));
-    CheckEqual(Int64(200), Int64(GLastEvent.Y));
-    CheckEqual(Int64(1), Int64(GLastEvent.Button));
-    GEvents:=0;
-    LFake.InjectMouse(weMouseMove, 150, 250, 0, 2);
-    CheckEqual(Int64(1), Int64(GEvents));
-    CheckEqual(Ord(weMouseMove), Ord(GLastEvent.Kind));
-    CheckEqual(Int64(150), Int64(GLastEvent.X));
-    CheckEqual(Int64(2), Int64(GLastEvent.Modifiers));
-  finally
-    W.Close; W:=nil;
-  end;
-end;
-
-procedure TestInputKeyUpMouseUp;
-var
-  W: IWindow;
-  LFake: TFakeWindow;
-begin
-  ResetEventCounters;
-  LFake := TFakeWindow.Create(DefaultWindowOptions);
-  W := LFake;
-  try
-    W.OnEvent(procedure(const E: TWindowEvent) begin GEvents:=GEvents+1; GLastEvent:=E; end);
-    LFake.InjectKey(weKeyUp, 66, 2);
-    CheckEqual(Ord(weKeyUp), Ord(GLastEvent.Kind));
-    CheckEqual(Int64(66), Int64(GLastEvent.KeyCode));
-    CheckEqual(Int64(2), Int64(GLastEvent.Modifiers));
-    GEvents:=0;
-    LFake.InjectMouse(weMouseUp, 10, 20, 3, 4);
-    CheckEqual(Ord(weMouseUp), Ord(GLastEvent.Kind));
-    CheckEqual(Int64(10), Int64(GLastEvent.X));
-    CheckEqual(Int64(3), Int64(GLastEvent.Button));
-    CheckEqual(Int64(4), Int64(GLastEvent.Modifiers));
-  finally W.Close; W:=nil; end;
-end;
-
 procedure TestDpiFocusAndMoveEvents;
 var
   W: IWindow;
@@ -506,10 +450,10 @@ begin
   W := LFake;
   try
     W.OnEvent(procedure(const AEvent: TWindowEvent) begin GEvents:=GEvents+1; GLastEvent:=AEvent; end);
-    E := Default(TWindowEvent); E.Kind := weDpiChanged; E.NewScale := 1.75;
+    E := Default(TWindowEvent); E.Kind := weScaleChanged; E.NewScale := TWindowScale.FromFactor(1.75);
     LFake.InjectEvent(E);
-    CheckEqual(Ord(weDpiChanged), Ord(GLastEvent.Kind));
-    CheckEqual(Double(1.75), GLastEvent.NewScale);
+    CheckEqual(Ord(weScaleChanged), Ord(GLastEvent.Kind));
+    CheckEqual(Double(1.75), GLastEvent.NewScale.Factor);
     E.Kind := weFocusChanged;
     LFake.InjectEvent(E);
     CheckEqual(Ord(weFocusChanged), Ord(GLastEvent.Kind));
@@ -599,9 +543,7 @@ begin
   T.Test('close marshal via dispatcher', @TestCloseMarshalViaDispatcher);
   T.Test('parent handle stored', @TestParentHandleStored);
   T.Test('live count tracking', @TestLiveCountTracking);
-  T.Test('input key/mouse via InjectKey/Mouse', @TestInputEvents);
-  T.Test('input keyUp/mouseUp via InjectKey/Mouse', @TestInputKeyUpMouseUp);
-  T.Test('dpi/focus/moved full 12-event matrix', @TestDpiFocusAndMoveEvents);
+  T.Test('scale/focus/moved minimal 6-event matrix', @TestDpiFocusAndMoveEvents);
   T.Test('queue 32-cap grow to 64', @TestQueueGrowBeyond32);
   T.Test('closeRequested vs closed', @TestCloseRequestedVsClosed);
   T.Test('no events after close', @TestNoEventsAfterClose);

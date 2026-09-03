@@ -25,6 +25,9 @@ function TryLoadWindowWin32(out AInfo: TWindowWin32LoadInfo): Boolean;
 procedure UnloadWindowWin32;
 function WindowWin32LoadInfo: TWindowWin32LoadInfo;
 function WindowWin32IsLoaded: Boolean;
+const
+  WINDOW_WIN32_SONAMES = 'user32.dll|kernel32.dll';
+function WindowWin32Sonames: string; inline;
 
 implementation
 
@@ -169,6 +172,11 @@ end;
 function WindowWin32IsLoaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function WindowWin32Sonames: string; inline;
+begin
+  Result := WINDOW_WIN32_SONAMES;
 end;
 
 end.

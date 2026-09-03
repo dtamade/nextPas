@@ -78,7 +78,7 @@ begin
     H.HostScaleChanged(2.5);
     CheckEqual(Int64(1), Int64(GCount));
     CheckEqual(Ord(weScaleChanged), Ord(GLast.Kind));
-    CheckEqual(Double(2.5), GLast.NewScale);
+    CheckEqual(Double(2.5), GLast.NewScale.Factor);
     CheckEqual(Double(2.5), W.GetScaleFactor);
   finally
     W.Close;

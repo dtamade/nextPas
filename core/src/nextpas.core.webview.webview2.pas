@@ -598,7 +598,7 @@ begin
   if FClosed then Exit;
   case AEvent.Kind of
     weResized: UpdateControllerBounds;
-    weScaleChanged, weDpiChanged: DoScaleChanged(AEvent.NewScale);
+    weScaleChanged: DoScaleChanged(AEvent.NewScale.Factor);
     weClosed, weCloseRequested: HandleNativeDestroy;
   end;
 end;

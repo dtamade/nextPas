@@ -38,7 +38,7 @@
 
 ## 备选
 
-- `TWindowDispatcherBase` 抽取 ROI <1.5 且破坏全局隔离，决策保持独立（见 FINAL_ROADMAP F1 审计）。
+- `TWindowDispatcherBase` 已抽取至 `nextpas.core.window.dispatcher.base`（55 行基类收口 7 后端 120 行样板 ROI≈2.2，各后端仍持独立 `GQueue/GWaitEvent` 全局隔离，`DoWake` 虚派仅唤醒路径），见 FINAL_ROADMAP F1 复评。
 - `webview.gtk.win` 若经 `IWindow` 高阶抽象嵌入 WebKit 将强耦合生命周期，Raw 低阶壳为最小必要缝。
 
 ## 链接

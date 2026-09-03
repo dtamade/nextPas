@@ -42,10 +42,9 @@ begin
       case AEvent.Kind of
         weCloseRequested: WriteLn('[event] close requested');
         weResized: WriteLn('[event] resized ', AEvent.Width, 'x', AEvent.Height);
-        weScaleChanged: WriteLn('[event] scale ', AEvent.NewScale:0:2);
+        weScaleChanged: WriteLn('[event] scale ', AEvent.NewScale.Factor:0:2);
         weMoved: WriteLn('[event] moved ', AEvent.X, ',', AEvent.Y);
         weFocusChanged: WriteLn('[event] focus changed');
-        weDpiChanged: WriteLn('[event] dpi changed');
         weClosed: WriteLn('[event] closed');
       end;
     end);
@@ -61,7 +60,7 @@ begin
   if Supports(Win, IFakeSelfAccess) then
   begin
     E.Kind := weCloseRequested;
-    E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+    E.Width := TWindowPixel(0); E.Height := TWindowPixel(0); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
     TFakeWindow.FromWindow(Win).InjectEvent(E);
   end;
 

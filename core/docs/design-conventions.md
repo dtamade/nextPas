@@ -163,6 +163,8 @@ end.
   `platform.thread` 这类跨平台统一 API 默认不创建自己的 `*.ffi.pas`，而是消费
   `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
   owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
+- `window` 家族内共享设施（占用 `window.*` 但非独立公开模块）：范围 `window.live`/`queue`/`hash`/`dispatcher.base` 及其子 shard `live.arena`/`queue.base`/`ring`/`backpressure`（共 8 项，各 <150 行，`queue` 门面 <800）；`Public facade=no`，不经 `nextpas.core.window` 门面，仅 `window.*` 后端 `uses`（`hash→live`、`live.arena→live`、`queue.*→queue`）；守四件套 `base←impl`（`base` 纯数据类型，`impl` Owner 单源）与 L0-L3（L2→L1 `bytes.ops` 单源），边界由抽象与 `CONTRACT §1` + source-contract allowed-uses 守，不靠 `TWindowFamilyToken strict private` 特权豁免；`window.impl` 保留 transitional `TWindowFamilyToken`（`private` + inline 零拷贝 O(1) 兼容）仅过渡，`bytes.ops` 单源 `WindowGrowCapacity 0→32→2×` inline 零拷贝 O(1)均摊；`Clear`/`Finalize` 成对释放不丢；缺能力反哺 `bytes.ops` owner 单源。
+- `dialog` 等 8 项已落地四件套（`window.loop/chrome/input/view/dpi/event/constraints` + `dialog` L3）为 Owner-faithful 独立模块（`base←intf←impl←门面`，`bytes.ops` 单源 inline 零拷贝，不经 `window` 门面，见 `core/docs/window/CONTRACT.md §1/§7.1` 与 `core/docs/core-module-registry.md`）。
 - `nextpas.core.webview.intf` 唯一例外允许 `uses nextpas.core.window.intf` 以暴露 `IWindow`/`Window` has-a 组合面（L3→L2，M6 收口；仅 `window.intf`）+ `uses nextpas.core.text.view` 以暴露 `TStringView` 零拷贝视图（L3→L1 合法下向，`bytes.ops` 单源 `inline` 零堆分配，`utils` thin-forward `TrimLeftChar/CStrLen` 单源，`TryResolveView` 零拷贝热点，释放不丢），仍禁止 `window` 后端/bridge/factory/gtk/webview2/wk/vfs/mime，`base` 保持零 `uses window`，见 `core/docs/webview/CONTRACT.md` INV-4/§1 与 `tests/architecture/source_contracts/check_architecture_source_contracts.py --check webview` 门禁。
 - `nextpas.core.system` 根门面为 L0 例外：门面纯 re-export 范式下，L0 helpers（FreeAndNil/SafeFree/ZeroMem/FillMem/CopyMem/CompareMem/Supports、HTonN/NToHs/Var*）允许 `inline` 薄转发至 owner 单源（`nextpas.core.base.utils` / `nextpas.core.bytes.ops` / `nextpas.core.text.conv`，Move/FillChar 单一来源为 `nextpas.core.bytes.ops.BytesCopy/BytesZero` 零拷贝无分配），非自有实现；资源释放经 owner（FreeAndNil nil-then-Free）保证不丢，热点 `inline` 零拷贝，属受控 L0 例外，已由 `core/tests/nextpas.core.system/test_system_source_contracts` facade parser 与 source-contract 回归固化，详 `core/docs/system/README.md` Boundaries 与 `compatibility-facades.md`。
 - `tar` / `zip` / `archive` 等的 `*.common` 内部共享内核（类型级隔离·门面零 re-export，仅受信实现 `implementation uses` 可见，辅以 `CONTRACT` 机械门禁双重收敛；四件套外内部核形态，不属于四件套公共面）：仅供同模块 `*.reader`/`*.writer`/`*.fs`/`*.builder` 实现内复用，禁止门面 `nextpas.core.<module>` re-export 与门面外直引。
@@ -921,10 +923,18 @@ build/
 | `zip`        | ZIP 容器（store/deflate，Zip64，WinZip AES，沙盒化，central+EOCD，流式解析，`base` 单源安全谓词 + `common` DOS 互转 + `bytes.ops` 单源 `StringToBytes`/`SpanCompare` + 零拷贝 `PByte` 落盘 + `builder` 薄门面） |
 | `vfs`        | 只读虚拟文件树（memtree/embedded/os/sub + ETag/Decompress 装饰器门面） |
 | `metrics`    | 通用可观测（`METRICS_MAX_FRAME_BYTES` 阈值 + `MetricsOversizedCount/ExpandedSize` plain UInt64 计数单源，L3 `webview.metrics` thin-forward） |
-| `window`     | 窗口外壳 + surface（nextpas.core.window 家族；首个消费者 webview/gpu/directui/game888；11 后端含 fake；1.0 单源收口含 gtk3 Raw `WindowGtkRaw*` 12项，`bytes.ops VecGrowCapacity` 单源 inline 零拷贝，`try-finally` 资源释放不丢） |
+| `window`     | 窗口外壳 + surface（nextpas.core.window 家族；首个消费者 webview/gpu/directui/game888；11 后端含 fake；1.0 单源收口含 gtk3 Raw `WindowGtkRaw*` 12项，`bytes.ops VecGrowCapacity` 单源 inline 零拷贝，`try-finally` 资源释放不丢；允许 L0-L1 含 diagnostics/text/system.typinfo（factory 经 `GetEnumName` 枚举桥薄委托 registry/probe）+ `platform.dl` + 单向 L2 `gtk2/gtk3/gtk4/qt5pas/qt`，详见 `core-module-registry.md:102`） |
+| `window` shards | `window.live/queue/hash/dispatcher.base` + 子 shard `live.arena/queue.base/ring/backpressure`（共 8 项，家族内特权 `Public facade=no`，`window.impl` `TWindowFamilyToken`，各 <150 行/`queue`门面<800，`bytes.ops` 单源 inline 零拷贝） |
+| `gtk2`       | GTK2 绑定（`nextpas.core.gtk2`，dlopen `libgtk-x11-2.0.so.0`） |
+| `gtk3`       | GTK3 绑定（`nextpas.core.gtk3`，dlopen `libgtk-3.so.0`） |
+| `gtk4`       | GTK4 绑定（`nextpas.core.gtk4`，dlopen `libgtk-4.so.1`） |
+| `qt5pas`     | Qt5Pas 绑定（`nextpas.core.qt5pas`，dlopen `libQt5Pas.so.1`） |
+| `qt`         | Qt 绑定 via self-wrap C shim（`nextpas.core.qt`，dlopen `libnextpas-qt.so`） |
 | `git`        | Git/libgit2 后端（同层单向 `fs/compress/hash/zlib/checksum` 豁免，`native.zlib → compress + checksum.adler32` 复用 `bytes.ops` 单源、`inline`/零拷贝 `PByte+Len`） |
 | `zip`        | ZIP 归档（同层单向 `compress/fs/checksum`） |
 | `sevenz`     | 7z 归档（同层单向 `crypto/hash/compress`） |
+
+> 注：本表示例，层级以 `core/docs/core-module-registry.md` 为准；`window` L2 `ci-matrix`，8 shard L2 `source-contract` `Public facade=no` + `TWindowFamilyToken` 三重锁定，`gtk` 家族 L2，勿误判 L3。
 
 ### L3: 框架（只依赖 L0-L2）
 

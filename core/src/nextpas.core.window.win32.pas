@@ -5,7 +5,7 @@ unit nextpas.core.window.win32;
        与 message-only 窗口驱动的 IWindowDispatcher（PostMessage）。
 
        关键语义：
-       - GWLP_USERDATA 携带 Self 指针，WndProc 按 handle 路由事件
+       - WNDCLASSEX.lpfnWndProc 直绑 GlobalWndProc（类级），GWLP_USERDATA 携带 Self 指针按 handle 路由，消运行时 SetWindowLongPtr GWLP_WNDPROC 覆写竞态
        - WM_CLOSE→weCloseRequested（不销毁），WM_SIZE/WM_MOVE→几何，
          WM_SETFOCUS/WM_KILLFOCUS→焦点，WM_DPICHANGED→weScaleChanged
        - WM_GETMINMAXINFO 约束 Min/Max（创建期选项）
@@ -26,6 +26,7 @@ function CreateWindowWin32(const AOptions: TWindowOptions): IWindow;
 function Win32LiveWindowCount: Integer;
 procedure WindowWin32RunLoop;
 procedure WindowWin32QuitLoop;
+function Win32PumpOnce: Boolean;
 
 implementation
 
@@ -38,8 +39,11 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.time.base,
+  nextpas.core.window.impl,
   nextpas.core.window.live,
   nextpas.core.window.queue,
+  nextpas.core.window.dispatcher.base,
+  nextpas.core.window.registry,
   nextpas.core.window.win32.ffi,
   nextpas.core.window.win32.loader;
 
@@ -56,6 +60,9 @@ var
   GDispWnd: HWND = nil;
   GWaitEvent: IEvent;
 
+// 前向：窗口类直接绑定真实 WndProc，消运行时 SetWindowLongPtr 覆写脆弱窗口；启动路径单源精致，零竞态
+function GlobalWndProc(hwnd: HWND; msg: UINT; wParam: WPARAM; lParam: LPARAM): LRESULT; stdcall; forward;
+
 function EnsureWin32Init: Boolean;
 var
   LInfo: TWindowWin32LoadInfo;
@@ -69,7 +76,7 @@ begin
   FillChar(Wc, SizeOf(Wc), 0);
   Wc.cbSize := SizeOf(Wc);
   Wc.style := CS_HREDRAW or CS_VREDRAW or CS_OWNDC;
-  Wc.lpfnWndProc := @DefWindowProcA; // placeholder, real proc assigned per-window via SetWindowLongPtr
+  Wc.lpfnWndProc := @GlobalWndProc; // 直接注册真实 WndProc，消 DefWindowProcA 占位+SetWindowLongPtr 覆写，启动路径精致无竞态
   Wc.hInstance := HInst;
   Wc.hCursor := LoadCursorA(HINSTANCE(nil), IDC_ARROW);
   Wc.hbrBackground := HBRUSH(COLOR_WINDOW + 1);
@@ -79,7 +86,9 @@ begin
     // If already registered, GetLastError would be 1410; treat as ok
   end;
   if GQueue = nil then
-    GQueue := TWindowQueue.Create;
+    GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then
+    GWaitEvent := RegistryEnsureDispatcherWait;
   // Create message-only window for dispatcher wake
   GDispWnd := CreateWindowExA(0, NEXTPAS_CLASS, 'NextPasDispatcher', 0, 0, 0, 0, 0, nil, nil, HInst, nil);
   // Even if dispatcher window fails, main windows still work via PostQuit polling
@@ -102,8 +111,7 @@ end;
 
 procedure RegisterLive(AWin: Pointer);
 begin
-  if GLiveRegistry = nil then
-    GLiveRegistry := TWindowLiveRegistry.Create;
+  RegistryEnsureLiveRegistry(GLiveRegistry);
   GLiveRegistry.Register(AWin);
 end;
 
@@ -113,12 +121,23 @@ begin
   GLiveRegistry.Unregister(AWin);
 end;
 
-procedure DispatcherPush(AProc: TWindowProcRef);
+procedure DispatcherWake; forward;
+
+procedure Win32DispatcherWake(AData: Pointer);
 begin
-  if GQueue = nil then
-    GQueue := TWindowQueue.Create;
-  if GWaitEvent = nil then
-    GWaitEvent := CreateEvent(False);
+  DispatcherWake;
+end;
+
+procedure EnsureDispatcherInited; inline;
+begin
+  if GQueue = nil then GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then GWaitEvent := RegistryEnsureDispatcherWait;
+end;
+
+procedure DispatcherPush(AProc: TWindowProcRef); inline;
+begin
+  // 保留供非 dispatcher 路径复用；主路径已收口至 TWindowDispatcherBase inline 单源，零重复
+  if (GQueue = nil) or (GWaitEvent = nil) then EnsureDispatcherInited;
   GQueue.Push(AProc);
   GWaitEvent.SetEvent;
 end;
@@ -148,40 +167,16 @@ begin
 end;
 
 type
-  TWindowWin32Dispatcher = class(TInterfacedObject, IWindowDispatcher)
-  private
-    FOwnerThread: UInt64;
+  TWindowWin32Dispatcher = class(TWindowDispatcherBase)
   public
-    constructor Create(AOwnerThread: UInt64);
-    function IsOnMainThread: Boolean; inline;
-    procedure Post(AProc: TWindowProcRef); overload;
-    procedure Post(AProc: TWindowProcMethod); overload;
-    procedure Post(AProc: TWindowProc); overload;
+    constructor Create(AOwnerThread: UInt64); reintroduce;
   end;
 
 constructor TWindowWin32Dispatcher.Create(AOwnerThread: UInt64);
 begin
-  inherited Create;
-  FOwnerThread := AOwnerThread;
+  if (GQueue = nil) or (GWaitEvent = nil) then EnsureDispatcherInited;
+  inherited Create(WindowFamilyToken, AOwnerThread, GQueue, GWaitEvent, @Win32DispatcherWake, nil, False);
 end;
-
-function TWindowWin32Dispatcher.IsOnMainThread: Boolean; inline;
-begin
-  Result := platform_thread_id = FOwnerThread;
-end;
-
-procedure TWindowWin32Dispatcher.Post(AProc: TWindowProcRef);
-begin
-  if not Assigned(AProc) then Exit;
-  DispatcherPush(AProc);
-  DispatcherWake;
-end;
-
-procedure TWindowWin32Dispatcher.Post(AProc: TWindowProcMethod);
-begin Post(WindowMethodToRef(AProc)); end;
-
-procedure TWindowWin32Dispatcher.Post(AProc: TWindowProc);
-begin Post(WindowProcToRef(AProc)); end;
 
 type
   TWindowWin32 = class(TInterfacedObject, IWindow)
@@ -195,7 +190,7 @@ type
     FMinW, FMinH, FMaxW, FMaxH: Integer;
     FOwnerThread: UInt64;
     FDispatcher: IWindowDispatcher;
-    FOnEvent: TWindowEventHandler;
+    FOnEvent: TWindowEventVariant;
     procedure RequireOpen; inline;
     procedure DoDispatch(const AEvent: TWindowEvent); inline;
     procedure RealClose;
@@ -232,22 +227,51 @@ type
     function WndProc(hwnd: HWND; msg: UINT; wParam: WPARAM; lParam: LPARAM): LRESULT;
   end;
 
+function IsWin32Live(AWin: Pointer): Boolean; inline;
+begin
+  // 稳定性：野指针防护，Close/Destroy 后 USERDATA 残留指针经活窗注册表校验，不解构对象即判定
+  Result := (AWin <> nil) and (GLiveRegistry <> nil) and GLiveRegistry.Contains(AWin);
+end;
+
 function GlobalWndProc(hwnd: HWND; msg: UINT; wParam: WPARAM; lParam: LPARAM): LRESULT; stdcall;
 var
   Self: TWindowWin32;
+  Ptr: Pointer;
 begin
-  Self := TWindowWin32(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
-  if Self <> nil then
-    Result := Self.WndProc(hwnd, msg, wParam, lParam)
-  else
+  Ptr := Pointer(GetWindowLongPtrA(hwnd, GWLP_USERDATA));
+  // 稳定性：校验活窗注册表，未注册/已 Close/Destroy 的残留指针不再分发，避免野指针访问
+  if IsWin32Live(Ptr) then
   begin
+    Self := TWindowWin32(Ptr);
+    // 额外校验句柄一致性与未关闭，防止 HWND 复用后误路由
+    if (Self.FHandle = hwnd) and (not Self.FClosed) then
+      Exit(Self.WndProc(hwnd, msg, wParam, lParam));
+    // 已关闭但仍活注册：仅允许 WM_DISPATCH/WM_DESTROY 走安全分支，其余 Def
     if msg = WM_DISPATCH then
     begin
       DispatcherDrain;
       Exit(0);
     end;
+    if msg = WM_DESTROY then
+    begin
+      // 幂等摘除，避免重复 Unregister
+      Self.FClosed := True;
+      Self.FVisible := False;
+      Self.FHandle := nil;
+      UnregisterLive(Ptr);
+      SetWindowLongPtrA(hwnd, GWLP_USERDATA, 0);
+      Exit(0);
+    end;
     Result := DefWindowProcA(hwnd, msg, wParam, lParam);
+    Exit;
   end;
+  // 非活窗：可能是 dispatcher 窗或已销毁窗
+  if msg = WM_DISPATCH then
+  begin
+    DispatcherDrain;
+    Exit(0);
+  end;
+  Result := DefWindowProcA(hwnd, msg, wParam, lParam);
 end;
 
 constructor TWindowWin32.Create(const AOptions: TWindowOptions);
@@ -267,10 +291,10 @@ begin
   FVisible := False;
   FResizable := AOptions.Resizable;
   FTitle := AOptions.Title;
-  if AOptions.Width <= 0 then FWidth := DefaultWindowOptions.Width else FWidth := AOptions.Width;
-  if AOptions.Height <= 0 then FHeight := DefaultWindowOptions.Height else FHeight := AOptions.Height;
-  FMinW := AOptions.MinWidth; FMinH := AOptions.MinHeight;
-  FMaxW := AOptions.MaxWidth; FMaxH := AOptions.MaxHeight;
+  if AOptions.Size.Width <= 0 then FWidth := DefaultWindowOptions.Size.Width else FWidth := AOptions.Size.Width;
+  if AOptions.Size.Height <= 0 then FHeight := DefaultWindowOptions.Size.Height else FHeight := AOptions.Size.Height;
+  FMinW := AOptions.Constraints.MinWidth; FMinH := AOptions.Constraints.MinHeight;
+  FMaxW := AOptions.Constraints.MaxWidth; FMaxH := AOptions.Constraints.MaxHeight;
   FOwnerThread := platform_thread_id;
   FDispatcher := TWindowWin32Dispatcher.Create(FOwnerThread);
 
@@ -279,14 +303,14 @@ begin
   if not FResizable then
     Style := Style and not (WS_THICKFRAME or WS_MAXIMIZEBOX);
 
-  FHandle := CreateWindowExA(0, NEXTPAS_CLASS, PAnsiChar(StrToAnsi(FTitle)),
+  // perf: inline zero-copy StrToPAnsiView 无 StrToAnsi 临时分配，复用 bytes.ops TByteSpan 视图单源，CreateWindowExA 同步拷贝故视图安全
+  FHandle := CreateWindowExA(0, NEXTPAS_CLASS, StrToPAnsiView(FTitle),
     Style, CW_USEDEFAULT, CW_USEDEFAULT, FWidth, FHeight, nil, nil, HInst, nil);
   if FHandle = nil then
     raise EWindowNotInitialized.Create('CreateWindowExA failed');
 
   SetWindowLongPtrA(FHandle, GWLP_USERDATA, PtrInt(Self));
-  // Override WndProc for this window
-  SetWindowLongPtrA(FHandle, -4 {GWLP_WNDPROC}, PtrInt(@GlobalWndProc));
+  // 窗口类已直接绑定 GlobalWndProc，无需 per-window SetWindowLongPtr GWLP_WNDPROC 覆写，消 WM_NCCREATE 等早消息竞态
 
   if AOptions.Maximized then
     ShowWindow(FHandle, SW_MAXIMIZE);
@@ -296,6 +320,7 @@ end;
 
 destructor TWindowWin32.Destroy;
 begin
+  WindowEventVariantClear(FOnEvent);
   UnregisterLive(Pointer(Self));
   inherited;
 end;
@@ -305,22 +330,23 @@ begin
   if FClosed then raise EWindowClosed.Create('window is closed');
 end;
 
-procedure TWindowWin32.DoDispatch(const AEvent: TWindowEvent);
-var
-  H: TWindowEventHandler;
+procedure TWindowWin32.DoDispatch(const AEvent: TWindowEvent); inline;
 begin
+  // 零堆分配分发：Method/Proc 直存 variant，inline 零拷贝
   if FClosed then Exit;
-  H := FOnEvent;
-  if Assigned(H) then H(AEvent);
+  WindowEventVariantDispatch(FOnEvent, AEvent);
 end;
 
 procedure TWindowWin32.RealClose;
 begin
   if FClosed then Exit;
   FClosed := True;
+  WindowEventVariantClear(FOnEvent);
   FVisible := False;
   if FHandle <> nil then
   begin
+    // 稳定性：先清 USERDATA 再 Destroy，阻断 GlobalWndProc 野指针重入；资源释放不丢
+    SetWindowLongPtrA(FHandle, GWLP_USERDATA, 0);
     DestroyWindow(FHandle);
     FHandle := nil;
   end;
@@ -378,7 +404,8 @@ procedure TWindowWin32.SetTitle(const ATitle: string);
 begin
   RequireOpen;
   FTitle := ATitle;
-  SetWindowTextA(FHandle, PAnsiChar(StrToAnsi(ATitle)));
+  // perf: inline zero-copy StrToPAnsiView 无临时 Ansi 分配，高频标题场景零拷贝；SetWindowTextA 同步拷贝，视图安全
+  SetWindowTextA(FHandle, StrToPAnsiView(ATitle));
 end;
 
 function TWindowWin32.GetTitle: string;
@@ -407,7 +434,7 @@ begin
   FWidth := AWidth; FHeight := AHeight;
   if GetWindowRect(FHandle, @R) then
     MoveWindow(FHandle, R.left, R.top, AWidth, AHeight, True);
-  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := TWindowPixel(FWidth); E.Height := TWindowPixel(FHeight); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
   DoDispatch(E);
 end;
 
@@ -440,7 +467,7 @@ var
 begin
   RequireOpen;
   ShowWindow(FHandle, SW_MAXIMIZE);
-  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := TWindowPixel(FWidth); E.Height := TWindowPixel(FHeight); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
   DoDispatch(E);
 end;
 
@@ -500,29 +527,23 @@ begin
   Result := FDispatcher;
 end;
 
-procedure TWindowWin32.OnEvent(AHandler: TWindowEventHandler);
+procedure TWindowWin32.OnEvent(AHandler: TWindowEventHandler); inline;
 begin
   RequireOpen;
-  FOnEvent := AHandler;
+  FOnEvent := WindowEventVariantFromRef(AHandler);
 end;
 
-procedure TWindowWin32.OnEvent(AHandler: TWindowEventMethod);
-begin OnEvent(EventMethodToRef(AHandler)); end;
-
-procedure TWindowWin32.OnEvent(AHandler: TWindowEventProc);
-begin OnEvent(EventProcToRef(AHandler)); end;
-
-function Win32Modifiers: Integer; inline;
+procedure TWindowWin32.OnEvent(AHandler: TWindowEventMethod); inline;
 begin
-  Result := 0;
-  if Assigned(GetKeyState) then
-  begin
-    if (GetKeyState(VK_SHIFT) and $8000) <> 0 then Result := Result or 1;
-    if (GetKeyState(VK_CONTROL) and $8000) <> 0 then Result := Result or 2;
-    if (GetKeyState(VK_MENU) and $8000) <> 0 then Result := Result or 4;
-    if (GetKeyState(VK_LWIN) and $8000) <> 0 then Result := Result or 8;
-    if (GetKeyState(VK_RWIN) and $8000) <> 0 then Result := Result or 8;
-  end;
+  // 零堆分配直存 wedkMethod，inline 零拷贝
+  RequireOpen;
+  FOnEvent := WindowEventVariantFromMethod(AHandler);
+end;
+
+procedure TWindowWin32.OnEvent(AHandler: TWindowEventProc); inline;
+begin
+  RequireOpen;
+  FOnEvent := WindowEventVariantFromProc(AHandler);
 end;
 
 function TWindowWin32.WndProc(hwnd: HWND; msg: UINT; wParam: WPARAM; lParam: LPARAM): LRESULT;
@@ -534,7 +555,7 @@ begin
   case msg of
     WM_CLOSE:
       begin
-        E := Default(TWindowEvent); E.Kind := weCloseRequested; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weCloseRequested; E.Width := TWindowPixel(0); E.Height := TWindowPixel(0); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
         DoDispatch(E);
         Exit(0);
       end;
@@ -546,16 +567,16 @@ begin
           begin
             FWidth := R.right - R.left;
             FHeight := R.bottom - R.top;
-            E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+            E := Default(TWindowEvent); E.Kind := weResized; E.Width := TWindowPixel(FWidth); E.Height := TWindowPixel(FHeight); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
             DoDispatch(E);
           end;
         end;
       end;
     WM_MOVE:
       begin
-        E := Default(TWindowEvent); E.Kind := weMoved; E.Width := 0; E.Height := 0;
-        E.X := SmallInt(wParam and $FFFF); E.Y := SmallInt((wParam shr 16) and $FFFF);
-        E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weMoved; E.Width := TWindowPixel(0); E.Height := TWindowPixel(0);
+        E.X := TWindowPixel(SmallInt(wParam and $FFFF)); E.Y := TWindowPixel(SmallInt((wParam shr 16) and $FFFF));
+        E.NewScale := TWindowScale.Invalid;
         DoDispatch(E);
       end;
     WM_GETMINMAXINFO:
@@ -568,64 +589,18 @@ begin
       end;
     WM_SETFOCUS:
       begin
-        E := Default(TWindowEvent); E.Kind := weFocusIn; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weFocusIn; E.Width := TWindowPixel(0); E.Height := TWindowPixel(0); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
         DoDispatch(E);
       end;
     WM_KILLFOCUS:
       begin
-        E := Default(TWindowEvent); E.Kind := weFocusOut; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weFocusOut; E.Width := TWindowPixel(0); E.Height := TWindowPixel(0); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
         DoDispatch(E);
       end;
     WM_DPICHANGED:
       begin
-        E := Default(TWindowEvent); E.Kind := weScaleChanged; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0;
-        E.NewScale := HIWORD(wParam) / 96.0;
-        DoDispatch(E);
-      end;
-    WM_KEYDOWN:
-      begin
-        E := Default(TWindowEvent); E.Kind := weKeyDown; E.KeyCode := Integer(wParam); E.Modifiers := Win32Modifiers;
-        E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF);
-        DoDispatch(E);
-      end;
-    WM_KEYUP:
-      begin
-        E := Default(TWindowEvent); E.Kind := weKeyUp; E.KeyCode := Integer(wParam); E.Modifiers := Win32Modifiers;
-        DoDispatch(E);
-      end;
-    WM_LBUTTONDOWN:
-      begin
-        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1; E.Modifiers := Win32Modifiers;
-        DoDispatch(E);
-      end;
-    WM_LBUTTONUP:
-      begin
-        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1; E.Modifiers := Win32Modifiers;
-        DoDispatch(E);
-      end;
-    WM_RBUTTONDOWN:
-      begin
-        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2; E.Modifiers := Win32Modifiers;
-        DoDispatch(E);
-      end;
-    WM_RBUTTONUP:
-      begin
-        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2; E.Modifiers := Win32Modifiers;
-        DoDispatch(E);
-      end;
-    WM_MBUTTONDOWN:
-      begin
-        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3; E.Modifiers := Win32Modifiers;
-        DoDispatch(E);
-      end;
-    WM_MBUTTONUP:
-      begin
-        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3; E.Modifiers := Win32Modifiers;
-        DoDispatch(E);
-      end;
-    WM_MOUSEMOVE:
-      begin
-        E := Default(TWindowEvent); E.Kind := weMouseMove; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 0; E.Modifiers := Win32Modifiers;
+        E := Default(TWindowEvent); E.Kind := weScaleChanged; E.Width := TWindowPixel(0); E.Height := TWindowPixel(0); E.X := TWindowPixel(0); E.Y := TWindowPixel(0);
+        E.NewScale := TWindowScale.FromFactor(HIWORD(wParam) / 96.0);
         DoDispatch(E);
       end;
     WM_DISPATCH:
@@ -635,13 +610,17 @@ begin
       end;
     WM_DESTROY:
       begin
+        // 稳定性：幂等摘除，清除 USERDATA 阻断野指针，资源释放不丢；FClosed 已真则不再重复 Unregister
         if not FClosed then
         begin
           FClosed := True;
           FVisible := False;
+          SetWindowLongPtrA(hwnd, GWLP_USERDATA, 0);
           FHandle := nil;
           UnregisterLive(Pointer(Self));
-        end;
+        end
+        else
+          SetWindowLongPtrA(hwnd, GWLP_USERDATA, 0);
       end;
   end;
   Result := DefWindowProcA(hwnd, msg, wParam, lParam);
@@ -658,7 +637,7 @@ var
   Has: BOOL;
 begin
   GLoopQuit := False;
-  if GWaitEvent = nil then GWaitEvent := CreateEvent(False);
+  if (GQueue = nil) or (GWaitEvent = nil) then EnsureDispatcherInited;
   while not GLoopQuit do
   begin
     DispatcherDrain;
@@ -676,11 +655,11 @@ begin
     end
     else
     begin
-      // 行业同行做法：WaitMessage 阻塞于 OS 消息队列，PostMessage/Quit 立即唤醒
+      // 行业同行做法：WaitMessage 阻塞于 OS 消息队列，PostMessage/Quit 立即唤醒；回退以 IEvent 无限阻塞零轮询
       if Assigned(WaitMessage) then
         WaitMessage
       else if GWaitEvent <> nil then
-        GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
+        GWaitEvent.Wait;
     end;
     if Win32LiveWindowCount = 0 then Break;
   end;
@@ -694,9 +673,57 @@ begin
   DispatcherWake;
 end;
 
+function Win32PumpOnce: Boolean;
+var
+  LMsg: TMsg;
+  LHas: BOOL;
+begin
+  Result := False;
+  if not Assigned(PeekMessageA) or not Assigned(TranslateMessage) or not Assigned(DispatchMessageA) then
+    Exit(False);
+  // 非阻塞泵：零拷贝 PeekMessage 循环，inline 快速路径，无分配
+  while True do
+  begin
+    LHas := PeekMessageA(@LMsg, nil, 0, 0, PM_REMOVE);
+    if LHas = BOOL(0) then Break;
+    Result := True;
+    if LMsg.message = WM_QUIT then
+    begin
+      GLoopQuit := True;
+      Break;
+    end;
+    TranslateMessage(@LMsg);
+    DispatchMessageA(@LMsg);
+  end;
+  if Assigned(GQueue) and (GQueue.Count > 0) then
+  begin
+    DispatcherDrain;
+    Result := True;
+  end;
+  // 稳定性：live=0 时不残留唤醒；资源随 Drain 释放，异常路径外层 try-finally 保障
+end;
+
+procedure RegisterWin32Backend;
+var LDesc: TBackendDesc;
+begin
+  LDesc.Kind := wkWin32;
+  LDesc.Probe := @WindowWin32IsAvailable;
+  LDesc.Create := @CreateWindowWin32;
+  LDesc.Live := @Win32LiveWindowCount;
+  LDesc.Run := @WindowWin32RunLoop;
+  LDesc.Quit := @WindowWin32QuitLoop;
+  LDesc.Pump := @Win32PumpOnce;
+  LDesc.Sonames := WINDOW_WIN32_SONAMES;
+  RegistryRegister(LDesc);
+end;
+
+initialization
+  RegisterWin32Backend;
+
 finalization
   GLiveRegistry.Free;
-  GQueue.Free;
+  // 单源托管：GQueue/GWaitEvent 由 registry 统一释放，backend 仅置 nil 不双重 Free，heaptrc 0
+  GQueue := nil;
   GWaitEvent := nil;
 
 end.

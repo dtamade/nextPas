@@ -55,7 +55,7 @@ begin
     end;
     weResized: WriteLn('[game] resized ', AEvent.Width, 'x', AEvent.Height, ' — swapchain rebuild');
     weScaleChanged: begin
-      FScale := AEvent.NewScale;
+      FScale := AEvent.NewScale.Factor;
       WriteLn('[game] scale ', FScale:0:2, ' — framebuffer scale rebuild');
     end;
     weFocusIn: WriteLn('[game] focus in — resume');

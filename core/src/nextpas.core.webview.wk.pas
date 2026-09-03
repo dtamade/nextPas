@@ -159,7 +159,7 @@ begin
   if FClosed then Exit;
   case AEvent.Kind of
     weResized: UpdateChildBounds;
-    weScaleChanged, weDpiChanged: DoScaleChanged(AEvent.NewScale);
+    weScaleChanged: DoScaleChanged(AEvent.NewScale.Factor);
     weClosed, weCloseRequested: Close;
   end;
 end;

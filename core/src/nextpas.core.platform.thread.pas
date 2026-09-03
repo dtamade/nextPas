@@ -65,6 +65,13 @@ procedure platform_thread_sleep_ms(const AMilliseconds: UInt64);
     @note sleep_sec safe range: POSIX converts to nanoseconds, Windows converts to DWORD milliseconds. *}
 procedure platform_thread_sleep_sec(const ASeconds: UInt64);
 
+const
+  PLATFORM_SPIN_BACKOFF_BASE_NS: UInt64 = 4096;
+  PLATFORM_SPIN_BACKOFF_MAX_NS: UInt64 = 50000;
+  PLATFORM_SPIN_BACKOFF_YIELD_RETRIES = 4;
+
+function platform_thread_backoff_ns(ARetry: Integer): UInt64; inline;
+
 { TLS - Thread Local Storage }
 
 {** @desc 创建 TLS 键
@@ -591,6 +598,15 @@ begin
   platform_thread_host_sleep_ns(ASeconds * 1000000000);
 end;
 
+function platform_thread_backoff_ns(ARetry: Integer): UInt64; inline;
+begin
+  if ARetry < PLATFORM_SPIN_BACKOFF_YIELD_RETRIES then
+    Exit(0);
+  Result := PLATFORM_SPIN_BACKOFF_BASE_NS shl (ARetry - PLATFORM_SPIN_BACKOFF_YIELD_RETRIES);
+  if Result > PLATFORM_SPIN_BACKOFF_MAX_NS then
+    Result := PLATFORM_SPIN_BACKOFF_MAX_NS;
+end;
+
 { TLS }
 
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
@@ -981,6 +997,15 @@ begin
     Sleep(INFINITE - 1)
   else
     Sleep(DWORD(ASeconds * 1000));
+end;
+
+function platform_thread_backoff_ns(ARetry: Integer): UInt64; inline;
+begin
+  if ARetry < PLATFORM_SPIN_BACKOFF_YIELD_RETRIES then
+    Exit(0);
+  Result := PLATFORM_SPIN_BACKOFF_BASE_NS shl (ARetry - PLATFORM_SPIN_BACKOFF_YIELD_RETRIES);
+  if Result > PLATFORM_SPIN_BACKOFF_MAX_NS then
+    Result := PLATFORM_SPIN_BACKOFF_MAX_NS;
 end;
 
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;

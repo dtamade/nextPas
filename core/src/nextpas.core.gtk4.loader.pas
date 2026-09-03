@@ -25,6 +25,11 @@ function TryLoadGtk4(out AInfo: TGtk4LoadInfo): Boolean;
 procedure UnloadGtk4;
 function Gtk4LoadInfo: TGtk4LoadInfo;
 function Gtk4IsLoaded: Boolean;
+const
+  GTK4_SONAMES = 'libgtk-4.so.1|libgtk-4.so|libgtk-4.so.0';
+  GTK4_GOBJECT_SONAME = 'libgobject-2.0.so.0';
+  GTK4_GLIB_SONAME = 'libglib-2.0.so.0';
+function Gtk4Sonames: string; inline;
 
 implementation
 
@@ -172,6 +177,12 @@ end;
 function Gtk4IsLoaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function Gtk4Sonames: string; inline;
+begin
+  // 单源：与 TryDlOpen 同源，inline 零拷贝
+  Result := GTK4_SONAMES + '|' + GTK4_GOBJECT_SONAME + '|' + GTK4_GLIB_SONAME;
 end;
 
 end.

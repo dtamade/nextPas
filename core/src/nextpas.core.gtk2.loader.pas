@@ -24,6 +24,11 @@ function TryLoadGtk2(out AInfo: TGtk2LoadInfo): Boolean;
 procedure UnloadGtk2;
 function Gtk2LoadInfo: TGtk2LoadInfo;
 function Gtk2IsLoaded: Boolean;
+const
+  GTK2_SONAMES = 'libgtk-x11-2.0.so.0|libgtk-x11-2.0.so';
+  GTK2_GOBJECT_SONAME = 'libgobject-2.0.so.0';
+  GTK2_GLIB_SONAME = 'libglib-2.0.so.0';
+function Gtk2Sonames: string; inline;
 
 implementation
 
@@ -165,6 +170,12 @@ end;
 function Gtk2IsLoaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function Gtk2Sonames: string; inline;
+begin
+  // 单源：与 TryDlOpen 同源
+  Result := GTK2_SONAMES + '|' + GTK2_GOBJECT_SONAME + '|' + GTK2_GLIB_SONAME;
 end;
 
 end.

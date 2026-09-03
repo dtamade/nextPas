@@ -25,6 +25,9 @@ function TryLoadWindowWasm(out AInfo: TWindowWasmLoadInfo): Boolean;
 procedure UnloadWindowWasm;
 function WindowWasmLoadInfo: TWindowWasmLoadInfo;
 function WindowWasmIsLoaded: Boolean;
+const
+  WINDOW_WASM_SONAMES = 'env:emscripten_*|libemscripten.so|libwasm.so';
+function WindowWasmSonames: string; inline;
 
 implementation
 
@@ -126,6 +129,11 @@ end;
 function WindowWasmIsLoaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function WindowWasmSonames: string; inline;
+begin
+  Result := WINDOW_WASM_SONAMES;
 end;
 
 end.

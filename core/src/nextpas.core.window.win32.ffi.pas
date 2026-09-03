@@ -172,6 +172,7 @@ var
   GetKeyState: function(nVirtKey: Integer): SmallInt; stdcall;
 
 const
+  GWLP_WNDPROC = -4;
   GWLP_USERDATA = -21;
 
   VK_SHIFT   = $10;

@@ -124,7 +124,7 @@ begin
   W.Window.OnEvent(procedure(const AEvent: TWindowEvent)
     begin
       if AEvent.Kind = weScaleChanged then
-      begin GScaleEvents := GScaleEvents + 1; GLastScale := AEvent.NewScale; end;
+      begin GScaleEvents := GScaleEvents + 1; GLastScale := AEvent.NewScale.Factor; end;
     end);
   LWinFake.SetScale(2.0);
   CheckEqual(1, GScaleEvents);

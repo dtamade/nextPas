@@ -1,10 +1,10 @@
 # nextpas.core.bytes 代码契约
 
-**模块路径**：`core/src/nextpas.core.bytes*.pas`（12 个源文件：`bytes.base/pas` + `ops` + `ops.capacity/ops.text/ops.ascii` 3 叶子 + `binary/builder/cursor/stream/pathvalid` + `framing`）
+**模块路径**：`core/src/nextpas.core.bytes*.pas`（15 个源文件：base/binary/builder/cursor/stream/pathvalid/framing + ops 门面 + ops.capacity/hash/ring/snapshot/text/ascii 6 叶子 + bytes 门面；window lane 与 main 并行分治的 union：lane 容量/哈希/环形/快照单源与 main 容量/字符串/ascii 叶子 + framing/Vec 注册表并存，ops 门面统一转发）
 **层级**：L1（依赖 L0: base, mem, platform, simd；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-09-03
-**版本**：1.9
+**版本**：1.10（union：lane 匠心分治 capacity/hash/ring/snapshot 四职责 + main 容量几何/字符串/ascii/framing/Vec 注册表并存，ops 门面 inline 零拷贝转发单源，window 家族与 Webview 复用单源，守四件套与 L0-L3）
 
 ---
 
@@ -15,9 +15,12 @@
 | 文件 | 职责 |
 |------|------|
 | bytes.base | TEndianness/TEndian/TByteOrder 别名、`NATIVE_ENDIAN`、Builder 默认容量 |
-| bytes.ops | TByteSpan/TBytes 单源操作（Equal/Compare/IndexOf/Fill/Reverse/Concat/Clone/CopySlice/ConcatMany/BytesAppend*）— 单源 Owner（raw Move/FillChar 仅此，BytesCopy/BytesZero inline 零拷贝，BytesAppend* 经 EnsureAppendCapacity 单源扩容 + BytesCopy 单 Move，BytesEnsureCapacity/BytesNextCapacity thin-forward capacity 叶子 0→64→2× 无重复 while）；叶子 `ops.capacity`（几何增长 `BytesGrowCapacityWithMin` 0→64→2×/Webview 0→4→2× 同源 `*2`）、`ops.text`（SpanToString/Var/HTon/FNV 零拷贝）、`ops.ascii`（Xor/Ascii inplace 无 Move）为纯算术/字符串叶子，thin-forward 复用单源，无重复 Move |
-| bytes.ops.capacity | 容量增长单源（`BytesGrowCapacityWithMin` 几何 `*2` 均摊 `O(1)`，`BytesGrowCapacity`/`BytesNextCapacity`/`BytesEnsureCapacity` 统一复用，`Webview 0→4→2×` 同源复用）— 不含 Move，not inline loop |
+| bytes.ops | TByteSpan/TBytes 单源门面（Span/Bytes 比较/拼接/追加/大小端互转 + 容量/哈希/环形/快照/字符串/ascii 职责 inline 转发单源，零拷贝；raw Move/FillChar 仅此，BytesCopy/BytesZero 门禁单源；`BytesAppend*` 全族经 `EnsureAppendCapacity` 单源几何扩容 + `BytesCopy` 单 `Move`，`BytesAppend(TBytes/PByte)` not inline，`BytesAppendByte/UInt*` 8 重载 inline 单次便利，高频/循环 `MUST` 走 `IBytesBuilder`/`ConcatMany` 防 O(n²)；dynarray probe/poke + `VecGrowCapacity 0→4→2×`/`TCompactLiveRegistry<T>` Vec/Registry 单源，window.live/webview 家族直用） |
 | bytes.ops.text | 字符串/Var/字节序 helpers（SpanToString/FNV/HTonN 等零拷贝 SetString 视图）— 不含 raw Move |
+| bytes.ops.capacity | 容量增长单源（`BytesGrowCapacityWithMin` 几何 `*2` 均摊 `O(1)` 0→64→2×，`Webview 0→4→2×` 同源复用；单参 `BytesGrowCapacity/Capped/GrowHelper` inline 零拷贝 O(1) 重载并存）— 不含 Move，loop 体 not inline |
+| bytes.ops.hash | 哈希阈值/幂二单源（BYTES_HASH_LOAD_DENOM=2, BytesHashNeedsGrow/IsPowerOfTwo/CeilPow2/AlignCapacity inline 零拷贝 O(1)，window.hash/cow 复用单源） |
+| bytes.ops.ring | 环形掩码单源（BytesRingMask/Index/Next and掩码 O(1) 避 mod + Managed/Raw Ring 批量 inline 零拷贝，托管释放不丢） |
+| bytes.ops.snapshot | 快照截断单源（ArraySetLengthNoRealloc/SwapRemove + ManagedEnsure/Triple + LiveArenaEnsureBatch inline 零拷贝 O(1)，window.live 64槽池化 ARENA_POOL_SIZE via ArenaPoolAcquireSlot/RecycleSlot/Finalize，阈值收缩8192，SetLength 托管释放不丢） |
 | bytes.ops.ascii | Xor/Ascii 大小写原地（QWord 批异或、ToLower/Upper）— 不含 Move |
 | bytes.binary | 字节序转换与游标编解码（Swap/ToEndian/Read/Write/TryRead/TryWrite） |
 | bytes.builder | IBytesBuilder 可变字节缓冲区（allocator 注入、按需增长） |
@@ -27,7 +30,7 @@
 | bytes.pathvalid | ValidPath + IsSafeArchiveEntryName/Ex 共享校验（tar/zip 归档名与 tar link target 参数化单源，阈值/尾斜杠收敛，复用 bytes.ops 单源 + text.utf8 单源） |
 | bytes.pas | 门面：纯 re-export + inline 转发 |
 
-四件套形态：`base` → `ops`（单源 Owner，raw Move 仅此） + `ops.capacity/ops.text/ops.ascii` 3 叶子（纯算术/字符串，无 Move，thin-forward）+ `binary/builder/cursor/stream/pathvalid` → `bytes.pas` 门面；`ops` 981→~760 行（≤800 软指引，叶子各 ~120 行），优雅度合规；无独立 `intf/ffi`（按需存在）。
+四件套形态：`base`（类型/常量）→ `ops.capacity/hash/ring/snapshot/text/ascii`（叶子，capacity←hash/ring/snapshot 依赖 DAG，text/ascii 纯字符串叶子，均守 L0-L3） + `ops`（单源 Owner，raw Move 仅此） + `binary/builder/cursor/stream/pathvalid`（实现子模块）→ `bytes.pas`（门面聚合）；本模块无独立 `intf/ffi`（按需存在，不机械创建）。
 
 ### 1.2 IBytesBuilder 接口
 
@@ -77,10 +80,10 @@ function CreateBytesBuilderWith(const AAllocator: TMemAllocator; const AInitialC
 | `SpanClone(Span): TBytes` | 克隆 |
 | `SpanConcatMany/BysConcatMany` | 多段拼接 |
 | `BytesEqual/Compare/IndexOf/Concat/StartsWith/EndsWith` | TBytes 便捷面（inline → Span） |
-| `BytesAppend(*)/BytesToString/StringToBytes` | TBytes 追加与字符串互转（`BytesAppend*` 均为 `not inline`，经 `EnsureAppendCapacity` 单源几何扩容 + `BytesCopy` 单 `Move` 零拷贝；`SetLength+Move` 逐次调用 O(n)，高频/循环拼接 O(n²)，高频/循环 `MUST` 改用 `IBytesBuilder` 几何扩容或 `BytesConcatMany/SpanConcatMany` 单次分配（门禁跨模块巡检）；注：`deprecated` 机械门禁与 `INV-8` 已随争议门禁撤销而废弃（见 1.2-tar/1.7 行），当前无 `deprecated` 标记） |
+| `BytesAppend(*)/BytesToString/StringToBytes` | TBytes 追加与字符串互转（全族经 `EnsureAppendCapacity` 单源几何扩容 + `BytesCopy` 单 `Move` 零拷贝；`BytesAppend(TBytes/PByte)` not inline（红线#1），`BytesAppendByte/UInt*` 8 重载 inline 单次便利；逐次调用 O(n)，高频/循环拼接 O(n²)，高频/循环 `MUST` 改用 `IBytesBuilder` 几何扩容或 `BytesConcatMany/SpanConcatMany` 单次分配（门禁跨模块巡检）；注：`deprecated` 机械门禁与 `INV-8` 已随争议门禁撤销而废弃，当前无 `deprecated` 标记） |
 | `SpanClone/SpanCopySlice` | 仅两处分配；其余 Span 为非拥有视图 |
 
-约定：`bytes.ops` 为 Span/TBytes 比较与切片的唯一实现源；门面与其它实现均 inline 转发，不复制逻辑。
+约定：`bytes.ops` 为 Span/TBytes 比较与切片的唯一实现源；门面与其它实现均 inline 转发，不复制逻辑。`BytesAppend`（TBytes/PByte）禁 inline（红线#1：索引元素直喂 Move untyped 形参，FPC 常量传播折叠为单字符临时，valgrind+反汇编实证，BytesToString/StringToBytes 同理，已用 typed PByte 中转破红线；见 `design-conventions.md` 两条红线），单次 SetLength+Move 零拷贝、异常安全；`BytesAppendByte/BytesAppendUInt16BE/LE/UInt24BE/UInt32BE/LE/UInt64BE/LE` 8 重载保持 inline 单次 SetLength 直写零拷贝、异常安全 SetLength 资源托管不丢、bytes.ops 单源 inline 零额外调用 O(1)，批量/循环/高频批量必须走 `IBytesBuilder`（amortized 2× via `BytesGrowCapacity/BYTES_BUILDER_MIN_GROW` inline 零拷贝）或 `BytesConcatMany/SpanConcatMany`（单次分配 O(n) 零拷贝 Moves）以避免 O(n²) 多次重分配，window 侧由 `test_window_source_contracts` 强制门禁（循环内 BytesAppend/Byte/UInt* 视为 O(n²) 违规，强制收敛至 IBytesBuilder/ConcatMany 批量单源）。
 
 ### 1.4 字节序与游标编解码
 
@@ -172,6 +175,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-26 | 1.1 | 时效刷新：补齐 8 文件门面（cursor/stream/pathvalid）、对齐 IBytesBuilder/Try* 真实签名、收敛 Span/Binary 单源与 inline/零拷贝不变量、资源释放（sized FreeMemOf）与 L1 分层四件套、测试 1→3 目录 | Claude |
+| 2026-09-02 | 1.2 | 匠心分治（window lane）：bytes.ops 按容量/负载/掩码/快照四职责拆 capacity/hash/ring/snapshot 子单元，ops 门面 inline 零拷贝转发单源，window.hash/ring/live 复用单源，heaptrc 0，守四件套与 L0-L3 | 窗口 lane |
 | 2026-09-02 | 1.2-tar | 匠心修复 BytesAppend O(n²)（tar lane 并行史）：`BytesAppend*` 全族 `deprecated` 机械门禁（`inline` 保留单次便利，`deprecated` 提示改用 `IBytesBuilder` 几何 Grow 或 `ConcatMany` 单分配，零拷贝单 `Move` 单源），新增 INV-8 与 `test_bytes_source_contract` 门禁；注：合入主线时 `BytesAppend` 取主线非 `deprecated` 形态（`test_bytes_ops_source_contracts` 红线门禁），本行仅留史 | tar lane |
 | 2026-09-02 | 1.2 | 匠心修复：`bytes.ops` 单源几何 `BytesGrowCapacityWithMin` 抽取（`BYTES_BUILDER_MIN_GROW=64` 与 `Webview` `0→4→2×` 同源 `*2` 复用，`WebviewGrowCapacityForReuse` inline 薄转发零额外调用，`factory.GrowCapacity` 私有冗余→`base.WebviewGrowCapacity`→`bytes.ops` 三级收敛）；`Move`/`FillChar` 单源 `BytesCopy`/`BytesZero` 门禁冻结（`L1+` 复用，`L0 platform` 例外 `platform.fs:421` 头注，`tls.websocket:115`/`tls.encoding:479` 等 `BytesCopy` 迁移，`inline red-line 1/2` 门禁脚本冻结，零拷贝证据）；`L3→L1` 反哺合规 | Claude |
 | 2026-09-02 | 1.3 | 匠心修复：`bytes.ops` 981→~760 四件套拆分优雅度 — 抽取 `ops.capacity`/`ops.text`/`ops.ascii` 3 叶子（容量几何/字符串-Var-HTon-FNV/异或-Ascii 无 Move 纯叶子，thin-forward 复用单源，叶子各 ~120，`bytes.ops` 单源 `BytesCopy/BytesZero` 不动，Move 仅 `bytes.ops`，`L0 platform.fs:421` 例外头注，`tls.encoding:479` 遷 `BytesCopy`，`red-line 1/2 inline` 与 `≤800` 软指引合规，零拷贝/性能 inline 证据与 `SetLength`/`FreeMem` 稳定性不丢） | AI |
@@ -181,3 +185,4 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 | 2026-09-03 | 1.7 | 主线收敛（core 合并）：代码取主线——`BytesAppend*` 经 `EnsureAppendCapacity` 单源几何扩容 + `BytesCopy` 单 `Move`（无 `BytesAppendRaw`，无 `deprecated`；争议 `deprecated` 门禁已在 tar 线撤销，`INV-8` 废弃），`BytesCopy/BytesZero` 接口声明补 `inline`（与实现一致，跨单元内联），`BytesHexUInt64` 去 `inline`（`SetLength` + `for` 循环体触 `red-line 2`，主线既有红点，连带修复）；门禁取 lane 新版并修复 `BytesCopy` 实现体正则跨行回溯误报（参数 `[^()]*` 单行锚定）；本文现行事实行已按合并后代码澄清，1.2-tar/1.4/1.6 行仅留史 | AI |
 | 2026-09-03 | 1.8 | 主线收敛（ssh 合并）：`bytes.ops` 取主线 1.7 + ssh 反哺 `BytesEnsureCapacity(SizeUInt)` 槽超载/`BytesRemovePrefix`/`BytesConsumePrefix`（channel/sftp 按槽复用，`BytesGrowCapacity` 单源）；`bytes.framing`（TWireBuffer，ssh 反哺：抽 sftp.wire 4B 前缀流，`BytesEnsureCapacity` 几何 + `FOff` 零拷贝 + 16KB/4KB 懒压实 + quarter-cap，TryTakeFrame 单次 Move+单次压实）在本文恢复事实行（§1.1/§1.5/§5/§6，INV-8 保持），先前 1.4/1.5 framing 行史实并入本行 | AI |
 | 2026-09-03 | 1.9 | 主线收敛（webview 合并）：`bytes.ops` 取主线 1.8 + webview 反哺 Vec/Registry 单源（`BytesSteal`/`TVecArray`/`VecGrowCapacity 0→4→2×`/`VecGrow/Snapshot/Trim/RemoveSwap/Ordered/Copy/GrowCopy/RingCopy/RingGrowCopy`/`TCompactLiveRegistry<T>`，window.live/webview 家族直用，`webview.live` 薄别名已删；先前 S107/S108 行史实并入本行） | AI |
+| 2026-09-03 | 1.10 | union（window lane 合 main）：lane capacity/hash/ring/snapshot 四职责叶子与 main capacity/text/ascii/framing/Vec 并存（15 文件），ops 门面统一转发（单参 grow/Capped/Helper 重载 + 双参几何单源 + dynarray/Vec/Registry），`BytesAppend*` 全族经 `EnsureAppendCapacity` 单源，双方复用方（window.hash/ring/live/cow/fake + Webview/vfs/js/agent）均不断链 | consolidation |

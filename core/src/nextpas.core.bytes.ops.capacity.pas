@@ -13,12 +13,20 @@ uses
   nextpas.core.exception;
 
 function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
-function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt; overload;
 function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
 function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
 function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
 function WebviewGrowCapacity(const ACurrent: Integer): Integer; inline;
+{ lane-window: single-source single-arg grow/capped/helper (union merge) }
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+function BytesGrowCapacity(const ACurrent: Integer): Integer; inline; overload;
+function BytesGrowCapacity(const ACurrent: SizeUInt): SizeUInt; inline; overload;
+function BytesGrowCapacityCapped(const ACurrent, AMax: Integer): Integer; inline; overload;
+function BytesGrowCapacityCapped(const ACurrent, AMax: SizeUInt): SizeUInt; inline; overload;
+generic function BytesGrowHelper<T>(ACount, AMax: Integer): Integer; inline;
 { Builder capacity estimates — overflow fail-closed pure arithmetic, inline. }
 function BuilderCapForTwo(const ALen1, ALen2: SizeUInt): SizeUInt; inline;
 function BuilderCapAdd(const A, B: SizeUInt): SizeUInt; inline;
@@ -88,6 +96,96 @@ begin
   if ACurrent = 0 then
     Exit(4);
   Result := BytesGrowCapacityIntWithMin(ACurrent, ACurrent + 1, 0);
+end;
+
+{ lane-window single-arg grow/capped/helper bodies (union merge; overloads of two-arg single source) }
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+var
+  LOld, LNewCap: SizeUInt;
+begin
+  LOld := SizeUInt(Length(ADest));
+  if ARequired <= LOld then
+    Exit;
+  // single doubling growth to amortize when called directly; callers that need
+  // exact length (BytesAppend) will SetLength to exact LNewLen themselves, so
+  // this path is for standalone Reserve/Ensure. No header poke.
+  LNewCap := LOld;
+  if LNewCap < BYTES_BUILDER_MIN_GROW then
+    LNewCap := BYTES_BUILDER_MIN_GROW;
+  while LNewCap < ARequired do
+  begin
+    if LNewCap <= High(SizeUInt) div 2 then
+      LNewCap := LNewCap * 2
+    else
+    begin
+      LNewCap := ARequired;
+      Break;
+    end;
+  end;
+  SetLength(ADest, LNewCap);
+end;
+
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
+var
+  LNeed: SizeUInt;
+begin
+  if AAdditional = 0 then
+    Exit;
+  // overflow guard: if Length + Additional wraps, let SetLength raise
+  LNeed := SizeUInt(Length(ADest)) + AAdditional;
+  BytesEnsureCapacity(ADest, LNeed);
+end;
+
+function BytesGrowCapacity(const ACurrent: Integer): Integer; inline; overload;
+begin
+  // single source 0→32→2× (BYTES_BUILDER_MIN_GROW 64 的 1/2 缩放单源派生，inline 零拷贝，O(1)均摊，防 O(n²)拷贝；溢出时 +1 兜底)
+  if ACurrent = 0 then
+    Exit(Integer(BYTES_BUILDER_MIN_GROW shr 1));
+  if ACurrent <= High(Integer) div 2 then
+    Result := ACurrent * 2
+  else
+    Result := ACurrent + 1;
+end;
+
+function BytesGrowCapacity(const ACurrent: SizeUInt): SizeUInt; inline; overload;
+begin
+  // single source 0→32→2× (BYTES_BUILDER_MIN_GROW 64 的 1/2 缩放单源派生，inline 零拷贝，O(1)均摊，防 O(n²)拷贝；溢出时 +1 兜底) — SizeUInt 与 Integer 单源一致 shr1=32
+  if ACurrent = 0 then
+    Exit(BYTES_BUILDER_MIN_GROW shr 1);
+  if ACurrent <= High(SizeUInt) div 2 then
+    Result := ACurrent * 2
+  else
+    Result := ACurrent + 1;
+end;
+
+function BytesGrowCapacityCapped(const ACurrent, AMax: Integer): Integer; inline; overload;
+begin
+  // single source capped grow inline 0→32→2× via BytesGrowCapacity, clamp to AMax, O(1) zero-copy, bytes.ops single source, resource managed not lost
+  if ACurrent > AMax then
+    Exit(ACurrent);
+  Result := BytesGrowCapacity(ACurrent);
+  if Result > AMax then
+    Result := AMax;
+  if Result < ACurrent then
+    Result := ACurrent;
+end;
+
+function BytesGrowCapacityCapped(const ACurrent, AMax: SizeUInt): SizeUInt; inline; overload;
+begin
+  // single source capped grow SizeUInt variant inline O(1) zero-copy, bytes.ops single source
+  if ACurrent > AMax then
+    Exit(ACurrent);
+  Result := BytesGrowCapacity(ACurrent);
+  if Result > AMax then
+    Result := AMax;
+  if Result < ACurrent then
+    Result := ACurrent;
+end;
+
+generic function BytesGrowHelper<T>(ACount, AMax: Integer): Integer; inline;
+begin
+  // generic GrowHelper single source capped grow via BytesGrowCapacityCapped inline zero-copy O(1), T specialization keeps per-call inline no extra dispatch, bytes.ops single source 0→32→2×
+  Result := BytesGrowCapacityCapped(ACount, AMax);
 end;
 
 function WebviewGrowCapacity(const ACurrent: Integer): Integer; inline;

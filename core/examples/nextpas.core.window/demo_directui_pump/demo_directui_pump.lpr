@@ -95,8 +95,8 @@ begin
       Layout; MarkDirty;
     end;
     weScaleChanged: begin
-      WriteLn('[directui] event scale ', AEvent.NewScale:0:2);
-      FScale := AEvent.NewScale;
+      WriteLn('[directui] event scale ', AEvent.NewScale.Factor:0:2);
+      FScale := AEvent.NewScale.Factor;
       Layout; MarkDirty;
     end;
     weCloseRequested: WriteLn('[directui] event close requested');

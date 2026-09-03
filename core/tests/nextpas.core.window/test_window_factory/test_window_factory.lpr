@@ -135,7 +135,7 @@ var
   LRaised: Boolean;
 begin
   LOptions := DefaultWindowOptions;
-  LOptions.Width := -1;
+  LOptions.Size.Width := -1;
   LRaised := False;
   try
     CreateFakeWindow(LOptions);
@@ -145,8 +145,8 @@ begin
   Check(LRaised, 'create must validate options - negative width');
 
   LOptions := DefaultWindowOptions;
-  LOptions.MinWidth := 800;
-  LOptions.MaxWidth := 400;
+  LOptions.Constraints.MinWidth := 800;
+  LOptions.Constraints.MaxWidth := 400;
   LRaised := False;
   try
     CreateFakeWindow(LOptions);

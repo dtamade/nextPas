@@ -28,9 +28,13 @@ uses
   nextpas.core.sync.event,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
+  nextpas.core.window.queue.base,
   nextpas.core.time.base,
+  nextpas.core.window.impl,
   nextpas.core.window.live,
   nextpas.core.window.queue,
+  nextpas.core.window.dispatcher.base,
+  nextpas.core.window.registry,
   nextpas.core.window.uikit.ffi,
   nextpas.core.window.uikit.loader;
 
@@ -55,8 +59,7 @@ end;
 
 procedure RegisterLive(AWin: Pointer);
 begin
-  if GLiveRegistry = nil then
-    GLiveRegistry := TWindowLiveRegistry.Create;
+  RegistryEnsureLiveRegistry(GLiveRegistry);
   GLiveRegistry.Register(AWin);
 end;
 
@@ -68,10 +71,8 @@ end;
 
 procedure DispatcherPush(AProc: TWindowProcRef);
 begin
-  if GQueue = nil then
-    GQueue := TWindowQueue.Create;
-  if GWaitEvent = nil then
-    GWaitEvent := CreateEvent(False);
+  if GQueue = nil then GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then GWaitEvent := RegistryEnsureDispatcherWait;
   GQueue.Push(AProc);
   GWaitEvent.SetEvent;
 end;
@@ -93,31 +94,17 @@ begin
 end;
 
 type
-  TWindowUIKitDispatcher = class(TInterfacedObject, IWindowDispatcher)
-  private
-    FOwnerThread: UInt64;
+  TWindowUIKitDispatcher = class(TWindowDispatcherBase)
   public
-    constructor Create(AOwnerThread: UInt64);
-    function IsOnMainThread: Boolean; inline;
-    procedure Post(AProc: TWindowProcRef); overload;
-    procedure Post(AProc: TWindowProcMethod); overload;
-    procedure Post(AProc: TWindowProc); overload;
+    constructor Create(AOwnerThread: UInt64); reintroduce;
   end;
 
 constructor TWindowUIKitDispatcher.Create(AOwnerThread: UInt64);
-begin inherited Create; FOwnerThread := AOwnerThread; end;
-
-function TWindowUIKitDispatcher.IsOnMainThread: Boolean; inline;
-begin Result := platform_thread_id = FOwnerThread; end;
-
-procedure TWindowUIKitDispatcher.Post(AProc: TWindowProcRef);
-begin if not Assigned(AProc) then Exit; DispatcherPush(AProc); end;
-
-procedure TWindowUIKitDispatcher.Post(AProc: TWindowProcMethod);
-begin Post(WindowMethodToRef(AProc)); end;
-
-procedure TWindowUIKitDispatcher.Post(AProc: TWindowProc);
-begin Post(WindowProcToRef(AProc)); end;
+begin
+  if GQueue = nil then GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then GWaitEvent := RegistryEnsureDispatcherWait;
+  inherited Create(WindowFamilyToken, AOwnerThread, GQueue, GWaitEvent, nil, nil, False);
+end;
 
 type
   TWindowUIKit = class(TInterfacedObject, IWindow, IWindowHost)
@@ -129,7 +116,7 @@ type
     FWidth, FHeight: Integer;
     FOwnerThread: UInt64;
     FDispatcher: IWindowDispatcher;
-    FOnEvent: TWindowEventHandler;
+    FOnEvent: TWindowEventVariant;
     procedure RequireOpen; inline;
     procedure DoDispatch(const AEvent: TWindowEvent); inline;
     procedure RealClose;
@@ -180,8 +167,8 @@ begin
   FClosed := False;
   FVisible := False;
   FTitle := AOptions.Title;
-  if AOptions.Width <= 0 then FWidth := DefaultWindowOptions.Width else FWidth := AOptions.Width;
-  if AOptions.Height <= 0 then FHeight := DefaultWindowOptions.Height else FHeight := AOptions.Height;
+  if AOptions.Size.Width <= 0 then FWidth := DefaultWindowOptions.Size.Width else FWidth := AOptions.Size.Width;
+  if AOptions.Size.Height <= 0 then FHeight := DefaultWindowOptions.Size.Height else FHeight := AOptions.Size.Height;
   FHandle := AOptions.ParentHandle;
   FOwnerThread := platform_thread_id;
   FDispatcher := TWindowUIKitDispatcher.Create(FOwnerThread);
@@ -190,6 +177,7 @@ end;
 
 destructor TWindowUIKit.Destroy;
 begin
+  WindowEventVariantClear(FOnEvent);
   UnregisterLive(Pointer(Self));
   inherited;
 end;
@@ -197,19 +185,18 @@ end;
 procedure TWindowUIKit.RequireOpen;
 begin if FClosed then raise EWindowClosed.Create('window is closed'); end;
 
-procedure TWindowUIKit.DoDispatch(const AEvent: TWindowEvent);
-var
-  H: TWindowEventHandler;
+procedure TWindowUIKit.DoDispatch(const AEvent: TWindowEvent); inline;
 begin
+  // 零堆分配分发：Method/Proc 直存 variant，inline 零拷贝
   if FClosed then Exit;
-  H := FOnEvent;
-  if Assigned(H) then H(AEvent);
+  WindowEventVariantDispatch(FOnEvent, AEvent);
 end;
 
 procedure TWindowUIKit.RealClose;
 begin
   if FClosed then Exit;
   FClosed := True;
+  WindowEventVariantClear(FOnEvent);
   FVisible := False;
   FHandle := nil;
   UnregisterLive(Pointer(Self));
@@ -293,26 +280,29 @@ end;
 function TWindowUIKit.GetDispatcher: IWindowDispatcher; inline;
 begin Result := FDispatcher; end;
 
-procedure TWindowUIKit.OnEvent(AHandler: TWindowEventHandler);
-begin RequireOpen; FOnEvent := AHandler; end;
+procedure TWindowUIKit.OnEvent(AHandler: TWindowEventHandler); inline;
+begin RequireOpen; FOnEvent := WindowEventVariantFromRef(AHandler); end;
 
-procedure TWindowUIKit.OnEvent(AHandler: TWindowEventMethod);
-begin OnEvent(EventMethodToRef(AHandler)); end;
+procedure TWindowUIKit.OnEvent(AHandler: TWindowEventMethod); inline;
+begin
+  // 零堆分配直存 wedkMethod，inline 零拷贝
+  RequireOpen; FOnEvent := WindowEventVariantFromMethod(AHandler);
+end;
 
-procedure TWindowUIKit.OnEvent(AHandler: TWindowEventProc);
-begin OnEvent(EventProcToRef(AHandler)); end;
+procedure TWindowUIKit.OnEvent(AHandler: TWindowEventProc); inline;
+begin RequireOpen; FOnEvent := WindowEventVariantFromProc(AHandler); end;
 
 procedure TWindowUIKit.HostResized(AWidth, AHeight: Integer);
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostResized(AWidth, AHeight); end); Exit; end; RequireOpen; if AWidth<0 then AWidth:=0; if AHeight<0 then AHeight:=0; FWidth:=AWidth; FHeight:=AHeight; E := Default(TWindowEvent); E.Kind:=weResized; E.Width:=FWidth; E.Height:=FHeight; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostResized(AWidth, AHeight); end); Exit; end; RequireOpen; if AWidth<0 then AWidth:=0; if AHeight<0 then AHeight:=0; FWidth:=AWidth; FHeight:=AHeight; E := Default(TWindowEvent); E.Kind:=weResized; E.Width:=TWindowPixel(FWidth); E.Height:=TWindowPixel(FHeight); E.X:=TWindowPixel(0); E.Y:=TWindowPixel(0); E.NewScale:=TWindowScale.Invalid; DoDispatch(E); end;
 
 procedure TWindowUIKit.HostScaleChanged(ANewScale: Double);
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostScaleChanged(ANewScale); end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=ANewScale; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostScaleChanged(ANewScale); end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weScaleChanged; E.Width:=TWindowPixel(0); E.Height:=TWindowPixel(0); E.X:=TWindowPixel(0); E.Y:=TWindowPixel(0); E.NewScale:=TWindowScale.FromFactor(ANewScale); DoDispatch(E); end;
 
 procedure TWindowUIKit.HostCloseRequested;
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weCloseRequested; E.Width:=TWindowPixel(0); E.Height:=TWindowPixel(0); E.X:=TWindowPixel(0); E.Y:=TWindowPixel(0); E.NewScale:=TWindowScale.Invalid; DoDispatch(E); end;
 
 function CreateWindowUIKit(const AOptions: TWindowOptions): IWindow;
 begin Result := TWindowUIKit.Create(AOptions); end;
@@ -320,7 +310,7 @@ begin Result := TWindowUIKit.Create(AOptions); end;
 procedure WindowUIKitRunLoop;
 begin
   GLoopQuit := False;
-  if GWaitEvent=nil then GWaitEvent := CreateEvent(False);
+  if GWaitEvent=nil then GWaitEvent := RegistryEnsureDispatcherWait;
   while not GLoopQuit do
   begin
     DispatcherDrain;
@@ -331,8 +321,21 @@ begin
 end;
 
 function UIKitPumpOnce: Boolean;
-var LProc: TWindowProcRef;
-begin Result := DispatcherPop(LProc); if Result then try if Assigned(LProc) then LProc(); except raise; end; end;
+var LItem: TWindowWorkItem;
+begin
+  Result := False;
+  if GQueue = nil then Exit(False);
+  Result := GQueue.TryPopItem(LItem);
+  if Result then
+    try
+      case LItem.Kind of
+        wwkRef: if Assigned(LItem.Ref) then LItem.Ref();
+        wwkMethod: if Assigned(LItem.Method) then LItem.Method();
+        wwkProc: if Assigned(LItem.Proc) then LItem.Proc();
+      end;
+    except raise; end;
+  LItem.Ref := nil;
+end;
 
 procedure WindowUIKitQuitLoop;
 begin
@@ -341,9 +344,27 @@ begin
   DispatcherDrain;
 end;
 
+procedure RegisterUIKitBackend;
+var LDesc: TBackendDesc;
+begin
+  LDesc.Kind := wkUIKit;
+  LDesc.Probe := @WindowUIKitIsAvailable;
+  LDesc.Create := @CreateWindowUIKit;
+  LDesc.Live := @UIKitLiveWindowCount;
+  LDesc.Run := @WindowUIKitRunLoop;
+  LDesc.Quit := @WindowUIKitQuitLoop;
+  LDesc.Pump := @UIKitPumpOnce;
+  LDesc.Sonames := WINDOW_UIKIT_SONAMES;
+  RegistryRegister(LDesc);
+end;
+
+initialization
+  RegisterUIKitBackend;
+
 finalization
   GLiveRegistry.Free;
-  GQueue.Free;
+  // 单源托管：GQueue/GWaitEvent 由 registry 统一释放，backend 仅置 nil 不双重 Free，heaptrc 0
+  GQueue := nil;
   GWaitEvent := nil;
 
 end.

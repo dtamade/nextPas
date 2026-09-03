@@ -22,6 +22,9 @@ function TryLoadWindowUIKit(out AInfo: TWindowUIKitLoadInfo): Boolean;
 procedure UnloadWindowUIKit;
 function WindowUIKitLoadInfo: TWindowUIKitLoadInfo;
 function WindowUIKitIsLoaded: Boolean;
+const
+  WINDOW_UIKIT_SONAMES = 'libUIKit.so|UIKit.framework';
+function WindowUIKitSonames: string; inline;
 
 implementation
 
@@ -110,6 +113,11 @@ end;
 function WindowUIKitIsLoaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function WindowUIKitSonames: string; inline;
+begin
+  Result := WINDOW_UIKIT_SONAMES;
 end;
 
 end.

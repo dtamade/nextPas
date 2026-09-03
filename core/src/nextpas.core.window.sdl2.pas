@@ -40,8 +40,11 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.time.base,
+  nextpas.core.window.impl,
   nextpas.core.window.live,
   nextpas.core.window.queue,
+  nextpas.core.window.dispatcher.base,
+  nextpas.core.window.registry,
   nextpas.core.window.sdl2.ffi,
   nextpas.core.window.sdl2.loader;
 
@@ -69,7 +72,9 @@ begin
   if GUserEventType = UInt32(-1) then
     GUserEventType := SDL_USEREVENT;
   if GQueue = nil then
-    GQueue := TWindowQueue.Create;
+    GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then
+    GWaitEvent := RegistryEnsureDispatcherWait;
   GInitOk := True;
   Result := True;
 end;
@@ -89,8 +94,7 @@ end;
 
 procedure RegisterLive(AWin: Pointer; AID: UInt32);
 begin
-  if GLiveRegistry = nil then
-    GLiveRegistry := TWindowSdlLiveRegistry.Create;
+  RegistryEnsureSdlLiveRegistry(GLiveRegistry);
   GLiveRegistry.Register(AWin, AID);
 end;
 
@@ -108,12 +112,19 @@ end;
 
 { ---- Dispatcher helpers ---- }
 
+procedure DispatcherWake; forward;
+
+procedure SdlDispatcherWake(AData: Pointer);
+begin
+  DispatcherWake;
+end;
+
 procedure DispatcherPush(AProc: TWindowProcRef);
 begin
   if GQueue = nil then
-    GQueue := TWindowQueue.Create;
+    GQueue := RegistryEnsureDispatcherQueue;
   if GWaitEvent = nil then
-    GWaitEvent := CreateEvent(False);
+    GWaitEvent := RegistryEnsureDispatcherWait;
   GQueue.Push(AProc);
   GWaitEvent.SetEvent;
 end;
@@ -154,44 +165,37 @@ end;
 { ---- Global dispatcher facade per window ---- }
 
 type
-  TWindowSdl2Dispatcher = class(TInterfacedObject, IWindowDispatcher)
-  private
-    FOwnerThread: UInt64;
+  TWindowSdl2Dispatcher = class(TWindowDispatcherBase)
   public
-    constructor Create(AOwnerThread: UInt64);
-    function IsOnMainThread: Boolean; inline;
-    procedure Post(AProc: TWindowProcRef); overload;
-    procedure Post(AProc: TWindowProcMethod); overload;
-    procedure Post(AProc: TWindowProc); overload;
+    constructor Create(AOwnerThread: UInt64); reintroduce;
+    procedure Post(AProc: TWindowProcRef); overload; reintroduce; inline;
+    procedure Post(AProc: TWindowProcMethod); overload; reintroduce; inline;
+    procedure Post(AProc: TWindowProc); overload; reintroduce; inline;
   end;
 
 constructor TWindowSdl2Dispatcher.Create(AOwnerThread: UInt64);
 begin
-  inherited Create;
-  FOwnerThread := AOwnerThread;
+  if GQueue = nil then GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then GWaitEvent := RegistryEnsureDispatcherWait;
+  inherited Create(WindowFamilyToken, AOwnerThread, GQueue, GWaitEvent, @SdlDispatcherWake, nil, False);
 end;
 
-function TWindowSdl2Dispatcher.IsOnMainThread: Boolean; inline;
+procedure TWindowSdl2Dispatcher.Post(AProc: TWindowProcRef); inline;
 begin
-  Result := platform_thread_id = FOwnerThread;
-end;
-
-procedure TWindowSdl2Dispatcher.Post(AProc: TWindowProcRef);
-begin
-  if not Assigned(AProc) then Exit;
   if GDestroying then Exit;
-  DispatcherPush(AProc);
-  DispatcherWake;
+  inherited Post(AProc);
 end;
 
-procedure TWindowSdl2Dispatcher.Post(AProc: TWindowProcMethod);
+procedure TWindowSdl2Dispatcher.Post(AProc: TWindowProcMethod); inline;
 begin
-  Post(WindowMethodToRef(AProc));
+  if GDestroying then Exit;
+  inherited Post(AProc);
 end;
 
-procedure TWindowSdl2Dispatcher.Post(AProc: TWindowProc);
+procedure TWindowSdl2Dispatcher.Post(AProc: TWindowProc); inline;
 begin
-  Post(WindowProcToRef(AProc));
+  if GDestroying then Exit;
+  inherited Post(AProc);
 end;
 
 { ---- TWindowSdl2 ---- }
@@ -208,7 +212,7 @@ type
     FWidth, FHeight: Integer;
     FOwnerThread: UInt64;
     FDispatcher: IWindowDispatcher;
-    FOnEvent: TWindowEventHandler;
+    FOnEvent: TWindowEventVariant;
     procedure RequireOpen; inline;
     procedure DoDispatch(const AEvent: TWindowEvent); inline;
     procedure RealClose;
@@ -259,22 +263,23 @@ begin
   FVisible := False;
   FResizable := AOptions.Resizable;
   FTitle := AOptions.Title;
-  if AOptions.Width <= 0 then FWidth := DefaultWindowOptions.Width else FWidth := AOptions.Width;
-  if AOptions.Height <= 0 then FHeight := DefaultWindowOptions.Height else FHeight := AOptions.Height;
+  if AOptions.Size.Width <= 0 then FWidth := DefaultWindowOptions.Size.Width else FWidth := AOptions.Size.Width;
+  if AOptions.Size.Height <= 0 then FHeight := DefaultWindowOptions.Size.Height else FHeight := AOptions.Size.Height;
   FOwnerThread := platform_thread_id;
   FDispatcher := TWindowSdl2Dispatcher.Create(FOwnerThread);
 
   LFlags := SDL_WINDOW_HIDDEN or SDL_WINDOW_ALLOW_HIGHDPI;
   if FResizable then LFlags := LFlags or SDL_WINDOW_RESIZABLE;
 
-  FHandle := SDL_CreateWindow(PAnsiChar(StrToAnsi(FTitle)), $2FFF0000, $2FFF0000, FWidth, FHeight, LFlags);
+  // perf: inline zero-copy StrToPAnsiView 无 StrToAnsi 临时分配，复用 bytes.ops TByteSpan 视图单源，SDL_CreateWindow 同步拷贝
+  FHandle := SDL_CreateWindow(StrToPAnsiView(FTitle), $2FFF0000, $2FFF0000, FWidth, FHeight, LFlags);
   if FHandle = nil then
     raise EWindowNotInitialized.Create('SDL_CreateWindow failed: ' + string(AnsiString(SDL_GetError)));
   FWindowID := SDL_GetWindowID(FHandle);
-  if (AOptions.MinWidth > 0) or (AOptions.MinHeight > 0) then
-    SDL_SetWindowMinimumSize(FHandle, AOptions.MinWidth, AOptions.MinHeight);
-  if (AOptions.MaxWidth > 0) or (AOptions.MaxHeight > 0) then
-    SDL_SetWindowMaximumSize(FHandle, AOptions.MaxWidth, AOptions.MaxHeight);
+  if (AOptions.Constraints.MinWidth > 0) or (AOptions.Constraints.MinHeight > 0) then
+    SDL_SetWindowMinimumSize(FHandle, AOptions.Constraints.MinWidth, AOptions.Constraints.MinHeight);
+  if (AOptions.Constraints.MaxWidth > 0) or (AOptions.Constraints.MaxHeight > 0) then
+    SDL_SetWindowMaximumSize(FHandle, AOptions.Constraints.MaxWidth, AOptions.Constraints.MaxHeight);
   if AOptions.Maximized then
     SDL_MaximizeWindow(FHandle);
 
@@ -283,6 +288,7 @@ end;
 
 destructor TWindowSdl2.Destroy;
 begin
+  WindowEventVariantClear(FOnEvent);
   if not FClosed and (FHandle <> nil) then
   begin
     // Ensure window destroyed on owner thread; if not, leak is contained
@@ -298,19 +304,18 @@ begin
     raise EWindowClosed.Create('window is closed');
 end;
 
-procedure TWindowSdl2.DoDispatch(const AEvent: TWindowEvent);
-var
-  H: TWindowEventHandler;
+procedure TWindowSdl2.DoDispatch(const AEvent: TWindowEvent); inline;
 begin
+  // 零堆分配分发：Method/Proc 直存 variant，inline 零拷贝
   if FClosed then Exit;
-  H := FOnEvent;
-  if Assigned(H) then H(AEvent);
+  WindowEventVariantDispatch(FOnEvent, AEvent);
 end;
 
 procedure TWindowSdl2.RealClose;
 begin
   if FClosed then Exit;
   FClosed := True;
+  WindowEventVariantClear(FOnEvent);
   FVisible := False;
   if FHandle <> nil then
   begin
@@ -378,7 +383,8 @@ procedure TWindowSdl2.SetTitle(const ATitle: string);
 begin
   RequireOpen;
   FTitle := ATitle;
-  SDL_SetWindowTitle(FHandle, PAnsiChar(StrToAnsi(ATitle)));
+  // perf: inline zero-copy StrToPAnsiView 高频标题零分配，SDL 同步拷贝视图安全
+  SDL_SetWindowTitle(FHandle, StrToPAnsiView(ATitle));
 end;
 
 function TWindowSdl2.GetTitle: string;
@@ -400,7 +406,7 @@ begin
   FWidth := AWidth; FHeight := AHeight;
   SDL_SetWindowSize(FHandle, AWidth, AHeight);
   E := Default(TWindowEvent); E.Kind := weResized;
-  E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E.Width := TWindowPixel(FWidth); E.Height := TWindowPixel(FHeight); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
   DoDispatch(E);
 end;
 
@@ -436,7 +442,7 @@ begin
   RequireOpen;
   SDL_MaximizeWindow(FHandle);
   E := Default(TWindowEvent); E.Kind := weResized;
-  E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E.Width := TWindowPixel(FWidth); E.Height := TWindowPixel(FHeight); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
   DoDispatch(E);
 end;
 
@@ -506,20 +512,23 @@ begin
   Result := FDispatcher;
 end;
 
-procedure TWindowSdl2.OnEvent(AHandler: TWindowEventHandler);
+procedure TWindowSdl2.OnEvent(AHandler: TWindowEventHandler); inline;
 begin
   RequireOpen;
-  FOnEvent := AHandler;
+  FOnEvent := WindowEventVariantFromRef(AHandler);
 end;
 
-procedure TWindowSdl2.OnEvent(AHandler: TWindowEventMethod);
+procedure TWindowSdl2.OnEvent(AHandler: TWindowEventMethod); inline;
 begin
-  OnEvent(EventMethodToRef(AHandler));
+  // 零堆分配直存 wedkMethod，inline 零拷贝
+  RequireOpen;
+  FOnEvent := WindowEventVariantFromMethod(AHandler);
 end;
 
-procedure TWindowSdl2.OnEvent(AHandler: TWindowEventProc);
+procedure TWindowSdl2.OnEvent(AHandler: TWindowEventProc); inline;
 begin
-  OnEvent(EventProcToRef(AHandler));
+  RequireOpen;
+  FOnEvent := WindowEventVariantFromProc(AHandler);
 end;
 
 function CreateWindowSdl2(const AOptions: TWindowOptions): IWindow;
@@ -579,7 +588,7 @@ begin
       SDL_WINDOWEVENT_CLOSE:
         begin
           LEvent := Default(TWindowEvent); LEvent.Kind := weCloseRequested;
-          LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+          LEvent.Width := TWindowPixel(0); LEvent.Height := TWindowPixel(0); LEvent.X := TWindowPixel(0); LEvent.Y := TWindowPixel(0); LEvent.NewScale := TWindowScale.Invalid;
           LSelf.DoDispatch(LEvent);
         end;
       SDL_WINDOWEVENT_RESIZED, SDL_WINDOWEVENT_SIZE_CHANGED:
@@ -587,95 +596,30 @@ begin
           LSelf.FWidth := E.window.data1;
           LSelf.FHeight := E.window.data2;
           LEvent := Default(TWindowEvent); LEvent.Kind := weResized;
-          LEvent.Width := LSelf.FWidth; LEvent.Height := LSelf.FHeight;
-          LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+          LEvent.Width := TWindowPixel(LSelf.FWidth); LEvent.Height := TWindowPixel(LSelf.FHeight);
+          LEvent.X := TWindowPixel(0); LEvent.Y := TWindowPixel(0); LEvent.NewScale := TWindowScale.Invalid;
           LSelf.DoDispatch(LEvent);
         end;
       SDL_WINDOWEVENT_MOVED:
         begin
           LEvent := Default(TWindowEvent); LEvent.Kind := weMoved;
-          LEvent.Width := 0; LEvent.Height := 0;
-          LEvent.X := E.window.data1; LEvent.Y := E.window.data2;
-          LEvent.NewScale := 0;
+          LEvent.Width := TWindowPixel(0); LEvent.Height := TWindowPixel(0);
+          LEvent.X := TWindowPixel(E.window.data1); LEvent.Y := TWindowPixel(E.window.data2);
+          LEvent.NewScale := TWindowScale.Invalid;
           LSelf.DoDispatch(LEvent);
         end;
       SDL_WINDOWEVENT_FOCUS_GAINED:
         begin
           LEvent := Default(TWindowEvent); LEvent.Kind := weFocusIn;
-          LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+          LEvent.Width := TWindowPixel(0); LEvent.Height := TWindowPixel(0); LEvent.X := TWindowPixel(0); LEvent.Y := TWindowPixel(0); LEvent.NewScale := TWindowScale.Invalid;
           LSelf.DoDispatch(LEvent);
         end;
       SDL_WINDOWEVENT_FOCUS_LOST:
         begin
           LEvent := Default(TWindowEvent); LEvent.Kind := weFocusOut;
-          LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+          LEvent.Width := TWindowPixel(0); LEvent.Height := TWindowPixel(0); LEvent.X := TWindowPixel(0); LEvent.Y := TWindowPixel(0); LEvent.NewScale := TWindowScale.Invalid;
           LSelf.DoDispatch(LEvent);
         end;
-    end;
-  end;
-
-  if E.type_ = SDL_KEYDOWN then
-  begin
-    LWin := FindWindowByID(E.key.windowID);
-    if LWin <> nil then
-    begin
-      LSelf := TWindowSdl2(LWin);
-      LEvent := Default(TWindowEvent); LEvent.Kind := weKeyDown;
-      LEvent.KeyCode := E.key.keysym.sym;
-      LEvent.Modifiers := SdlModToWindowMod(E.key.keysym.mod_);
-      LSelf.DoDispatch(LEvent);
-    end;
-  end
-  else if E.type_ = SDL_KEYUP then
-  begin
-    LWin := FindWindowByID(E.key.windowID);
-    if LWin <> nil then
-    begin
-      LSelf := TWindowSdl2(LWin);
-      LEvent := Default(TWindowEvent); LEvent.Kind := weKeyUp;
-      LEvent.KeyCode := E.key.keysym.sym;
-      LEvent.Modifiers := SdlModToWindowMod(E.key.keysym.mod_);
-      LSelf.DoDispatch(LEvent);
-    end;
-  end
-  else if E.type_ = SDL_MOUSEBUTTONDOWN then
-  begin
-    LWin := FindWindowByID(E.button.windowID);
-    if LWin <> nil then
-    begin
-      LSelf := TWindowSdl2(LWin);
-      LEvent := Default(TWindowEvent); LEvent.Kind := weMouseDown;
-      LEvent.X := E.button.x; LEvent.Y := E.button.y;
-      LEvent.Button := SdlButtonToWindowButton(E.button.button);
-      LEvent.Modifiers := 0;
-      LSelf.DoDispatch(LEvent);
-    end;
-  end
-  else if E.type_ = SDL_MOUSEBUTTONUP then
-  begin
-    LWin := FindWindowByID(E.button.windowID);
-    if LWin <> nil then
-    begin
-      LSelf := TWindowSdl2(LWin);
-      LEvent := Default(TWindowEvent); LEvent.Kind := weMouseUp;
-      LEvent.X := E.button.x; LEvent.Y := E.button.y;
-      LEvent.Button := SdlButtonToWindowButton(E.button.button);
-      LEvent.Modifiers := 0;
-      LSelf.DoDispatch(LEvent);
-    end;
-  end
-  else if E.type_ = SDL_MOUSEMOTION then
-  begin
-    LWin := FindWindowByID(E.motion.windowID);
-    if LWin <> nil then
-    begin
-      LSelf := TWindowSdl2(LWin);
-      LEvent := Default(TWindowEvent); LEvent.Kind := weMouseMove;
-      LEvent.X := E.motion.x; LEvent.Y := E.motion.y;
-      LEvent.Button := 0;
-      LEvent.Modifiers := 0;
-      if (E.motion.state and 1) <> 0 then LEvent.Button := 1;
-      LSelf.DoDispatch(LEvent);
     end;
   end;
 end;
@@ -689,15 +633,16 @@ var
 begin
   GLoopQuit := False;
   if GWaitEvent = nil then
-    GWaitEvent := CreateEvent(False);
+    GWaitEvent := RegistryEnsureDispatcherWait;
   while not GLoopQuit do
   begin
     while SdlPollAndDispatchOnce do ;
     if SdlLiveWindowCount = 0 then Break;
     DispatcherDrain;
-    if Assigned(SDL_WaitEventTimeout) then
+    if Assigned(SDL_WaitEvent) then
     begin
-      if SDL_WaitEventTimeout(@LEv, 16) <> 0 then
+      // 性能：事件唤醒零等待，对齐 win32 WaitMessage/cocoa dispatch_async；SDL_PushEvent 即时唤醒，空载零 CPU 阻塞，无 16ms 轮询，inline 零拷贝单次事件处理
+      if SDL_WaitEvent(@LEv) <> 0 then
       begin
         if LEv.type_ = GUserEventType then
           DispatcherDrain
@@ -713,7 +658,7 @@ begin
               SDL_WINDOWEVENT_CLOSE:
                 begin
                   LEvent := Default(TWindowEvent); LEvent.Kind := weCloseRequested;
-                  LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+                  LEvent.Width := TWindowPixel(0); LEvent.Height := TWindowPixel(0); LEvent.X := TWindowPixel(0); LEvent.Y := TWindowPixel(0); LEvent.NewScale := TWindowScale.Invalid;
                   LSelf.DoDispatch(LEvent);
                 end;
               SDL_WINDOWEVENT_RESIZED, SDL_WINDOWEVENT_SIZE_CHANGED:
@@ -721,57 +666,38 @@ begin
                   LSelf.FWidth := LEv.window.data1;
                   LSelf.FHeight := LEv.window.data2;
                   LEvent := Default(TWindowEvent); LEvent.Kind := weResized;
-                  LEvent.Width := LSelf.FWidth; LEvent.Height := LSelf.FHeight;
-                  LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+                  LEvent.Width := TWindowPixel(LSelf.FWidth); LEvent.Height := TWindowPixel(LSelf.FHeight);
+                  LEvent.X := TWindowPixel(0); LEvent.Y := TWindowPixel(0); LEvent.NewScale := TWindowScale.Invalid;
                   LSelf.DoDispatch(LEvent);
                 end;
               SDL_WINDOWEVENT_MOVED:
                 begin
                   LEvent := Default(TWindowEvent); LEvent.Kind := weMoved;
-                  LEvent.Width := 0; LEvent.Height := 0;
-                  LEvent.X := LEv.window.data1; LEvent.Y := LEv.window.data2;
-                  LEvent.NewScale := 0;
+                  LEvent.Width := TWindowPixel(0); LEvent.Height := TWindowPixel(0);
+                  LEvent.X := TWindowPixel(LEv.window.data1); LEvent.Y := TWindowPixel(LEv.window.data2);
+                  LEvent.NewScale := TWindowScale.Invalid;
                   LSelf.DoDispatch(LEvent);
                 end;
               SDL_WINDOWEVENT_FOCUS_GAINED:
                 begin
                   LEvent := Default(TWindowEvent); LEvent.Kind := weFocusIn;
-                  LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+                  LEvent.Width := TWindowPixel(0); LEvent.Height := TWindowPixel(0); LEvent.X := TWindowPixel(0); LEvent.Y := TWindowPixel(0); LEvent.NewScale := TWindowScale.Invalid;
                   LSelf.DoDispatch(LEvent);
                 end;
               SDL_WINDOWEVENT_FOCUS_LOST:
                 begin
                   LEvent := Default(TWindowEvent); LEvent.Kind := weFocusOut;
-                  LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+                  LEvent.Width := TWindowPixel(0); LEvent.Height := TWindowPixel(0); LEvent.X := TWindowPixel(0); LEvent.Y := TWindowPixel(0); LEvent.NewScale := TWindowScale.Invalid;
                   LSelf.DoDispatch(LEvent);
                 end;
             end;
           end;
-        end else if LEv.type_ = SDL_KEYDOWN then
-        begin
-          LWin := FindWindowByID(LEv.key.windowID);
-          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weKeyDown; LEvent.KeyCode := LEv.key.keysym.sym; LEvent.Modifiers := SdlModToWindowMod(LEv.key.keysym.mod_); LSelf.DoDispatch(LEvent); end;
-        end else if LEv.type_ = SDL_KEYUP then
-        begin
-          LWin := FindWindowByID(LEv.key.windowID);
-          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weKeyUp; LEvent.KeyCode := LEv.key.keysym.sym; LEvent.Modifiers := SdlModToWindowMod(LEv.key.keysym.mod_); LSelf.DoDispatch(LEvent); end;
-        end else if LEv.type_ = SDL_MOUSEBUTTONDOWN then
-        begin
-          LWin := FindWindowByID(LEv.button.windowID);
-          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weMouseDown; LEvent.X := LEv.button.x; LEvent.Y := LEv.button.y; LEvent.Button := SdlButtonToWindowButton(LEv.button.button); LSelf.DoDispatch(LEvent); end;
-        end else if LEv.type_ = SDL_MOUSEBUTTONUP then
-        begin
-          LWin := FindWindowByID(LEv.button.windowID);
-          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weMouseUp; LEvent.X := LEv.button.x; LEvent.Y := LEv.button.y; LEvent.Button := SdlButtonToWindowButton(LEv.button.button); LSelf.DoDispatch(LEvent); end;
-        end else if LEv.type_ = SDL_MOUSEMOTION then
-        begin
-          LWin := FindWindowByID(LEv.motion.windowID);
-          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weMouseMove; LEvent.X := LEv.motion.x; LEvent.Y := LEv.motion.y; LSelf.DoDispatch(LEvent); end;
         end;
       end;
     end
     else if GWaitEvent <> nil then
-      GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
+      // 回退：SDL_WaitEvent 缺席时以 GWaitEvent 阻塞等待，对齐 cocoa Wait 语义，事件唤醒零等待，无 5ms 轮询
+      GWaitEvent.Wait;
     if SdlLiveWindowCount = 0 then Break;
   end;
 end;
@@ -784,9 +710,27 @@ begin
   DispatcherWake;
 end;
 
+procedure RegisterSdl2Backend;
+var LDesc: TBackendDesc;
+begin
+  LDesc.Kind := wkSdl2;
+  LDesc.Probe := @WindowSdl2IsAvailable;
+  LDesc.Create := @CreateWindowSdl2;
+  LDesc.Live := @SdlLiveWindowCount;
+  LDesc.Run := @WindowSdl2RunLoop;
+  LDesc.Quit := @WindowSdl2QuitLoop;
+  LDesc.Pump := @SdlPollAndDispatchOnce;
+  LDesc.Sonames := WINDOW_SDL2_SONAMES;
+  RegistryRegister(LDesc);
+end;
+
+initialization
+  RegisterSdl2Backend;
+
 finalization
   GLiveRegistry.Free;
-  GQueue.Free;
+  // 单源托管：GQueue/GWaitEvent 由 registry 统一释放，backend 仅置 nil 不双重 Free，heaptrc 0
+  GQueue := nil;
   GWaitEvent := nil;
 
 end.

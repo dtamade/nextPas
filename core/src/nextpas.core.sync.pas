@@ -24,7 +24,8 @@ uses
   nextpas.core.sync.notify,
   nextpas.core.sync.channel,
   nextpas.core.sync.scoped,
-  nextpas.core.sync.pool;
+  nextpas.core.sync.pool,
+  nextpas.core.sync.cow;
 
 type
   TLockState = nextpas.core.sync.base.TLockState;

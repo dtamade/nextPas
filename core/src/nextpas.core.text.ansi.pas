@@ -18,6 +18,8 @@ function AnsiPtrToStr(const P: PAnsiChar): string; inline;
 { 为 FFI 调用显式 Hold：Result 指向 Hold 的首字符，Hold 需在调用期间存活 }
 function HoldAnsi(const S: string; out Hold: AnsiString): PAnsiChar; inline;
 function StrToPAnsi(const S: string; out Hold: AnsiString): PAnsiChar; inline;
+{ 零拷贝视图：直接复用 string 的 NUL 终结缓冲，无 StrToAnsi 分配；inline 单源 bytes.ops TByteSpan 视图语义，FFI 同步拷贝故视图生命周期安全 }
+function StrToPAnsiView(const S: string): PAnsiChar; inline;
 
 { 容量与拼接：复用 bytes.ops 几何增长单源，避免逐次 SetLength O(n²)。 }
 procedure AnsiSetLogicalLenNoRealloc(var S: AnsiString; const ANewLen: SizeUInt); inline;
@@ -60,6 +62,12 @@ end;
 function StrToPAnsi(const S: string; out Hold: AnsiString): PAnsiChar;
 begin
   Result := HoldAnsi(S, Hold);
+end;
+
+function StrToPAnsiView(const S: string): PAnsiChar;
+begin
+  if S = '' then Exit(nil);
+  Result := PAnsiChar(S);
 end;
 
 procedure AnsiSetLogicalLenNoRealloc(var S: AnsiString; const ANewLen: SizeUInt); inline;

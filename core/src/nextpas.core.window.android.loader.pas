@@ -22,6 +22,9 @@ function TryLoadWindowAndroid(out AInfo: TWindowAndroidLoadInfo): Boolean;
 procedure UnloadWindowAndroid;
 function WindowAndroidLoadInfo: TWindowAndroidLoadInfo;
 function WindowAndroidIsLoaded: Boolean;
+const
+  WINDOW_ANDROID_SONAMES = 'libandroid.so|libnativewindow.so';
+function WindowAndroidSonames: string; inline;
 
 implementation
 
@@ -112,6 +115,11 @@ end;
 function WindowAndroidIsLoaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function WindowAndroidSonames: string; inline;
+begin
+  Result := WINDOW_ANDROID_SONAMES;
 end;
 
 end.
