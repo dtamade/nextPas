@@ -158,6 +158,8 @@ end.
   `platform.thread` 这类跨平台统一 API 默认不创建自己的 `*.ffi.pas`，而是消费
   `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
   owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
+- `tar` / `zip` / `archive` 等的 `*.common` 内部共享内核（类型级隔离·门面零 re-export，仅受信实现 `implementation uses` 可见，辅以 `CONTRACT` 机械门禁双重收敛；四件套外内部核形态，不属于四件套公共面）：仅供同模块 `*.reader`/`*.writer`/`*.fs`/`*.builder` 实现内复用，禁止门面 `nextpas.core.<module>` re-export 与门面外直引。
+- `tar` 的 `ITarBuilder` 单口直达 `AddEntryFromReader`（`nextpas.core.tar.intf` L2→L1 单向 `nextpas.core.io.intf(IReader)`，2026-09-02 精简完成，消除 `ITarStreamBuilder`+`AsStreamBuilder`+`TarBuilderAddFromReader` 四入口与 `QueryInterface` 分发仪式，`TarBuilder.Add(...).AddEntryFromReader(...).Finish` 一链直达），守 `bytes.ops` 单源 `CopyMemory/Move` inline 零拷贝、per-entry 局域缓冲 `try..finally` 必释无滞留（见 `core/docs/tar/CONTRACT.md §4`）。
 
 ### 单元体积指引
 
@@ -182,8 +184,8 @@ L0: 内核 (base, errors, platform, mem, log.intf; current governance set also l
 L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, time, id, testing)
      ↑ 只依赖 L0
 
-L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
-     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`、`sevenz.fs→fs/fs.intf`、`sevenz.coders→compress`、`git.native.zlib→compress + checksum.adler32` 单点缝 source-contract gated like respack.dirsource/vfs.os），其余同层依赖仍禁止
+L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation, archive, tar, zip)
+     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`、`sevenz.fs→fs/fs.intf`、`sevenz.coders→compress`、`git.native.zlib→compress + checksum.adler32` 单点缝 source-contract gated like respack.dirsource/vfs.os），其余同层依赖仍禁止；另 `archive`→`tar`/`zip` 经 `archive.fs` + `archive.pax` 家族缝单向显式依赖（见 module-registry L2 同层 one-way），禁循环
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -194,6 +196,7 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 - 只能向下依赖，不能向上依赖
 - 同层内允许单向依赖，禁止循环依赖（L2 例：`js`→`json` 为允许的同层单向，见 module-registry:50；`js` 的 `platform.dl` 仅 loader、`text.view/mem` 为 L0-L1，其余同层依赖如 `fs` 禁止；已登记同层如 `zip → compress/fs/checksum`、`sevenz → crypto/hash/compress`、`git → fs/compress/hash/zlib/checksum`（含 `git.native.zlib → compress + checksum.adler32` 复用 `bytes.ops` 单源）以注册表为准）
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
+- L2 同层显式 one-way 仅 via `nextpas.core.archive.fs` + `nextpas.core.archive.pax` 家族缝联邦：`tar`/`zip`/`sevenz.fs` 共享 walk/排序/防劫持/零拷贝落盘与 pax kv 等单源，家族缝归一，需在 `core/docs/core-module-registry.md` 显式登记 `federation via archive.fs + archive.pax` / `allowed dependencies`（L2 同层显式一-way），禁循环或隐式同层依赖
 - 单点 L2→L2 seam 必须在 `docs/module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝、`sevenz.fs` 唯一 fs 联邦缝、`sevenz.coders` 唯一 compress 缝 source-contract gated like respack.dirsource/vfs.os — bytes.ops 单源 inline 零拷贝 + try..finally 不丢）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
@@ -884,6 +887,9 @@ build/
 | `validation` | 数据校验（类型、范围、格式、嵌套） |
 | `mime`       | MIME 格式（RFC 2045/2046/2047/2231；mail 依赖） |
 | `respack`    | 资源打包格式（v1 线格式、writer/reader、embed 工具链） |
+| `archive`    | 归档共享助手（tar/zip 共享 walk/排序/防劫持/快照/零拷贝落盘 + pax kv，federated via archive.fs + archive.pax 家族缝，平台文件经 fs 单缝透出、pax kv 经 pax 单缝透出，L2 同层显式一-way，几何扩容 2×/16 + 零拷贝 pivot） |
+| `tar`        | tar 容器（ustar/pax/GNU，块对齐，两零块收尾，沙盒化，`base` 单源校验 + `common` 单点 pad/guard + 零拷贝切片 `EntryDataSlice`/`PByte` + `bytes.ops` 单源 `StringToBytes` 一次 Move + pax x/g 与 GNU L/K 长名 + bomb 守卫 + 确定性排序委托 `ArchiveCollectWalk` + 链式 `ITarBuilder` 薄门面） |
+| `zip`        | ZIP 容器（store/deflate，Zip64，WinZip AES，沙盒化，central+EOCD，流式解析，`base` 单源安全谓词 + `common` DOS 互转 + `bytes.ops` 单源 `StringToBytes`/`SpanCompare` + 零拷贝 `PByte` 落盘 + `builder` 薄门面） |
 | `vfs`        | 只读虚拟文件树（memtree/embedded/os/sub + ETag/Decompress 装饰器门面） |
 | `git`        | Git/libgit2 后端（同层单向 `fs/compress/hash/zlib/checksum` 豁免，`native.zlib → compress + checksum.adler32` 复用 `bytes.ops` 单源、`inline`/零拷贝 `PByte+Len`） |
 | `zip`        | ZIP 归档（同层单向 `compress/fs/checksum`） |

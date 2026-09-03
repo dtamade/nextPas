@@ -109,11 +109,11 @@ LZ4 error model: The stable `lz4:` error model is the default pure-Pascal surfac
 ## Performance
 
 - Deflate/Gzip: FPC paszlib by default; `nextpas.core.compress.zlib.ffi` documents the optional native zlib switch
-- LZ4: pure Pascal by default; define `NEXTPAS_USE_LZ4_NATIVE` for native liblz4 FFI
+- LZ4: pure Pascal by default; define `NEXTPAS_USE_LZ4_NATIVE` for native liblz4 FFI — `nextpas.core.compress` facade no longer branches with `{$IFDEF}`; backend selection is sunk to `nextpas.core.compress.lz4.native` (intf/ffi/impl owner, pure fallback) and `nextpas.core.compress.zstd` via `nextpas.core.compress.zstd.ffi` (ABI-only)
 - `make -C core/tests/nextpas.core.compress/test_compress_audit zlib-native-compile` only proves the native zlib branch compiles; the default audit gate does not provide native zlib runtime/link proof.
 - Run `make -C core/tests/nextpas.core.compress/test_compress_audit zlib-native-runtime` on hosts with system `libz.so` for native zlib runtime/link proof.
 - Native LZ4 audit is compile-only by default; run `make -C core/tests/nextpas.core.compress/test_compress_audit native-runtime` only on hosts with system liblz4 for runtime/link proof.
-- `nextpas.core.compress.lz4.ffi` is ABI-only for liblz4 declarations; `nextpas.core.compress.lz4.native` owns wrapper, fallback, and error-policy code.
+- `nextpas.core.compress.lz4.ffi` is ABI-only for liblz4 declarations; `nextpas.core.compress.lz4.native` owns wrapper, fallback, and error-policy code; `nextpas.core.compress.zstd.ffi` is ABI-only for libzstd, `nextpas.core.compress.zstd` owns one-shot/streaming and resource-release policy — facade `nextpas.core.compress` is pure `inline` forwarding with zero-copy `TBytes` views (no `Move` duplication, `bytes.ops` single-source).
 - Native LZ4 runtime proof requires the development link name `liblz4.so`, not only a runtime `liblz4.so.1` shared object.
 - When `pkg-config liblz4` is available, `native-runtime` uses that libdir for FPC linking and runtime shared-library lookup.
 - Streaming interface avoids full-buffer copies for large data

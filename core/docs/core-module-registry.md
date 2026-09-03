@@ -31,7 +31,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `embed` | L1 | embedding carrier thresholds (typed const <4MiB, EmbedRequireIncSize/ResPackRequireIncSize/EffectiveLimit inline zero-copy, MaxBlobBytes configurable) — independent strategy module extracted from respack.limits (S6); units live at `nextpas.core.embed.*` plus facade `nextpas.core.embed`; compatible alias `nextpas.core.respack.limits` forwards to `nextpas.core.embed.limits` | yes | L0 only (base/exception) | source-contract |
 | `collections` | L1 | containers | yes | L0 plus approved L1 | focused-runtime |
 | `compiler` | tooling | compiler mem/arena helpers | yes | L0 mem owners | draft |
-| `compress` | L2 | compression formats | yes | L0-L1 | focused-runtime |
+| `compress` | L2 | compression formats | yes | L0-L1 plus provider FFI (tar single source 已收敛至 nextpas.core.tar，compress.tar 已删除) | focused-runtime |
 | `checksum` | L1 | checksums (CRC-32, FNV-1a 32) | yes | L0 | focused-runtime |
 | `config` | L3 | configuration framework | yes | L0-L2 | focused-runtime |
 | `contracts` | L0 support | assertions/contracts | yes | L0 root | source-contract |
@@ -117,6 +117,8 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `qt` | L2 | Qt toolkit binding via self-wrap C shim (nextpas.core.qt family; ffi/loader/base; dlopen `libnextpas-qt.so`, Qt5/6 agnostic, deferred) | yes | L0-L1 plus platform.dl plus vendors/libnextpas-qt | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
+| `archive` | L2 | archive shared helpers (tar/zip walk/sort/symlink/snapshot/zero-copy + pax kv, federated via archive.fs + archive.pax) | yes | L0-L1 plus fs/io via platform.files (tar/zip owned, single seam for fs; pax kv single seam for strict pax) | focused-runtime — ArchivePaxParseRecords zero-copy PByte strict fail-closed供归档族复用 |
+| `tar` | L2 | tar container (ustar/pax/GNU, block-aligned, sandboxed, dir pack/extract + fluent builder) | yes | L0-L1 plus L2 federated via `archive.fs` + `archive.pax` single seam family (no direct `fs`; `tar.fs` is the `fs` seam for pack/extract, `tar.builder` is the `IBytesBuilder`/`IWriter` sink seam; shared walk/sort/snapshot/sink/CreateArchiveBuilder plus pax kv strict `ArchivePaxParseRecords`/`TarParsePaxKVRecords` zero-copy, L2 同层显式 one-way) | focused-runtime |
 | `zip` | L2 | ZIP archive container (store/deflate, Zip64, streaming, WinZip AES, sequential, builder, dir pack/extract) | yes | L0-L2 (compress/fs/checksum owners) | source-contract + focused-runtime |
 
 Database family: backends are L2 implementations inside the `db` family —

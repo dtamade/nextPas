@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.0 (2026-09-03) — nextpas.core.tar 1.0.0 独立 L2 晋升
+
+`nextpas.core.compress.tar` 寄生抽离为独立 `nextpas.core.tar`  परिवार，6 维打磨对齐 `zip` 标杆：四件套 `base/intf/reader/writer/fs` + 薄门面 `tar.pas` + 兼容转发 `compress.tar`，`L2` 归一 `IWriter/IReader/IStream`。
+
+### Highlights
+
+- **模块化**：`tar.base → tar.intf → tar.common/reader/writer/fs/builder → tar` 门面，三层 `base←intf←实现←门面` 单向，`common` 单点 `PadToBlock/Guard*` 消除两端重复，`archive.fs` 几何扩容/排序/防劫持复用
+- **性能**：`HeaderIsZeroOrValid` 单遍 512 融合校验，`ParsePaxRecordsSlice` 零拷贝无 `Copy`，`EntryDataSlice/OpenEntryStream` 外部视图 + `ArchiveWriteFileSlice` 零拷贝落盘，`bench_tar` 7 项（`tar/pack/200x512B`、`builder-pack`、`open/parse`、`extract-*`、`write/read 1MB`）
+- **高级感**：`C_TAR_OFF_*` 命名常量统一头布局，`IsSafeArchiveEntryName(AMaxBytes)` 抽参消除 `zip/tar` 35 行重复，`PutOctal` base-256 阈值 `((ALen-1)*8+7)>=63` 防 `shl 63`，`NumericField` 负数 `$FF` 符号扩展
+- **复用度**：`TarBuilder` 链式薄门面 `ITarBuilder`（`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/Finish`），与 `TTarWriter` bytes 级一致，`TarPackDir/TarExtractToDir` 确定性排序 + `deferred dir` 逆序定稿
+- **稳定性**：`MaxEntrySize(0→1GiB)`/`MaxTotalSize` 双守卫计入 `L/K/x/g` 载荷，`IsSafeTarEntryName` 写端 `EArgumentError`/读端 `EParseError`，双校验和 `unsigned/signed` 任一过，`EIOError` 携带 `offset/size` 上下文
+- **完整性**：`docs/tar/{README,CONTRACT}` 8 不变量 + 源契约 `test_tar_contract`，4 门 `reader/writer/fs/contract` + 回归 `compress_tar` 全绿，`tar_roundtrip` 全链路示例，`compress.tar` 保留 thin forward
+
+### Testing
+
+- `test_tar_reader` / `writer` / `fs` / `contract` 聚焦门全绿 `[HEAPTRC] 0 leak`，`test_compress_tar` 回归仍绿，`make hygiene` / `git diff --check` 通过
 ## 1.0.2 (2026-09-02) — nextpas.core.audio 1.5.3 (PR评审闭环)
 
 `78→85` 文件收敛（`29+56`, unique `83+2` bus facade），`11→23` GUID（B前缀 bus异形 `B1A2B3C4-D5E6-7890-ABCD-C00000000001/02`），`14→24` 门 `195→268` tests，`wav` 四件套 L2化 + `opus` 占位 + `bus` 本地 pin/实时零分配/8MB 守卫 + `bench` 扩 `Graph/1K/4K Timeline/1K Loop Device.Drive/1K`，`24` 门 + `85` 文件 + `23` GUID + `test_bus/test_wav` + `Probe≤4KB` + `hygiene` 全绿，`VERSION 1.0.1→1.0.2`。

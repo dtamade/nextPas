@@ -230,6 +230,10 @@ function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 function CurrentException: Exception; inline;
 function CurrentExceptionMessage: string; inline;
 function CurrentExceptionIs(AClass: ExceptClass): Boolean; inline;
+{ ExceptObject — single-source query of current exception (RaiseList 封装),
+  inline zero-copy, L0 owner for SafeFail without L2 直接耦合编译器运行时细节. }
+function ExceptObject: TObject; inline;
+function IsExceptionUnwinding: Boolean; inline;
 
 implementation
 
@@ -716,6 +720,16 @@ function CurrentExceptionIs(AClass: ExceptClass): Boolean; inline;
 begin
   Result := (SysUtils.ExceptObject <> nil) and (SysUtils.ExceptObject is AClass);
 end;
+
+function ExceptObject: TObject; inline;
+begin
+  Result := SysUtils.ExceptObject;
+end;
+
+function IsExceptionUnwinding: Boolean; inline;
+begin
+  Result := SysUtils.ExceptObject <> nil;
+end;
 {$ELSE}
 function ExceptAddr: Pointer; inline;
 begin
@@ -743,6 +757,16 @@ begin
 end;
 
 function CurrentExceptionIs(AClass: ExceptClass): Boolean; inline;
+begin
+  Result := False;
+end;
+
+function ExceptObject: TObject; inline;
+begin
+  Result := nil;
+end;
+
+function IsExceptionUnwinding: Boolean; inline;
 begin
   Result := False;
 end;

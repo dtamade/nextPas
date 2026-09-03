@@ -1,3 +1,4 @@
+{$modeswitch typehelpers}
 {
   OpenSSL CT (证书透明度) 日志服务器客户端模块
   实现 CT 日志列表加载和管理

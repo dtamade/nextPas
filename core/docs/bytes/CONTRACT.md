@@ -23,7 +23,7 @@
 | bytes.builder | IBytesBuilder 可变字节缓冲区（allocator 注入、按需增长） |
 | bytes.cursor | IByteCursor 边界受查只读游标（顺序/绝对偏移、Try* 变体） |
 | bytes.stream | TByteStreamBuf 可增长缓冲流（append/consume/compact） |
-| bytes.pathvalid | ValidPath 共享校验（复用 bytes.ops 单源 + text.utf8 单源） |
+| bytes.pathvalid | ValidPath + IsSafeArchiveEntryName/Ex 共享校验（tar/zip 归档名与 tar link target 参数化单源，阈值/尾斜杠收敛，复用 bytes.ops 单源 + text.utf8 单源） |
 | bytes.pas | 门面：纯 re-export + inline 转发 |
 
 四件套形态：`base` → `ops`（单源 Owner，raw Move 仅此） + `ops.capacity/ops.text/ops.ascii` 3 叶子（纯算术/字符串，无 Move，thin-forward）+ `binary/builder/cursor/stream/pathvalid` → `bytes.pas` 门面；`ops` 981→~760 行（≤800 软指引，叶子各 ~120 行），优雅度合规；无独立 `intf/ffi`（按需存在）。
@@ -76,7 +76,7 @@ function CreateBytesBuilderWith(const AAllocator: TMemAllocator; const AInitialC
 | `SpanClone(Span): TBytes` | 克隆 |
 | `SpanConcatMany/BysConcatMany` | 多段拼接 |
 | `BytesEqual/Compare/IndexOf/Concat/StartsWith/EndsWith` | TBytes 便捷面（inline → Span） |
-| `BytesAppend/BytesToString/StringToBytes` | TBytes 追加与字符串互转 |
+| `BytesAppend(*)/BytesToString/StringToBytes` | TBytes 追加与字符串互转（`BytesAppend*` 均为 `inline + single Move` 零拷贝单源，但 `SetLength+Move` 逐次重分配 O(n)，高频/循环拼接 O(n²)；机械门禁 `deprecated` 强制改用 `IBytesBuilder` 几何扩容或 `BytesConcatMany/SpanConcatMany` 单次分配，见 INV-8） |
 | `SpanClone/SpanCopySlice` | 仅两处分配；其余 Span 为非拥有视图 |
 
 约定：`bytes.ops` 为 Span/TBytes 比较与切片的唯一实现源；门面与其它实现均 inline 转发，不复制逻辑。
@@ -99,6 +99,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - **TByteStreamBuf**：`EnsureCapacity/ReserveAppend/CommitAppend/Append/Consume/Clear/Compact`；容量保留、尾部零分配、头游标延迟压实；Destroy 经 `FreeMemOf(FAllocator, FPtr, FCap)` 释放。
 - **IByteCursor**：`NewByteCursor(TBytes)` 持有 `TBytes` 拷贝保活；`NewByteCursorAt(PByte, Len)` 裸指针由调用方保活；只读无分配（`ReadBytes` 除外）。
 - **ValidPath**：`BytesValidPath/BaseValidPath(APath, AAllowRoot)` — Go `io/fs.ValidPath` 语义，复用 `text.utf8.UTF8IsValid` 单源，段扫描零拷贝。
+- **ArchiveEntry**：`IsSafeArchiveEntryName(AName, AMaxBytes)` / `IsSafeArchiveEntryNameEx(AName, AMaxBytes, AAllowTrailingSlash)` — tar/zip 归档名与 tar link target 安全谓词参数化单源（非空/≤AMaxBytes/非'/'/无盘符/无'\'/无'//'/'.'/'..'，尾随'/'由 `AAllowTrailingSlash` 决定；`IsSafeArchiveEntryName` 为 `Ex(..., True)` 薄转发，`IsSafeTarLinkTarget` 经 `Ex(..., C_TAR_MAX_LINK_BYTES, False)` 零拷贝段扫描单源、消除80%重复），inline+零拷贝原串索引，无Copy/分配，tar.base/zip.base/tar.fs 薄 inline 转发，复用 `bytes.ops` 单源。
 
 ---
 
@@ -148,10 +149,11 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 | test_bytes | Span/TBytes 操作 + 字节序编解码 + Builder（含 allocator 注入、增长、截断） |
 | test_cursor | IByteCursor 顺序/BE/peek/Seek/Try* / 边界守卫 / 裸指针构造 |
 | test_stream | TByteStreamBuf append/consume/compact/EnsureCapacity/Clear/ReserveAppend/Grow |
+| test_bytes_source_contract | `BytesAppend*` 机械门禁：`deprecated` 编译提示 + 循环拼接扫描（`check_bytes_append_contract.sh`），强制 `IBytesBuilder/ConcatMany` 单源复用 |
 | test_bytes_ops_source_contracts | `bytes.ops` 源契约门禁：`red-line 1/2 inline` 冻结、`Move` 单源与 `WebviewGrowCapacity` 复用 `bytes.ops` 单源（`0→4→2×`/`0→64→2×` 同源） |
-| **合计** | **4 个测试目录** |
+| **合计** | **5 个测试目录** |
 
-门禁：`make -C core/tests/nextpas.core.bytes/test_bytes clean test`；`test_cursor`；`test_stream`；`test_bytes_ops_source_contracts`（均 `heaptrc 0`，`check_bytes_ops_source_contract.py` 输出 `bytes.ops single-source` 与 `capacity`/`gate` 证据行）。
+门禁：`make -C core/tests/nextpas.core.bytes/test_bytes clean test`；`test_cursor`；`test_stream`；`make -C core/tests/nextpas.core.bytes/test_bytes_source_contract test`；`test_bytes_ops_source_contracts`（均 `heaptrc 0`，`check_bytes_ops_source_contract.py` 输出 `bytes.ops single-source` 与 `capacity`/`gate` 证据行）。
 
 ---
 
@@ -161,5 +163,6 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-26 | 1.1 | 时效刷新：补齐 8 文件门面（cursor/stream/pathvalid）、对齐 IBytesBuilder/Try* 真实签名、收敛 Span/Binary 单源与 inline/零拷贝不变量、资源释放（sized FreeMemOf）与 L1 分层四件套、测试 1→3 目录 | Claude |
+| 2026-09-02 | 1.2-tar | 匠心修复 BytesAppend O(n²)（tar lane 并行史）：`BytesAppend*` 全族 `deprecated` 机械门禁（`inline` 保留单次便利，`deprecated` 提示改用 `IBytesBuilder` 几何 Grow 或 `ConcatMany` 单分配，零拷贝单 `Move` 单源），新增 INV-8 与 `test_bytes_source_contract` 门禁；注：合入主线时 `BytesAppend` 取主线非 `deprecated` 形态（`test_bytes_ops_source_contracts` 红线门禁），本行仅留史 | tar lane |
 | 2026-09-02 | 1.2 | 匠心修复：`bytes.ops` 单源几何 `BytesGrowCapacityWithMin` 抽取（`BYTES_BUILDER_MIN_GROW=64` 与 `Webview` `0→4→2×` 同源 `*2` 复用，`WebviewGrowCapacityForReuse` inline 薄转发零额外调用，`factory.GrowCapacity` 私有冗余→`base.WebviewGrowCapacity`→`bytes.ops` 三级收敛）；`Move`/`FillChar` 单源 `BytesCopy`/`BytesZero` 门禁冻结（`L1+` 复用，`L0 platform` 例外 `platform.fs:421` 头注，`tls.websocket:115`/`tls.encoding:479` 等 `BytesCopy` 迁移，`inline red-line 1/2` 门禁脚本冻结，零拷贝证据）；`L3→L1` 反哺合规 | Claude |
 | 2026-09-02 | 1.3 | 匠心修复：`bytes.ops` 981→~760 四件套拆分优雅度 — 抽取 `ops.capacity`/`ops.text`/`ops.ascii` 3 叶子（容量几何/字符串-Var-HTon-FNV/异或-Ascii 无 Move 纯叶子，thin-forward 复用单源，叶子各 ~120，`bytes.ops` 单源 `BytesCopy/BytesZero` 不动，Move 仅 `bytes.ops`，`L0 platform.fs:421` 例外头注，`tls.encoding:479` 遷 `BytesCopy`，`red-line 1/2 inline` 与 `≤800` 软指引合规，零拷贝/性能 inline 证据与 `SetLength`/`FreeMem` 稳定性不丢） | AI |

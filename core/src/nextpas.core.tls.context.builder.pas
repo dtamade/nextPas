@@ -14,6 +14,7 @@
 unit nextpas.core.tls.context.builder;
 
 {$mode objfpc}{$H+}
+{$modeswitch typehelpers}
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 interface
