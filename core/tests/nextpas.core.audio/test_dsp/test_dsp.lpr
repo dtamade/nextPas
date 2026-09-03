@@ -1,7 +1,8 @@
 program test_dsp;
 {$mode objfpc}{$H+}
 uses
-  Math,
+  nextpas.core.math,
+  nextpas.core.exception,
   nextpas.core.base, nextpas.core.test, nextpas.core.audio.base,
   nextpas.core.audio.dsp.filters,
   nextpas.core.audio.dsp.dynamics,

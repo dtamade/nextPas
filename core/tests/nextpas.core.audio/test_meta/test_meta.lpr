@@ -3,7 +3,6 @@ program test_meta;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.io,

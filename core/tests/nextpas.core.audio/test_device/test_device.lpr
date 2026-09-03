@@ -1,8 +1,7 @@
 program test_device;
 {$mode objfpc}{$H+}
 uses
-  SysUtils,
-  Math,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.audio.base,

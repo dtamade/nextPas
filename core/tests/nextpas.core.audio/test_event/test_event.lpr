@@ -1,6 +1,6 @@
 program test_event;
 {$mode objfpc}{$H+}
-uses SysUtils, Math, nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.spatial.base, nextpas.core.audio.event.intf, nextpas.core.audio.event, nextpas.core.audio.spatial.intf, nextpas.core.audio;
+uses nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.spatial.base, nextpas.core.audio.event.intf, nextpas.core.audio.event, nextpas.core.audio.spatial.intf, nextpas.core.audio;
 function MakeBuf(AFrames: Integer; AVal: Single): TAudioBuffer;
 var P: PSingle; I: Integer;
 begin

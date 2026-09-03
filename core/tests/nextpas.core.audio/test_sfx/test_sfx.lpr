@@ -1,6 +1,6 @@
 program test_sfx;
 {$mode objfpc}{$H+}
-uses SysUtils, Math, nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.sfx.intf, nextpas.core.audio.sfx, nextpas.core.audio.device.null, nextpas.core.audio;
+uses nextpas.core.exception, nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.sfx.intf, nextpas.core.audio.sfx, nextpas.core.audio.device.null, nextpas.core.audio;
 function MakeBuf(AFrames: Integer; AVal: Single): TAudioBuffer;
 var P: PSingle; I: Integer;
 begin

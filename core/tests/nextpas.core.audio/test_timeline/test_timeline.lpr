@@ -1,6 +1,6 @@
 program test_timeline;
 {$mode objfpc}{$H+}
-uses SysUtils, Math, nextpas.core.base, nextpas.core.test,
+uses nextpas.core.exception, nextpas.core.base, nextpas.core.test,
   nextpas.core.audio.base, nextpas.core.audio.timeline.intf,
   nextpas.core.audio.timeline, nextpas.core.audio.device.null, nextpas.core.audio;
 

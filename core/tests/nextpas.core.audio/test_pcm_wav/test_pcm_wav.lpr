@@ -7,7 +7,8 @@ uses
   nextpas.core.io,
   nextpas.core.fs,
   nextpas.core.time,
-  nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
+  nextpas.core.path,
   nextpas.core.audio.pcm_wav;
 
 type

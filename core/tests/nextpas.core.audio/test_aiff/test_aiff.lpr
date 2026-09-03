@@ -3,7 +3,8 @@ program test_aiff;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.io,

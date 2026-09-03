@@ -1,6 +1,6 @@
 program test_bank;
 {$mode objfpc}{$H+}
-uses cthreads, SysUtils, Math, nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.bank.intf, nextpas.core.audio.bank, nextpas.core.audio;
+uses nextpas.core.thread.init, nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.bank.intf, nextpas.core.audio.bank, nextpas.core.audio;
 function MakeBuf(AFrames: Integer; AVal: Single): TAudioBuffer;
 var P: PSingle; I: Integer;
 begin

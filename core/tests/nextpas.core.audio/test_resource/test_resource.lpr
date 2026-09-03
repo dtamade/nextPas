@@ -1,6 +1,6 @@
 program test_resource;
 {$mode objfpc}{$H+}
-uses cthreads, SysUtils, Classes, nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.resource.base, nextpas.core.audio.resource.intf, nextpas.core.audio.resource, nextpas.core.audio;
+uses nextpas.core.thread.init, nextpas.core.text.conv, nextpas.core.fs, nextpas.core.path, nextpas.core.platform.thread, nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.resource.base, nextpas.core.audio.resource.intf, nextpas.core.audio.resource, nextpas.core.audio;
 function MakeBuf(AFrames: Integer; AVal: Single): TAudioBuffer;
 var P: PSingle; I: Integer;
 begin
@@ -21,7 +21,7 @@ begin
   repeat
     Result:=AMgr.GetState(AId);
     if Result<>arsLoading then Exit;
-    Sleep(10); Inc(Elapsed,10);
+    platform_thread_sleep_ms(10); Inc(Elapsed,10);
   until Elapsed>=ATimeoutMs;
   Result:=AMgr.GetState(AId);
 end;
@@ -124,7 +124,7 @@ begin
     AudioEncodeWav(MakeBuf(4,0.1), P1);
     AudioEncodeWav(MakeBuf(4,0.1), P2);
     Mgr.AsyncLoad(P1); Mgr.AsyncLoad(P2);
-    Sleep(100);
+    platform_thread_sleep_ms(100);
     CheckEqual(2, Mgr.ResourceCount,'count 2');
     Mgr.ReleaseAll; CheckEqual(0, Mgr.ResourceCount,'0 after release all');
   finally
@@ -182,7 +182,7 @@ begin
     AudioEncodeWav(MakeBuf(4,0.1), P1);
     AudioEncodeWav(MakeBuf(4,0.1), P2);
     Mgr.AsyncLoad(P1); Mgr.AsyncLoad(P2);
-    Sleep(100);
+    platform_thread_sleep_ms(100);
     Mgr.ReleaseAll; CheckEqual(0, Mgr.ResourceCount,'0 after release all');
   finally
     if FileExists(P1) then DeleteFile(P1);
@@ -211,7 +211,7 @@ begin
   Path:=TempWavPath('res_retry_bad');
   try
     // first load with non-wav probe -> will fail
-    with TFileStream.Create(Path, fmCreate) do try WriteBuffer('BAD!'[1],4); finally Free; end;
+    WriteFileText(Path, 'BAD!');
     Id:=Mgr.AsyncLoad(Path);
     St:=WaitState(Mgr, Id, 2000);
     CheckEqual(Ord(arsFailed), Ord(St),'first failed');

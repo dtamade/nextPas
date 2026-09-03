@@ -3,7 +3,7 @@ program test_registry;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.io,

@@ -1,7 +1,7 @@
 program test_graph;
 {$mode objfpc}{$H+}
 uses
-  SysUtils, Math,
+  nextpas.core.exception,
   nextpas.core.base, nextpas.core.test,
   nextpas.core.audio.base, nextpas.core.audio.intf,
   nextpas.core.audio.graph.intf, nextpas.core.audio.graph, nextpas.core.audio.player,
