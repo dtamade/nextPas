@@ -78,6 +78,7 @@ uses
   nextpas.core.io.mapped,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
+  nextpas.core.respack.dirsource.mmap,
   nextpas.core.respack.reader,
   nextpas.core.respack.writer;
 
@@ -233,40 +234,6 @@ begin
     Exit(False);
   end;
   Result := True;
-end;
-
-{ mmap 零拷贝单源：Stat Size → MmapOpen → 空文件/大小校验/异常归一，~45 行重复收口 MmapRequire }
-function TryMmapRequire(const APath: string; const AStatSize: Int64; out AMap: IMappedFile; out AErrMsg: string): Boolean;
-begin
-  AMap := nil;
-  AErrMsg := '';
-  if AStatSize = 0 then Exit(True);
-  try
-    AMap := MmapOpen(APath);
-    if (AMap = nil) or (AMap.Size = 0) or (AMap.Data = nil) then
-    begin
-      if AStatSize <> 0 then
-      begin
-        AErrMsg := 'mmap failed: empty mapping for non-empty file (path=' + APath + ')';
-        AMap := nil;
-        Exit(False);
-      end;
-      AMap := nil;
-    end
-    else if SizeUInt(AMap.Size) <> SizeUInt(AStatSize) then
-    begin
-      AErrMsg := 'mmap size mismatch: stat=' + IntToStr(AStatSize) + ' cmap=' + IntToStr(AMap.Size) + ' (path=' + APath + ')';
-      Exit(False);
-    end;
-    Result := True;
-  except
-    on E: Exception do
-    begin
-      AErrMsg := 'mmap failed: ' + E.Message + ' (path=' + APath + ')';
-      AMap := nil;
-      Result := False;
-    end;
-  end;
 end;
 
 function MapAndFilter(const AOpts: TResPackEmbedOptions; const ARel: string; out AOut: string): Boolean; forward;
