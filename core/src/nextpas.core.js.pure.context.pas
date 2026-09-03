@@ -83,11 +83,8 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text.view,
   nextpas.core.js.eval,
-  nextpas.core.js.lifecycle,
-  nextpas.core.js.pure.host,
-  nextpas.core.js.pure.value;
+  nextpas.core.js.lifecycle; // text.view/pure.host/pure.value already used in interface — no duplicate uses entry
 
 constructor TJsPureContext.Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind);
 begin

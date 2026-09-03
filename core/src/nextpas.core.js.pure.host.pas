@@ -76,13 +76,10 @@ function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets
 function JsPureCall(ACtx: IJsContext; var AState: TJsPureHostState; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload; inline;
 implementation
 uses
-  nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.bytes.ops,
   nextpas.core.bytes.ops.text,
   nextpas.core.mem.dynarray,
-  nextpas.core.js.pure.base,
-  nextpas.core.platform.fs;
+  nextpas.core.platform.fs; // base/bytes.ops/pure.base already used in interface — no duplicate uses entry
 procedure HostFreeRec(var Rec: TJsPureHostRec); inline;
 begin
   // inline single field clear via managed assignment — no heap New/Dispose, thousand hosts via Hosts dynarray pool (bytes.ops BytesDynEnsureLength geometric + mem.dynarray Exactly-Once poke amortized O(1) inline zero-copy), resource Finalize via managed fields幂等不丢

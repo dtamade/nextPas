@@ -16,7 +16,7 @@ function JsQuickJsProbeNames: string;
 function JsQuickJsLoad: Boolean;
 procedure JsQuickJsUnload;
 implementation
-uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops, nextpas.core.sync.mutex, nextpas.core.sync.vault, nextpas.core.atomic;
+uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops, nextpas.core.sync.intf, nextpas.core.sync.mutex, nextpas.core.sync.vault, nextpas.core.atomic; // IMutex owner is sync.intf (uses not transitive)
 type
   // Vault 统一隔离：单 owner 收敛 GLib/GAvailable/GLoaded/GProbeIndex 裸全局，经 VaultRef inline 单源访问，IMutex→platform.sync 原子保护，64B 友好，lazy Exactly-Once
   TJsQuickJsVault = record

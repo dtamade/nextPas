@@ -109,13 +109,11 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text.view,
-  nextpas.core.json.types,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
   nextpas.core.js.eval,
   nextpas.core.js.quickjs.loader,
-  nextpas.core.js.lifecycle;
+  nextpas.core.js.lifecycle; // text.view/json.types already used in interface — no duplicate uses entry
 
 function QjsInterruptHandler(RT: PJSRuntime; Opaque: Pointer): Integer; cdecl;
 var

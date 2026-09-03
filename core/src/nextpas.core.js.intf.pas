@@ -108,6 +108,7 @@ function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValu
 implementation
 // CONTRACT §1 impl narrow single slit: bytes.ops+pure.value+lifecycle single source — interface narrow json.types only; impl narrow via bytes.ops SpanToString + pure.value JsPureToJsonString + lifecycle IsAlive acquire single source, L2→L2 single-point cycle-gated via pure.value, L0-L3 four-piece base←intf←impl←门面, bytes.ops single source inline zero-copy, resource try-finally not lost
 uses
+  nextpas.core.base, // L0 root type visibility for TByteSpan (owner base); layering-safe, impl seam stays bytes.ops narrow
   nextpas.core.bytes.ops, // CONTRACT §1 impl narrow single source SpanToString (bytes.ops owner, inline zero-copy, single alloc)
   nextpas.core.js.pure.value, // CONTRACT §1 impl narrow single source JsPureToJsonString (pure.value owner, L2→L2 single seam cycle-gated, json.writer/text via pure.value single point)
   nextpas.core.js.lifecycle; // CONTRACT §1 impl narrow single source IsAlive acquire (lifecycle owner, compact 4B epoch*2+closed generation-tagged, bulk IsValid zero barrier vs strong IsAlive)

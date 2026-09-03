@@ -5,14 +5,18 @@ unit nextpas.core.sync.vault;
  *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.sync.mutex;
+uses nextpas.core.sync.intf, nextpas.core.sync.mutex; // IMutex owner is sync.intf (uses not transitive via sync.mutex)
 procedure SyncVaultEnsureLock(var AInit: Int32; var ALock: IMutex);
 function SyncVaultIsReady(const AInit: Int32): Boolean; inline;
 implementation
 uses nextpas.core.atomic, nextpas.core.platform.sync, nextpas.core.platform.thread;
 function SyncVaultIsReady(const AInit: Int32): Boolean; inline;
+var
+  LInit: Int32;
 begin
-  Result := atomic_load(AInit, mo_acquire) = 2;
+  // const param cannot bind to atomic_load var param — snapshot to local (single acquire, value semantics preserved)
+  LInit := AInit;
+  Result := atomic_load(LInit, mo_acquire) = 2;
 end;
 procedure SyncVaultEnsureLock(var AInit: Int32; var ALock: IMutex);
 var

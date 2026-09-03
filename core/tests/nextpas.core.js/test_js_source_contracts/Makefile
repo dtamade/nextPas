@@ -1,7 +1,8 @@
 # hygiene sampling anchor: wc -l core/src/nextpas.core.js*.pas threshold 800 (single threshold, no 550/650 drift, see CONTRACT §1)
 # explicit anchor in module Makefile, hygiene抽样显式锚定防阈值漂移, bytes.ops single source, inline zero-copy
 THRESHOLD := 800
-JS_SRCS := $(wildcard ../../../src/nextpas.core.js*.pas)
+# wildcard js* over-matches json* — json units belong to the json module gates, not the js 800-threshold sampling
+JS_SRCS := $(filter-out ../../../src/nextpas.core.json%,$(wildcard ../../../src/nextpas.core.js*.pas))
 
 .PHONY: test clean hygiene
 test: hygiene

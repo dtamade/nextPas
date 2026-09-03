@@ -8,11 +8,14 @@ uses
   nextpas.core.mem.dynarray;
 const
   FREELIST_MIN_CAP = 64;
-function FreelistCapacityU64(const A: array of UInt64): SizeUInt; inline;
-procedure FreelistEnsureU64(var A: array of UInt64; ANewLen: SizeUInt); inline;
-procedure FreelistPushU64(var A: array of UInt64; AValue: UInt64); inline;
-function FreelistPopU64(var A: array of UInt64; out AValue: UInt64): Boolean; inline;
-procedure FreelistTryShrinkU64(var A: array of UInt64); inline;
+type
+  // named dynamic array so routines can SetLength/probe capacity (open-array params allow neither)
+  TFreelistU64s = array of UInt64;
+function FreelistCapacityU64(const A: TFreelistU64s): SizeUInt; inline;
+procedure FreelistEnsureU64(var A: TFreelistU64s; ANewLen: SizeUInt); inline;
+procedure FreelistPushU64(var A: TFreelistU64s; AValue: UInt64); inline;
+function FreelistPopU64(var A: TFreelistU64s; out AValue: UInt64): Boolean; inline;
+procedure FreelistTryShrinkU64(var A: TFreelistU64s); inline;
 // generic trivial-type freelist single source via bytes.ops + mem.dynarray poke, inline zero-copy
 procedure FreelistEnsure(var A; AElemSize: SizeUInt; ANewLen: SizeUInt); inline;
 function FreelistCapacity(var A; AElemSize: SizeUInt): SizeUInt; inline;
@@ -21,29 +24,29 @@ implementation
 type
   PDynArrayHeaderLocal = ^TDynArrayHeaderLocal;
   TDynArrayHeaderLocal = record RefCnt: PtrInt; High: PtrInt; end;
-function FreelistCapacityU64(const A: array of UInt64): SizeUInt; inline;
+function FreelistCapacityU64(const A: TFreelistU64s): SizeUInt; inline;
 begin
   Result := BytesDynCapacityElem(Pointer(A), SizeUInt(Length(A)), SizeOf(UInt64));
 end;
-procedure FreelistEnsureU64(var A: array of UInt64; ANewLen: SizeUInt); inline;
+procedure FreelistEnsureU64(var A: TFreelistU64s; ANewLen: SizeUInt); inline;
 begin
   BytesDynEnsureLength(A, SizeOf(UInt64), ANewLen);
 end;
-procedure FreelistPushU64(var A: array of UInt64; AValue: UInt64); inline;
+procedure FreelistPushU64(var A: TFreelistU64s; AValue: UInt64); inline;
 var LNeed: SizeUInt;
 begin
   LNeed := SizeUInt(Length(A)) + 1;
   BytesDynEnsureLength(A, SizeOf(UInt64), LNeed);
   A[High(A)] := AValue;
 end;
-function FreelistPopU64(var A: array of UInt64; out AValue: UInt64): Boolean; inline;
+function FreelistPopU64(var A: TFreelistU64s; out AValue: UInt64): Boolean; inline;
 begin
   if Length(A) = 0 then Exit(False);
   AValue := A[High(A)];
   SetLength(A, Length(A) - 1);
   Result := True;
 end;
-procedure FreelistTryShrinkU64(var A: array of UInt64); inline;
+procedure FreelistTryShrinkU64(var A: TFreelistU64s); inline;
 var LCap, LLen, LNewCap: SizeUInt;
 begin
   LCap := FreelistCapacityU64(A);

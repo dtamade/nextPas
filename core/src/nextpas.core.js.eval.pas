@@ -26,10 +26,8 @@ function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJs
 implementation
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.text.scan,
   nextpas.core.text.number,
-  nextpas.core.js.pure.value,
-  nextpas.core.js.pure.predicates;
+  nextpas.core.js.pure.value; // text.scan/pure.predicates already used in interface — no duplicate uses entry
 var
   // hoisted constant views — zero-copy via TStringView.FromStr once at unit init, not per Eval (was LJsonView/LWhileView FromStr per ScanEvalPredicates), single source via TStringView inline, bytes.ops single source via view, B/op=0
   EvalJsonView: TStringView;

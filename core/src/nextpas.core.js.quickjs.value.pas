@@ -20,9 +20,11 @@ uses
   nextpas.core.text.view;
 
 type
+  // named mirror array so length can be poked via mem.dynarray (open-array params allow neither absolute alias nor SetLength)
+  TJSQjsValueArray = array of TJSQjsValue;
   TJsQjsValueStore = record
     Pure: TJsValueStore;
-    QjsHeap: array of TJSQjsValue;
+    QjsHeap: TJSQjsValueArray;
   end;
 
 procedure QjsStoreInit(var S: TJsQjsValueStore; AContextId: UInt64; ARuntime, ACtx: Pointer); inline;
@@ -64,13 +66,14 @@ function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var
 implementation
 
 uses
+  nextpas.core.base, // L0 root for TBytes absolute alias in PokeQjsHeapLen
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
   nextpas.core.js.lifecycle,
   nextpas.core.js.pure.value;
 
-procedure PokeQjsHeapLen(var AHeap: array of TJSQjsValue; const ANewLen: SizeUInt); inline;
+procedure PokeQjsHeapLen(var AHeap: TJSQjsValueArray; const ANewLen: SizeUInt); inline;
 var LBytes: TBytes absolute AHeap;
 begin
   // perf: inline thin-forward to mem.dynarray DynArraySetLength single source (exactly-once geometric), zero-copy header poke, no manual High branch, amortized O(1) via BYTES_BUILDER_MIN_GROW

@@ -40,8 +40,7 @@ function JsValueView(P: PAnsiChar): TStringView; inline;
 implementation
 
 uses
-  nextpas.core.bytes.ops,
-  nextpas.core.js.pure.value;
+  nextpas.core.bytes.ops;
 
 procedure JsValueStoreInit(var S: TJsValueStore; AContextId: UInt64); inline;
 begin

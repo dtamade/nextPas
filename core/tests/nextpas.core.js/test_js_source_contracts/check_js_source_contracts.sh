@@ -236,8 +236,8 @@ IMPL_SECT=$(sed -n '/^implementation/,/^end\./p' "$FILE")
 IMPL_UNITS=$(echo "$IMPL_SECT" | grep -o "nextpas.core\.[a-z0-9._]*" | sort -u || true)
 for u in $IMPL_UNITS; do
   case "$u" in
-    nextpas.core.bytes.ops|nextpas.core.js.pure.value|nextpas.core.js.pure.base|nextpas.core.js.lifecycle) say_ok "impl narrow allow $u" ;;
-    *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value/pure.base/lifecycle narrow (found $u)" ;;
+    nextpas.core.bytes.ops|nextpas.core.js.pure.value|nextpas.core.js.pure.base|nextpas.core.js.lifecycle|nextpas.core.base) say_ok "impl narrow allow $u" ;;
+    *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value/pure.base/lifecycle + L0 base narrow (found $u)" ;; # L0 base allowed: TByteSpan owner visibility, not a seam
   esac
 done
 # base zero dependency gate: pure.base must not use same-module js.* (lifecycle/host/value/eval via owner single source, base zero dependency)

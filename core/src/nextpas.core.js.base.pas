@@ -24,6 +24,7 @@ const
   JS_INTERRUPT_SAMPLE_MIN = 1;
   JS_INTERRUPT_SAMPLE_MAX = 65536;
 
+type
   TJsRuntimeOptions = record
   private
     FMemoryLimit: SizeUInt;
@@ -41,6 +42,7 @@ const
 
 function JsInterruptSampleIntervalNormalized(AInterval: Cardinal): Cardinal; inline;
 
+type
   EJsError = class(ENextPasError)
   private
     FJsCategory: TJsErrorCategory;

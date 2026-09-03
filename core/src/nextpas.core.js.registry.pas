@@ -14,6 +14,7 @@ function JsRegistryCreate(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptio
 function JsRegistryIsRegistered(AKind: TJsBackendKind): Boolean;
 implementation
 uses
+  nextpas.core.sync.intf, // IMutex owner (uses not transitive via sync.mutex)
   nextpas.core.sync.mutex,
   nextpas.core.sync.vault,
   nextpas.core.atomic,

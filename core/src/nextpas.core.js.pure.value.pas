@@ -153,6 +153,10 @@ begin
   AProp.DblVal := 0.0;
   AProp.BoolVal := False;
 end;
+procedure PropBucketsInvalidate(var Obj: TJsPureObject); forward;
+procedure PropBucketsRebuild(var Obj: TJsPureObject); forward;
+function JsPureHeapFindPropHashed(const AProps: array of TJsPureProp; const AName: string; const AHash: UInt32): Integer; overload; forward;
+function JsPureHeapFindPropHashed(const Obj: TJsPureObject; const AName: string; const AHash: UInt32): Integer; overload; forward;
 procedure JsPureHeapSetPropHashedReserved(var Heap: TJsPureHeap; const Obj: TJsValue; const AName: string; const AHash: UInt32; const Val: TJsValue); inline;
 var Idx, P: Integer; LOld: SizeUInt;
 begin
@@ -214,7 +218,9 @@ var I: Integer;
 begin
   // hash-filter when AHash<>0, inline
   if AHash <> 0 then
-    for I:=0 to High(AProps) do if (AProps[I].Hash=AHash) and (AProps[I].Name=AName) then Exit(I)
+  begin
+    for I:=0 to High(AProps) do if (AProps[I].Hash=AHash) and (AProps[I].Name=AName) then Exit(I);
+  end
   else
     for I:=0 to High(AProps) do if AProps[I].Name=AName then Exit(I);
   Result:=-1;
@@ -237,13 +243,17 @@ begin
       Exit(-1);
     end;
     if AHash <> 0 then
-      for LPos:=0 to High(Obj.Props) do if (Obj.Props[LPos].Hash=AHash) and (Obj.Props[LPos].Name=AName) then Exit(LPos)
+    begin
+      for LPos:=0 to High(Obj.Props) do if (Obj.Props[LPos].Hash=AHash) and (Obj.Props[LPos].Name=AName) then Exit(LPos);
+    end
     else
       for LPos:=0 to High(Obj.Props) do if Obj.Props[LPos].Name=AName then Exit(LPos);
     Exit(-1);
   end;
   if AHash <> 0 then
-    for LPos:=0 to High(Obj.Props) do if (Obj.Props[LPos].Hash=AHash) and (Obj.Props[LPos].Name=AName) then Exit(LPos)
+  begin
+    for LPos:=0 to High(Obj.Props) do if (Obj.Props[LPos].Hash=AHash) and (Obj.Props[LPos].Name=AName) then Exit(LPos);
+  end
   else
     for LPos:=0 to High(Obj.Props) do if Obj.Props[LPos].Name=AName then Exit(LPos);
   Result:=-1;
@@ -573,7 +583,7 @@ begin
     Result[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
 end;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
-var I, Idx, DPos, DCnt, J: Integer; LHash: UInt32; Distinct: array of Integer; LFound: Boolean; DedupBuckets: array of Integer; DedupMask: UInt32; LDummy, LCap: Integer;
+var I, Idx, DPos, DCnt, J: Integer; LHash: UInt32; Distinct: array of Integer; LFound: Boolean; DedupBuckets: TJsPureBuckets; DedupMask: UInt32; LDummy, LCap: Integer;
 begin
   if Length(Objs)=0 then Exit;
   if Length(Vals)<>Length(Objs) then Exit;

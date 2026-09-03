@@ -12,8 +12,10 @@ type
     Hash: UInt32;
   end;
   TJsPureHostArray = array of TJsPureHostRec;
+  // named bucket array so hash template can SetLength/probe capacity (open-array params allow neither)
+  TJsPureBuckets = array of Integer;
   TJsPureHostBuckets = record
-    Buckets: array of Integer;
+    Buckets: TJsPureBuckets;
     Mask: UInt32;
     Count: Integer;
   end;
@@ -35,7 +37,7 @@ type
   TJsPureObject = record
     Id: Int64;
     Props: TJsPurePropArray;
-    PropsBuckets: array of Integer;
+    PropsBuckets: TJsPureBuckets;
     PropsMask: UInt32;
   end;
   TJsPureHeap = array of TJsPureObject;

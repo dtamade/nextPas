@@ -32,7 +32,7 @@ type
     ClosedLen: PtrUInt;
     NextId: Int64;
     Lock: Int32;
-    Free: array of UInt64; // freelist via collections.freelist single source
+    Free: TFreelistU64s; // freelist via collections.freelist single source
   end;
   PJsLifecycleVault = ^TJsLifecycleVault;
 var
