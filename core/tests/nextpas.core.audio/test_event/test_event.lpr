@@ -130,7 +130,7 @@ end;
 procedure T.TestFacade;
 var Sys: IAudioEventSystem;
 begin
-  Sys:=nextpas.core.audio.CreateAudioEventSystem(AudioFormatCreate(48000,2,sfF32), 4);
+  Sys:=nextpas.core.audio.event.CreateAudioEventSystem(AudioFormatCreate(48000,2,sfF32), 4);
   CheckTrue(Assigned(Sys),'facade event');
 end;
 var S:TTestSuite; C:T;

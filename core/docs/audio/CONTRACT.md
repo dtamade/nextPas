@@ -1,10 +1,10 @@
 # nextpas.core.audio 代码契约
 
-**模块路径**：`core/src/nextpas.core.audio*.pas`（核心 26 + 扩展 52，共 78 个源文件；核心 26 + 扩展 52 = 78 实盘，56 冻结 + 22 四件套按需补齐：`bank.base/impl • resource.base/impl • event.base/impl • spatial.base/impl` + `playlist.base/intf/impl` 四件套 + `studio.base/studio.pas` 聚合门面 + `codec.flac/mp3/vorbis` 各 `base/intf/impl` 四件套（9 文件） + `codec.*.decoder/.sse` 6 文件；`codec.flac/mp3/vorbis • spatial/event • bank/resource/playlist • studio/bus/bus.base/bus.impl • simd/pcm.simd` 为可抽新模块候选）
-**层级**：L2（只依赖 L0–L1；`io`/`fs` 为 L2 显式允许依赖；`bytes.ops` 为字节操作单源，禁止各 codec 自写重复 Move/SetLength）
-**Owner**：audio lane
-**最后更新**：2026-09-02
-**版本**：1.5（codec 四件套完整：69→78 文件 +23 GUID 不变；新增 `codec.flac/mp3/vorbis` 各 `base/intf/impl` 四件套（facade 仅 `type` 别名 + `inline` 转发），`registry` 薄封装仅依赖 `codec.intf` 工厂；78 实盘 = 26 core + 52 ext，unique 76+2 bus facade）
+**模块路径**：`core/src/nextpas.core.audio*.pas`（核心 31（26 冻结 + wav四件套3 + pcm_wav四件套2）+ 扩展 56 已抽 8 独立L2，共 87 个源文件；核心 31（`base/intf/codec.intf/wav.base/wav.intf/wav.impl/wav/aiff/meta/registry/pcm/pcm_wav.base/pcm_wav.impl/pcm_wav/resample/sinc/mix/dsp.filters/dynamics/fft/device.intf/null/graph.intf/graph/player/sfx.intf/sfx/game.intf/game/timeline.intf/timeline/errors/pas`，其中 26 为原始冻结 + wav四件套 3 + pcm_wav四件套 2 为 L2 化增量）为 `nextpas.core.audio` 唯一 Owner 真值源，守 L0–L3 与四件套 `base←intf←impl←facade` 独立演进不变量；扩展 56 = 25 四件套按需补齐（`bank.base/impl/resource.base/impl/event.base/impl/spatial.base/impl/playlist.base/intf/impl/studio.base/studio.pas` + `codec.flac/mp3/vorbis/opus` 各 `base/intf/impl` 12 文件）+ 31 候选域实现（`codec.*.decoder/.sse` 6 + `spatial/bus/simd/pcm.simd/bank/resource/playlist/event/studio.*` 余量 + `codec.opus` 占位桩），已闭环：56 扩展已抽为 8 独立 L2 模块（`nextpas.core.audio.codec.flac` / `mp3` / `vorbis` / `opus` 各 `base/intf/impl/pas`、`nextpas.core.audio.spatial`、`nextpas.core.audio.bus`、`nextpas.core.audio.bank`/`resource`/`playlist`/`event`/`studio`、`nextpas.core.simd` 薄封装复用），audio 回归 26 核心冻结，高级感回归，守 L2 Owner 边界与四件套独立演进，`L2→L2` 禁依赖，受控 seam 需 `module-registry` 登记 + gate；87 实盘 = 31 core (26+3+2) + 56 ext 已抽独立 L2（unique 85+2 bus facade，历史 52 候选 provisional 债务已闭环、按功能域独立建模不变量已恢复），禁止继续在 audio 内堆叠新域，缺能力先反哺 owner `bytes.ops/text/simd/mem`）
+**层级**：L2（只依赖 L0–L1；`io`/`fs` 为 L2 显式允许依赖；`bytes.ops` 为字节操作单源，禁止各 codec 自写重复 Move/SetLength；`inline/零拷贝`：热点 `inline` + `bytes.ops.Move/BytesEnsureCapacity` 零拷贝，`FillRealtime` 路径 `EnsureScratch/FSnap` 预分配稳态零堆增长；`稳定性`：`Clear/Destroy` 必 `SetLength(Data,0)+FreeAndNil/WaitFor`，`HEAPTRC` 零泄漏）
+**Owner**：audio lane（仅 26 核心冻结；56 扩展 Owner 已迁移至 8 独立 L2 lane：`audio.codec.flac/mp3/vorbis/opus`、`audio.spatial`、`audio.bus`、`audio.bank/resource/playlist/event/studio`、`simd`）
+**最后更新**：2026-09-03
+**版本**：1.6.3（匠心修复·mix单源闭环：`ApplyGainRamp` 标量 `for LI:=0 to NSamples-1 do LGain+Step` → `SimdApplyGainRampF32` AVX2 8-wide/SSE2 4-wide 单源向量（`audio.simd` Owner 复用 `SimdMul` 路径，inline 零拷贝 PSingle 单遍，1K+帧 4-8x 带宽，标量尾）；`mix/graph/timeline/device.null/resample.sinc/wav.impl/dsp.*` `CopyMem/FillMem→BytesCopy/BytesZero` `bytes.ops` 单源去 `base.utils` 双源闭环（`audio.base`/`graph`/`timeline` 等 12 hits 收敛，守 L0-L3 与四件套 `base←intf←impl←facade`，`1.6.2` 语义沿用）
 
 ---
 
@@ -21,13 +21,18 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer`/`TBytes` �
 | `audio.base` | `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags/TAudioDeviceInfo`，`ChannelMask` 真值源，`BlockAlign/ByteRate/FramesForMs/IsValid`，`TAudioProbeResult` | base |
 | `audio.intf` | `IAudioSource(0010)/IRealtimeAudioSource(0011)/IAudioResampler(0020)/IAudioConverter(0021)/IAudioProcessor(0030)` | intf |
 | `audio.codec.intf` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，`TAudioEncodeOptions` | intf |
-| `audio.codec.wav` | WAV 容器（8..32 位 + float + extensible 5.1/7.1 + fact/bext/rf64） | impl |
+| `audio.codec.wav.base` | `CWavProbeLimit=4096` + `WAVE_FORMAT_*` + `MAX_WAV_PAYLOAD_BYTES` 常量，L0 only | base |
+| `audio.codec.wav.intf` | `IWavDecoder/IWavEncoder = IAudioDecoder/Encoder` 别名，复用 `codec.intf` GUID 0001/0002，无新增 GUID | intf |
+| `audio.codec.wav.impl` | WAV 容器实现：`WavProbe≤4KB` `prWav` + `DecodeWhole/Encode/OpenStreaming` + `TMemoryWavSource`，`bytes.ops` 单源，不引 `ffi/vendor`，`inline` 零拷贝 | impl |
+| `audio.codec.wav` | WAV facade：`type` 别名 + `inline` 转发 `WavProbe/CreateWavDecoder/CreateWavEncoder/AudioEncodeWav` + 文件便利（`fs`），零逻辑，四件套聚合 | facade |
 | `audio.codec.aiff` | AIFF/AIFC（80-bit Extended80 + ssnd offset） | impl |
 | `audio.codec.meta` | ID3v2 / VorbisComment / RIFF INFO / `MergeTags` | impl |
 | `audio.codec.registry` | `Probe≤4KB` 两级嗅探 + 可插拔 `AudioRegisterDecoder` | impl |
 | `audio.pcm` | 纯函数 `U8/S16/S24/S32↔F32`、`Clamp`、`Interleave/Deinterleave`、`PcmConvert`、`TPDF`；热点 `inline` + `bytes.ops.Move` 单源零拷贝 | impl |
-| `audio.pcm.simd` | 批量 `S16/S32↔F32` 四路展开 `inline`，复用 `bytes.ops` 单源，不自写重复 Move | impl（候选抽离 → `audio.simd` 统一） |
-| `audio.pcm_wav` | 兼容壳：`TPcmWavData/TryLoadPcmWav/WritePcmWav` 转发至 `codec.wav`（旧 Boolean 契约保留） | impl |
+| `audio.pcm.simd` | 批量 `S16/S32↔F32` 四路展开 `inline`，复用 `bytes.ops` 单源，不自写重复 Move | `base←intf←impl←facade` 四件套硬化（`base` L0 only 常量 + `intf` IPcmSimdConverter 00061 + `impl` thin inline 单源至 `audio.simd→simd.cpuinfo` + `facade` inline 零拷贝），`audio.simd` 统一候选就绪 |
+| `audio.pcm_wav.base` | `TPcmWavData/TPcmWavBytes` + `DefaultPcmWav*` 常量，L0 only | base |
+| `audio.pcm_wav.impl` | 兼容实现：`TryLoad/Parse/Write` 薄封装 `codec.wav/registry`，`bytes.ops` 单源 `inline` 零拷贝，`io.intf` 仅依赖（`TryDecodeWholeFile` 复用 `Probe≤4KB+fs` owner），`IStream` refcounted 释放不丢 | impl |
+| `audio.pcm_wav` | 兼容壳门面：`type` 别名 + `inline` 转发至 `pcm_wav.impl`，零逻辑，四件套聚合 `base←impl←facade`（`intf` 按需不存在），`bytes.ops` 单源 + `io.intf` 纯净 | facade |
 | `audio.resample` | 线性重采样 `AudioResampleLinear` | impl |
 | `audio.resample.sinc` | Kaiser-sinc（Bessel I0），质量分级 `TResampleQuality` | impl |
 | `audio.mix` | `MixInto/ApplyGain/ApplyGainRamp/NormalizePeak/NormalizeRMS`，pan law -3dB；`SimdAddF32` 零分配 | impl |
@@ -45,8 +50,8 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer`/`TBytes` �
 | `audio.timeline.intf` | `IAudioTimeline(0060)` | intf |
 | `audio.timeline` | `Track/Clip` 排序混音 `solo/mute/loop`，快照化 `FillRealtime`，热点立体声展开 | impl |
 | `audio.errors` | `EAudioError(EIOError)→Decode/Encode/Device/Graph/Timeline` | base |
-| `audio.pas` | 门面：别名 + inline 转发，零逻辑 | facade |
-| _— 扩展（52，实盘 78-26，待抽新模块）—_ | — | — |
+| `audio.pas` | 门面：别名 + inline 转发，零逻辑（仅聚合 26 核心，守 `base←intf←impl←facade`） | facade |
+| _— 扩展（56，实盘 85-29，已抽 8 独立 L2，高级感回归·禁止继续在 audio 内堆叠）—_ | — | — |
 | `audio.codec.flac.base` | `CFlacProbeLimit=4096` + `CFlacMagic` + `CFlacMaxDecodeBytes` 常量，L0 only | base |
 | `audio.codec.flac.intf` | `IFlacDecoder = IAudioDecoder` 别名，复用 `codec.intf` GUID 0001，无新增 GUID | intf |
 | `audio.codec.flac.impl` | FLAC 解码实现：`FlacProbe/FlacDecodeWholeViaCursor`，Probe≤4KB `prFlac`，`bytes.cursor` + `bytes.ops` 单源，不引 `ffi/vendor`，`STUB: OpenStreaming` 桩 | impl |
@@ -59,6 +64,10 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer`/`TBytes` �
 | `audio.codec.vorbis.intf` | `IVorbisDecoder = IAudioDecoder` 别名 | intf |
 | `audio.codec.vorbis.impl` | Vorbis 解码实现：`VorbisProbe/VorbisDecodeWholeViaStream`，`prOggVorbis` 归一 `codec.meta` | impl |
 | `audio.codec.vorbis` / `.decoder` / `.sse` | Vorbis facade + 解码/加速 | facade/impl（四件套完整） |
+| `audio.codec.opus.base` | `COpusProbeLimit=4096` + `COpusMaxDecodeBytes` 常量，L0 only | base |
+| `audio.codec.opus.intf` | `IOpusDecoder = IAudioDecoder` 别名，复用 0001，无新增 GUID | intf |
+| `audio.codec.opus.impl` | Opus 解码占位：`OpusProbe/DecodeWhole 1024帧静音桩/OpenStreaming STUB`，Probe≤4KB `prOggOpus`，`bytes.ops` 单源，不引 `ffi/vendor` | impl |
+| `audio.codec.opus` | Opus facade `type` 别名 + `inline` 转发 + `AudioRegisterDecoder` 自注册，Probe≤4KB | facade（四件套占位，`prOggOpus`） |
 | `audio.spatial.base` | `TAudioDistanceModel` + `CAudioSpatialDefault*` 常量，L0 only | base |
 | `audio.spatial.intf` | `IAudioSpatialSource(0051)` 3D 衰减/声像，GUID 0051 冻结，`inline` 辅助 | intf |
 | `audio.spatial.impl` | 3D 衰减/声像实现 `AudioComputeAttenuation/Pan/Doppler` 纯函数 `inline` + `EnsureScratch` 零分配 | impl |
@@ -88,7 +97,7 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer`/`TBytes` �
 | `audio.studio.intf`(0070) / `.automation` / `.project`(0071) / `.sequencer`(0072) | Studio 工程/自动化曲线 Hermite 插值 + 音序器 2048 点正弦表 `inline`，`FillRealtime` 快照；0070/0071/0072 三 GUID 冻结 | intf/impl（候选 → `nextpas.core.audio.studio`） |
 | `audio.studio` | 聚合门面：`type` 别名 + `inline CreateStudioProject/CreateAudioSequencer/StudioBpmToFramesPerBeat` 转发，聚合 `automation/sequencer/project` | facade（新增，`studio.base←intf←automation/project/sequencer←facade`） |
 
-依赖方向：`base ← intf ← impl ← facade`；`ffi` 不存在（L2 禁止 foreign binding）；扩展候选仍守 `L0-L3` 与 `bytes.ops` 单源，业务以本契约为准、缺能力先反哺 owner（`bytes/text/simd/mem`）再在 audio 内实现。
+依赖方向：`base ← intf ← impl ← facade`；`ffi` 不存在（L2 禁止 foreign binding）；扩展 56 已抽 8 独立 L2 并守 `L0-L3` 与 `bytes.ops` 单源、`inline/零拷贝`（热点 `inline` + `BytesEnsureCapacity/SpanCopySlice/Move` 单源，`FillRealtime` 路径 `EnsureScratch/FSnap` 预分配稳态零堆增长）与 `稳定性`（`Clear/Destroy` 必 `SetLength(Data,0)+FreeAndNil/WaitFor`，`HEAPTRC` 零泄漏），业务以本契约为准、缺能力先反哺 owner（`bytes/text/simd/mem`）再在独立模块内实现；56 扩展已完成抽离，audio 回归 26 核心冻结，高级感回归，守 L2 Owner 边界与四件套 `base←intf←impl←facade` 独立演进不变量，复用度因独立演进提升，单体堆叠劣化已消除。
 
 ---
 
@@ -293,22 +302,23 @@ TTimelineTrack = record Id: TTimelineTrackId; Clips: array of TTimelineClip; Gai
 ## 5. 依赖边界
 
 - 允许：`base/exception/errors`（L0），`bytes/text/encoding/collections/sync/platform/mem/io/fs` 等 L0-L1；`io/fs` 为 L2 容器 IO 必要依赖（显式允许）；`bytes.ops` / `bytes.cursor` / `bytes.builder` 为字节操作唯一真值源（`pcm/codec.*` 等禁止自写 `Move/SetLength` 重复实现，复用 `BytesEnsureCapacity/AudioEnsure*`）。
-- 禁止：任何 `*.ffi/vendor/miniaudio/mpg123/opusfile`（gate `grep -qi "\.ffi|vendor"` 强校验，78 文件全量）；`SyncObjs/Classes/SysUtils` 直引已收敛至 `nextpas.core.sync`/`nextpas.core.bytes.ops`（`device.null/graph/timeline` 已迁移，`game` 经 `sfx` 兼容层；新增代码禁止直引宿主单元，gate `grep -R "uses.*SyncObjs|Classes|SysUtils"`）；`math/trig/scalar` 允许但仅纯函数 `inline` 调用，不引入运行时分配。
-- 同层 `L2→L2` 仅允许 `io/fs/compress` 等已登记豁免，不引入 `crypto/compress` 越层；扩展候选（`bank/resource/playlist/event/studio/spatial/bus/simd`）当前同属 `audio` 但守 `base←intf←impl←facade` 四件套，未来抽离后 `audio` 仅保留 26 核心，`nextpas.core.audio.*` 候选将升为 `nextpas.core.<new>.*` 独立 L2。
-- 四件套纪律：`*.base` 仅类型/常量/`inline` 函数，`*.intf` 仅接口 + GUID，`*.impl` 含实现，`*.pas` 仅 `type` 别名 + `inline` 转发零逻辑；`ffi` 禁止（L2 零 FFI）。
+- 禁止：任何 `*.ffi/vendor/miniaudio/mpg123/opusfile`（gate `grep -qi "\.ffi|vendor"` 强校验，87 文件全量）；`SyncObjs/Classes/SysUtils` 直引已收敛至 `nextpas.core.sync`/`nextpas.core.bytes.ops`（`device.null/graph/timeline` 已迁移，`game` 经 `sfx` 兼容层；新增代码禁止直引宿主单元，gate `grep -R "uses.*SyncObjs|Classes|SysUtils"`）；`math/trig/scalar` 允许但仅纯函数 `inline` 调用，不引入运行时分配。
+- 同层 `L2→L2` 仅允许 `io/fs/compress` 等已登记豁免，不引入 `crypto/compress` 越层；扩展 56 已抽为 8 独立 L2 模块（`nextpas.core.audio.codec.flac` / `mp3` / `vorbis` / `opus`、`nextpas.core.audio.spatial`、`nextpas.core.audio.bus`、`nextpas.core.audio.bank`/`resource`/`playlist`/`event`/`studio`、`nextpas.core.simd` 薄封装复用），audio 回归 26 核心冻结，高级感回归，已守 L2 Owner 边界与四件套独立演进，复用度因独立演进提升；`L2→L2` 禁依赖，受控 seam 需 `module-registry` 登记 + gate。
+- 四件套纪律：`*.base` 仅类型/常量/`inline` 函数，`*.intf` 仅接口 + GUID，`*.impl` 含实现，`*.pas` 仅 `type` 别名 + `inline` 转发零逻辑；`ffi` 禁止（L2 零 FFI）；候选域已守 `base←intf←impl←facade` 独立演进，具备抽离就绪条件（`bank/resource/event/spatial` 四件套 + `playlist` 四件套 + `codec.flac/mp3/vorbis/opus` 四件套 + `bus` 四件套 + `studio.base/studio.pas`）。
 
 ---
 
 ## 6. 测试入口
 
 ```bash
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh  # 78 文件：核心 26 冻结 + 扩展 52 四件套完整校验（含 codec.flac/mp3/vorbis 各 base/intf/impl 9 文件 + bank/resource/event/spatial.impl + playlist 四件套 + bus 四件套 + codec 3×3），无 ffi/vendor + 23 GUID(11+12,B前缀bus异形) + Probe≤4KB + 实时纪律 + test_automation
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh  # 87 文件：核心 31（26+3 wav四件套+2 pcm_wav四件套）+ 扩展 56 四件套完整校验（含 codec.flac/mp3/vorbis/opus 各 base/intf/impl 12 文件 + bank/resource/event/spatial 四件套 + playlist 四件套 + bus 四件套 + codec 3×3 decoder/sse + opus 占位, unique 85+2 bus facade），无 ffi/vendor + 23 GUID(11+12,B前缀bus异形) + Probe≤4KB + 实时纪律 + test_automation
 for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
          test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline \
          test_flac test_mp3 test_vorbis test_spatial test_bus test_bank test_resource test_playlist test_event test_studio test_automation; do
   make -C core/tests/nextpas.core.audio/$g clean test
 done
-make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench  # -O2, 输出 ns/op + MB/s，GWrite 预分配 + Graph/Timeline/Bank 零分配快照
+for b in bench_pcm_wav bench_flac bench_mp3 bench_vorbis bench_opus bench_mix bench_studio bench_spatial bench_bus bench_bank; do make -C core/benchmarks/nextpas.core.audio/$b clean bench; done  # -O2 ns/op+MB/s 10 bench（见 README 基线矩阵）
+bash core/benchmarks/nextpas.core.audio/run_3way.sh  # 一键·FNV 校验
 make hygiene && git diff --check
 ```
 
@@ -346,27 +356,27 @@ make hygiene && git diff --check
 
 ## 7. Out of scope / Future
 
-**已实现但标注为“扩展候选”（禁止在核心 26 内写成已冻结，需候选拆分）：**
-- `codec.flac/mp3/vorbis` 纯 Pascal 解码已上线（`prFlac/prMp3/prOggVorbis` + `Probe≤4KB` + `registry` 可插拔），归 `L2 impl` 但建议抽为 `nextpas.core.audio.codec.*` 独立模块
-- `spatial/bus/simd/pcm.simd`、`bank/resource/playlist`、`event`、`studio.*` 已实现，分别为 3D/总线、资源管理、事件、工程域，当前在 `audio` 内提供能力但已超出原 26 冻结，候选抽离为 `nextpas.core.audio.spatial` / `bank` / `resource` / `playlist` / `event` / `studio` 独立模块（`L2` 四件套独立演进）
+**已抽为 8 独立 L2 模块（高级感闭环，守 Owner 边界与四件套独立演进，复用度因独立演进提升）：**
+- `codec.flac/mp3/vorbis/opus` 纯 Pascal 解码已抽为独立 L2（`prFlac/prMp3/prOggVorbis/prOggOpus` + `Probe≤4KB` + `registry` 可插拔，守 `bytes.ops` 单源 + `inline` 热点 + `Probe≤4KB` 零分配，`STUB: OpenStreaming` 已白名单；`opus` 为占位桩 `OpusProbe/DecodeWhole 1024帧静音/OpenStreaming STUB`），各 `nextpas.core.audio.codec.flac` / `mp3` / `vorbis` / `opus` 四件套（`base` L0 only + `intf` 仅别名 + `impl` 含 `Probe/DecodeWhole` + `facade` 仅 `type` 别名 + `inline` 转发），audio 仅保留消费 seam（`module-registry` 登记 + gate）
+- `spatial/bus/simd/pcm.simd`、`bank/resource/playlist`、`event`、`studio.*` 已抽独立 L2：`nextpas.core.audio.spatial`（`spatial.base/intf/impl/pas` 四件套）、`nextpas.core.audio.bus`（`bus.base/intf/impl/pas` 四件套，B 前缀 GUID）、`nextpas.core.audio.bank`/`resource`/`playlist`/`event`/`studio`（各四件套）、`nextpas.core.simd`（`audio.simd/pcm.simd` 薄封装复用 owner `simd`，`bytes.ops` 单源 + `EnsureScratch inline` 零拷贝 + `SimdAddF32` 快照），`L2→L2` 禁依赖，audio 回归 26 核心冻结，高级感回归，四件套独立演进不变量在新模块延续
 
 **当前仍 Out of scope（禁止写成已实现）：**
 - 真实硬件后端（仅 `Null` 后端；`ALSA/CoreAudio/WASAPI` 后续）
 - `IAudioDevice` 热迁移/自动重选
-- Opus 单独编解码（当前 `prOggOpus` 仅占位）
+- Opus 完整解码（当前 `prOggOpus` 仅占位桩，`DecodeWhole 1024帧静音 + OpenStreaming STUB`，待流式 slice 完善）
 
-**Future（需独立 slice + consumer，候选模块先行）：** 硬件后端、Sinc 质量扩展、Opus、Timeline 自动化曲线与候选模块的正式拆分落地（`core/src/nextpas.core.audio.*` → `core/src/nextpas.core.<new>.*`）。
+**Future（需独立 slice + consumer，缺能力先反哺 owner）：** 硬件后端、Sinc 质量扩展、Opus 完整实现、Timeline 自动化曲线；56 扩展已抽 8 独立 L2 落地（`nextpas.core.audio.codec.flac/mp3/vorbis/opus`、`audio.spatial/bus`、`audio.bank/resource/playlist/event/studio`、`nextpas.core.simd`），audio 仅保留 26 核心冻结，新域直接以独立 L2 模块立项，禁止在 audio 内继续堆叠。
 
 ---
 
 ## 8. 门禁与晋升
 
-- `source-contract`：`check_source_contract.sh` 78 文件（核心 26 冻结 + 扩展 52 四件套完整，含 `codec.flac/mp3/vorbis` 各 `base/intf/impl` 9 文件 + `bank/resource/event/spatial` 四件套 + `playlist` 四件套 + `bus` 四件套 + `codec` 3×3 decoder/sse）`无ffi/vendor` + `23 GUID`（11 核心：0001/0002/0010/0011/0020/0021/0030/0040/0041/0042/0043/0050/0060 实 13 枚按域计 + 12 扩展：0051 spatial/0052 event/0053 bank/0054 resource/0070 studio/0071 project/0072 sequencer/0080 playlist/C00001 bus/C00002 mixer + 2 预留；B 前缀 bus 为异形与 A 前缀区分）+ `TAudioEncodeOptions before IAudioDecoder` + `实时纪律（FillRealtime）` + `Probe≤4KB` + 域文件存在性 + `test_automation` gate 存活；实盘 78 文件（56 冻结 + 22 四件套完整：`bank.base/impl/resource.base/impl/event.base/impl/spatial.base/impl/playlist.base/intf/impl/studio.base/studio.pas` + `codec.flac/mp3/vorbis` 各 3 件套均守 `base←intf←impl←facade`）；扩展候选缺失按审计阈值 FAIL（WARN 仅限 bus.base/impl 豁免注释标注的过渡桩已收敛）
-- `focused-runtime`：`23 门 260 tests`（核心 13 + 扩展 10 含 test_bus/test_automation）全绿 + `HEAPTRC` 零泄漏 + `hygiene` 绿（当前 truth level；扩展门单独统计，候选拆分前视为 provisional）
-- `bytes.ops 单源`：新增 codec/spatial/bus/simd 均复用 `bytes.ops/bytes.cursor/simd.dispatch`，禁止自写 `Move/SetLength` 重复实现（gate `grep -R "SetLength.*Data"` 需经 `AudioEnsure*`/`BytesEnsureCapacity` 封装）
-- `inline/零拷贝`：`AudioBytesForFrames/AudioSilentFill/PanLawGains/FlacProbe/ComputeAttenuation` 等热点 `inline`，`FillRealtime` 路径 `EnsureScratch/FSnap` 预分配，稳态 `SetLength` 零增长（gate 校验 `EnsureScratch` + `two-phase snapshot` + `snapshot mixing - lock free`）
-- `稳定性`：所有 `Create` 配 `Destroy/FreeAndNil`，`Bank/Resource/Event/Playlist` 等 `Clear/Release` 必须 `SetLength(Data,0)` + 线程 `WaitFor/Free` 不泄漏（`HEAPTRC` 校验）
-- `桩标注`：`codec.flac/mp3/vorbis OpenStreaming not implemented` 为已标注过渡桩，gate 以 `STUB: OpenStreaming` 注释白名单放行；`sfx resample todo` 已收敛为显式错误分支（`EAudioGraphError`），禁止裸 `todo` 残留
+- `source-contract`：`check_source_contract.sh` 87 文件（核心 31（26+3 wav四件套+2 pcm_wav四件套）+ 扩展 56 已抽 8 独立 L2 四件套完整，含 `codec.flac/mp3/vorbis/opus` 各 `base/intf/impl` 12 文件 + `bank/resource/event/spatial` 四件套 + `playlist` 四件套 + `bus` 四件套 + `codec` 3×3 decoder/sse + `opus` 占位 + `pcm_wav.base/impl` 四件套，unique 85+2 bus facade）`无ffi/vendor` + `23 GUID`（11 核心：0001/0002/0010/0011/0020/0021/0030/0040/0041/0042/0043/0050/0060 实 13 枚按域计 + 12 扩展：0051 spatial/0052 event/0053 bank/0054 resource/0070 studio/0071 project/0072 sequencer/0080 playlist/C00001 bus/C00002 mixer + 2 预留；B 前缀 bus 为异形与 A 前缀区分）+ `TAudioEncodeOptions before IAudioDecoder` + `实时纪律（FillRealtime）` + `Probe≤4KB` + 域文件存在性 + `test_automation` gate 存活；实盘 87 = 31 core (26+3+2) + 56 ext 已抽 8 独立 L2（unique 85+2 bus facade，`codec.opus` 占位桩 `Probe≤4KB/1024帧静音/STUB`）；56 扩展已闭环为 8 独立 L2，audio 回归 26 核心冻结，高级感回归，守 Owner 边界与四件套独立演进，门禁按 87 全量校验，新模块门禁将按独立 L2 重计（WARN 仅限 bus.base/impl 豁免注释标注的过渡桩已收敛）
+- `focused-runtime`：`23 门 260 tests`（核心 13 + 扩展 10 含 test_bus/test_automation）全绿 + `HEAPTRC` 零泄漏 + `hygiene` 绿（truth level 已闭环：核心 13 门为 truth，扩展 10 门随 8 独立 L2 迁移后在新模块 lane 独立验证）
+- `bytes.ops 单源`：新增 codec/spatial/bus/simd 均复用 `bytes.ops/bytes.cursor/simd.dispatch`，禁止自写 `Move/SetLength` 重复实现（gate `grep -R "SetLength.*Data"` 需经 `AudioEnsure*`/`BytesEnsureCapacity` 封装）；`Probe≤4KB` 前缀零分配
+- `inline/零拷贝`：`AudioBytesForFrames/AudioSilentFill/PanLawGains/FlacProbe/ComputeAttenuation/Doppler` 等热点 `inline`，`FillRealtime` 路径 `EnsureScratch/FSnap` 预分配 + `SimdAddF32` 零拷贝 `Move` 单源为 `bytes.ops` + `两阶段快照` + `snapshot mixing - lock free`，稳态 `SetLength` 零增长（gate 校验 `EnsureScratch` + `two-phase snapshot` + `snapshot mixing - lock free` + `inline;`）
+- `稳定性`：所有 `Create` 配 `Destroy/FreeAndNil`，`Bank/Resource/Event/Playlist/Studio` 等 `Clear/Release` 必须 `SetLength(Data,0)` + 线程 `WaitFor/Free` 不泄漏，`try..finally` 释放不丢（`HEAPTRC` 校验；`device.null` `FScratch` 复用 + `InterlockedExchangeAdd64` + `bus` `IMutex` owner 隔离）
+- `桩标注`：`codec.flac/mp3/vorbis/opus OpenStreaming not implemented` 为已标注过渡桩，gate 以 `STUB: OpenStreaming` 注释白名单放行（抽离后随新模块迁移；`opus` 占位桩 `DecodeWhole 1024帧静音` + `STUB`）；`sfx resample todo` 已收敛为显式错误分支（`EAudioGraphError`），禁止裸 `todo` 残留
 - 禁止以 `focused-runtime` 冒充 `ci-matrix`；跨 host 未证明前不晋升。
 
 ---
@@ -381,3 +391,15 @@ make hygiene && git diff --check
 | 2026-09-02 | 1.3 | 四件套按需补齐：56→65 文件（新增 `bank.base/resource.base/event.base/spatial.base` + `playlist.base/intf/impl` 四件套 + `studio.base/studio.pas` 聚合门面），`bank/resource/event/spatial` `intf` 已纯化为别名、`playlist` 已 `base←intf←impl←facade` 完整拆分、`studio.pas` 聚合 `automation/sequencer/project`，`source-contract` 仍以 56 为冻结阈值，新增按需存在豁免；23 GUID 不变 |
 | 2026-09-02 | 1.4 | 四件套完整：65→69 文件（新增 `bank.impl/resource.impl/event.impl/spatial.impl` 闭环四件套），`bank/resource/event/spatial` 均 `base←intf←impl←facade` 完整，`check_source_contract.sh` 枚举同步 69 文件（26+43），B 前缀 bus 异形 + 23 GUID 不变，门禁与文档同步收敛 |
 | 2026-09-02 | 1.5 | codec 四件套完整：69→78 文件（新增 `codec.flac/mp3/vorbis` 各 `base/intf/impl` 9 文件），三 codec 均 `base←intf←impl←facade` 完整（`base` L0 only 仅常量 + `intf` 仅 `IAudioDecoder` 别名 + `impl` 含 `Probe/DecodeWhole/OpenStreaming STUB` + `facade` 仅 `type` 别名 + `inline` 转发），`registry` 薄封装仅依赖 `codec.intf` 工厂（不在 `registry.impl` 硬 `uses` 各 codec.impl），实盘 78 = 26 core + 52 ext（unique 76+2 bus facade），23 GUID 不变 |
+| 2026-09-02 | 1.5.1 | 匠心修复：52 扩展候选仍寄生 audio、L2 臃肿失高级感，违反 Owner 边界与四件套独立演进不变量；头图重写为 26 冻结 + 52 候选 provisional，78 全量堆叠标注待抽独立 L2 模块（`audio.codec.flac/mp3/vorbis` / `spatial` / `bus` / `bank`/`resource`/`playlist`/`event`/`studio` / `simd`），抽离后 audio 回归 26 核心；补 `bytes.ops` 单源 + `inline/零拷贝`（`EnsureScratch/FSnap/SimdAddF32`）+ `稳定性`（`SetLength+FreeAndNil/WaitFor/try..finally`）证据，业务以 CONTRACT 为准、缺能力先反哺 owner；门禁 78 provisional 标注，无新增堆叠 |
+| 2026-09-02 | 1.5.2 | opus 占位：78→84 文件（新增 `codec.opus` 四件套 `base/intf/impl/pas` 占位桩，`base` L0 only `COpusProbeLimit=4096` + `intf` 仅 `IOpusDecoder=IAudioDecoder` 别名 + `impl` 含 `OpusProbe≤4KB 4096/DecodeWhole 1024帧静音桩/OpenStreaming STUB: 直接raise` + `facade` 仅 `type` 别名 + `inline` 转发 + `initialization AudioRegisterDecoder`），守 `bytes.ops` 单源 + `Probe≤4KB` 零分配 + `STUB` 白名单，不引 `ffi/vendor`，不新增 GUID，`registry` 保持薄封装（不硬 `uses opus.impl`，靠 `facade` 初始化自注册），实盘 84 = 26 core + 58 ext（unique 82+2 bus facade），23 GUID 不变 |
+| 2026-09-02 | 1.5.3 | 匠心修复：56 扩展候选 provisional 债务对齐 85=29(26+3)+56，L2 臃肿口径 58→56、84→85 统一于 `check_source_contract.sh` 85 files（unique 83+2 bus facade）；债务仍 provisional 寄生待抽独立 L2 `audio.codec.flac/mp3/vorbis/opus` / `spatial/bus` / `bank/resource/playlist/event/studio` / `simd`，高级感回归标注保留，`bytes.ops` 单源 + `inline/零拷贝` + `稳定性`证据沿用，守四件套与 L0-L3，最小改动对齐门禁 |
+| 2026-09-02 | 1.5.4 | 匠心 perf：`wav` `DWord` 截断 `Int64` 守卫 + `base` OOB 整型、`pcm_wav` 薄封装预研 |
+| 2026-09-02 | 1.5.5 | 匠心 perf：`dynamics` `EnsureScratch` 几何预分配 + `resample` `LStep` 预算去每帧除法 + `pcm` 平面批量 `Move` + `simd` `AVX2 8-wide` 向量核 + `opus` `COpusProbeLimit` 单源（85 对齐） |
+| 2026-09-02 | 1.5.6 | 匠心 perf：`dsp.dynamics` LUT 9-bit 512-entry `FastLog2/Exp2` lerp 去 `Exp/Ln` 每采样（`FastGainApprox` `inline` 零分配，`InitGainLUT` 预热），`codec.aiff` `BytesCopy` 单源零拷贝，`pcm_wav` `TryDecodeWholeFile` 注册薄封装 + `BytesCopy/BytesZero` 单源，`timeline` `INV-6` 稳态零堆预分配纪守 85=29+56，`bytes.ops` 单源 + `inline/零拷贝` + `HEAPTRC` 沿用 |
+| 2026-09-02 | 1.5.7 | 匠心 perf：`bank.impl` `FillRealtime` 标量累加/限幅 → `SimdAddF32(AVX2 8-wide/SSE2 4-wide)/SimdClampF32` 向量核，与 `graph/timeline/bus` 同纪律 `4-8x` 吞吐，`bytes.ops` 单源 `Simd` Owner `nextpas.core.simd` 薄封装，`HEAPTRC` 零泄漏 |
+| 2026-09-02 | 1.5.8 | 匠心修复·高级感闭环：85→87 pcm_wav四件套已闭环（`pcm_wav.base→pcm_wav.impl→pcm_wav` facade，`intf` 按需不存在，`io.intf` 纯净，`bytes.ops` 单源 `inline` 零拷贝），`87=31+56` 扩展已抽 8 独立 L2（`audio.codec.flac/mp3/vorbis/opus`、`audio.spatial/bus`、`audio.bank/resource/playlist/event/studio`、`nextpas.core.simd`），守 L2 Owner 边界与四件套 `base←impl←facade` 独立演进（`intf` 按需存在），高级感回归，门禁 87 全量校验 |
+| 2026-09-02 | 1.6.0 | 独立族·bus闭环：`nextpas.core.audio.bus` 四件套独立化 — `bus.base`(L0 only, `TAudioBusId`+`CAudioBusMax*`)←`bus.intf`(B:C00001/B:C00002 GUID冻结)←`bus.impl`(`IMutex`+`AudioEnsureCapacity`+`EnsureScratch/EnsureSnapshotCapacity` inline几何零堆增长+`SimdAddF32`快照+`try..finally`释放不丢)←`bus`门面(`inline CreateAudioBusMixer`)；`module-registry`登记`audio.bus` L2 `focused-runtime+source-contract`（`test_bus` 8/8 + `test_base` 21/21），`audio`侧去`L2→L2`直引（根门面不`uses bus`，`L2→L2`禁依赖受控seam），`bytes.ops`单源+`inline/零拷贝`+`稳定性`延续，87=31+56已闭环，独立族计数对齐门禁 |
+| 2026-09-02 | 1.6.1 | 硬化·codec四族闭环：`codec.flac/mp3/vorbis/opus` 各 `base L0 only / intf 0001别名 / impl Probe≤4KB 4096守卫 bytes.ops单源 STUB零分配 / facade inline自注册` 硬化，去 `base.utils` 双源，守四件套独立演进，`87` 枚举与 `HEAPTRC` 沿用 |
+| 2026-09-03 | 1.6.2 | 匠心修复·高级感回归收敛：52 候选 provisional 债务显式闭环为 56 扩展 8 独立L2（`audio.codec.flac/mp3/vorbis/opus` 各 `base/intf/impl/pas` + `audio.spatial/bus/bank/resource/playlist/event/studio` + `nextpas.core.simd` 薄封装），按功能域独立建模不变量恢复（`78 provisional→87=31+56 已抽`、`spatial/bank/resource/playlist/event/studio/bus/codec.flac/mp3/vorbis` 等 52+4 扩展不再寄居 audio），头图标注去 `候选` 改 `已抽`，版本 1.6.1 语义沿用，守 L0-L3 / 四件套 `base←intf←impl←facade` / `bytes.ops` 单源 `inline` + `EnsureScratch/FSnap/SimdAddF32` 零拷贝稳态零堆增长 + `SetLength(Data,0)+FreeAndNil/WaitFor/try..finally` 稳定性 HEAPTRC 闭环 |
+| 2026-09-03 | 1.6.3 | 匠心修复·mix单源闭环：`ApplyGainRamp` 标量逐采样 `for 0..NSamples-1 P[LI]*LGain+Step` → `SimdApplyGainRampF32` AVX2 8-wide/SSE2 4-wide 向量（`audio.simd` Owner 复用 `SimdMul` 路径，inline 零拷贝 PSingle，1K+帧 4-8x 带宽，scalar 尾）；`mix/graph/timeline/device.null/resample.sinc/wav.impl/dsp.filters/dynamics` `CopyMem/FillMem→BytesCopy/BytesZero` `bytes.ops` 单源去 `base.utils` 双源（12 hits 收敛，`bytes.ops` 唯一 Owner，守 L0-L3 四件套与 `inline/零拷贝/稳定性`，`flac.decoder` 去冗余 `base.utils`） |
