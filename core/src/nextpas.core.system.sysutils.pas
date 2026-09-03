@@ -135,7 +135,6 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.exception,
   nextpas.core.path,
   nextpas.core.fs,
   nextpas.core.fs.util,
