@@ -5,7 +5,15 @@ unit nextpas.core.tls.freepascal.engine;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.base, nextpas.core.tls.engine, sysutils; type TFreePascalEngine = class(TInterfacedObject, ISSLEngine) private FContext: ISSLContext;
+uses
+  nextpas.core.base,
+  nextpas.core.tls.base,
+  nextpas.core.tls.engine;
+
+type
+  TFreePascalEngine = class(TInterfacedObject, ISSLEngine)
+  private
+    FContext: ISSLContext;
     FRole: TSSLEngineRole;
     FConnection: ISSLConnection;
     FClientConnection: ISSLClientConnection;
@@ -53,7 +61,13 @@ function CreateFreePascalEngine(AContext: ISSLContext; ARole: TSSLEngineRole; AS
 
 implementation
 
-uses nextpas.core.tls.freepascal.connection; constructor TFreePascalEngine.Create(AContext: ISSLContext; ARole: TSSLEngineRole; ASocket: THandle);
+uses
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
+  nextpas.core.exception,
+  nextpas.core.tls.freepascal.connection;
+
+constructor TFreePascalEngine.Create(AContext: ISSLContext; ARole: TSSLEngineRole; ASocket: THandle);
 begin
   inherited Create;
   FContext := AContext;
@@ -180,8 +194,8 @@ begin
   LRead := FConnection.Read(LBuf[0], SizeOf(LBuf));
   if LRead > 0 then
   begin
-    SetLength(FPlaintextOut, Length(FPlaintextOut) + LRead);
-    Move(LBuf[0], FPlaintextOut[Length(FPlaintextOut) - LRead], LRead);
+    // perf: single-source via bytes.ops BytesAppend — exponential grow amortized O(1), single SetLength+Move zero-copy (PByte), not inline per red-line 1/2
+    BytesAppend(FPlaintextOut, @LBuf[0], SizeUInt(LRead));
     Exit(eaHasPlaintext);
   end;
 

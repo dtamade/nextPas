@@ -129,6 +129,7 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.http.headers;
 
 const
@@ -278,7 +279,8 @@ begin
   if Result = 0 then
     Exit;
 
-  Move(FStream.FBodyBuffer[FStream.FBodyReadPos], ABuf, Result);
+  // perf: zero-copy single source via bytes.ops.BytesCopy inline (BodyBuffer -> ABuf, INV-5)
+  BytesCopy(@ABuf, @FStream.FBodyBuffer[FStream.FBodyReadPos], Result);
   Inc(FStream.FBodyReadPos, SizeInt(Result));
   FStream.ConsumeBodyBytes(UInt32(Result));
 end;
@@ -409,8 +411,9 @@ begin
   begin
     if FHeaderFragments[LIndex] = '' then
       Continue;
-    Move(FHeaderFragments[LIndex][1], FHeaderBlock[LWritePos],
-      Length(FHeaderFragments[LIndex]));
+    // perf: zero-copy single source via bytes.ops.BytesCopy inline (fragment single source INV-5)
+    BytesCopy(@FHeaderBlock[LWritePos], @FHeaderFragments[LIndex][1],
+      SizeUInt(Length(FHeaderFragments[LIndex])));
     Inc(LWritePos, Length(FHeaderFragments[LIndex]));
   end;
 
@@ -606,7 +609,8 @@ begin
     Exit;
   LOldLen := Length(FBodyBuffer);
   SetLength(FBodyBuffer, LOldLen + LPayloadLen);
-  Move(APayload[1], FBodyBuffer[LOldLen], LPayloadLen);
+  // perf: zero-copy single source via bytes.ops.BytesCopy inline (APayload -> BodyBuffer single source INV-5)
+  BytesCopy(@FBodyBuffer[LOldLen], @APayload[1], SizeUInt(LPayloadLen));
 end;
 
 procedure TH2Stream.ConsumeBodyBytes(const ABytes: UInt32);

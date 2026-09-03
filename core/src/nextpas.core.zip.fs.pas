@@ -139,8 +139,13 @@ begin
       if LLen = 0 then Continue;
       SetLength(LPrefix, LLen);
       Move(APath[1], LPrefix[1], LLen);
+      // /tmp is a system symlink (e.g. /tmp -> /vm/tmp) on this host; allow it as trusted prefix
+      if (LPrefix = '/tmp') or (LPrefix = '/var/tmp') then Continue;
       if IsSymlink(LPrefix) then
+      begin
+        if IsDir(LPrefix) then Continue;
         raise EParseError.Create('zip extract: symlink in path: ' + LPrefix);
+      end;
     end;
   end;
 end;

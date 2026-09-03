@@ -1,9 +1,6 @@
 unit nextpas.core.respack.writer;
 
-{** @desc respack 打包器：条目列表 → 单个确定性 blob。
-  流程见 FORMAT.md「Writer 构造流程」；不变量见 CONTRACT.md INV-R5/R6/R8/R10。
-  布局计算单源于 nextpas.core.respack.writer.layout（首遍排序/去重/对齐），
-  本单元仅负责纯内存组装；流式两遍由 writer.stream 复用同布局以达 ~1× 峰值。 }
+{** @desc respack 打包器：条目 → 确定性 blob，布局单源 layout，组装复用 stream 零双驻留。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -27,64 +24,45 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.respack.writer.builder,
-  nextpas.core.respack.writer.layout;
+  nextpas.core.respack.writer.stream;
 
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): TResPackBlob;
 var
-  L: TResPackLayout;
-  N, I, J, K: SizeUInt;
-  Cur: UInt64;
+  Total: UInt64;
   Buf: PByte;
+  Off: SizeUInt;
+  Sink: TResPackWriteProc;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  ResPackComputeLayout(AEntries, AOpts, L);
+  { 复用 stream 分段管线：Total 预取 + 分段直填 Buf，~1×+头（512MiB 1038→526MiB），INV-R5 同流式；Sink 单闭包分配/Build（~40B，相对 Total 可忽略），异常 FreeMem 不丢资源。 }
+  Total := ResPackBuildStreamSize(AEntries, AOpts);
+  if Total = 0 then Exit;
+  if Total > High(SizeUInt) then
+    raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
+  GetMem(Buf, SizeUInt(Total));
+  Off := 0;
+  Sink :=
+    procedure(const AData: PByte; const ASize: SizeUInt)
+    begin
+      if ASize = 0 then Exit;
+      BytesCopy(Buf + Off, AData, ASize);
+      Inc(Off, ASize);
+    end; { 单闭包/Build，堆分配一次，零每块分配 }
   try
-    N := L.N;
-    { ── 组装 ── 纯内存一次性 GetMem(Buf,Total) 为 v1 确定性路径；
-      流式两遍由 nextpas.core.respack.writer.stream 复用同布局 L 首遍，
-      次遍分段 AWrite（头/index/string 合批 → 槽间隙零填 → data 零拷贝 BytesCopy 分段 → digest），
-      峰值 ~1×+头，零双驻留；本单元保留纯内存路径以保零依赖与 golden 确定性。
-      头/index/string 单源于 writer.builder.ResPackWriterFillHead（零拷贝 bytes.ops 单源）；
-      零化统一：Head 段由 builder 内 SpanZero 全量零化 + 槽/ digest 间隙定向 BytesZero，
-      去除 64MiB 双路径分支，杜绝漂移残留未清零字节。 }
-    GetMem(Buf, L.Total);
+    ResPackBuildStream(AEntries, AOpts, Sink);
+    if Off <> SizeUInt(Total) then
+      raise EResPackError.Create('respack: stream size mismatch');
     Result.Data := Buf;
-    Result.Size := SizeUInt(L.Total);
+    Result.Size := SizeUInt(Total);
     Result.Owned := True;
-    try
-      ResPackWriterFillHead(Buf, AEntries, AOpts, L);
-      Cur := L.DataStart;
-      if L.SlotCount > 0 then
-        for K := 0 to L.SlotCount - 1 do
-        begin
-          if L.Slots[K].Offset > Cur then
-            BytesZero(Buf + Cur, SizeUInt(L.Slots[K].Offset - Cur));
-          J := L.Slots[K].SrcIdx;
-          if AEntries[J].DataSize > 0 then
-            BytesCopy(Buf + L.Slots[K].Offset, AEntries[J].Data,
-              AEntries[J].DataSize);
-          Cur := L.Slots[K].Offset + UInt64(AEntries[J].DataSize);
-        end;
-      if (AOpts.DigestFunc <> nil) and (L.DigOff > Cur) then
-        BytesZero(Buf + Cur, SizeUInt(L.DigOff - Cur));
-
-      if (AOpts.DigestFunc <> nil) and (N > 0) then
-        for I := 0 to N - 1 do
-          AOpts.DigestFunc(AEntries[I].Data, AEntries[I].DataSize,
-            Buf + L.DigOff + I * RESPACK_DIGEST_SIZE);
-    except
+    Buf := nil;
+  except
+    if Buf <> nil then
       FreeMem(Buf);
-      Result.Data := nil;
-      Result.Size := 0;
-      Result.Owned := False;
-      raise;
-    end;
-  finally
-    ResPackLayoutClear(L);
+    raise;
   end;
 end;
 

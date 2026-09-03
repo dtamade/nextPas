@@ -1,18 +1,15 @@
 unit nextpas.core.respack.base;
 
-{** @desc respack 线格式 v1 基座：常量、record、LE 编解码、路径语法、FNV-1a、错误。
-  权威格式定义见 core/docs/respack/FORMAT.md；实现与文档冲突时先修文档。
-  双编译器：FPC 编译时 uses SysUtils 等经 FPC 自带 RTL 自然解析，nextPas 编译时经
-  units/<target>/SysUtils.pas stub 名称桥接（非兼容层）；本单元零直引 SysUtils
-  (uses 仅 L0/L1 单源 bytes.binary/bytes.pathvalid/checksum.fnv32/text.number/mem)，
-  证据链见 core/docs/respack/README.md 与 CLAUDE.md 双编译器架构。 }
+{** @desc respack 线格式 v1 基座：常量/record/LE/路径/FNV/错误，见 FORMAT.md。 }
 
 {$I nextpas.core.settings.inc}
 
 interface
 
 uses
-  nextpas.core.exception;
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.mem.arena.local;
 
 const
   { 线格式常量（FORMAT.md） }
@@ -39,8 +36,14 @@ const
   { codecId 登记表（FORMAT.md）；未知值 reader 整包拒绝 }
   RESPACK_CODEC_STORE = 0;
 
-  { writer 输入上限（CONTRACT INV-R10）：超出显式 raise，绝不静默产出坏包 }
+  { 输入上限 INV-R10：超限显式 raise }
   RESPACK_MAX_INPUT_BYTES = SizeUInt(512) * 1024 * 1024;
+  { 小包便捷 ≤64MiB（INV-R10 家族，流式 ~1×+头） }
+  RESPACK_DIRSOURCE_LEGACY_LIMIT = SizeUInt(64) * 1024 * 1024;
+  { 熔断：entryCount ≤12.8M（512M/40） }
+  RESPACK_MAX_ENTRY_COUNT = RESPACK_MAX_INPUT_BYTES div RESPACK_ENTRY_SIZE;
+  { 头块 64K 分片 }
+  RESPACK_WRITER_HEAD_CHUNK = SizeUInt(64) * 1024;
 
 type
   { host-order API record；线上布局一律经 LE helper 编解码（BE 平台安全） }
@@ -94,9 +97,7 @@ type
     Owned: Boolean;
   end;
 
-  { 错误层级：全部挂在 exception 根上，不触碰 SysUtils。
-    对齐 vfs EVfsError(Op/Path) 范式：Op/Path 结构化定位，message 保留
-    详情后缀 (op=…, path=…) 质感；CreateStep 补充 Op/Path 重载。 }
+  { 错误：挂 exception 根，Op/Path 结构化；CreateStep 重载 }
   EResPackError = class(Exception)
   private
     FOp: string;
@@ -123,7 +124,25 @@ type
   EResPackTooLarge = class(EResPackError);
   EResPackDirSourceFailed = class(EResPackError);
 
-{ LE 编解码 — 单源于 bytes.binary.Read/WriteUInt*LE (host-endian 无关), inline 零拷贝转发 }
+{ Dedup/overlap arena：base 统一拥有，writer.layout/reader 共享，单 slab。 }
+type
+  PSizeInt = ^SizeInt;
+  TResPackDistinct = record Off: UInt64; Size: UInt64; end;
+  PResPackDistinct = ^TResPackDistinct;
+
+  // MIN=256 为哈希分散下限，tiny pack(N=1-2) 256*8=2K slab 相对 Total 可忽略，已评估；
+  // 若需优化可在调用方对 N<=4 时用线性扫描分支，但当前 arena 单 slab 已极简，保留 MIN。
+  TResPackDedupBuckets = record
+    const MIN = 256; // MIN 256 保障哈希分散，tiny pack 2K slab 可忽略
+    const MAX = 65536;
+    class function BucketCountFor(const ANeeded: SizeUInt): SizeUInt; static; inline;
+  end;
+
+procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt);
+procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
+procedure ResPackDedupDone(var AArena: TLocalArena); inline;
+
+{ LE：转发 bytes.binary，inline }
 function RdU16LE(AData: PByte): Word; inline;
 function RdU32LE(AData: PByte): UInt32; inline;
 function RdU64LE(AData: PByte): UInt64; inline;
@@ -131,18 +150,16 @@ procedure WrU16LE(AData: PByte; const AValue: Word); inline;
 procedure WrU32LE(AData: PByte; const AValue: UInt32); inline;
 procedure WrU64LE(AData: PByte; const AValue: UInt64); inline;
 
-{ FNV-1a 32 — 单源于 L1 checksum.fnv32.Fnv1a32Update (批量 8 字节展开, 零拷贝 PByte+SizeUInt 视图), inline 转发; LE 单源于 bytes.binary }
+{ FNV-1a：转发 checksum.fnv32，inline }
 function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32; inline;
 
-{ Go io/fs.ValidPath 语义（FORMAT.md 路径规范）：UTF-8、unrooted、'/'
-  分隔、段非空非'.'非'..'、反斜杠为普通字符；特例 '.' 表根。
-  文件条目场景 AFileEntry=True 时拒绝根。
-  perf: 热路径（writer/reader 批量校验 10k 条目）inline 消除调用开销，对齐
-  ResPackFnv1a32 单源转发，零拷贝视图经 bytes.pathvalid。 }
+{ ValidPath：Go io/fs 语义，热路径 inline，零拷贝 bytes.pathvalid }
 function ResPackValidPath(const APath: string;
   const AFileEntry: Boolean): Boolean; inline;
+function ResPackValidSpan(const ASpan: TByteSpan;
+  const AFileEntry: Boolean): Boolean; inline;
 
-{ 路径字节比较单源：writer/reader 共用，零拷贝 SpanCompare 转发，inline 零开销，owner bytes.ops }
+{ CmpPath：SpanCompare 转发，inline，owner bytes.ops }
 function ResPackCmpPath(const PA: PByte; const LA: SizeUInt; const PB: PByte; const LB: SizeUInt): Integer; inline;
 
 { 默认构建选项 }
@@ -153,7 +170,7 @@ procedure ResPackFreeBlob(var ABlob: TResPackBlob); inline;
 implementation
 
 uses
-  nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid,
@@ -208,6 +225,12 @@ begin
   Result := BytesValidPath(APath, not AFileEntry);
 end;
 
+function ResPackValidSpan(const ASpan: TByteSpan;
+  const AFileEntry: Boolean): Boolean; inline;
+begin
+  Result := BytesValidSpan(ASpan, not AFileEntry);
+end;
+
 function ResPackDefaultOptions: TResPackBuildOptions;
 begin
   Result.Deduplicate := False;
@@ -226,9 +249,96 @@ begin
   ABlob.Owned := False;
 end;
 
-{ 十进制整数转字符串 — 单源于 L1 text.number.UIntToBuffer (DIGIT_PAIRS 批量),
-  仅 EResPackCorrupted.CreateStep 报错路径使用；冷路径外联避免 I-Cache 膨胀，
-  遵守 inline 红线1（不以索引元素喂 Move 无类型参数，FPC 常量传播下栈污染风险）。 }
+{ Dedup/overlap arena 单源实现：base 统一拥有，writer.layout/reader 共享，bytes.ops.BytesNextCapacity 单源，TLocalArena 单 slab }
+
+class function TResPackDedupBuckets.BucketCountFor(const ANeeded: SizeUInt): SizeUInt; inline;
+var
+  Target: SizeUInt;
+begin
+  if ANeeded <= MIN then Exit(MIN);
+  if ANeeded >= MAX then Exit(MAX);
+  Target := ANeeded;
+  Result := BytesNextCapacity(MIN, Target);
+  if Result > MAX then Result := MAX;
+  if Result < MIN then Result := MIN;
+end;
+
+procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt);
+var
+  NeedArena: SizeUInt;
+  Target: SizeUInt;
+  I: SizeUInt;
+begin
+  AArena := nil;
+  ABucketsHead := nil;
+  ASlotNext := nil;
+  ABucketCount := 0;
+  if AN = 0 then Exit;
+  Target := 0;
+  if not TryMulSizeUInt(AN, 2, Target) then
+    Target := High(SizeUInt);
+  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
+  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedArena) then
+    raise EResPackTooLarge.Create('respack: dedup arena size overflow');
+  try
+    AArena := TLocalArena.Create(NeedArena);
+  except
+    on E: EOutOfMemoryError do
+      raise EResPackTooLarge.Create('respack: dedup arena too large');
+  end;
+  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
+  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
+  if (ABucketsHead = nil) or (ASlotNext = nil) then
+    raise EResPackTooLarge.Create('respack: dedup arena alloc failed');
+  FillChar(ABucketsHead^, ABucketCount * SizeUInt(SizeOf(SizeInt)), $FF);
+  FillChar(ASlotNext^, AN * SizeUInt(SizeOf(SizeInt)), $FF);
+end;
+
+procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
+var
+  NeedBuckets, NeedDistinct, Total: SizeUInt;
+  Target: SizeUInt;
+begin
+  AArena := nil;
+  ABucketsHead := nil;
+  ASlotNext := nil;
+  ADistinct := nil;
+  ABucketCount := 0;
+  if AN <= 1 then Exit;
+  Target := 0;
+  if not TryMulSizeUInt(AN, 2, Target) then Target := High(SizeUInt);
+  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
+  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedBuckets) then
+    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
+  if not TryMulSizeUInt(AN, SizeUInt(SizeOf(TResPackDistinct)), NeedDistinct) then
+    raise EResPackTooLarge.Create('respack: overlap distinct size overflow');
+  if not TryAddSizeUInt(NeedBuckets, NeedDistinct, Total) then
+    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
+  try
+    AArena := TLocalArena.Create(Total);
+  except
+    on E: EOutOfMemoryError do
+      raise EResPackTooLarge.Create('respack: overlap arena too large');
+  end;
+  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
+  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
+  ADistinct := PResPackDistinct(AArena.Alloc(AN * SizeUInt(SizeOf(TResPackDistinct))));
+  if (ABucketsHead = nil) or (ASlotNext = nil) or (ADistinct = nil) then
+    raise EResPackTooLarge.Create('respack: overlap arena alloc failed');
+  FillChar(ABucketsHead^, ABucketCount * SizeUInt(SizeOf(SizeInt)), $FF);
+  FillChar(ASlotNext^, AN * SizeUInt(SizeOf(SizeInt)), $FF);
+end;
+
+procedure ResPackDedupDone(var AArena: TLocalArena); inline;
+begin
+  if AArena <> nil then
+  begin
+    AArena.Free;
+    AArena := nil;
+  end;
+end;
+
+{ 十进制转字符串单源于 text.number }
 function ResPackUIntToStr(AValue: UInt32): string;
 var
   LBuf: array[0..15] of AnsiChar;
@@ -237,7 +347,7 @@ begin
   LLen := UIntToBuffer(UInt64(AValue), @LBuf[0]);
   SetLength(Result, LLen);
   if LLen > 0 then
-    Move(LBuf, PAnsiChar(Result)^, LLen);
+    BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen));
 end;
 
 constructor EResPackError.Create(const AMsg: string);
@@ -268,7 +378,6 @@ end;
 constructor EResPackCorrupted.CreateStep(const AStep: Integer; const AOp,
   APath, ADetail: string);
 begin
-  FStep := AStep;
   inherited CreateCtx(AOp, APath, 'respack: validation step '
     + ResPackUIntToStr(UInt32(AStep)) + ' failed: ' + ADetail);
   FStep := AStep;

@@ -9,6 +9,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.respack.base,
+  nextpas.core.respack.limits,
   nextpas.core.respack.reader,
   nextpas.core.respack.writer,
   nextpas.core.respack.writer.stream,
@@ -47,7 +48,12 @@ const
   RESPACK_FLAG_ALGO_SHIFT = nextpas.core.respack.base.RESPACK_FLAG_ALGO_SHIFT;
   RESPACK_DIGEST_ALGO_SHA256 = nextpas.core.respack.base.RESPACK_DIGEST_ALGO_SHA256;
   RESPACK_INC_DEFAULT_BYTES_PER_LINE =
-    nextpas.core.respack.embed.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
+    nextpas.core.respack.limits.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
+  RESPACK_INC_MAX_BLOB_BYTES =
+    nextpas.core.respack.limits.RESPACK_INC_MAX_BLOB_BYTES;
+  RESPACK_MAX_INPUT_BYTES = nextpas.core.respack.base.RESPACK_MAX_INPUT_BYTES;
+  RESPACK_DIRSOURCE_LEGACY_LIMIT = nextpas.core.respack.base.RESPACK_DIRSOURCE_LEGACY_LIMIT;
+  RESPACK_WRITER_HEAD_CHUNK = nextpas.core.respack.base.RESPACK_WRITER_HEAD_CHUNK;
 
 function ResPackOpen(const AData: PByte; const ASize: SizeUInt): TResPack; inline;
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
@@ -77,6 +83,8 @@ function ResPackDefaultIncOptions: TResPackIncOptions; inline;
 function ResPackValidIdent(const AName: string): Boolean; inline;
 function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob; inline;
+procedure ResPackEmbedBuildStream(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions; const AWrite: TResPackWriteProc); inline;
 function ResPackEmbedIncSource(const ABlob: TResPackBlob;
   const AOpts: TResPackIncOptions): TBytes; inline;
 function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
@@ -174,6 +182,12 @@ function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob;
 begin
   Result := nextpas.core.respack.dirsource.ResPackEmbedBuild(ASourceDir, AOpts);
+end;
+
+procedure ResPackEmbedBuildStream(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions; const AWrite: TResPackWriteProc);
+begin
+  nextpas.core.respack.dirsource.ResPackEmbedBuildStream(ASourceDir, AOpts, AWrite);
 end;
 
 function ResPackEmbedIncSource(const ABlob: TResPackBlob;

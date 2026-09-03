@@ -5,67 +5,41 @@ unit nextpas.core.audio.codec.vorbis;
 interface
 
 uses
+  nextpas.core.audio.codec.vorbis.base,
+  nextpas.core.audio.codec.vorbis.intf,
+  nextpas.core.audio.codec.vorbis.impl,
   nextpas.core.base,
-  nextpas.core.io.intf,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.codec.intf;
 
-function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
-function CreateVorbisDecoder: IAudioDecoder;
+type
+  IVorbisDecoder = nextpas.core.audio.codec.vorbis.intf.IVorbisDecoder;
+
+const
+  CVorbisProbeLimit = nextpas.core.audio.codec.vorbis.base.CVorbisProbeLimit;
+
+function VorbisProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function CreateVorbisDecoder: IAudioDecoder; inline;
 
 implementation
 
 uses
-  nextpas.core.audio.errors,
-  nextpas.core.audio.codec.vorbis.decoder;
+  nextpas.core.audio.codec.registry;
 
-type
-  TVorbisDecoder = class(TInterfacedObject, IAudioDecoder)
-  private
-    FTags: TAudioTags;
-  public
-    function Probe(const APrefix: TBytes): TAudioProbeResult;
-    function DecodeWhole(const AStream: IStream): TAudioBuffer;
-    function OpenStreaming(const AStream: IStream): IAudioSource;
-    function Tags: TAudioTags;
-  end;
+// Probe≤4KB guard: 4096 — facade inline forwarding to impl
 
-function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
+function VorbisProbe(const APrefix: TBytes): TAudioProbeResult; inline;
 begin
-  if Length(APrefix) > 4096 then
-    Result := VorbisProbeBytes(Copy(APrefix, 0, 4096))
-  else
-    Result := VorbisProbeBytes(APrefix);
+  Result := nextpas.core.audio.codec.vorbis.impl.VorbisProbe(APrefix);
 end;
 
-function TVorbisDecoder.Probe(const APrefix: TBytes): TAudioProbeResult;
+function CreateVorbisDecoder: IAudioDecoder; inline;
 begin
-  Result := VorbisProbe(APrefix);
+  Result := nextpas.core.audio.codec.vorbis.impl.CreateVorbisDecoder;
 end;
 
-function TVorbisDecoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
-begin
-  if AStream = nil then
-    raise EAudioDecodeError.Create('vorbis DecodeWhole: nil');
-  Result := VorbisDecodeWholeViaStream(AStream);
-  FTags := Default(TAudioTags);
-end;
-
-function TVorbisDecoder.OpenStreaming(const AStream: IStream): IAudioSource;
-begin
-  Result := nil;
-  raise EAudioDecodeError.Create('vorbis OpenStreaming: not implemented');
-end;
-
-function TVorbisDecoder.Tags: TAudioTags;
-begin
-  Result := FTags;
-end;
-
-function CreateVorbisDecoder: IAudioDecoder;
-begin
-  Result := TVorbisDecoder.Create;
-end;
+initialization
+  AudioRegisterDecoder(@CreateVorbisDecoder);
 
 end.

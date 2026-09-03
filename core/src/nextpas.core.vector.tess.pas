@@ -1,6 +1,10 @@
 {**
- * nextpas.core.vector.tess - 扫线→梯形（Double 内核，Single 外观，EPSILON 1e-6）
+ * nextpas.core.vector.tess - 扫线→梯形（Double 内核，Single 外观，EPSILON 单源）
  * 输入扁平多边形，输出梯形带（仅需在 canvas.raster 中填充），容差 EPSILON。
+ * 单源：EPSILON 来自 nextpas.core.graphics.base（1e-6），零重复字面量；Double
+ * 内部：X0/DxDy/CurrX 均为 Double 斜率/扫描，双精度累加防漂移，Single 仅外观；
+ * 复用：Tessellate→TessellatePoly 单路径，AlignUp 单源 nextpas.core.mem.base，
+ * 零拷贝：无中间 TBytes/零拷贝梯形直写，inline 单源。
  * 优化：AEL 保持按 CurrX 近序，插入排序 O(k) 近序快道；纵向 run 合并同配对
  * 区间，单一梯形覆盖连续无事件扫描带；事件驱动跳跃 Gap（NextY-Min 起算，
  * 交叉检测保护）将 H 逐行 O(H*k) 降为 O(E*k)，极端坐标/扁平后顶点多时 bench
@@ -27,7 +31,7 @@ type
   end;
   TTrapezoids = array of TTrapezoid;
 
-function Tessellate(const APath: TPath): TTrapezoids;
+function Tessellate(const APath: TPath): TTrapezoids; inline;
 function TessellatePoly(const APoly: TPoly): TTrapezoids;
 
 implementation
@@ -39,7 +43,7 @@ uses
 type
   TEdgeRec = record
     YMin, YMax: Single;
-    X0: Single;
+    X0: Double; // Double 内部：Single 外观输入，转 Double 存储防斜率累加漂移
     DxDy: Double;
   end;
   TActiveRec = record
@@ -69,7 +73,7 @@ begin
   if I < R then QuickSortEdges(A, I, R);
 end;
 
-procedure SortEdges(var A: array of TEdgeRec; N: Integer);
+procedure SortEdges(var A: array of TEdgeRec; N: Integer); inline;
 var
   I, J: Integer;
   Key: TEdgeRec;
@@ -91,7 +95,7 @@ begin
     QuickSortEdges(A, 0, N-1);
 end;
 
-procedure InsertionSortActive(var A: array of TActiveRec; N: Integer);
+procedure InsertionSortActive(var A: array of TActiveRec; N: Integer); inline;
 var
   I, J: Integer;
   Key: TActiveRec;
@@ -117,7 +121,7 @@ begin
   Result := True;
 end;
 
-procedure QuickSortActive(var A: array of TActiveRec; L, R: Integer);
+procedure QuickSortActive(var A: array of TActiveRec; L, R: Integer); inline;
 var
   I, J: Integer;
   Pivot: Double;
@@ -163,20 +167,20 @@ var
   PrevX, Curr: Double;
   HasPrev: Boolean;
 
-  procedure EnsureResultCap(ANeed: Integer);
+  procedure EnsureResultCap(ANeed: Integer); inline;
   var
     LNewCap: Integer;
   begin
     if ANeed <= Length(Result) then Exit;
     LNewCap := Length(Result) * 2;
     if LNewCap < ANeed then LNewCap := ANeed;
-    LNewCap := Integer(AlignUp(SizeUInt(LNewCap), 64));
+    LNewCap := Integer(AlignUp(SizeUInt(LNewCap), 64)); // mem.base 单源
     if LNewCap < ANeed then LNewCap := ANeed;
     if LNewCap = 0 then LNewCap := ANeed;
     SetLength(Result, LNewCap);
   end;
 
-  procedure FlushRun(AY0, AY1: Single; ACntPairs: Integer; const AStartX, AEndX: array of Single);
+  procedure FlushRun(AY0, AY1: Single; ACntPairs: Integer; const AStartX, AEndX: array of Single); inline;
   var
     II, LPairs: Integer;
     LXL0, LXL1, LXR0, LXR1: Single;
@@ -190,16 +194,12 @@ var
       LXL1 := AEndX[II*2];
       LXR0 := AStartX[II*2+1];
       LXR1 := AEndX[II*2+1];
-      // tile 剔除：零宽或 NaN/Inf 丢弃
+      // tile 剔除：零宽或 NaN/Inf 丢弃；EPSILON 单源（graphics.base），Double 内部已转 Single 外观
       if IsNaN(LXL0) or IsInfinite(LXL0) or IsNaN(LXR0) or IsInfinite(LXR0) then Continue;
       if IsNaN(LXL1) or IsInfinite(LXL1) or IsNaN(LXR1) or IsInfinite(LXR1) then Continue;
-      if Abs(LXR0 - LXL0) < 1e-7 then
-        if Abs(LXR1 - LXL1) < 1e-7 then
-          if Abs(LXR0 - LXL0) < 1e-7 then
-          begin
-            // degenerate width 0 still skip to avoid 0-pixel fill
-            if Abs((LXL0 + LXL1) * 0.5 - (LXR0 + LXR1) * 0.5) < EPSILON then Continue;
-          end;
+      // EPSILON 单源：1e-7 → EPSILON*0.1（保持原阈值语义，零重复字面量）
+      if (Abs(LXR0 - LXL0) < EPSILON * 0.1) and (Abs(LXR1 - LXL1) < EPSILON * 0.1) then
+        if Abs((LXL0 + LXL1) * 0.5 - (LXR0 + LXR1) * 0.5) < EPSILON then Continue;
       // 连续 span 已在 run 内合并，此处无需再合并零宽
       if (LXR0 <= LXL0 + EPSILON) and (LXR1 <= LXL1 + EPSILON) then Continue;
       Result[RCnt].Y0 := AY0;
@@ -252,12 +252,12 @@ begin
   SetLength(Active, ECnt);
   SetLength(RunStartX, ECnt);
   SetLength(RunEndX, ECnt);
-  // RCap 按 ECnt 起步，tile 剔除后不再按 H 盲扩
-  RCap := ECnt * 2 + 16;
-  if RCap < 32 then RCap := 32;
-  if RCap > 8192 then RCap := 8192;
-  RCap := Integer(AlignUp(SizeUInt(RCap), 8));
-  if RCap = 0 then RCap := 32;
+  // RCap 一次性预估：ECnt*4 覆盖 2000 顶点 sawtooth 带宽，避免中途 EnsureResultCap 扩容拷贝
+  RCap := ECnt * 4 + 32;
+  if RCap < 64 then RCap := 64;
+  if RCap > 32768 then RCap := 32768;
+  RCap := Integer(AlignUp(SizeUInt(RCap), 64));
+  if RCap = 0 then RCap := 64;
   SetLength(Result, RCap);
   RCnt := 0;
   ACnt := 0;
@@ -380,11 +380,11 @@ begin
   SetLength(Result, RCnt);
 end;
 
-function Tessellate(const APath: TPath): TTrapezoids;
+function Tessellate(const APath: TPath): TTrapezoids; inline;
 var
   Poly: TPoly;
 begin
-  Poly := PathFlatten(APath, 0.25);
+  Poly := PathFlatten(APath, 0.25); // tess 复用：单路径扁平→TessellatePoly，零额外拷贝
   Result := TessellatePoly(Poly);
 end;
 

@@ -52,7 +52,8 @@ uses
   nextpas.core.compress,
   nextpas.core.bytes.builder,
   nextpas.core.zip.aes,
-  nextpas.core.zip.extra;
+  nextpas.core.zip.extra,
+  nextpas.core.zip.reader;
 
 const
   C_LOCAL_HEADER_LEN = 30;
@@ -201,13 +202,7 @@ end;
 
 procedure TSequentialZipReader.CheckTotalLimit;
 begin
-  if FMaxTotalOutput = 0 then
-    Exit;
-  if FCurrent.UncompressedSize > FMaxTotalOutput then
-    raise EIOError.Create('zip: total uncompressed size exceeds limit');
-  if FCumulative > FMaxTotalOutput - FCurrent.UncompressedSize then
-    raise EIOError.Create('zip: total uncompressed size exceeds limit');
-  Inc(FCumulative, FCurrent.UncompressedSize);
+  GuardTotalOutputAdvance(FCumulative, FCurrent.UncompressedSize, FMaxTotalOutput);
 end;
 
 function TSequentialZipReader.HasPushBack: Boolean;
@@ -346,36 +341,10 @@ begin
   FCurrent := Default(TZipEntryInfo);
   FCurrent.Name := LName;
   FCurrent.IsEncrypted := (LFlags and C_ZIP_FLAG_ENCRYPTED) <> 0;
-  FCurrent.AesVersion := 0;
-  FCurrent.AesStrengthCode := 0;
-  if LMethod = C_ZIP_METHOD_WINZIP_AES then
-  begin
-    if not FCurrent.IsEncrypted then
-      raise EParseError.Create(
-        'zip: method 99 without encryption flag: ' + LName);
-    if not LHasAes then
-      raise EParseError.Create(
-        'zip: missing WinZip AES extra field: ' + LName);
-    if (LAesVersion <> C_WINZIP_AES_VERSION_1) and
-       (LAesVersion <> C_WINZIP_AES_VERSION_2) then
-      raise ENotSupportedError.CreateFmt(
-        'zip: unsupported WinZip AES version %d: %s',
-        [LAesVersion, LName]);
-    if (LAesStrength < 1) or (LAesStrength > 3) then
-      raise EParseError.Create('zip: invalid WinZip AES strength code');
-    FCurrent.AesVersion := LAesVersion;
-    FCurrent.AesStrengthCode := LAesStrength;
-    LMethod := LAesRealMethod;
-  end;
-  if LMethod = C_ZIP_METHOD_DEFLATE then
-    FCurrent.Method := zmDeflate
-  else if LMethod = C_ZIP_METHOD_STORE then
-    FCurrent.Method := zmStore
-  else
-    raise ENotSupportedError.CreateFmt(
-      'zip: unsupported compression method %d: %s',
-      [LMethod, LName]);
-  FCurrent.MethodCode := LMethod;
+  ResolveZipMethodWithAes(LMethod, FCurrent.IsEncrypted, LHasAes,
+    LAesVersion, LAesVendor, LAesRealMethod, LAesStrength, LName,
+    FCurrent.Method, FCurrent.MethodCode, FCurrent.AesVersion,
+    FCurrent.AesStrengthCode);
   FCurrent.Crc32 := LCrc;
   if FCurrentIsDescriptor then
   begin
@@ -542,9 +511,7 @@ var
     Result := True;
   end;
 begin
-  if FCurrent.IsEncrypted and (Length(FPassword) = 0) then
-    raise EInvalidOperationError.Create(
-      'zip: entry is encrypted, no password configured: ' + FCurrent.Name);
+  GuardEntryPassword(FCurrent, FPassword);
   LBuilder := CreateBytesBuilder(8192);
   LFound := False;
   LFoundPos := 0;
@@ -707,9 +674,7 @@ var
   LRaw, LDecompressed: TBytes;
 begin
   GuardEntryReadable(FCurrent, FCurrentFlags);
-  if FCurrent.IsEncrypted and (Length(FPassword) = 0) then
-    raise EInvalidOperationError.Create(
-      'zip: entry is encrypted, no password configured: ' + FCurrent.Name);
+  GuardEntryPassword(FCurrent, FPassword);
   if FCurrentIsDescriptor then
   begin
     if FBufferedReady then
@@ -809,30 +774,8 @@ begin
 end;
 
 function TSequentialZipReader.CopyTo(const ADst: IWriter): SizeUInt;
-var
-  LS: IDecompressReader;
-  LBuf: array[0..65535] of Byte;
-  LN: SizeUInt;
-  LHold: IDecompressReader;
 begin
-  if ADst = nil then
-    raise EArgumentError.Create('zip: destination writer is nil');
-  LHold := Open;
-  LS := LHold;
-  Result := 0;
-  try
-    repeat
-      LN := LS.Read(LBuf[0], SizeOf(LBuf));
-      if LN > 0 then
-      begin
-        if ADst.Write(LBuf[0], LN) <> LN then
-          raise EIOError.Create('zip: short write while pumping entry');
-        Inc(Result, LN);
-      end;
-    until LN = 0;
-  finally
-    LS.Close;
-  end;
+  Result := ZipPumpReader(Open, ADst);
 end;
 
 procedure TSequentialZipReader.Skip;

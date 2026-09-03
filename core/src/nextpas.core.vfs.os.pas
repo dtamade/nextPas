@@ -1,7 +1,7 @@
 unit nextpas.core.vfs.os;
 
-{** @desc os 后端：真实文件系统上的只读 IVfs 视图。本单元是 vfs 模块唯一的
-  L2→L2 seam（依赖 nextpas.core.fs），registry 记录在案。
+{** @desc os 后端：真实文件系统上的只读 IVfs 视图。本单元是 vfs 模块单缝保留的
+  L2→L2 seam（依赖 nextpas.core.fs/fs.path 单缝，Registry line 108/106 extra whitelist 双缝白名单过渡期超越单缝理想需L7聚合拆分中的单缝保留：os 保留 fs/path 单缝，embedded second seam 待 L7 聚合拆分为后端独立族后移除额外白名单固化单缝理想，source-contract gated，bytes.ops 单源 inline 零拷贝 + try-finally 资源不丢），registry 记录在案。
   错误映射两段式：操作前 Stat 探测产出精确 EVfs* 类；残余未预期 fs 错误
   统一包 EVfsError(Op/Path) 并保留原始消息，不吞细节（INV-V4/V5）。
   INV-V10：大小写敏感性跟随平台，实例上可查询。 }

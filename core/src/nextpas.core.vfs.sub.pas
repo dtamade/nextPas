@@ -107,9 +107,9 @@ begin
     Exit('.');
   if Length(APath) <= Length(FSubPrefix) then
     Exit;
-  // perf: zero-copy TByteSpan view single-source via bytes.ops.SpanStartsWith -> MemEqual, inline hot path, no alloc
-  if Length(APath) = 0 then SPath := TByteSpan.Empty else SPath := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)));
-  if Length(FSubPrefix) = 0 then SPrefix := TByteSpan.Empty else SPrefix := TByteSpan.Create(PByte(@FSubPrefix[1]), SizeUInt(Length(FSubPrefix)));
+  // perf: zero-copy TByteSpan view single-source via VfsSpanFromString->TByteSpan.FromStr inline, bytes.ops SpanStartsWith->MemEqual hot path, no alloc
+  SPath := VfsSpanFromString(APath);
+  SPrefix := VfsSpanFromString(FSubPrefix);
   if SpanStartsWith(SPath, SPrefix) then
     Result := Copy(APath, Length(FSubPrefix) + 1, MaxInt);
 end;

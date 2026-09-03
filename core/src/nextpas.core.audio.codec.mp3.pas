@@ -5,67 +5,41 @@ unit nextpas.core.audio.codec.mp3;
 interface
 
 uses
+  nextpas.core.audio.codec.mp3.base,
+  nextpas.core.audio.codec.mp3.intf,
+  nextpas.core.audio.codec.mp3.impl,
   nextpas.core.base,
-  nextpas.core.io.intf,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.codec.intf;
 
-function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
-function CreateMp3Decoder: IAudioDecoder;
+type
+  IMp3Decoder = nextpas.core.audio.codec.mp3.intf.IMp3Decoder;
+
+const
+  CMp3ProbeLimit = nextpas.core.audio.codec.mp3.base.CMp3ProbeLimit;
+
+function Mp3Probe(const APrefix: TBytes): TAudioProbeResult; inline;
+function CreateMp3Decoder: IAudioDecoder; inline;
 
 implementation
 
 uses
-  nextpas.core.audio.errors,
-  nextpas.core.audio.codec.mp3.decoder;
+  nextpas.core.audio.codec.registry;
 
-type
-  TMp3Decoder = class(TInterfacedObject, IAudioDecoder)
-  private
-    FTags: TAudioTags;
-  public
-    function Probe(const APrefix: TBytes): TAudioProbeResult;
-    function DecodeWhole(const AStream: IStream): TAudioBuffer;
-    function OpenStreaming(const AStream: IStream): IAudioSource;
-    function Tags: TAudioTags;
-  end;
+// Probe≤4KB guard: 4096 — facade inline forwarding to impl
 
-function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
+function Mp3Probe(const APrefix: TBytes): TAudioProbeResult; inline;
 begin
-  if Length(APrefix) > 4096 then
-    Result := Mp3ProbeBytes(Copy(APrefix, 0, 4096))
-  else
-    Result := Mp3ProbeBytes(APrefix);
+  Result := nextpas.core.audio.codec.mp3.impl.Mp3Probe(APrefix);
 end;
 
-function TMp3Decoder.Probe(const APrefix: TBytes): TAudioProbeResult;
+function CreateMp3Decoder: IAudioDecoder; inline;
 begin
-  Result := Mp3Probe(APrefix);
+  Result := nextpas.core.audio.codec.mp3.impl.CreateMp3Decoder;
 end;
 
-function TMp3Decoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
-begin
-  if AStream = nil then
-    raise EAudioDecodeError.Create('mp3 DecodeWhole: nil');
-  Result := Mp3DecodeWholeViaStream(AStream);
-  FTags := Default(TAudioTags);
-end;
-
-function TMp3Decoder.OpenStreaming(const AStream: IStream): IAudioSource;
-begin
-  Result := nil;
-  raise EAudioDecodeError.Create('mp3 OpenStreaming: not implemented');
-end;
-
-function TMp3Decoder.Tags: TAudioTags;
-begin
-  Result := FTags;
-end;
-
-function CreateMp3Decoder: IAudioDecoder;
-begin
-  Result := TMp3Decoder.Create;
-end;
+initialization
+  AudioRegisterDecoder(@CreateMp3Decoder);
 
 end.

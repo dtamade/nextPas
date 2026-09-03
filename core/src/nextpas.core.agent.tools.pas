@@ -389,7 +389,7 @@ procedure RunToolBatch(const AJobs: array of TToolJob;
   const AToken: IAsyncCancellationToken);
 var
   I: Integer;
-  LStart, LNow: Int64;
+  LStart, LNow, LDrainStart: Int64;
   LCancelled: Boolean;
   LTimedOut: array of Boolean;
   LPending: Integer;
@@ -473,7 +473,10 @@ begin
     在返回前等待全部 DoneFlag 置位，否则调用方 FreeJobs 对尚在执行
     的 worker 形成 UAF/泄漏（test_tools 间歇 HEAPTRC 根因）。
     无 Timeout 的挂死 worker 需响应取消：排水期轮询 AToken，取消即
-    合成取消载荷后退出，避免无限自旋（P1 工具排水无限循环修复）。 }
+    合成取消载荷后退出，避免无限自旋（P1 工具排水无限循环修复）。
+    看门狗：无论 AToken 是否为 nil，排水最长 5s 硬截（合成 cancelled），
+    覆盖外部永不取消令牌下挂死 worker 的无限排水，防 TAgentLoop.Run 永久阻塞。}
+  LDrainStart := AClock.NowMs;
   repeat
     LPending := 0;
     atomic_seq_cst_fence;
@@ -487,6 +490,13 @@ begin
       for I := 0 to High(AJobs) do
         if (not LTimedOut[I]) and (AJobs[I].DoneFlag = 0) then
           SynthIfOpen(AJobs[I], 'cancelled before completion');
+      Break;
+    end;
+    if AClock.NowMs - LDrainStart >= 5000 then
+    begin
+      for I := 0 to High(AJobs) do
+        if (not LTimedOut[I]) and (AJobs[I].DoneFlag = 0) then
+          SynthIfOpen(AJobs[I], 'cancelled before completion (drain watchdog)');
       Break;
     end;
     APool.WaitAllTimeout(2000000);

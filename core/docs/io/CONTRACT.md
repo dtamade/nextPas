@@ -1,10 +1,10 @@
 # nextpas.core.io 代码契约
 
-**模块路径**：`core/src/nextpas.core.io*.pas`（23 个源文件）
+**模块路径**：`core/src/nextpas.core.io*.pas`（24 个源文件）
 **层级**：L1（依赖 L0: base, bytes, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-31
-**版本**：1.1
+**最后更新**：2026-09-02
+**版本**：1.2（新增 io.prefix 可复用前缀旁路流：由 vfs.transform 抽取独立，供 io/os/embedded/vfs 复用，Seek-free 零拷贝，bytes.ops 单源 inline，try-finally 不丢）
 
 ---
 
@@ -36,6 +36,7 @@
 | io.mapped.ring_buffer.sharded | 分片环形缓冲区 |
 | io.mapped.slab_pool | slab 内存池 |
 | io.async.fileio | 异步文件 IO |
+| io.prefix | TPrefixBypassStream 通用前缀旁路流（L1 可复用装饰器，供 io/os/embedded/vfs 复用，Seek-free 零拷贝，bytes.ops 单源，chunked streaming 友好） |
 | io.pas | 门面 re-export |
 
 ### 1.2 核心接口

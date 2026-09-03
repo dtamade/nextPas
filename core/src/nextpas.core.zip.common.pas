@@ -31,8 +31,15 @@ function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
 procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
 
-procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
+procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
 
+procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
+procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
+function GuardZipIndex(AIndex, ACount: Integer): Integer; inline;
+function FindZipEntry(const AEntries: array of TZipEntryInfo; const AName: string): Integer; inline;
+
+procedure GuardTotalOutputAdvance(var ACumulative: UInt64;
+  AEntrySize, AMaxTotal: UInt64);
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
 
@@ -107,6 +114,22 @@ begin
     raise EParseError.Create('zip: truncated ' + AWhat);
 end;
 
+procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
+begin
+  if AC.ReadU32LE <> C_ZIP_LOCAL_SIG then
+    raise EParseError.Create('zip: bad local header signature');
+  AC.ReadU16LE;                    { version needed }
+  AC.ReadU16LE;                    { flags }
+  AC.ReadU16LE;                    { method }
+  AC.ReadU16LE;                    { DOS time }
+  AC.ReadU16LE;                    { DOS date }
+  AC.ReadU32LE;                    { local crc }
+  AC.ReadU32LE;                    { local compressed size }
+  AC.ReadU32LE;                    { local uncompressed size }
+  ANameLen := AC.ReadU16LE;
+  AExtraLen := AC.ReadU16LE;
+end;
+
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 begin
   if ((AFlags and C_ZIP_FLAG_ENCRYPTED) <> 0) and (AE.AesVersion = 0) then
@@ -114,6 +137,46 @@ begin
       'zip: legacy ZipCrypto encryption not supported: ' + AE.Name);
   if not IsSafeZipEntryName(AE.Name) then
     raise EParseError.Create('zip: refusing unsafe entry name: ' + AE.Name);
+end;
+
+procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
+begin
+  if AE.IsEncrypted and (Length(APassword) = 0) then
+    raise EInvalidOperationError.Create(
+      'zip: entry is encrypted, no password configured: ' + AE.Name);
+end;
+
+function GuardZipIndex(AIndex, ACount: Integer): Integer; inline;
+begin
+  if (AIndex < 0) or (AIndex >= ACount) then
+    raise EIndexOutOfRangeError.Create(
+      'zip: entry index out of range: ' + IntToStr(AIndex));
+  Result := AIndex;
+end;
+
+function FindZipEntry(const AEntries: array of TZipEntryInfo; const AName: string): Integer; inline;
+var
+  LI: Integer;
+begin
+  for LI := 0 to High(AEntries) do
+    if AEntries[LI].Name = AName then
+      Exit(LI);
+  Result := -1;
+end;
+
+procedure GuardTotalOutputAdvance(var ACumulative: UInt64;
+  AEntrySize, AMaxTotal: UInt64);
+begin
+  if AMaxTotal = 0 then
+  begin
+    Inc(ACumulative, AEntrySize);
+    Exit;
+  end;
+  if AEntrySize > AMaxTotal then
+    raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
+  if ACumulative > AMaxTotal - AEntrySize then
+    raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
+  Inc(ACumulative, AEntrySize);
 end;
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
@@ -125,13 +188,7 @@ begin
   if AMaxTotal = 0 then Exit;
   LCum := 0;
   for LI := 0 to High(AEntries) do
-  begin
-    if AEntries[LI].UncompressedSize > AMaxTotal then
-      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
-    if LCum > AMaxTotal - AEntries[LI].UncompressedSize then
-      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
-    Inc(LCum, AEntries[LI].UncompressedSize);
-  end;
+    GuardTotalOutputAdvance(LCum, AEntries[LI].UncompressedSize, AMaxTotal);
 end;
 
 function DecompressEntryVerified(const AE: TZipEntryInfo;

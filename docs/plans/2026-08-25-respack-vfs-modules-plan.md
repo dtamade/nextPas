@@ -27,9 +27,7 @@
    Op/Path 错误上下文、fs.Sub 重定根视图、fstest 级一致性属性电池、WalkDir 对等物
    `VfsWalk` 与包级辅助函数、MapFS 对等物 memtree——全盘采纳；接口最小化策略与
    phf O(1) 索引为有意偏离并记录理由（后者留 flag bit2 扩展槽）。
-1. **respack 仅依赖 L0**（base/errors）：纯格式层；FNV-1a 内联不依赖 checksum；
-   digest 区存**不透明 32 字节摘要、算法由调用方注入**（SHA-256 属 hash 域，
-   依赖倒置）；目录扫描收口在 `dirsource` 单元（唯一 L2→L2 seam）。
+1. **respack 仅依赖 L0-L1**（base/errors + embed.limits L1 策略）：纯格式层阈值策略已抽离 `nextpas.core.embed.limits` 独立 L1，`respack.limits` 为兼容转发；FNV-1a 内联不依赖 checksum；digest 区存**不透明 32 字节摘要、算法由调用方注入**（SHA-256 属 hash 域，依赖倒置）；目录扫描收口在 `dirsource` 单元（唯一 L2→L2 seam）。
 2. **vfs v1 只读**；自有 `TEntryInfo/TStatInfo` 不复用 `fs.base`；流词汇复用
    `io.intf.IStream`。
 3. **vfs→fs seam 收口在 `vfs.os` 单元**；其余 vfs 单元禁止 uses fs/respack

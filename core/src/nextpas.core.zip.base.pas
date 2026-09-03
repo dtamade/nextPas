@@ -144,6 +144,7 @@ function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
 
 function DefaultZipReadOptions: TZipReadOptions; inline;
 function NormalizeZipReadOptions(const AOptions: TZipReadOptions): TZipReadOptions; inline;
+function TryZipMethodFromCode(ACode: Word; out AMethod: TZipMethod): Boolean; inline;
 
 implementation
 
@@ -296,6 +297,21 @@ begin
     Result.MaxOutputSize := C_ZIP_DEFAULT_MAX_OUTPUT;
   if Result.MaxDescriptorBuffer = 0 then
     Result.MaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
+end;
+
+function TryZipMethodFromCode(ACode: Word; out AMethod: TZipMethod): Boolean;
+begin
+  if ACode = C_ZIP_METHOD_STORE then
+  begin
+    AMethod := zmStore;
+    Exit(True);
+  end;
+  if ACode = C_ZIP_METHOD_DEFLATE then
+  begin
+    AMethod := zmDeflate;
+    Exit(True);
+  end;
+  Result := False;
 end;
 
 end.

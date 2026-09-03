@@ -29,8 +29,10 @@ function GitShortlogText(const AGitDir: string; AMaxCount: Integer): string; ove
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.fs,
+  nextpas.core.text.builder,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
@@ -98,8 +100,13 @@ var
   Info: TGitCommitInfo;
   Found: Integer;
   Entry: TGitShortlogEntry;
+  LResLen, LResCap: Integer;
+  LCapArr: array of Integer;
 begin
   Result := nil;
+  LResLen := 0;
+  LResCap := 0;
+  SetLength(LCapArr, 0);
   if AGitDir = '' then raise EGitError.Create('shortlog: gitdir empty');
   Repo := TNativeRepository.Create(AGitDir);
   try
@@ -107,33 +114,52 @@ begin
     Peeled := PeelToCommit(Repo, StartOid);
     if AMaxCount < 0 then Oids := GitCollectCommits(Repo, [Peeled], -1)
     else Oids := GitCollectCommits(Repo, [Peeled], AMaxCount);
-    // group
+    // group: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
     for I := 0 to High(Oids) do
     begin
       Data := Repo.ReadObject(Oids[I], Kind);
       if Kind <> gokCommit then Continue;
       Info := GitParseCommit(Data);
       Found := -1;
-      for J := 0 to High(Result) do
+      for J := 0 to LResLen - 1 do
         if (Result[J].AuthorName = Info.Author.Name) and (Result[J].AuthorEmail = Info.Author.Email) then
         begin Found := J; Break; end;
       if Found >= 0 then
       begin
         Inc(Result[Found].Count);
-        SetLength(Result[Found].Commits, Length(Result[Found].Commits)+1);
-        Result[Found].Commits[High(Result[Found].Commits)] := Oids[I];
+        if Result[Found].Count > Length(Result[Found].Commits) then
+        begin
+          LCapArr[Found] := BytesGrowCapacityInt(LCapArr[Found], Result[Found].Count);
+          SetLength(Result[Found].Commits, LCapArr[Found]);
+        end;
+        Result[Found].Commits[Result[Found].Count - 1] := Oids[I];
       end
       else
       begin
         Entry.AuthorName := Info.Author.Name;
         Entry.AuthorEmail := Info.Author.Email;
         Entry.Count := 1;
-        SetLength(Entry.Commits, 1);
+        if LResLen + 1 > LResCap then
+        begin
+          LResCap := BytesGrowCapacityInt(LResCap, LResLen + 1);
+          SetLength(Result, LResCap);
+          SetLength(LCapArr, LResCap);
+        end;
+        LCapArr[LResLen] := BytesGrowCapacityInt(0, 1);
+        SetLength(Entry.Commits, LCapArr[LResLen]);
         Entry.Commits[0] := Oids[I];
-        SetLength(Result, Length(Result)+1);
-        Result[High(Result)] := Entry;
+        Result[LResLen] := Entry;
+        Inc(LResLen);
       end;
     end;
+    // trim capacity slack to exact logical length
+    if LResLen <> Length(Result) then
+      SetLength(Result, LResLen);
+    if LResLen <> Length(LCapArr) then
+      SetLength(LCapArr, LResLen);
+    for I := 0 to High(Result) do
+      if Length(Result[I].Commits) <> Result[I].Count then
+        SetLength(Result[I].Commits, Result[I].Count);
   finally
     Repo.Free;
   end;
@@ -169,12 +195,27 @@ begin
 end;
 
 function FormatShortlog(const AEntries: TGitShortlogArray): string;
-var I: Integer; S: string;
+var
+  I: Integer;
+  B: TBufStringBuilder;
 begin
-  S := '';
-  for I := 0 to High(AEntries) do
-    S := S + IntToStr(AEntries[I].Count) + #9 + AEntries[I].AuthorName + ' <' + AEntries[I].AuthorEmail + '>' + #10;
-  Result := S;
+  // perf: single allocation via text.builder zero-copy (single SetString from view), amortized O(n) vs S:=S+ O(n²)
+  if Length(AEntries) = 0 then Exit('');
+  B.Init(256);
+  try
+    for I := 0 to High(AEntries) do
+    begin
+      B.AppendInt(AEntries[I].Count);
+      B.AppendChar(#9);
+      B.AppendStr(AEntries[I].AuthorName);
+      B.AppendStr(' <');
+      B.AppendStr(AEntries[I].AuthorEmail);
+      B.AppendStr('>'#10);
+    end;
+    Result := B.ToString;
+  finally
+    B.Done;
+  end;
 end;
 
 function GitShortlogText(const AGitDir, ARef: string; AMaxCount: Integer): string;
