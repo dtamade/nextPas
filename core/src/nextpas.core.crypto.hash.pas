@@ -150,16 +150,16 @@ begin
   FInner := AInner;
 end;
 
-procedure THashContext.Update(const AData: TBytes); inline;
+procedure THashContext.Update(const AData: TBytes);
 begin
-  // perf: inline zero-copy TByteSpan view, single Write, nil/Len guard, owner hash.*
+  // perf: thin-forward zero-copy TByteSpan view, single Write, nil/Len guard, owner hash.*
   if (FInner <> nil) and (Length(AData) > 0) then
     FInner.Write(AData[0], Length(AData));
 end;
 
-procedure THashContext.Update(const AData: string); inline;
+procedure THashContext.Update(const AData: string);
 begin
-  // perf: inline thin-forward via bytes.ops.StringToBytes single source, zero-copy PAnsiChar view
+  // perf: thin-forward via bytes.ops.StringToBytes single source, zero-copy PAnsiChar view
   Update(StringToBytes(AData));
 end;
 

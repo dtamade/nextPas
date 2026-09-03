@@ -473,8 +473,8 @@ begin
     的 worker 形成 UAF/泄漏（test_tools 间歇 HEAPTRC 根因）。
     无 Timeout 的挂死 worker 需响应取消：排水期轮询 AToken，取消即
     合成取消载荷后退出，避免无限自旋（P1 工具排水无限循环修复）。
-    看门狗：若 AToken=nil 且剩余挂死任务无 Timeout，排水永不退出；
-    以 5s 硬截（合成 cancelled）防 TAgentLoop.Run 永久阻塞。 }
+    看门狗：无论 AToken 是否为 nil，排水最长 5s 硬截（合成 cancelled），
+    覆盖外部永不取消令牌下挂死 worker 的无限排水，防 TAgentLoop.Run 永久阻塞。}
   LDrainStart := AClock.NowMs;
   repeat
     LPending := 0;
@@ -491,7 +491,7 @@ begin
           SynthIfOpen(AJobs[I], 'cancelled before completion');
       Break;
     end;
-    if (AToken = nil) and (AClock.NowMs - LDrainStart >= 5000) then
+    if AClock.NowMs - LDrainStart >= 5000 then
     begin
       for I := 0 to High(AJobs) do
         if (not LTimedOut[I]) and (AJobs[I].DoneFlag = 0) then

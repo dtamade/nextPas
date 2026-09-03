@@ -97,7 +97,6 @@ function IoUringCqeGetData(ACqe: PIoUringCqe): UInt64; inline;
 implementation
 
 uses
-  nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
 
 const

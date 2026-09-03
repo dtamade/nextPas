@@ -20,9 +20,15 @@ function SpanCompare(const A, B: TByteSpan): Integer; inline;
 
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
+function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
+{ string trim/equals — zero-copy view layer single source for text.view Trim/Equals + js.base JsTrimEquals (owner bytes.ops, inline thin-forward, loop not inline per red-line 2) }
+function SpanTrimLeft(const ASpan: TByteSpan): TByteSpan;
+function SpanTrimRight(const ASpan: TByteSpan): TByteSpan;
+function SpanTrim(const ASpan: TByteSpan): TByteSpan; inline;
+function StringTrimEquals(const S, Lit: string): Boolean;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
@@ -36,8 +42,23 @@ procedure SpanZero(const ASpan: TByteSpan); inline;
 { 全局零页单源（.bss 零初值，4K 对齐页）：writer.stream 万槽零填共享，无栈分配/无重复 FillChar，零拷贝分段直写；按需切片避免小间隙 4K memset }
 const
   BYTES_ZERO_PAGE_SIZE = 4096;
+  BYTES_ZERO_PAGE_SLICE_THRESHOLD = BYTES_ZERO_PAGE_SIZE;
 var
   BYTES_ZERO_PAGE: array[0..BYTES_ZERO_PAGE_SIZE - 1] of Byte;
+
+function ZeroPageSlice(const ALen: SizeUInt): TByteSpan; inline;
+
+{ XOR — QWord batched }
+procedure XorInplace(ADst, AKey: PByte; ALen: SizeUInt);
+procedure SpanXorInplace(const ADst, AKey: TByteSpan); inline;
+
+{ ASCII case }
+procedure AsciiToLowerInplace(AData: PByte; ALen: SizeUInt);
+procedure AsciiToUpperInplace(AData: PByte; ALen: SizeUInt);
+procedure SpanToLowerAscii(const ASpan: TByteSpan); inline;
+procedure SpanToUpperAscii(const ASpan: TByteSpan); inline;
+function AsciiLowerString(const S: string): string; inline;
+function AsciiUpperString(const S: string): string; inline;
 
 function SpanConcat(const A, B: TByteSpan): TBytes;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
@@ -100,12 +121,43 @@ function BytesSliceToString(const ABytes: TBytes; const AOffset,
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
 { Hex single source (uppercase fixed-width UInt64→hex, L1 canonical for vfs ETag etc., not inline per red-line 2 (loop+SetLength I-Cache), Span-less, reuses single HEX_UPPER table) }
 function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string;
+function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
+{ not inline: loop — C string length single source, zero-copy view length, owner bytes.ops }
+function AnsiPtrLen(const P: PAnsiChar): SizeUInt;
+{ not inline: loop+Move — reuses AnsiPtrLen single source, zero-copy Move }
+function AnsiPtrToString(const P: PAnsiChar): string;
+{ not inline: loop }
+function BigEndianUnicodeBytesToString(const AData: TBytes): string; inline;
+
+{ Variant helpers }
+type
+  TVarType = Word;
+const
+  varEmpty = $0000;
+  varNull = $0001;
+  varTypeMask = $0FFF;
+function VarType(const V: Variant): TVarType; inline;
+function VarIsNull(const V: Variant): Boolean; inline;
+function VarIsEmpty(const V: Variant): Boolean; inline;
+function VarIsClear(const V: Variant): Boolean; inline;
+
+{ byte order }
+function HTonN(AValue: Word): Word; overload; inline;
+function HTonN(AValue: LongWord): LongWord; overload; inline;
+function NToHs(AValue: Word): Word; overload; inline;
+function NToHs(AValue: LongWord): LongWord; overload; inline;
+
+{ FNV-1a 32 }
+function FNV1a32(const AData: PByte; const ALen: SizeUInt): UInt32; inline;
+function FNV1a32Bytes(const AData: TBytes): UInt32; inline;
 
 implementation
 
 uses
   nextpas.core.simd,
   nextpas.core.bytes.ops.capacity,
+  nextpas.core.bytes.ops.text,
+  nextpas.core.bytes.ops.ascii,
   nextpas.core.text.unicode.utils;
 
 { BytesEnsureCapacity/Reserve: safe SetLength-based growth (no header poke).
@@ -219,6 +271,29 @@ begin
   Result := SizeInt(LResult);
 end;
 
+function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
+var
+  LPos, LFound, LLast: SizeInt;
+  LSlice: TByteSpan;
+begin
+  if (ANeedle.Len = 0) or (ANeedle.Len > AHaystack.Len) then
+    Exit(-1);
+  LLast := -1;
+  LPos := 0;
+  while SizeUInt(LPos) <= AHaystack.Len - ANeedle.Len do
+  begin
+    LSlice := TByteSpan.Create(AHaystack.Data + SizeUInt(LPos), AHaystack.Len - SizeUInt(LPos));
+    LFound := SpanIndexOfSpan(LSlice, ANeedle);
+    if LFound < 0 then
+      Break;
+    LLast := LPos + LFound;
+    LPos := LLast + 1;
+    if SizeUInt(LPos) > AHaystack.Len then
+      Break;
+  end;
+  Result := LLast;
+end;
+
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean;
 begin
   Result := SpanIndexOf(AHaystack, ANeedle) >= 0;
@@ -240,6 +315,55 @@ begin
   if ASuffix.Len > AData.Len then
     Exit(False);
   Result := MemEqual(AData.Data + (AData.Len - ASuffix.Len), ASuffix.Data, ASuffix.Len);
+end;
+
+function SpanTrimLeft(const ASpan: TByteSpan): TByteSpan;
+var
+  LPos: SizeUInt;
+begin
+  // single source: zero-copy view trim left, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  if ASpan.Len = 0 then
+    Exit(TByteSpan.Empty);
+  LPos := 0;
+  while (LPos < ASpan.Len) and ((ASpan.Data[LPos] = 9) or (ASpan.Data[LPos] = 10) or (ASpan.Data[LPos] = 13) or (ASpan.Data[LPos] = 32)) do
+    Inc(LPos);
+  if LPos >= ASpan.Len then
+    Exit(TByteSpan.Empty);
+  Result.Data := ASpan.Data + LPos;
+  Result.Len := ASpan.Len - LPos;
+end;
+
+function SpanTrimRight(const ASpan: TByteSpan): TByteSpan;
+var
+  LEnd: SizeUInt;
+begin
+  // single source: zero-copy view trim right, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  if ASpan.Len = 0 then
+    Exit(TByteSpan.Empty);
+  LEnd := ASpan.Len;
+  while (LEnd > 0) and ((ASpan.Data[LEnd - 1] = 9) or (ASpan.Data[LEnd - 1] = 10) or (ASpan.Data[LEnd - 1] = 13) or (ASpan.Data[LEnd - 1] = 32)) do
+    Dec(LEnd);
+  if LEnd = 0 then
+    Exit(TByteSpan.Empty);
+  Result.Data := ASpan.Data;
+  Result.Len := LEnd;
+end;
+
+function SpanTrim(const ASpan: TByteSpan): TByteSpan; inline;
+begin
+  // perf: inline thin-forward via SpanTrimLeft+SpanTrimRight single source, zero-copy view, no heap alloc, owner bytes.ops
+  Result := SpanTrimRight(SpanTrimLeft(ASpan));
+end;
+
+function StringTrimEquals(const S, Lit: string): Boolean;
+var
+  LTrim: TByteSpan;
+  LLit: TByteSpan;
+begin
+  // single source: reuse SpanTrim+SpanEqual zero-copy TByteSpan view, no heap alloc, loop not inline per red-line 2, owner bytes.ops (MemEqual SIMD)
+  LTrim := SpanTrim(TByteSpan.FromStr(S));
+  LLit := TByteSpan.FromStr(Lit);
+  Result := SpanEqual(LTrim, LLit);
 end;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
@@ -302,6 +426,54 @@ procedure SpanZero(const ASpan: TByteSpan); inline;
 begin
   if ASpan.Len > 0 then
     MemSet(ASpan.Data, ASpan.Len, 0);
+end;
+
+procedure XorInplace(ADst, AKey: PByte; ALen: SizeUInt);
+begin
+  nextpas.core.bytes.ops.ascii.XorInplace(ADst, AKey, ALen);
+end;
+
+procedure SpanXorInplace(const ADst, AKey: TByteSpan); inline;
+begin
+  nextpas.core.bytes.ops.ascii.SpanXorInplace(ADst, AKey);
+end;
+
+procedure AsciiToLowerInplace(AData: PByte; ALen: SizeUInt);
+begin
+  nextpas.core.bytes.ops.ascii.AsciiToLowerInplace(AData, ALen);
+end;
+
+procedure AsciiToUpperInplace(AData: PByte; ALen: SizeUInt);
+begin
+  nextpas.core.bytes.ops.ascii.AsciiToUpperInplace(AData, ALen);
+end;
+
+procedure SpanToLowerAscii(const ASpan: TByteSpan); inline;
+begin
+  nextpas.core.bytes.ops.ascii.SpanToLowerAscii(ASpan);
+end;
+
+procedure SpanToUpperAscii(const ASpan: TByteSpan); inline;
+begin
+  nextpas.core.bytes.ops.ascii.SpanToUpperAscii(ASpan);
+end;
+
+function AsciiLowerString(const S: string): string; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.AsciiLowerString(S);
+end;
+
+function AsciiUpperString(const S: string): string; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.AsciiUpperString(S);
+end;
+
+function ZeroPageSlice(const ALen: SizeUInt): TByteSpan; inline;
+begin
+  if ALen > BYTES_ZERO_PAGE_SIZE then
+    Result := TByteSpan.Create(@BYTES_ZERO_PAGE[0], BYTES_ZERO_PAGE_SIZE)
+  else
+    Result := TByteSpan.Create(@BYTES_ZERO_PAGE[0], ALen);
 end;
 
 function SpanConcat(const A, B: TByteSpan): TBytes;
@@ -703,6 +875,90 @@ end;
 function StringLowerAsciiAware(const S: string): string; inline;
 begin
   Result := nextpas.core.text.unicode.utils.ToLowerAsciiAware(S);
+end;
+
+function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.TryClampSlice(AOffset, ALength, ATotal, AClampedLen);
+end;
+
+function AnsiPtrLen(const P: PAnsiChar): SizeUInt;
+var
+  LP: PAnsiChar;
+begin
+  if P = nil then
+    Exit(0);
+  LP := P;
+  while LP^ <> #0 do
+    Inc(LP);
+  Result := SizeUInt(LP - P);
+end;
+
+function AnsiPtrToString(const P: PAnsiChar): string;
+var
+  LLen: SizeUInt;
+begin
+  Result := '';
+  LLen := AnsiPtrLen(P);
+  if LLen = 0 then
+    Exit;
+  SetLength(Result, LLen);
+  Move(P^, Pointer(Result)^, LLen);
+end;
+
+function BigEndianUnicodeBytesToString(const AData: TBytes): string; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.BigEndianUnicodeBytesToString(AData);
+end;
+
+function FNV1a32(const AData: PByte; const ALen: SizeUInt): UInt32; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.FNV1a32(AData, ALen);
+end;
+
+function FNV1a32Bytes(const AData: TBytes): UInt32; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.FNV1a32Bytes(AData);
+end;
+
+function HTonN(AValue: Word): Word; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.HTonN(AValue);
+end;
+
+function HTonN(AValue: LongWord): LongWord; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.HTonN(AValue);
+end;
+
+function NToHs(AValue: Word): Word; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.NToHs(AValue);
+end;
+
+function NToHs(AValue: LongWord): LongWord; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.NToHs(AValue);
+end;
+
+function VarType(const V: Variant): TVarType; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.VarType(V);
+end;
+
+function VarIsNull(const V: Variant): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.VarIsNull(V);
+end;
+
+function VarIsEmpty(const V: Variant): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.VarIsEmpty(V);
+end;
+
+function VarIsClear(const V: Variant): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.VarIsClear(V);
 end;
 
 const

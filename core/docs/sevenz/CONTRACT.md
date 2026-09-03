@@ -1,13 +1,13 @@
 # nextpas.core.sevenz 契约
 
-**模块**：`nextpas.core.sevenz.*` 26 单元（base/intf/header/coders/filters/levels/limits/aes/bcj.*×8/bcj.utils/bcj2/lzma.rc/decoder/encoder/ffi/reader/writer/fs + 门面）
-**层级**：L2，`Allowed L0-L1 plus io/fs/compress/checksum/crypto/hash (L2→L2 exempt via platform lstat)`
+**模块**：`nextpas.core.sevenz.*` 25 单元（base/intf/header/coders/filters/levels/aes/bcj.*×8/bcj.utils/bcj2/lzma.rc/decoder/encoder/ffi/reader/writer/fs + 门面；`limits` 历史空壳 deprecated 已移除第二公共源，阈值单源于 `base`）
+**层级**：L2，`Allowed L0-L1 plus same-layer one-way crypto/hash/compress/checksum/io/fs (fs/io via platform.lstat exempt, federation via sevenz.fs single L2→L2 seam, source-contract gated like respack.dirsource/vfs.os — only sevenz.fs may reference fs/fs.intf; compress via sevenz.coders single L2→L2 seam (only sevenz.coders may reference compress.intf/compress.deflate/compress.bzip2/compress, compress.* → sevenz.* cycle-gated, thin inline forward via compress.intf, source-contract gated; levels/writer encode path reuses compress.base pure mapping, not second decode seam), bytes.ops single-source inline zero-copy + try..finally not lost)`
 **门面**：`nextpas.core.sevenz.pas` re-export `TSevenZEntryKind/Info/ESevenZError/ESevenZLimitError/TSevenZLzmaBackend/CompressionLevel/Filter/LzmaEncoded/Extracted/Enumerator/ISevenZReader/ISevenZWriter` 等
 **接口**：`ISevenZReader` 50+ 胖门面为容器刻意聚合（查询/提取/大小写三族+Try*+ToFs联邦），不拆小接口以保 `for..in`/`Count` 一致性，详见 README API 表（设计权衡，非小接口违规）
 **真相**：`focused-runtime` 172 用例 + `bench_sevenz` + `README` 单源真相同步（`header IBytesBuilder ToBuilder 单源 + CRC 预计数两遍单分配` + `FEntries/LFolders 几何扩容 + writer SpanClone 单源` / `filters.DeltaApply` 外联 / `reader.Sort` + `EnsureSortedGeneric` / `writer.pathvalid` + `writer 炸弹早期/纯↔FFI/pack+name/截断/coderProps 六探针`）
 
 ## 不变量
-- [INV-7Z1] 单源 limits：`base` 13 阈值（`MAX_HEADER 64MiB/PACK 64MiB/UNPACK 8GiB/FILE_COUNT 1M` 等）经 `limits` 薄封装，reader/writer/header 单源引用
+- [INV-7Z1] 单源 limits：`base` 13 阈值（`MAX_HEADER 64MiB/PACK 64MiB/UNPACK 8GiB/FILE_COUNT 1M` 等）单源于 `base`，`limits` 空壳 deprecated 不再提供第二公共源，reader/writer/header 单源引用 `base`
 - [INV-7Z2] 炸弹门限：`header>64MiB / pack>64MiB / total>8GiB / unpack>8GiB / name>64KiB / file>1M / coderProps>1M` 抛 `ESevenZLimitError(ecResourceExhausted)`（reader 解析期 + writer `BuildArchive`/`ValidateEntryName`/`ParseFolder` 分配前双端对等校验，`FCount/totalUnpack/totalPack/folderCount/packStreams/name/coderProps` 七维，复用 `base` 单源防漂移），其余损坏抛 `ESevenZError(ecParse)`
 - [INV-7Z3] LZMA 字典：`CheckWindow Pos-DictStart` 越界即 `EngineError`，`CopyMatch` 校验 `Pos+Len<=OutSize`
 - [INV-7Z4] AES：CBC 无填充，`mod16<>0` 抛错，19 轮 SHA256 KDF，IV 16B 随机，错口令由 CRC/解码暴露为 `ecParse`

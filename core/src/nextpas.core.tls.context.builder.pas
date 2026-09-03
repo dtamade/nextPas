@@ -195,7 +195,7 @@ uses
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.base64,
   nextpas.core.tls.logging,
-  nextpas.core.json, nextpas.core.json.builder, nextpas.core.json.value;
+  nextpas.core.json, nextpas.core.json.builder;
 
 procedure LogBuilderContextLevelServerNameCompatibilityWarning(
   const ACallSite: string;

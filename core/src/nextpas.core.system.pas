@@ -26,7 +26,11 @@ uses
   nextpas.core.system.errors,
   nextpas.core.text.conv;
 
+{$IFDEF FPC}
+{$I nextpas.core.system.fpc.inc}
+{$ELSE}
 {$I nextpas.core.system.kernel.inc}
+{$ENDIF}
 
 const
   NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';

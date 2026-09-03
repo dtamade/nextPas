@@ -12,6 +12,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
@@ -26,6 +27,9 @@ function VfsStat(const AFs: IVfs; const APath: string): TStatInfo; inline;
 function VfsList(const AFs: IVfs; const ADirPath: string): TEntryArray; inline;
 function VfsReadAllBytes(const AFs: IVfs; const APath: string): TBytes;
 function VfsReadAllText(const AFs: IVfs; const APath: string): string;
+{ 单源填充器 At 偏移版：供 transform 大文件命中单流复用尾段零拷贝填充（bytes.ops 单源，IReaderAt 缓存复用） }
+procedure VfsFillFromStreamAt(const S: IStream; const APath: string; ADst: PByte; const ALen: SizeUInt; const AOffset: Int64);
+procedure VfsFillFromStreamAtCached(const S: IStream; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; const APath: string; ADst: PByte; const ALen: SizeUInt; const AOffset: Int64);
 { 字典序确定性全树遍历（Go fs.WalkDir 对等物）：先访问 ARoot 自身再逐层深入 }
 procedure VfsWalk(const AFs: IVfs; const ARoot: string;
   const AVisit: TVfsVisitProc);
@@ -45,19 +49,16 @@ end;
 { 单源填充器：IReaderAt 单次直读 + 回退 Read 循环；入参 ADst 直指 TBytes/string 存储零拷贝无中间分配/Move，
   复用 bytes.ops 零拷贝词汇（BytesCopy 单源语义，Move 直达目的缓冲）；
   非 inline：含循环体守 design-conventions §2 红线；稳定性 try-finally Close 由调用方保障不丢 }
-procedure VfsFillFromStream(const S: IStream; const APath: string; ADst: PByte; const ALen: SizeUInt);
+procedure VfsFillFromStreamAtCached(const S: IStream; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; const APath: string; ADst: PByte; const ALen: SizeUInt; const AOffset: Int64);
 var
-  LReaderAt: IReaderAt;
   Got, Total, Rem: SizeUInt;
 begin
   if ALen = 0 then Exit;
   if ADst = nil then
     raise EVfsError.CreateCtx('read', APath, 'nil destination');
-  { perf: 探测 IReaderAt（INV-V12 三后端一致），命中则单次 ReadAt(0) 直达 blob/文件窗口，
-    省循环内每次 Read 虚调用 + 边界校验；embedded/os 实测单 Move 零拷贝（bytes.ops 单源） }
-  if (S.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil) then
+  if AHasReaderAt and (AReaderAt <> nil) then
   begin
-    Got := LReaderAt.ReadAt(ADst^, ALen, 0);
+    Got := AReaderAt.ReadAt(ADst^, ALen, AOffset);
     if Got = ALen then Exit;
     if Got = 0 then
       raise EVfsError.CreateCtx('read', APath, 'stream ended before declared size');
@@ -65,24 +66,42 @@ begin
     while Total < ALen do
     begin
       Rem := ALen - Total;
-      Got := LReaderAt.ReadAt(ADst[Total], Rem, Int64(Total));
+      Got := AReaderAt.ReadAt(ADst[Total], Rem, AOffset + Int64(Total));
       if Got = 0 then
         raise EVfsError.CreateCtx('read', APath, 'stream ended before declared size');
       Total := Total + Got;
     end;
     Exit;
   end;
+  if S.GetPosition <> AOffset then
+    S.Seek(AOffset, soBeginning);
   Total := 0;
   while Total < ALen do
   begin
-    if Total >= ALen then
-      raise EVfsError.CreateCtx('read', APath, 'truncated: size exceeds addressable length');
     Rem := ALen - Total;
     Got := S.Read(ADst[Total], Rem);
     if Got = 0 then
       raise EVfsError.CreateCtx('read', APath, 'stream ended before declared size');
     Total := Total + Got;
   end;
+end;
+
+procedure VfsFillFromStreamAt(const S: IStream; const APath: string; ADst: PByte; const ALen: SizeUInt; const AOffset: Int64);
+var
+  LReaderAt: IReaderAt;
+  LHas: Boolean;
+begin
+  LHas := (S.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
+  VfsFillFromStreamAtCached(S, LReaderAt, LHas, APath, ADst, ALen, AOffset);
+end;
+
+procedure VfsFillFromStream(const S: IStream; const APath: string; ADst: PByte; const ALen: SizeUInt);
+var
+  LReaderAt: IReaderAt;
+  LHas: Boolean;
+begin
+  LHas := (S.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
+  VfsFillFromStreamAtCached(S, LReaderAt, LHas, APath, ADst, ALen, 0);
 end;
 
 function VfsStat(const AFs: IVfs; const APath: string): TStatInfo;

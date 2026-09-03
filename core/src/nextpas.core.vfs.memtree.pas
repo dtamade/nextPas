@@ -333,11 +333,6 @@ var
   Prefix: string;
   DirIdx: SizeUInt;
   Ctx: TMemListCtx;
-  I: SizeUInt;
-  K: SizeUInt;
-  Seen: TVfsNameArray;
-  Info: TStatInfo;
-  Paths: array of string;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -365,31 +360,7 @@ begin
   VfsEnumerateChildSpans(Ctx.N, @MemtreeGetter, Self, Prefix, @MemtreeHandler, @Ctx);
   SetLength(Ctx.Result, Ctx.OutN);
   Result := Ctx.Result;
-  // Ctx.Result 已 LowerBound+SpanStartsWith 有序去重保证字典序，省去 VfsSortEntries O(k log k)，与 embedded 同源
-  { 单源模板收敛：委托 base.VfsDeriveChildNames 的 LowerBound+SpanStartsWith+Early-Break 零拷贝模板
-    扇出限界分配消除 Hi-Lo 全量预分配与重复 LowerBound 手写分支，与 embedded 同构单源 }
-  Result := nil;
-  if Length(FFiles) = 0 then
-  begin
-    Seen := nil;
-  end
-  else
-  begin
-    // 零拷贝单源路径数组：利用有序 FFiles 名称视图委托基座扫描模板，避免三处同构重复
-    SetLength(Paths, Length(FFiles));
-    for K := 0 to SizeUInt(Length(FFiles)) - 1 do
-      Paths[K] := FFiles[K].Name;
-    Seen := VfsDeriveChildNames(Paths, Prefix);
-    SetLength(Paths, 0);
-  end;
-
-  SetLength(Result, SizeUInt(Length(Seen)));
-  for I := 0 to SizeUInt(Length(Seen)) - 1 do
-  begin
-    StatInto(Seen[I], Info);
-    Result[I] := Info.Info;
-  end;
-  VfsSortEntries(Result);
+  // Ctx.Result 已 LowerBound+SpanStartsWith 有序去重保证字典序，省去 VfsSortEntries O(k log k)，与 embedded 同源单源
 end;
 
 function TMemVfs.OpenRead(const APath: string): IStream;
