@@ -3,9 +3,7 @@ program test_openssl_ssl_async_quic_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.platform.dl,
-  Dynlibs,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.ssl;
 

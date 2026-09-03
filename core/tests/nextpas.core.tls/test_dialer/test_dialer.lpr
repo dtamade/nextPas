@@ -8,7 +8,6 @@ program test_dialer;
   dial/handshake/cert-parse paths the previous internet variant hit,
   now deterministically and under the default heaptrc gate. }
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.io.intf,
   nextpas.core.tls,
   nextpas.core.tls.base,
@@ -17,7 +16,7 @@ uses
   nextpas.core.tls.pool,
   nextpas.core.tls.pending,
   nextpas.core.tls.quick,
-  nextpas.core.tls.context.builder;
+  nextpas.core.tls.context.builder, nextpas.core.text, nextpas.core.text.conv;
 
 const
   SERVER_PORT = 15556;

@@ -8,7 +8,6 @@ program test_ecdsa_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -17,7 +16,7 @@ uses
   nextpas.core.tls.openssl.api.ecdsa,
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -96,16 +95,16 @@ begin
     SigLen := SizeOf(Signature);
     if ECDSA_sign(0, @Digest[0], 32, @Signature[0], @SigLen, Key) = 1 then
     begin
-      Runner.Check('Sign digest', True, Format('Generated %d byte signature', [SigLen]));
+      Runner.Check('Sign digest', True, TextFormat('Generated %d byte signature', [SigLen]));
 
       VerifyResult := ECDSA_verify(0, @Digest[0], 32, @Signature[0], SigLen, Key);
       Runner.Check('Verify signature', VerifyResult = 1,
-              Format('Verification result: %d', [VerifyResult]));
+              TextFormat('Verification result: %d', [VerifyResult]));
 
       Digest[0] := Digest[0] xor $FF;
       VerifyResult := ECDSA_verify(0, @Digest[0], 32, @Signature[0], SigLen, Key);
       Runner.Check('Detect tampered data', VerifyResult = 0,
-              Format('Tamper detection result: %d (should be 0)', [VerifyResult]));
+              TextFormat('Tamper detection result: %d (should be 0)', [VerifyResult]));
     end
     else
       Runner.Check('Sign digest', False, 'ECDSA_sign failed');
@@ -155,7 +154,7 @@ begin
 
       VerifyResult := ECDSA_do_verify(@Digest[0], 32, Sig, Key);
       Runner.Check('ECDSA_do_verify verification', VerifyResult = 1,
-              Format('Verification result: %d', [VerifyResult]));
+              TextFormat('Verification result: %d', [VerifyResult]));
 
       ECDSA_SIG_free(Sig);
     end
@@ -183,7 +182,7 @@ begin
     begin
       SigSize := ECDSA_size(Key);
       Runner.Check('P-256 signature size', SigSize > 0,
-              Format('Max signature size: %d bytes', [SigSize]));
+              TextFormat('Max signature size: %d bytes', [SigSize]));
     end;
     EC_KEY_free(Key);
   end;
@@ -196,7 +195,7 @@ begin
     begin
       SigSize := ECDSA_size(Key);
       Runner.Check('secp384r1 signature size', SigSize > 0,
-              Format('Max signature size: %d bytes', [SigSize]));
+              TextFormat('Max signature size: %d bytes', [SigSize]));
     end;
     EC_KEY_free(Key);
   end;
@@ -209,7 +208,7 @@ begin
     begin
       SigSize := ECDSA_size(Key);
       Runner.Check('secp521r1 signature size', SigSize > 0,
-              Format('Max signature size: %d bytes', [SigSize]));
+              TextFormat('Max signature size: %d bytes', [SigSize]));
     end;
     EC_KEY_free(Key);
   end;

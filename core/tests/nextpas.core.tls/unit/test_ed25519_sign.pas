@@ -4,7 +4,7 @@ program test_ed25519_sign;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.crypto.ed25519;
+   nextpas.core.tls.crypto.ed25519, nextpas.core.base, nextpas.core.text.conv;
 
 var
   LTotal, LPassed: Integer;

@@ -3,8 +3,7 @@ program test_fluent_builder;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.cert.builder;
+  nextpas.core.tls.cert.builder, nextpas.core.base, nextpas.core.exception, nextpas.core.time;
 
 var
   LKeyPair: IKeyPairWithCertificate;

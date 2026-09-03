@@ -3,7 +3,6 @@ program test_cert_utils_generate_signed_symbol_contracts;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -18,7 +17,7 @@ uses
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.api.rsa,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception;
 type
   TSymbolEntry = record
     Name: string;

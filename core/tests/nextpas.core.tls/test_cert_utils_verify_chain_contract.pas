@@ -3,9 +3,8 @@ program test_cert_utils_verify_chain_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.fs, nextpas.core.fs.path;
 var
   TotalTests: Integer = 0;
   PassedTests: Integer = 0;

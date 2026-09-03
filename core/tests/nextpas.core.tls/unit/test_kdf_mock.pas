@@ -14,8 +14,8 @@ unit test_kdf_mock;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
-  openssl_kdf_interface;
+  nextpas.core.test,
+  openssl_kdf_interface, nextpas.core.base, nextpas.core.text.conv;
 
 type
   { TTestKDFMock - Test suite for KDF mock }

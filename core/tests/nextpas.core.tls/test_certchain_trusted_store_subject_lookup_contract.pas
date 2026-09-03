@@ -4,11 +4,10 @@ program test_certchain_trusted_store_subject_lookup_contract;
 
 uses
   nextpas.core.tls.factory,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.certchain,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.text.conv;
 procedure AssertTrue(const AName: string; ACondition: Boolean; const ADetail: string = '');
 begin
   if ACondition then

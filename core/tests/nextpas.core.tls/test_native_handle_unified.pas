@@ -10,13 +10,12 @@ program test_native_handle_unified;
 {$modeswitch advancedrecords}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.native_handle,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.freepascal.lib,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv;
 type
   PSSL_CTX = Pointer;  // OpenSSL 类型（简化）
   PSSL = Pointer;

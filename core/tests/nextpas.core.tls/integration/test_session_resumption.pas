@@ -8,7 +8,7 @@ program test_session_resumption;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.system.classes,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.backed,
@@ -24,7 +24,7 @@ uses
   nextpas.core.tls.openssl.api.crypto,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.exception, nextpas.core.text.format;
 
 const
   MBSTRING_ASC_VALUE = $1001;
@@ -212,14 +212,14 @@ begin
         begin
           SessionID := SSL_SESSION_get_id(Session, @SessionIDLen);
           Runner.Check('Get session ID', (SessionID <> nil) or (SessionIDLen = 0),
-                    Format('Session ID length: %d bytes (TLS 1.3 may be 0)', [SessionIDLen]));
+                    TextFormat('Session ID length: %d bytes (TLS 1.3 may be 0)', [SessionIDLen]));
         end
         else
           Runner.Check('Get session ID', False, 'SSL_SESSION_get_id not loaded');
 
         if Assigned(SSL_SESSION_get_timeout) then
           Runner.Check('Session timeout', SSL_SESSION_get_timeout(Session) > 0,
-                    Format('%d seconds', [SSL_SESSION_get_timeout(Session)]));
+                    TextFormat('%d seconds', [SSL_SESSION_get_timeout(Session)]));
 
         SSL_SESSION_free(Session);
       end;
@@ -374,13 +374,13 @@ begin
         begin
           OrigTimeout := SSL_SESSION_get_timeout(Session);
           Runner.Check('Get original timeout', OrigTimeout > 0,
-                    Format('%d seconds', [OrigTimeout]));
+                    TextFormat('%d seconds', [OrigTimeout]));
 
           NewTimeout := 600;
           SSL_SESSION_set_timeout(Session, NewTimeout);
 
           Runner.Check('Set new timeout', SSL_SESSION_get_timeout(Session) = NewTimeout,
-                    Format('New timeout: %d seconds', [SSL_SESSION_get_timeout(Session)]));
+                    TextFormat('New timeout: %d seconds', [SSL_SESSION_get_timeout(Session)]));
 
           SSL_SESSION_set_timeout(Session, 0);
           Runner.Check('Set zero timeout', SSL_SESSION_get_timeout(Session) = 0);

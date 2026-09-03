@@ -4,7 +4,7 @@ program test_p384_validation;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.crypto.p384;
+   nextpas.core.tls.crypto.p384, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv;
 
 var
   LTotal, LPassed: Integer;

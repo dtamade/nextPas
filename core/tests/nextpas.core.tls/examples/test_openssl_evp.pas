@@ -3,14 +3,14 @@ program test_openssl_evp;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.err;
+  nextpas.core.tls.openssl.api.err, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.platform.dl;
 
 var
   TestsPassed, TestsFailed, TestsSkipped: Integer;
   SkipCapability, SkipOther: Integer;
+  LCrypto: TPlatformLibrary;
 
 procedure MarkSkip(const AMessage: string; const ACategory: string = 'other');
 begin
@@ -446,7 +446,8 @@ begin
 
   // Load OpenSSL
   LoadOpenSSLCore;
-  if GetCryptoLibHandle = 0 then
+  LCrypto := GetCryptoLibHandle;
+  if LCrypto.IsInvalid then
   begin
     WriteLn('ERROR: Failed to load OpenSSL libraries');
     Halt(1);
@@ -456,7 +457,7 @@ begin
   WriteLn;
 
   // Load EVP module
-  if not LoadEVP(GetCryptoLibHandle) then
+  if not LoadEVP(LCrypto) then
   begin
     WriteLn('ERROR: Failed to load EVP module');
     UnloadOpenSSLCore;
@@ -488,10 +489,10 @@ begin
 
   // Summary
   WriteLn('=======================');
-  WriteLn(Format('Tests Passed: %d', [TestsPassed]));
-  WriteLn(Format('Tests Failed: %d', [TestsFailed]));
-  WriteLn(Format('Tests Skipped: %d (capability=%d, other=%d)', [TestsSkipped, SkipCapability, SkipOther]));
-  WriteLn(Format('Total Tests:   %d', [TestsPassed + TestsFailed + TestsSkipped]));
+  WriteLn(TextFormat('Tests Passed: %d', [TestsPassed]));
+  WriteLn(TextFormat('Tests Failed: %d', [TestsFailed]));
+  WriteLn(TextFormat('Tests Skipped: %d (capability=%d, other=%d)', [TestsSkipped, SkipCapability, SkipOther]));
+  WriteLn(TextFormat('Total Tests:   %d', [TestsPassed + TestsFailed + TestsSkipped]));
   WriteLn;
 
   if TestsFailed > 0 then

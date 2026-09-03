@@ -4,8 +4,7 @@ program test_openssl_load;
 {$CODEPAGE UTF8}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.exception, nextpas.core.text.conv;
 
 begin
   WriteLn('Testing OpenSSL library loading...');

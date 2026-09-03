@@ -9,9 +9,8 @@ program test_cert_utils;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.exception, nextpas.core.fs, nextpas.core.text;
 
 var
   TotalTests: Integer = 0;

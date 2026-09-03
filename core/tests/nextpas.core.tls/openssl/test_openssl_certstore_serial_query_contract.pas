@@ -3,9 +3,8 @@ program test_openssl_certstore_serial_query_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.text.conv;
 
 const
   CERT_FIXTURE_PATH = 'tests/certificate/test_certs/signer_cert.pem';

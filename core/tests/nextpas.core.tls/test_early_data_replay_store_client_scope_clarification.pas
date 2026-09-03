@@ -3,12 +3,11 @@ program test_early_data_replay_store_client_scope_clarification;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.exception, nextpas.core.text;
 
 var
   GTestsPassed: Integer = 0;

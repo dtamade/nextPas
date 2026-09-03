@@ -3,11 +3,10 @@ program test_factory_connection_scope_clarification;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.exception, nextpas.core.text;
 
 type
   TConfigMutator = procedure(var AConfig: TSSLConfig);

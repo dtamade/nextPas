@@ -3,10 +3,9 @@ program test_crypto_utils_hkdf_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.encoding,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 procedure Fail(const AMessage: string);
 begin
@@ -23,7 +22,7 @@ end;
 procedure AssertEqualInt(AExpected, AActual: Int64; const AMessage: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
+    Fail(TextFormat('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
 end;
 
 procedure AssertBytesEqual(const AExpected, AActual: TBytes; const AMessage: string);
@@ -33,7 +32,7 @@ begin
   AssertEqualInt(Length(AExpected), Length(AActual), AMessage + ' length mismatch');
   for I := 0 to Length(AExpected) - 1 do
     if AExpected[I] <> AActual[I] then
-      Fail(Format('%s byte mismatch at %d (expected=%d actual=%d)',
+      Fail(TextFormat('%s byte mismatch at %d (expected=%d actual=%d)',
         [AMessage, I, AExpected[I], AActual[I]]));
 end;
 

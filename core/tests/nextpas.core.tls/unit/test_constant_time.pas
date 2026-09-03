@@ -3,8 +3,7 @@ program test_constant_time;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.crypto.constant_time;
+  nextpas.core.tls.crypto.constant_time, nextpas.core.base, nextpas.core.text.format;
 
 var
   TestsPassed: Integer = 0;
@@ -109,7 +108,7 @@ begin
   for I := 1 to ITERATIONS do
     TConstantTime.CompareBytes(A, B);
   EndTime := GetTickCount64;
-  WriteLn(Format('  Equal-array loop completed in %d ms', [EndTime - StartTime]));
+  WriteLn(TextFormat('  Equal-array loop completed in %d ms', [EndTime - StartTime]));
   Assert(TConstantTime.CompareBytes(A, B) = 1, 'Equal arrays still compare equal after timing loop');
 
   // Different arrays should still execute the same compare path and return 0.
@@ -119,7 +118,7 @@ begin
   for I := 1 to ITERATIONS do
     TConstantTime.CompareBytes(A, B);
   EndTime := GetTickCount64;
-  WriteLn(Format('  Different-array loop completed in %d ms', [EndTime - StartTime]));
+  WriteLn(TextFormat('  Different-array loop completed in %d ms', [EndTime - StartTime]));
   Assert(TConstantTime.CompareBytes(A, B) = 0, 'Different arrays still compare different after timing loop');
   WriteLn('  (Low-resolution wall-clock variance is not used as a pass/fail signal)');
 end;
@@ -177,8 +176,8 @@ begin
   WriteLn;
 
   WriteLn('=== Test Results ===');
-  WriteLn(Format('Passed: %d', [TestsPassed]));
-  WriteLn(Format('Failed: %d', [TestsFailed]));
+  WriteLn(TextFormat('Passed: %d', [TestsPassed]));
+  WriteLn(TextFormat('Failed: %d', [TestsFailed]));
 
   if TestsFailed = 0 then
   begin

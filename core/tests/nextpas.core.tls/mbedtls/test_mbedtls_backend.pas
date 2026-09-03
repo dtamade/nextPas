@@ -13,7 +13,7 @@ program test_mbedtls_backend;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, TypInfo,
+  nextpas.core.text.conv, nextpas.core.exception,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.mbedtls.base,
@@ -52,7 +52,7 @@ begin
     WriteLn('   ✅ MbedTLS initialized successfully');
     WriteLn('   Version: ', LLib.GetVersionString);
     WriteLn('   Version Number: ', LLib.GetVersionNumber);
-    WriteLn('   Type: ', GetEnumName(TypeInfo(TSSLLibraryType), Ord(LLib.GetLibraryType)));
+    WriteLn('   Type: ', LibraryTypeToString(LLib.GetLibraryType));
   end
   else
   begin
@@ -105,8 +105,8 @@ begin
   WriteLn;
 
   WriteLn('Protocol Versions:');
-  WriteLn('  Min TLS:              ', GetEnumName(TypeInfo(TSSLProtocolVersion), Ord(LCaps.MinTLSVersion)));
-  WriteLn('  Max TLS:              ', GetEnumName(TypeInfo(TSSLProtocolVersion), Ord(LCaps.MaxTLSVersion)));
+  WriteLn('  Min TLS:              ', ProtocolVersionToString(LCaps.MinTLSVersion));
+  WriteLn('  Max TLS:              ', ProtocolVersionToString(LCaps.MaxTLSVersion));
   WriteLn;
 
   WriteLn('2.2 Testing protocol support...');
@@ -177,7 +177,7 @@ begin
     if LCtx <> nil then
     begin
       WriteLn('   ✅ Client context created successfully');
-      WriteLn('   Context type: ', GetEnumName(TypeInfo(TSSLContextType), Ord(LCtx.GetContextType)));
+      WriteLn('   Context type: ', IntToStr(Ord(LCtx.GetContextType)));
       LCtx := nil;  // 释放接口引用
     end
     else
@@ -194,7 +194,7 @@ begin
     if LCtx <> nil then
     begin
       WriteLn('   ✅ Server context created successfully');
-      WriteLn('   Context type: ', GetEnumName(TypeInfo(TSSLContextType), Ord(LCtx.GetContextType)));
+      WriteLn('   Context type: ', IntToStr(Ord(LCtx.GetContextType)));
       LCtx := nil;  // 释放接口引用
     end
     else

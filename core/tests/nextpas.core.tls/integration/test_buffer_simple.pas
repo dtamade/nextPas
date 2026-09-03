@@ -8,13 +8,12 @@ program test_buffer_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, DynLibs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.buffer,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -50,12 +49,12 @@ begin
   if buf = nil then Exit;
 
   result_size := BUF_MEM_grow(buf, 100);
-  Runner.Check('Grow buffer to 100 bytes', result_size > 0, Format('Size: %d', [result_size]));
+  Runner.Check('Grow buffer to 100 bytes', result_size > 0, TextFormat('Size: %d', [result_size]));
 
-  Runner.Check('Buffer length >= 100', buf^.length >= 100, Format('Length: %d', [buf^.length]));
+  Runner.Check('Buffer length >= 100', buf^.length >= 100, TextFormat('Length: %d', [buf^.length]));
 
   result_size := BUF_MEM_grow(buf, 200);
-  Runner.Check('Grow buffer to 200 bytes', result_size > 0, Format('Size: %d', [result_size]));
+  Runner.Check('Grow buffer to 200 bytes', result_size > 0, TextFormat('Size: %d', [result_size]));
 
   BUF_MEM_free(buf);
 end;
@@ -75,7 +74,7 @@ begin
   if buf = nil then Exit;
 
   result_size := BUF_MEM_grow_clean(buf, 50);
-  Runner.Check('Grow buffer cleanly to 50 bytes', result_size > 0, Format('Size: %d', [result_size]));
+  Runner.Check('Grow buffer cleanly to 50 bytes', result_size > 0, TextFormat('Size: %d', [result_size]));
 
   all_zero := True;
   for i := 0 to 49 do

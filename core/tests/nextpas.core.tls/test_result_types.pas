@@ -9,9 +9,8 @@ program test_result_types;
  *}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.base, nextpas.core.exception, nextpas.core.text.format;
 
 var
   GTestsPassed: Integer = 0;
@@ -80,12 +79,12 @@ end;
 
 procedure AssertEquals(AExpected, AActual: Integer; const AMessage: string);
 begin
-  Assert(AExpected = AActual, AMessage + Format(' (Expected: %d, Got: %d)', [AExpected, AActual]));
+  Assert(AExpected = AActual, AMessage + TextFormat(' (Expected: %d, Got: %d)', [AExpected, AActual]));
 end;
 
 procedure AssertEquals(const AExpected, AActual: string; const AMessage: string);
 begin
-  Assert(AExpected = AActual, AMessage + Format(' (Expected: "%s", Got: "%s")', [AExpected, AActual]));
+  Assert(AExpected = AActual, AMessage + TextFormat(' (Expected: "%s", Got: "%s")', [AExpected, AActual]));
 end;
 
 procedure TestSSLOperationResult;
@@ -433,7 +432,7 @@ begin
     TestSSLStringResult_Inspect;
 
     WriteLn('╔════════════════════════════════════════════════════════════╗');
-    WriteLn(Format('║   Tests Passed: %-3d  Failed: %-3d                         ║', [GTestsPassed, GTestsFailed]));
+    WriteLn(TextFormat('║   Tests Passed: %-3d  Failed: %-3d                         ║', [GTestsPassed, GTestsFailed]));
     WriteLn('╚════════════════════════════════════════════════════════════╝');
 
     if GTestsFailed > 0 then

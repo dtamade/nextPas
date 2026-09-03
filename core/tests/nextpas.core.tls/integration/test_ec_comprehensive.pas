@@ -8,7 +8,6 @@ program test_ec_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, DynLibs,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api,
@@ -17,7 +16,7 @@ uses
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.api.obj,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -103,10 +102,10 @@ begin
   if group = nil then Exit;
 
   nid := EC_GROUP_get_curve_name(group);
-  Runner.Check('Get curve NID', nid = NID_X9_62_prime256v1, Format('NID=%d', [nid]));
+  Runner.Check('Get curve NID', nid = NID_X9_62_prime256v1, TextFormat('NID=%d', [nid]));
 
   degree := EC_GROUP_get_degree(group);
-  Runner.Check('Get curve degree', degree > 0, Format('Degree=%d bits', [degree]));
+  Runner.Check('Get curve degree', degree > 0, TextFormat('Degree=%d bits', [degree]));
 
   ctx := BN_CTX_new();
   if ctx <> nil then
@@ -261,7 +260,7 @@ begin
   end;
 
   buf_len := EC_POINT_point2oct(group, pub_key, POINT_CONVERSION_UNCOMPRESSED, @buf[0], SizeOf(buf), ctx);
-  Runner.Check('Serialize public key', buf_len > 0, Format('%d bytes', [buf_len]));
+  Runner.Check('Serialize public key', buf_len > 0, TextFormat('%d bytes', [buf_len]));
 
   restored_point := EC_POINT_new(group);
   if restored_point <> nil then

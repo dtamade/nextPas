@@ -3,15 +3,14 @@ program test_rand_direct;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, DynLibs,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api;
+  nextpas.core.tls.openssl.api, nextpas.core.platform.dl;
 
 type
   TRAND_bytes = function(buf: PByte; num: Integer): Integer; cdecl;
 
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
   LRAND_bytes: TRAND_bytes;
   LBuf: array[0..31] of Byte;
 
@@ -25,7 +24,7 @@ begin
   LLib := GetCryptoLibHandle;
   WriteLn('Library handle: ', LLib);
 
-  LRAND_bytes := TRAND_bytes(GetProcAddress(LLib, 'RAND_bytes'));
+  LRAND_bytes := TRAND_bytes(platform_dl_symbol(LLib, 'RAND_bytes'));
   WriteLn('RAND_bytes assigned: ', Assigned(LRAND_bytes));
 
   if Assigned(LRAND_bytes) then

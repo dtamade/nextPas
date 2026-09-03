@@ -3,7 +3,7 @@ program test_pure_pascal_aescbc;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.tls.crypto.aescbc;
+  nextpas.core.tls.crypto.aescbc, nextpas.core.base, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   GPassCount: Integer = 0;
@@ -115,7 +115,7 @@ begin
   TestAESCBC_SingleBlock;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPassCount, GFailCount]));
   if GFailCount > 0 then
     Halt(1);
 end.

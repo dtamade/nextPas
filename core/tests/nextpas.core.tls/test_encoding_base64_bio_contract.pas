@@ -3,10 +3,9 @@ program test_encoding_base64_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.encoding,
-  nextpas.core.tls.openssl.api.bio;
+  nextpas.core.tls.openssl.api.bio, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;
@@ -43,7 +42,7 @@ var
   LEncoded: string;
   LDecoded: TBytes;
 begin
-  LEncoded := TEncodingUtils.Base64Encode(BytesOf('abc'));
+  LEncoded := TEncodingUtils.Base64Encode(StringToUTF8Bytes('abc'));
   LDecoded := TEncodingUtils.Base64Decode('YWJj');
   if (LEncoded = '') or (Length(LDecoded) <> 3) then
     raise Exception.Create('failed to warm up encoding helpers');
@@ -64,7 +63,7 @@ begin
   LDetail := '';
 
   try
-    TEncodingUtils.Base64Encode(BytesOf('abc'));
+    TEncodingUtils.Base64Encode(StringToUTF8Bytes('abc'));
   except
     on E: Exception do
     begin
@@ -78,7 +77,7 @@ begin
   LTryDetail := '';
   LTryEncoded := 'sentinel';
   try
-    LTryResult := TEncodingUtils.TryBase64Encode(BytesOf('abc'), LTryEncoded);
+    LTryResult := TEncodingUtils.TryBase64Encode(StringToUTF8Bytes('abc'), LTryEncoded);
   except
     on E: Exception do
     begin

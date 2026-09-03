@@ -3,7 +3,6 @@ program test_backend_certificate_time_utc_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
@@ -19,7 +18,7 @@ uses
   , nextpas.core.tls.mbedtls.lib
   , nextpas.core.tls.wolfssl.lib
   {$ENDIF}
-  ;
+  , nextpas.core.exception;
 
 var
   TestsPassed: Integer = 0;

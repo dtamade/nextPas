@@ -3,9 +3,8 @@ program test_openssl_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.api.core, nextpas.core.exception;
 
 var
   TestsPassed: Integer = 0;

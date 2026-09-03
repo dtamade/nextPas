@@ -29,17 +29,14 @@ program test_winssl_certstore;
 }
 
 uses
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+
   nextpas.core.tls.base,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.certstore,
-  nextpas.core.tls.winssl.certificate;
+  nextpas.core.tls.winssl.certificate, nextpas.core.exception, nextpas.core.fs, nextpas.core.path, nextpas.core.text, nextpas.core.text.conv, nextpas.core.time;
 
 var
   GTestsPassed: Integer = 0;

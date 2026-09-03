@@ -3,7 +3,6 @@ program test_phase6_sni;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
@@ -13,7 +12,7 @@ uses
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.api.ssl,
-  nextpas.core.tls.openssl.api.consts;
+  nextpas.core.tls.openssl.api.consts, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   // Test counters

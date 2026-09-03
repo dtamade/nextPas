@@ -3,11 +3,10 @@ program test_cert_utils_ed25519_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.cert.utils;
+  nextpas.core.tls.cert.utils, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;
@@ -101,7 +100,7 @@ begin
         'KeyUsage=' + LInfo.KeyUsage);
       AssertTrue('Self-signed Ed25519 cert should not be CA',
         not LInfo.IsCA,
-        'IsCA=' + BoolToStr(LInfo.IsCA, True));
+        'IsCA=' + BoolToStr(LInfo.IsCA));
       AssertTrue('Public key bits should be > 0',
         LInfo.PublicKeyBits > 0,
         'PublicKeyBits=' + IntToStr(LInfo.PublicKeyBits));
@@ -150,7 +149,7 @@ begin
     try
       AssertTrue('CA cert should be marked IsCA',
         LCAInfo.IsCA,
-        'IsCA=' + BoolToStr(LCAInfo.IsCA, True));
+        'IsCA=' + BoolToStr(LCAInfo.IsCA));
       AssertTrue('CA key usage should include keyCertSign',
         Pos('keycertsign', LowerCase(LCAInfo.KeyUsage)) > 0,
         'CA KeyUsage=' + LCAInfo.KeyUsage);
@@ -213,7 +212,7 @@ begin
         'KeyUsage=' + LInfo.KeyUsage);
       AssertTrue('Leaf cert should not be marked IsCA',
         not LInfo.IsCA,
-        'IsCA=' + BoolToStr(LInfo.IsCA, True));
+        'IsCA=' + BoolToStr(LInfo.IsCA));
       AssertTrue('Leaf public key bits should be > 0',
         LInfo.PublicKeyBits > 0,
         'PublicKeyBits=' + IntToStr(LInfo.PublicKeyBits));

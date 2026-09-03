@@ -4,7 +4,6 @@ program test_tls13_e2e_openssl;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  nextpas.core.system.sysutils,
   nextpas.core.net.tcp,
   nextpas.core.net.intf,
   nextpas.core.io.intf,
@@ -12,7 +11,7 @@ uses
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.keyschedule,
-  nextpas.core.tls.tls13.wire;
+  nextpas.core.tls.tls13.wire, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.time;
 
 var
   GPass, GFail: Integer;
@@ -94,7 +93,7 @@ begin
   Check('ClientHello sent', True);
 
   // Wait for response
-  Sleep(1500);
+  MsSleep(1500);
   LRead := LStream.Read(LBuf[0], SizeOf(LBuf));
   Check('received response', LRead > 5);
 
@@ -153,7 +152,7 @@ begin
   LStream := nil;
 
   WriteLn;
-  WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPass, GFail]));
   if GFail > 0 then
     Halt(1);
 end.

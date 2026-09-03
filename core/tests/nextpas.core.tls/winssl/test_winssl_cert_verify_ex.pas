@@ -3,13 +3,11 @@ program test_winssl_cert_verify_ex;
 {$mode objfpc}{$H+}
 
 uses
-  Windows,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.certstore,
-  nextpas.core.tls.winssl.certificate;
+  nextpas.core.tls.winssl.certificate, nextpas.core.exception, nextpas.core.fs, nextpas.core.path, nextpas.core.text, nextpas.core.text.conv;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin
@@ -53,8 +51,8 @@ end;
 function FormatVerifyState(AVerified: Boolean; const AResult: TSSLCertVerifyResult): string;
 begin
   Result :=
-    'actual verified=' + BoolToStr(AVerified, True) +
-    ' success=' + BoolToStr(AResult.Success, True) +
+    'actual verified=' + BoolToStr(AVerified) +
+    ' success=' + BoolToStr(AResult.Success) +
     ' error=' + IntToStr(Integer(AResult.ErrorCode)) +
     ' msg=' + AResult.ErrorMessage +
     ' details=' + AResult.DetailedInfo;

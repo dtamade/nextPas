@@ -3,8 +3,7 @@ program test_ssl_ctrl;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.text.conv;
 
 begin
   WriteLn('SSL_ctrl Loading Test');

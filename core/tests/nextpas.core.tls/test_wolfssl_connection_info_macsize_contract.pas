@@ -4,13 +4,12 @@ program test_wolfssl_connection_info_macsize_contract;
 {$DEFINE ENABLE_WOLFSSL}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,
   nextpas.core.tls.wolfssl.lib,
-  nextpas.core.tls.wolfssl.connection;
+  nextpas.core.tls.wolfssl.connection, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.format;
 
 var
   GLib: ISSLLibrary = nil;
@@ -116,7 +115,7 @@ begin
   LInfo := CaptureFreshConnectionInfo(AContext);
   AssertTrue(AName,
     LInfo.MacSize = AExpectedMacSize,
-    Format('expected MacSize=%d but got %d', [AExpectedMacSize, LInfo.MacSize]));
+    TextFormat('expected MacSize=%d but got %d', [AExpectedMacSize, LInfo.MacSize]));
 end;
 
 procedure TestGetConnectionInfoMacSizeTruth;

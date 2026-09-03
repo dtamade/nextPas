@@ -8,13 +8,13 @@ program test_asn1_module;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time, ctypes,
+  nextpas.core.time,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -34,7 +34,7 @@ begin
   Runner.Check('Set value to 42', ASN1_INTEGER_set(int1, 42) = 1);
 
   value := ASN1_INTEGER_get(int1);
-  Runner.Check('Get value equals 42', value = 42, Format('Value=%d', [value]));
+  Runner.Check('Get value equals 42', value = 42, TextFormat('Value=%d', [value]));
 
   ASN1_INTEGER_free(int1);
 end;
@@ -54,11 +54,11 @@ begin
 
   test_val := 9876543210;
   Runner.Check('Set 64-bit value', ASN1_INTEGER_set_int64(int1, test_val) = 1,
-          Format('Value: %d', [test_val]));
+          TextFormat('Value: %d', [test_val]));
 
   value := 0;
   Runner.Check('Get 64-bit value', ASN1_INTEGER_get_int64(@value, int1) = 1);
-  Runner.Check('Value matches', value = test_val, Format('Got: %d', [value]));
+  Runner.Check('Value matches', value = test_val, TextFormat('Got: %d', [value]));
 
   ASN1_INTEGER_free(int1);
 end;
@@ -107,7 +107,7 @@ begin
   Runner.Check('Set string data', ASN1_STRING_set(str1, PAnsiChar(test_data), Length(test_data)) = 1);
 
   len := ASN1_STRING_length(str1);
-  Runner.Check('Get string length', len = Length(test_data), Format('Length=%d', [len]));
+  Runner.Check('Get string length', len = Length(test_data), TextFormat('Length=%d', [len]));
 
   data := ASN1_STRING_get0_data(str1);
   Runner.Check('Get string data', data <> nil);
@@ -131,7 +131,7 @@ begin
 
   str_type := ASN1_STRING_type(str1);
   Runner.Check('Verify string type', str_type = V_ASN1_UTF8STRING,
-          Format('Type: %d (expected %d)', [str_type, V_ASN1_UTF8STRING]));
+          TextFormat('Type: %d (expected %d)', [str_type, V_ASN1_UTF8STRING]));
 
   ASN1_STRING_free(str1);
 end;

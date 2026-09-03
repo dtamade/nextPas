@@ -3,7 +3,6 @@ program test_auto_backend_system_cert_store_capability_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.backend.selector,
@@ -23,7 +22,7 @@ uses
   , nextpas.core.tls.mbedtls.lib
   , nextpas.core.tls.wolfssl.lib
   {$ENDIF}
-  ;
+  , nextpas.core.exception, nextpas.core.text;
 
 procedure Require(ACondition: Boolean; const AMessage: string);
 begin

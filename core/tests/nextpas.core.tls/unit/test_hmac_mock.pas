@@ -16,8 +16,8 @@ unit test_hmac_mock;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
-  openssl_hmac_interface;
+  nextpas.core.test,
+  openssl_hmac_interface, nextpas.core.base, nextpas.core.text.conv;
 
 type
   { TTestHMACMock - Test suite for HMAC mock }

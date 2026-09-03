@@ -3,10 +3,9 @@ program test_zerocopy_view;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils,
-  nextpas.core.tls.encoding;
+  nextpas.core.tls.encoding, nextpas.core.base, nextpas.core.exception;
 
 var
   GTestsPassed: Integer = 0;

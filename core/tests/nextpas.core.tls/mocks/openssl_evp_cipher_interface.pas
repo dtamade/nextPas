@@ -13,7 +13,7 @@ unit openssl_evp_cipher_interface;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils;
+  nextpas.core.base;
 
 type
   TCipherMode = (cmECB, cmCBC, cmCFB, cmOFB, cmCTR, cmGCM, cmCCM, cmXTS, cmOCB);

@@ -6,7 +6,6 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,  // 必须在最前面，用于线程模块
   {$ENDIF}
-  nextpas.core.system.sysutils,
   // Priority 2 - Symmetric Ciphers (2 modules)
   nextpas.core.tls.openssl.api.aria,
   nextpas.core.tls.openssl.api.seed,
@@ -36,7 +35,7 @@ uses
   nextpas.core.tls.openssl.api.lhash,  // Fixed!
   nextpas.core.tls.openssl.api.obj,
   nextpas.core.tls.openssl.api.conf,  // Fixed!
-  nextpas.core.tls.openssl.api.thread;
+  nextpas.core.tls.openssl.api.thread, nextpas.core.text.format;
 
 var
   TotalTests, PassedTests: Integer;
@@ -104,7 +103,7 @@ begin
   WriteLn;
 
   PrintSeparator;
-  WriteLn(Format('Results: %d/%d tests passed (%.1f%%)',
+  WriteLn(TextFormat('Results: %d/%d tests passed (%.1f%%)',
     [PassedTests, TotalTests, (PassedTests * 100.0) / TotalTests]));
   PrintSeparator;
 

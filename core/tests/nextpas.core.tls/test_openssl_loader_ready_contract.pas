@@ -3,13 +3,11 @@ program test_openssl_loader_ready_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.platform.dl,
-  Dynlibs,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.aes,
   nextpas.core.tls.openssl.api.sha,
-  nextpas.core.tls.openssl.api.modes;
+  nextpas.core.tls.openssl.api.modes, nextpas.core.text.format;
 
 var
   GTestsPassed: Integer = 0;
@@ -38,7 +36,7 @@ end;
 procedure CheckEqualsInt(AExpected, AActual: Integer; const AMessage: string);
 begin
   Check(AExpected = AActual,
-    Format('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
+    TextFormat('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
 end;
 
 function ModesRequiredReady: Boolean;

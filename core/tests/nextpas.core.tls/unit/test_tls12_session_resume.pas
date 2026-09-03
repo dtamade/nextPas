@@ -5,9 +5,9 @@ program test_tls12_session_resume;
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.time,
+   nextpas.core.time,
   nextpas.core.tls.base,
-  nextpas.core.tls.freepascal.session;
+  nextpas.core.tls.freepascal.session, nextpas.core.base, nextpas.core.base.utils;
 
 var
   LTotal, LPassed: Integer;
@@ -45,7 +45,7 @@ begin
   LObj.ConfigureTLS12Resumption(
     $C02F, 'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256',
     LSessionID, LMasterSecret,
-    Now, 3600);
+    DateTimeNow, 3600);
   LSession := LObj;
 
   Check(LSession.GetProtocolVersion = sslProtocolTLS12, 'Protocol is TLS 1.2');
@@ -77,7 +77,7 @@ begin
   LObj.ConfigureTLS12Resumption(
     $C030, 'TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384',
     LSessionID, LMasterSecret,
-    DateTimeAddSeconds(Now, -7200), 3600);
+    DateTimeAddSeconds(DateTimeNow, -7200), 3600);
   LSession := LObj;
 
   Check(not LSession.IsValid, 'Expired session is not valid');
@@ -103,7 +103,7 @@ begin
   LObj.ConfigureTLS12Resumption(
     $C02F, 'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256',
     LSessionID, LMasterSecret,
-    Now, 3600);
+    DateTimeNow, 3600);
   LObj.BoundServerName := 'example.com';
   LSession := LObj;
 
@@ -138,7 +138,7 @@ begin
   LObj.ConfigureResumption(
     $1301, 'TLS_AES_128_GCM_SHA256',
     LTicketNonce, LTicket, LPSK,
-    7200, 12345, Now, 3600, 16384);
+    7200, 12345, DateTimeNow, 3600, 16384);
   LSession := LObj;
 
   Check(LSession.GetProtocolVersion = sslProtocolTLS13, 'TLS 1.3 protocol');
@@ -169,7 +169,7 @@ begin
   LObj.ConfigureTLS12Resumption(
     $C02F, 'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256',
     LSessionID, LMasterSecret,
-    Now, 3600);
+    DateTimeNow, 3600);
   LObj.BoundServerName := 'test.example.com';
   LSession := LObj;
 
@@ -214,7 +214,7 @@ begin
 
   LObj := TFreePascalSession.Create;
   LObj.ConfigureResumption($1301, 'TLS_AES_128_GCM_SHA256',
-    LTicketNonce, LTicket, LPSK, 7200, 99999, Now, 3600, 8192);
+    LTicketNonce, LTicket, LPSK, 7200, 99999, DateTimeNow, 3600, 8192);
   LObj.BoundServerName := 'tls13.example.com';
   LSession := LObj;
 

@@ -3,10 +3,9 @@ program test_cert_verify;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception;
 
 procedure TestCertificateVerification;
 var

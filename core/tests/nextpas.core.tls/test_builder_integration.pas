@@ -17,11 +17,10 @@ program test_builder_integration;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.openssl.backed;  // 注册 OpenSSL 后端
+  nextpas.core.tls.openssl.backed, nextpas.core.exception;  // 注册 OpenSSL 后端
 
 procedure TestSecurityFirst;
 var

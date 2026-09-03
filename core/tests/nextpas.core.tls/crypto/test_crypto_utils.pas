@@ -3,9 +3,8 @@ program test_crypto_utils;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.utils,
-  nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.api.core, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text.conv;
 
 var
   Total, Passed: Integer;
@@ -49,7 +48,7 @@ begin
 
   // AES-GCM
   WriteLn('--- AES-GCM ---');
-  LData := BytesOf('Hello!');
+  LData := StringToUTF8Bytes('Hello!');
   LKey := TCryptoUtils.GenerateKey(256);
   LIV := TCryptoUtils.GenerateIV(12);
   LCipher := TCryptoUtils.AES_GCM_Encrypt(LData, LKey, LIV);

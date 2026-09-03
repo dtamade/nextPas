@@ -3,7 +3,7 @@ program test_sha3_names;
 {$mode Delphi}{$H+}
 
 uses
-  nextpas.core.system.sysutils, Dynlibs;
+  nextpas.core.platform.dl;
 
 type
   PEVP_MD = Pointer;
@@ -17,7 +17,7 @@ type
   TEVP_MD_free = procedure(md: PEVP_MD); cdecl;
 
 var
-  libHandle: TLibHandle;
+  libHandle: TPlatformLibrary;
   EVP_MD_CTX_new: TEVP_MD_CTX_new;
   EVP_MD_CTX_free: TEVP_MD_CTX_free;
   EVP_DigestInit_ex: TEVP_DigestInit_ex;
@@ -40,8 +40,8 @@ begin
   WriteLn('============================');
   WriteLn;
 
-  libHandle := LoadLibrary('libcrypto-3-x64.dll');
-  if libHandle = 0 then
+  if not platform_dl_load('libcrypto-3-x64.dll', [dlfLazy], libHandle) then libHandle := PLATFORM_DL_NIL_LIBRARY;
+  if libHandle.IsInvalid then
   begin
     WriteLn('ERROR: Failed to load libcrypto-3-x64.dll');
     Halt(1);
@@ -49,12 +49,12 @@ begin
 
   try
     // Load functions
-    EVP_MD_CTX_new := TEVP_MD_CTX_new(GetProcAddress(libHandle, 'EVP_MD_CTX_new'));
-    EVP_MD_CTX_free := TEVP_MD_CTX_free(GetProcAddress(libHandle, 'EVP_MD_CTX_free'));
-    EVP_DigestInit_ex := TEVP_DigestInit_ex(GetProcAddress(libHandle, 'EVP_DigestInit_ex'));
-    EVP_get_digestbyname := TEVP_get_digestbyname(GetProcAddress(libHandle, 'EVP_get_digestbyname'));
-    EVP_MD_fetch := TEVP_MD_fetch(GetProcAddress(libHandle, 'EVP_MD_fetch'));
-    EVP_MD_free := TEVP_MD_free(GetProcAddress(libHandle, 'EVP_MD_free'));
+    EVP_MD_CTX_new := TEVP_MD_CTX_new(platform_dl_symbol(libHandle, 'EVP_MD_CTX_new'));
+    EVP_MD_CTX_free := TEVP_MD_CTX_free(platform_dl_symbol(libHandle, 'EVP_MD_CTX_free'));
+    EVP_DigestInit_ex := TEVP_DigestInit_ex(platform_dl_symbol(libHandle, 'EVP_DigestInit_ex'));
+    EVP_get_digestbyname := TEVP_get_digestbyname(platform_dl_symbol(libHandle, 'EVP_get_digestbyname'));
+    EVP_MD_fetch := TEVP_MD_fetch(platform_dl_symbol(libHandle, 'EVP_MD_fetch'));
+    EVP_MD_free := TEVP_MD_free(platform_dl_symbol(libHandle, 'EVP_MD_free'));
 
     if not (Assigned(EVP_MD_CTX_new) and Assigned(EVP_DigestInit_ex)) then
     begin
@@ -130,7 +130,7 @@ begin
       WriteLn('  EVP_get_digestbyname not available');
 
   finally
-    FreeLibrary(libHandle);
+    platform_dl_release(libHandle);
   end;
 
   WriteLn;

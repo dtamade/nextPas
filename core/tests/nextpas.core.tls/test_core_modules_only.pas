@@ -3,7 +3,6 @@ program test_core_modules_only;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   // Core - 这些肯定能编译
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.base,

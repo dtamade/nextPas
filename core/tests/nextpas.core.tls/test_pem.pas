@@ -3,8 +3,7 @@ program test_pem;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.pem;
+  nextpas.core.tls.pem, nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.text, nextpas.core.text.conv;
 
 var
   TestsPassed, TestsFailed, TestsSkipped: Integer;
@@ -159,7 +158,7 @@ begin
   WriteLn('=== 测试格式检测 ===');
 
   // PEM 格式数据
-  PEMData := BytesOf('-----BEGIN CERTIFICATE-----' + LineEnding);
+  PEMData := StringToUTF8Bytes('-----BEGIN CERTIFICATE-----' + LineEnding);
   Check('格式检测 - PEM', IsPEMFormat(PEMData));
   Check('格式检测 - PEM 非 DER', not IsDERFormat(PEMData));
 

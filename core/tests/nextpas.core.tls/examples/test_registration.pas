@@ -1,13 +1,12 @@
 program test_registration;
 
 {$mode objfpc}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.winssl.lib;
+  nextpas.core.tls.winssl.lib, nextpas.core.base.utils, nextpas.core.exception;
 
 procedure TestRegistration;
 var

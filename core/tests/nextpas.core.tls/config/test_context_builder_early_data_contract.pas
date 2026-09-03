@@ -3,11 +3,10 @@ program test_context_builder_early_data_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.base.utils, nextpas.core.text.format;
 
 var
   GTestsPassed: Integer = 0;
@@ -135,9 +134,9 @@ begin
   if GTestsFailed > 0 then
   begin
     WriteLn;
-    WriteLn(Format('❌ %d builder early-data contract check(s) failed', [GTestsFailed]));
+    WriteLn(TextFormat('❌ %d builder early-data contract check(s) failed', [GTestsFailed]));
     Halt(1);
   end;
 
-  WriteLn(Format('✅ Context builder early-data contract passed (%d checks)', [GTestsPassed]));
+  WriteLn(TextFormat('✅ Context builder early-data contract passed (%d checks)', [GTestsPassed]));
 end.

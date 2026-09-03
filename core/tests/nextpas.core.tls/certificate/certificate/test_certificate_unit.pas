@@ -8,9 +8,8 @@ program test_certificate_unit;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TestsPassed: Integer = 0;
@@ -173,7 +172,7 @@ begin
     WriteLn('  [DEBUG] Step 6: IsCA');
   Info.IsCA := Cert.IsCA;
   if EnableSystemStoreDebug then
-    WriteLn('  [DEBUG] Step 6 OK, IsCA = ', BoolToStr(Info.IsCA, True));
+    WriteLn('  [DEBUG] Step 6 OK, IsCA = ', BoolToStr(Info.IsCA));
 
   if EnableSystemStoreDebug then
     WriteLn('  [DEBUG] Step 7: GetKeyUsage');

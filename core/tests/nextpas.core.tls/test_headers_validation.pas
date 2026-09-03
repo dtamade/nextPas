@@ -3,7 +3,6 @@ program test_headers_validation;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,

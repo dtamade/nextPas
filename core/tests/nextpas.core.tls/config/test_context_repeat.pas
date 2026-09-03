@@ -1,9 +1,8 @@
 program test_context_repeat;
 {$mode objfpc}{$H+}
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.backed,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base, nextpas.core.exception;
 var
   Lib: ISSLLibrary;
   Ctx1, Ctx2, Ctx3: ISSLContext;

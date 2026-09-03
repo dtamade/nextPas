@@ -31,14 +31,11 @@ program test_winssl_context_comprehensive;
 }
 
 uses
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
-  nextpas.core.tls.winssl.base;
+  nextpas.core.tls.winssl.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv, nextpas.core.time;
 
 var
   GTestsPassed: Integer = 0;
@@ -519,7 +516,7 @@ end;
 begin
   WriteLn('=========================================');
   WriteLn('WinSSL 上下文综合测试');
-  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn('=========================================');
   WriteLn;
 

@@ -4,8 +4,7 @@ program test_openssl_loader;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader, nextpas.core.text.format;
 
 var
   GPass, GFail: Integer;
@@ -122,7 +121,7 @@ begin
   TestUnloadReload;
 
   WriteLn;
-  WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPass, GFail]));
 
   TOpenSSLLoader.UnloadLibraries;
 

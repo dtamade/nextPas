@@ -3,13 +3,12 @@ program test_openssl_ed25519_certificate_algorithm_truth;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.backed,
-  nextpas.core.tls.cert.utils;
+  nextpas.core.tls.cert.utils, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;

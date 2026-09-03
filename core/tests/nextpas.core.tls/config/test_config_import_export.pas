@@ -719,7 +719,7 @@ var
 begin
   TestHeader('Test 26: INI Round-Trip Preserves PKCS#11 PIN File Source');
 
-  LMissingPINFile := IncludeTrailingPathDelimiter(GetTempDir(False)) + 'pkcs11_import_export_missing_pin.txt';
+  LMissingPINFile := IncludeTrailingPathDelimiter(GetTempDir()) + 'pkcs11_import_export_missing_pin.txt';
   if FileExists(LMissingPINFile) then
     DeleteFile(LMissingPINFile);
 
@@ -782,7 +782,7 @@ var
 begin
   TestHeader('Test 28: Manual INI Import Accepts Named PKCS#11 PIN Method');
 
-  LMissingPINFile := IncludeTrailingPathDelimiter(GetTempDir(False)) + 'pkcs11_manual_ini_missing_pin.txt';
+  LMissingPINFile := IncludeTrailingPathDelimiter(GetTempDir()) + 'pkcs11_manual_ini_missing_pin.txt';
   if FileExists(LMissingPINFile) then
     DeleteFile(LMissingPINFile);
 

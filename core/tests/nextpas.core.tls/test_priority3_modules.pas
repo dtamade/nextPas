@@ -3,7 +3,6 @@ program test_priority3_modules;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   // Priority 3 - Symmetric Ciphers (1 module)
   nextpas.core.tls.openssl.api.legacy_ciphers,
 
@@ -15,7 +14,7 @@ uses
   nextpas.core.tls.openssl.api.txt_db,
   nextpas.core.tls.openssl.api.ui,  // Fixed in Priority 2!
   nextpas.core.tls.openssl.api.dso,
-  nextpas.core.tls.openssl.api.srp;
+  nextpas.core.tls.openssl.api.srp, nextpas.core.text.format;
   //nextpas.core.tls.openssl.api.rand_old;  // Needs type conversions
 
 var
@@ -65,7 +64,7 @@ begin
   WriteLn;
 
   PrintSeparator;
-  WriteLn(Format('Results: %d/%d tests passed (%.1f%%)',
+  WriteLn(TextFormat('Results: %d/%d tests passed (%.1f%%)',
     [PassedTests, TotalTests, (PassedTests * 100.0) / TotalTests]));
   PrintSeparator;
 

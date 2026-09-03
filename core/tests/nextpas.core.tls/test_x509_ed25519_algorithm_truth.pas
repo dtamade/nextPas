@@ -3,12 +3,11 @@ program test_x509_ed25519_algorithm_truth;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.x509;
+  nextpas.core.tls.x509, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;

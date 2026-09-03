@@ -7,11 +7,10 @@ program test_rsa_direct;
 }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.rsa,
   nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.exception;
 
 var
   LKey: PRSA;

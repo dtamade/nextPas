@@ -3,11 +3,10 @@ program test_auto_backend_os_native_preference_truth_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.backend.selector,
-  nextpas.core.tls.context.builder;
+  nextpas.core.tls.context.builder, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.io.intf;
 
 const
   // Current selector formula:

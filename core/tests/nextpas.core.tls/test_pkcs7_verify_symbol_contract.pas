@@ -3,12 +3,11 @@ program test_pkcs7_verify_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.pkcs;
+  nextpas.core.tls.openssl.api.pkcs, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;
@@ -51,7 +50,7 @@ begin
   WriteLn;
   WriteLn('=== PKCS7 verify symbol guard ===');
 
-  LData := BytesOf('pkcs7-verify-symbol-contract');
+  LData := StringToUTF8Bytes('pkcs7-verify-symbol-contract');
   LOriginalPKCS7Verify := PKCS7_verify;
 
   LVerifyRaised := False;

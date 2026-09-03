@@ -8,11 +8,10 @@ program test_certificate_chain_methods;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
-  nextpas.core.tls.openssl.certificate;
+  nextpas.core.tls.openssl.certificate, nextpas.core.exception;
 
 var
   TestsPassed: Integer = 0;

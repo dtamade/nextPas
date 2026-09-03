@@ -1,14 +1,12 @@
 program test_openssl_ca_autoload;
 
 {$mode objfpc}{$H+}{$J-}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   nextpas.core.tls.factory,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base, nextpas.core.exception, nextpas.core.text.format;
 
 type
   TSkipCategory = (
@@ -292,17 +290,17 @@ begin
 
   WriteLn('=' + StringOfChar('=', 70));
   if TotalTests > 0 then
-    WriteLn(Format('Test Results: %d/%d passed (%.1f%%)',
+    WriteLn(TextFormat('Test Results: %d/%d passed (%.1f%%)',
       [PassedTests, TotalTests, PassedTests * 100.0 / TotalTests]))
   else
     WriteLn('Test Results: no executable tests');
 
-  WriteLn(Format('Skipped groups: %d (dependency=%d, version=%d, environment=%d, capability=%d, other=%d)',
+  WriteLn(TextFormat('Skipped groups: %d (dependency=%d, version=%d, environment=%d, capability=%d, other=%d)',
     [SkippedTests, SkipDependency, SkipVersion, SkipEnvironment, SkipCapability, SkipOther]));
 
   if FailedTests > 0 then
   begin
-    WriteLn(Format('%d tests FAILED', [FailedTests]));
+    WriteLn(TextFormat('%d tests FAILED', [FailedTests]));
     Halt(1);
   end
   else

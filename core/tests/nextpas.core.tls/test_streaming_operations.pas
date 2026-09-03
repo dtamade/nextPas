@@ -3,9 +3,8 @@ program test_streaming_operations;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.crypto.utils;
+  nextpas.core.tls.crypto.utils, nextpas.core.base, nextpas.core.exception;
 
 var
   GTestsPassed: Integer = 0;

@@ -3,7 +3,6 @@ program test_basic_compilation;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base;
 
 begin

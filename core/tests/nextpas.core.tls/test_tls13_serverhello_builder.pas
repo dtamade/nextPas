@@ -3,11 +3,10 @@ program test_tls13_serverhello_builder;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.parser,
-  nextpas.core.tls.tls13.serverhello;
+  nextpas.core.tls.tls13.serverhello, nextpas.core.base, nextpas.core.exception, nextpas.core.text.format;
 
 procedure Fail(const AMessage: string);
 begin
@@ -24,7 +23,7 @@ end;
 procedure AssertEqualsWord(AExpected, AActual: Word; const AMessage: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s (expected=0x%.4x actual=0x%.4x)', [AMessage, AExpected, AActual]));
+    Fail(TextFormat('%s (expected=0x%.4x actual=0x%.4x)', [AMessage, AExpected, AActual]));
 end;
 
 procedure TestBuildServerHelloHandshakeAndParse;

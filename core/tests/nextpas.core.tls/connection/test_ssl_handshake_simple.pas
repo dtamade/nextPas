@@ -3,10 +3,9 @@ program test_ssl_handshake_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.bio;
+  nextpas.core.tls.openssl.api.bio, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   // Test counters

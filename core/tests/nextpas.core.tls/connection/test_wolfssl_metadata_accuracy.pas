@@ -6,15 +6,13 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,
   nextpas.core.tls.wolfssl.lib,
   nextpas.core.tls.wolfssl.certificate,
-  nextpas.core.tls.wolfssl.session;
+  nextpas.core.tls.wolfssl.session, nextpas.core.base, nextpas.core.math, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   TestsSkipped: Integer = 0;
@@ -51,13 +49,13 @@ end;
 procedure AssertEqualInt(const AExpected, AActual: Integer; const AMessage: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s (expected=%d, actual=%d)', [AMessage, AExpected, AActual]));
+    Fail(TextFormat('%s (expected=%d, actual=%d)', [AMessage, AExpected, AActual]));
 end;
 
 procedure AssertEqualStr(const AExpected, AActual, AMessage: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s (expected="%s", actual="%s")', [AMessage, AExpected, AActual]));
+    Fail(TextFormat('%s (expected="%s", actual="%s")', [AMessage, AExpected, AActual]));
 end;
 
 procedure TestEmptyCertificateMetadata;

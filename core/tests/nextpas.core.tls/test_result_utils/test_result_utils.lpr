@@ -3,10 +3,9 @@ program test_result_utils;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.result.utils,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.text;
 
 function AlwaysTrue: Boolean; begin Result := True; end;
 function AlwaysFalse: Boolean; begin Result := False; end;

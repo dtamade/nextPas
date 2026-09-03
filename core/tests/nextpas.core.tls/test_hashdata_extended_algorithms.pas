@@ -3,10 +3,9 @@ program test_hashdata_extended_algorithms;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.encoding;
+  nextpas.core.tls.encoding, nextpas.core.base, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   TotalTests: Integer = 0;
@@ -16,7 +15,7 @@ var
 procedure AssertTrue(const Msg: string; Condition: Boolean);
 begin
   Inc(TotalTests);
-  Write(Format('[TEST] %s... ', [Msg]));
+  Write(TextFormat('[TEST] %s... ', [Msg]));
   if Condition then
   begin
     WriteLn('✓ PASS');
@@ -30,7 +29,7 @@ procedure AssertSkip(const Msg, Reason: string);
 begin
   Inc(TotalTests);
   Inc(SkippedTests);
-  WriteLn(Format('[TEST] %s... ↷ SKIP (%s)', [Msg, Reason]));
+  WriteLn(TextFormat('[TEST] %s... ↷ SKIP (%s)', [Msg, Reason]));
 end;
 
 procedure AssertHashLength(const Name: string; HashType: TSSLHash; const Data: TBytes; ExpectedLen: Integer);
@@ -76,7 +75,7 @@ begin
   WriteLn('HashData Extended Algorithm Tests');
   WriteLn('========================================');
 
-  Data := BytesOf('hashdata-extended-algo-test');
+  Data := StringToUTF8Bytes('hashdata-extended-algo-test');
 
   // Mandatory support added in this iteration
   AssertHashLength('SHA224', sslHashSHA224, Data, 56);
@@ -91,10 +90,10 @@ begin
   WriteLn('========================================');
   WriteLn('HashData Extended Algorithm Summary');
   WriteLn('========================================');
-  WriteLn(Format('Total tests: %d', [TotalTests]));
-  WriteLn(Format('Passed: %d', [PassedTests]));
-  WriteLn(Format('Skipped: %d', [SkippedTests]));
-  WriteLn(Format('Failed: %d', [FailedTests]));
+  WriteLn(TextFormat('Total tests: %d', [TotalTests]));
+  WriteLn(TextFormat('Passed: %d', [PassedTests]));
+  WriteLn(TextFormat('Skipped: %d', [SkippedTests]));
+  WriteLn(TextFormat('Failed: %d', [FailedTests]));
 
   if FailedTests = 0 then
     WriteLn('✅ HASHDATA EXTENDED ALGORITHM TESTS PASSED!')

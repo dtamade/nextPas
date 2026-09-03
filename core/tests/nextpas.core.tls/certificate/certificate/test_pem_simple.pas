@@ -3,9 +3,8 @@ program test_pem_simple;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.pem;
+  nextpas.core.tls.openssl.api.pem, nextpas.core.exception;
 
 begin
   WriteLn('========================================');

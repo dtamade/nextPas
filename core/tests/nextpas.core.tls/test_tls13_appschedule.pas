@@ -3,9 +3,8 @@ program test_tls13_appschedule;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.wire,
-  nextpas.core.tls.tls13.appschedule;
+  nextpas.core.tls.tls13.appschedule, nextpas.core.base;
 
 procedure Fail(const AMessage: string);
 begin

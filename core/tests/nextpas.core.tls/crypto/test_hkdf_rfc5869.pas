@@ -8,11 +8,10 @@ program test_hkdf_rfc5869;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Math,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.api.kdf,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base, nextpas.core.exception, nextpas.core.math, nextpas.core.text.conv;
 
 var
   TestsPassed: Integer = 0;

@@ -1,10 +1,9 @@
 program test_pkcs7_sign_verify_workflow;
 
 {$mode objfpc}{$H+}{$J-}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
-  nextpas.core.system.sysutils, ctypes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
@@ -18,7 +17,7 @@ uses
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.err,
   nextpas.core.tls.openssl.api.pkcs7,
-  nextpas.core.tls.openssl.api.consts;
+  nextpas.core.tls.openssl.api.consts, nextpas.core.base, nextpas.core.exception, nextpas.core.text.format;
 
 const
   TEST_DATA = 'This is test data for PKCS7 signing and verification workflow.';
@@ -567,9 +566,9 @@ begin
   WriteLn('                             Test Results Summary');
   WriteLn('================================================================================');
   WriteLn;
-  WriteLn(Format('Total Tests:  %d', [TestsPassed + TestsFailed]));
-  WriteLn(Format('Passed:       %d', [TestsPassed]));
-  WriteLn(Format('Failed:       %d', [TestsFailed]));
+  WriteLn(TextFormat('Total Tests:  %d', [TestsPassed + TestsFailed]));
+  WriteLn(TextFormat('Passed:       %d', [TestsPassed]));
+  WriteLn(TextFormat('Failed:       %d', [TestsFailed]));
 
   if TestsFailed = 0 then
   begin
@@ -587,7 +586,7 @@ begin
   else
   begin
     WriteLn;
-    WriteLn(Format('Result: %d TEST(S) FAILED [FAIL]', [TestsFailed]));
+    WriteLn(TextFormat('Result: %d TEST(S) FAILED [FAIL]', [TestsFailed]));
     WriteLn;
     WriteLn('================================================================================');
     Halt(1);

@@ -6,11 +6,10 @@ program test_factory_server_name_compatibility_warning;
   TSSLConfig.ServerName compatibility warnings on factory paths. }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
-  nextpas.core.tls.logging;
+  nextpas.core.tls.logging, nextpas.core.exception, nextpas.core.text;
 
 type
   TWarningCaptureLogger = class(TBaseLogger)

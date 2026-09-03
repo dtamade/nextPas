@@ -3,12 +3,11 @@ program test_cms_decrypt_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.cms;
+  nextpas.core.tls.openssl.api.cms, nextpas.core.base, nextpas.core.exception;
 
 var
   TotalTests: Integer = 0;

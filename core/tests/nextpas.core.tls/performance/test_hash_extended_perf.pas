@@ -3,8 +3,8 @@ program test_hash_extended_perf;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
-  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api;
+  nextpas.core.time,
+  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api, nextpas.core.text.format;
 
 const
   TEST_ITERATIONS = 1000;
@@ -58,7 +58,7 @@ begin
     Exit;
   end;
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   for i := 1 to Iterations do
   begin
@@ -97,7 +97,7 @@ begin
     EVP_MD_CTX_free(ctx);
   end;
 
-  EndTime := Now;
+  EndTime := DateTimeNow;
   TotalMs := DateTimeMillisecondsBetween(EndTime, StartTime);
   Result := TotalMs / Iterations;
 end;
@@ -128,8 +128,8 @@ begin
   ThroughputMBps := (TEST_DATA_SIZE / 1024.0 / 1024.0) / (AvgTime / 1000.0);
 
   WriteLn(' OK');
-  WriteLn('    Average time: ', Format('%.6f', [AvgTime]), ' ms');
-  WriteLn('    Throughput:   ', Format('%.2f', [ThroughputMBps]), ' MB/s');
+  WriteLn('    Average time: ', TextFormat('%.6f', [AvgTime]), ' ms');
+  WriteLn('    Throughput:   ', TextFormat('%.2f', [ThroughputMBps]), ' MB/s');
 end;
 
 procedure TestWithVersion;

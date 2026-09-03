@@ -1,12 +1,11 @@
 program test_winssl_direct;
 
 {$mode objfpc}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.winssl.lib;
+  nextpas.core.tls.winssl.lib, nextpas.core.exception;
 
 procedure TestWinSSLDirect;
 var

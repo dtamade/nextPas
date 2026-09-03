@@ -15,12 +15,11 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.ssl,
-  nextpas.core.tls.openssl.api.consts;
+  nextpas.core.tls.openssl.api.consts, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;

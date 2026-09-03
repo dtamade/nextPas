@@ -3,9 +3,8 @@ program test_tls13_aead;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.wire,
-  nextpas.core.tls.tls13.aead;
+  nextpas.core.tls.tls13.aead, nextpas.core.base;
 
 procedure Fail(const AMessage: string);
 begin

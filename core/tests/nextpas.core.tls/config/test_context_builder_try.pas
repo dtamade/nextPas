@@ -8,14 +8,13 @@ program test_context_builder_try;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.freepascal.context.material,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.fs, nextpas.core.io.intf, nextpas.core.path, nextpas.core.text, nextpas.core.text.conv, nextpas.core.text.format;
 
 type
   IInspectableBuilderMaterialContext = interface
@@ -828,7 +827,7 @@ begin
   Assert(Pos('environment variable', LowerCase(LResult.ErrorMessage)) > 0,
     'Missing PKCS#11 environment PIN source should report environment variable failure');
 
-  LMissingPINFile := IncludeTrailingPathDelimiter(GetTempDir(False)) + 'pkcs11_builder_missing_pin.txt';
+  LMissingPINFile := IncludeTrailingPathDelimiter(GetTempDir()) + 'pkcs11_builder_missing_pin.txt';
   if FileExists(LMissingPINFile) then
     DeleteFile(LMissingPINFile);
 
@@ -1204,7 +1203,7 @@ begin
     TestReplayStoreErrorContracts;
 
     WriteLn('╔════════════════════════════════════════════════════════════╗');
-    WriteLn(Format('║   Tests Passed: %-3d  Failed: %-3d                         ║', [GTestsPassed, GTestsFailed]));
+    WriteLn(TextFormat('║   Tests Passed: %-3d  Failed: %-3d                         ║', [GTestsPassed, GTestsFailed]));
     WriteLn('╚════════════════════════════════════════════════════════════╝');
 
     if GTestsFailed > 0 then

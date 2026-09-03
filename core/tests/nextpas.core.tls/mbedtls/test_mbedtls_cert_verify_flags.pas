@@ -14,12 +14,9 @@ program test_mbedtls_cert_verify_flags;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
-  TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
-  tls_test_sockets;
+  tls_test_sockets, nextpas.core.exception, nextpas.core.text.format;
 
 type
   TTestResult = record
@@ -286,7 +283,7 @@ begin
     for I := 0 to High(LDepths) do
     begin
       WriteLn;
-      WriteLn(Format('4.%d: Verify depth = %d', [I + 1, LDepths[I]]));
+      WriteLn(TextFormat('4.%d: Verify depth = %d', [I + 1, LDepths[I]]));
 
       LSock := ConnectTCP('www.google.com', 443);
       try
@@ -301,14 +298,14 @@ begin
         begin
           if LConn.GetVerifyResult = 0 then
           begin
-            WriteLn(Format('✅ Passed with depth=%d', [LDepths[I]]));
-            AddResult(Format('Depth=%d', [LDepths[I]]), True, 'Verification passed');
+            WriteLn(TextFormat('✅ Passed with depth=%d', [LDepths[I]]));
+            AddResult(TextFormat('Depth=%d', [LDepths[I]]), True, 'Verification passed');
           end
           else
           begin
-            WriteLn(Format('⚠️  Failed with depth=%d: %s',
+            WriteLn(TextFormat('⚠️  Failed with depth=%d: %s',
               [LDepths[I], LConn.GetVerifyResultString]));
-            AddResult(Format('Depth=%d', [LDepths[I]]), False,
+            AddResult(TextFormat('Depth=%d', [LDepths[I]]), False,
               'Verification failed');
           end;
 
@@ -377,7 +374,7 @@ begin
         else
         begin
           WriteLn('⚠️  Unexpected result: ', LResult);
-          AddResult('VerifyResult - Success', False, Format('Code = %d', [LResult]));
+          AddResult('VerifyResult - Success', False, TextFormat('Code = %d', [LResult]));
         end;
 
         LConn.Shutdown;
@@ -409,7 +406,7 @@ begin
         if LResult <> 0 then
         begin
           WriteLn('✅ Result is non-zero (failure detected)');
-          AddResult('VerifyResult - Failure', True, Format('Code = %d', [LResult]));
+          AddResult('VerifyResult - Failure', True, TextFormat('Code = %d', [LResult]));
         end
         else
         begin

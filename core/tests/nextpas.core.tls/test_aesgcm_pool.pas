@@ -4,12 +4,11 @@ program test_aesgcm_pool;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.aesgcm.pool,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.backed,  // 确保 OpenSSL 后端注册
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.math;
 
 var
   TotalTests: Integer = 0;

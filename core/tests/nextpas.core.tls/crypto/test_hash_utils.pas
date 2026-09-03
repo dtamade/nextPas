@@ -3,10 +3,9 @@ program test_hash_utils;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.utils;
+  nextpas.core.tls.utils, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv;
 
 procedure TestSHA1;
 var
@@ -16,7 +15,7 @@ begin
   WriteLn('Testing SHA1...');
 
   // Test with "Hello World"
-  LData := BytesOf('Hello World');
+  LData := StringToUTF8Bytes('Hello World');
   LHash := TSSLUtils.CalculateSHA1(LData);
 
   WriteLn('  Input: Hello World');
@@ -41,7 +40,7 @@ begin
   WriteLn('Testing SHA256...');
 
   // Test with "Hello World"
-  LData := BytesOf('Hello World');
+  LData := StringToUTF8Bytes('Hello World');
   LHash := TSSLUtils.CalculateSHA256(LData);
 
   WriteLn('  Input: Hello World');
@@ -66,7 +65,7 @@ begin
   WriteLn('Testing MD5...');
 
   // Test with "Hello World"
-  LData := BytesOf('Hello World');
+  LData := StringToUTF8Bytes('Hello World');
   LHash := TSSLUtils.CalculateMD5(LData);
 
   WriteLn('  Input: Hello World');

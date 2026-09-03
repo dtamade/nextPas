@@ -16,15 +16,13 @@
 program test_basic;
 
 {$mode ObjFPC}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.exceptions;  // 主库单元
+  nextpas.core.tls.exceptions, nextpas.core.exception, nextpas.core.time;  // 主库单元
 
 procedure PrintSeparator;
 begin
@@ -319,7 +317,7 @@ begin
   WriteLn('  nextpas.core.tls 基础功能测试');
   WriteLn('================================');
   WriteLn;
-  WriteLn('时间: ', DateTimeToStr(Now));
+  WriteLn('时间: ', DateTimeToStr(DateTimeNow));
   WriteLn('平台: ', {$IFDEF WINDOWS}'Windows'{$ELSE}'Unix/Linux'{$ENDIF});
   WriteLn;
 

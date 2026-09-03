@@ -4,10 +4,9 @@ program test_winssl_certificate;
 {$CODEPAGE UTF8}
 
 uses
-  nextpas.core.system.sysutils
+  nextpas.core.exception, nextpas.core.text.conv
   {$IFDEF WINDOWS}
-  , nextpas.core.system.classes, Windows,
-  nextpas.core.tls.base,
+  , nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
   nextpas.core.tls.winssl.certificate,

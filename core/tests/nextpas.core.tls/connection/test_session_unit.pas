@@ -3,11 +3,11 @@ program test_session_unit;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.session,
-  nextpas.core.tls.openssl.api.core;  // 添加以便访问 SSL_SESSION API
+  nextpas.core.tls.openssl.api.core, nextpas.core.exception;  // 添加以便访问 SSL_SESSION API
 
 var
   SSLLib: ISSLLibrary;

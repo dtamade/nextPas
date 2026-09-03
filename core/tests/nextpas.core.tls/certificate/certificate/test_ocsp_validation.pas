@@ -3,9 +3,8 @@ program test_ocsp_validation;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.ocsp;
+  nextpas.core.tls.openssl.api.ocsp, nextpas.core.text.format;
 
 var
   TotalTests, PassedTests, FailedTests: Integer;
@@ -83,10 +82,10 @@ begin
   WriteLn('========================================');
   WriteLn('测试结果总结');
   WriteLn('========================================');
-  WriteLn(Format('总测试数: %d', [TotalTests]));
-  WriteLn(Format('通过: %d', [PassedTests]));
-  WriteLn(Format('失败: %d', [FailedTests]));
-  WriteLn(Format('通过率: %.1f%%', [PassedTests * 100.0 / TotalTests]));
+  WriteLn(TextFormat('总测试数: %d', [TotalTests]));
+  WriteLn(TextFormat('通过: %d', [PassedTests]));
+  WriteLn(TextFormat('失败: %d', [FailedTests]));
+  WriteLn(TextFormat('通过率: %.1f%%', [PassedTests * 100.0 / TotalTests]));
   WriteLn;
 
   if FailedTests > 0 then

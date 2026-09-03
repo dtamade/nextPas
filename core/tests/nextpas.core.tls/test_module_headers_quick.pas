@@ -3,7 +3,6 @@ program test_module_headers_quick;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   // Core modules
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.base,

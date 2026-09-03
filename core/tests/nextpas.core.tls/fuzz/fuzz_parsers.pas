@@ -15,11 +15,10 @@ program fuzz_parsers;
  *}
 
 uses
-  nextpas.core.system.sysutils,
   fuzz_framework,
   nextpas.core.tls.cert,
   nextpas.core.tls.cert.builder,
-  nextpas.core.tls.utils;
+  nextpas.core.tls.utils, nextpas.core.base, nextpas.core.text.conv;
 
 { ============================================================================ }
 { Fuzz Targets                                                                  }

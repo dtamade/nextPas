@@ -1,7 +1,6 @@
 program test_cert_load_debug;
 {$mode objfpc}{$H+}
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.bio,

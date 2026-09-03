@@ -3,8 +3,7 @@ program test_hmac_comprehensive;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.api;
+  nextpas.core.tls.openssl.api, nextpas.core.exception, nextpas.core.platform.dl, nextpas.core.text.conv, nextpas.core.text.format;
 
 type
   // HMAC_CTX opaque type for OpenSSL 3.0+
@@ -22,19 +21,19 @@ var
 
 procedure LoadHMACFunctions;
 var
-  LibHandle: THandle;
+  LibHandle: TPlatformLibrary;
 begin
-  LibHandle := LoadLibrary(CRYPTO_LIB);
-  if LibHandle = 0 then
+  if not platform_dl_load(CRYPTO_LIB, [dlfLazy], LibHandle) then LibHandle := PLATFORM_DL_NIL_LIBRARY;
+  if LibHandle.IsInvalid then
     raise Exception.Create('Failed to load ' + CRYPTO_LIB);
 
-  Pointer(HMAC_CTX_new) := GetProcAddress(LibHandle, 'HMAC_CTX_new');
-  Pointer(HMAC_CTX_free) := GetProcAddress(LibHandle, 'HMAC_CTX_free');
-  Pointer(HMAC_CTX_reset) := GetProcAddress(LibHandle, 'HMAC_CTX_reset');
-  Pointer(HMAC_Init_ex) := GetProcAddress(LibHandle, 'HMAC_Init_ex');
-  Pointer(HMAC_Update) := GetProcAddress(LibHandle, 'HMAC_Update');
-  Pointer(HMAC_Final) := GetProcAddress(LibHandle, 'HMAC_Final');
-  Pointer(HMAC) := GetProcAddress(LibHandle, 'HMAC');
+  Pointer(HMAC_CTX_new) := platform_dl_symbol(LibHandle, 'HMAC_CTX_new');
+  Pointer(HMAC_CTX_free) := platform_dl_symbol(LibHandle, 'HMAC_CTX_free');
+  Pointer(HMAC_CTX_reset) := platform_dl_symbol(LibHandle, 'HMAC_CTX_reset');
+  Pointer(HMAC_Init_ex) := platform_dl_symbol(LibHandle, 'HMAC_Init_ex');
+  Pointer(HMAC_Update) := platform_dl_symbol(LibHandle, 'HMAC_Update');
+  Pointer(HMAC_Final) := platform_dl_symbol(LibHandle, 'HMAC_Final');
+  Pointer(HMAC) := platform_dl_symbol(LibHandle, 'HMAC');
 end;
 
 type
@@ -109,11 +108,11 @@ begin
   WriteLn;
   PrintSeparator;
   if (TotalTests - SkippedTests) > 0 then
-    WriteLn(Format('Total: %d tests, %d passed, %d failed, %d skipped (%.1f%% executed pass rate)',
+    WriteLn(TextFormat('Total: %d tests, %d passed, %d failed, %d skipped (%.1f%% executed pass rate)',
       [TotalTests, PassedTests, TotalTests - PassedTests - SkippedTests, SkippedTests,
        (PassedTests / (TotalTests - SkippedTests)) * 100]))
   else
-    WriteLn(Format('Total: %d tests, %d passed, %d failed, %d skipped (all skipped)',
+    WriteLn(TextFormat('Total: %d tests, %d passed, %d failed, %d skipped (all skipped)',
       [TotalTests, PassedTests, TotalTests - PassedTests - SkippedTests, SkippedTests]));
   PrintSeparator;
 end;

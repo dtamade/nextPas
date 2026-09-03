@@ -4,15 +4,13 @@ program benchmark_crypto;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   benchmark_utils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.secure,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.encoding,  // Phase 2.3.6: Base64 functions moved here
-  nextpas.core.time;
+  nextpas.core.time, nextpas.core.base, nextpas.core.text.conv;
 
 const
   ITERATIONS = 10000;
@@ -100,8 +98,8 @@ var
 begin
   PrintHeader('HKDF Key Derivation Performance');
 
-  LSalt := BytesOf('benchmark-salt');
-  LInfo := BytesOf('benchmark-info');
+  LSalt := StringToUTF8Bytes('benchmark-salt');
+  LInfo := StringToUTF8Bytes('benchmark-info');
 
   LBench := TBenchmark.Create('HKDF-SHA256 (32 bytes x 1000)');
   LBench.SetIterations(HKDF_ITERATIONS);

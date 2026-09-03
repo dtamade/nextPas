@@ -14,9 +14,9 @@ program test_session_metadata;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.base,
-  nextpas.core.tls.winssl.connection;
+  nextpas.core.tls.winssl.connection, nextpas.core.base, nextpas.core.math, nextpas.core.text.format;
 
 var
   Total, Passed, Failed: Integer;
@@ -129,7 +129,7 @@ begin
     Check('设置超时后仍有效', LSession.IsValid);
 
     // 等待 2 秒后应该过期
-    Sleep(2000);
+    MsSleep(2000);
     Check('超时后无效', not LSession.IsValid);
   finally
     LSession.Free;
@@ -154,7 +154,7 @@ begin
 
     // 过期会话不可复用
     LSession.SetTimeout(1);
-    Sleep(2000);
+    MsSleep(2000);
     Check('过期会话不可复用', not LSession.IsResumable);
   finally
     LSession.Free;
@@ -298,7 +298,7 @@ begin
   WriteLn('总计: ', Total);
   WriteLn('通过: ', Passed);
   WriteLn('失败: ', Failed);
-  WriteLn('成功率: ', Format('%.1f%%', [Passed * 100.0 / Total]));
+  WriteLn('成功率: ', TextFormat('%.1f%%', [Passed * 100.0 / Total]));
   WriteLn('================================================================');
 end;
 

@@ -4,10 +4,9 @@ program test_encryption;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.secure;
+  nextpas.core.tls.secure, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception;
 
 var
   LKeyStore: ISecureKeyStore;

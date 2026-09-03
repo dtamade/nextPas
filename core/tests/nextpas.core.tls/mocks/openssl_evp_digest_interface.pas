@@ -13,7 +13,7 @@ unit openssl_evp_digest_interface;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils;
+  nextpas.core.base;
 
 type
   TDigestAlgorithm = (daNull, daMD5, daSHA1, daSHA224, daSHA256, daSHA384, daSHA512,

@@ -3,7 +3,6 @@ program test_freepascal_cipher_config;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context,
   nextpas.core.tls.freepascal.context.material,

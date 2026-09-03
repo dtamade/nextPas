@@ -15,8 +15,8 @@ unit test_memutils;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
-  test_base, nextpas.core.mem.secure;
+  nextpas.core.test,
+  test_base, nextpas.core.mem.secure, nextpas.core.base, nextpas.core.text.conv;
 
 type
   { TTestMemUtils - Tests for secure memory operations }

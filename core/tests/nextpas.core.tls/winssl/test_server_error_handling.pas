@@ -18,13 +18,12 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.classes, nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
   nextpas.core.tls.winssl.context,
   nextpas.core.tls.winssl.connection,
-  nextpas.core.tls.winssl.errors;
+  nextpas.core.tls.winssl.errors, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv;
 
 procedure TestErrorMapping;
 var

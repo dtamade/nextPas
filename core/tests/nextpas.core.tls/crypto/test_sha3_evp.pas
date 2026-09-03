@@ -3,8 +3,9 @@ program test_sha3_evp;
 {$mode Delphi}{$H+}
 
 uses
-  {$IFDEF WINDOWS}Windows,{$ENDIF}
-  nextpas.core.system.sysutils, Dynlibs,
+  nextpas.core.platform.dl,
+  nextpas.core.text.conv,
+  nextpas.core.base,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.sha3.evp;
@@ -206,7 +207,7 @@ begin
 end;
 
 var
-  libHandle: TLibHandle;
+  libHandle: TPlatformLibrary;
   dllNames: array[0..3] of string = ('libcrypto-3.dll', 'libcrypto-3-x64.dll', 'libcrypto-1_1-x64.dll', 'libcrypto.dll');
   i: Integer;
   dllName: string;
@@ -217,31 +218,31 @@ begin
   WriteLn;
 
   // Try to load OpenSSL library with different names
-  libHandle := 0;
+  libHandle := PLATFORM_DL_NIL_LIBRARY;
   dllName := '';
 
   {$IFDEF WINDOWS}
   for i := 0 to High(dllNames) do
   begin
     WriteLn('Trying to load: ', dllNames[i]);
-    libHandle := LoadLibrary(dllNames[i]);
-    if libHandle <> 0 then
+    if not platform_dl_load(dllNames[i], [dlfLazy], libHandle) then libHandle := PLATFORM_DL_NIL_LIBRARY;
+    if libHandle.IsValid then
     begin
       dllName := dllNames[i];
       Break;
     end;
   end;
   {$ELSE}
-  libHandle := LoadLibrary('libcrypto.so.3');
+  if not platform_dl_load('libcrypto.so.3', [dlfLazy], libHandle) then libHandle := PLATFORM_DL_NIL_LIBRARY;
   dllName := 'libcrypto.so.3';
-  if libHandle = 0 then
+  if libHandle.IsInvalid then
   begin
-    libHandle := LoadLibrary('libcrypto.so');
+    if not platform_dl_load('libcrypto.so', [dlfLazy], libHandle) then libHandle := PLATFORM_DL_NIL_LIBRARY;
     dllName := 'libcrypto.so';
   end;
   {$ENDIF}
 
-  if libHandle = 0 then
+  if libHandle.IsInvalid then
   begin
     WriteLn;
     WriteLn('ERROR: Failed to load OpenSSL library');
@@ -253,7 +254,7 @@ begin
   try
     WriteLn;
     WriteLn('OpenSSL library loaded successfully: ', dllName);
-    WriteLn('Library Handle: 0x', IntToHex(libHandle, 8));
+    WriteLn('Library Handle: 0x', IntToHex(PtrUInt(libHandle.Handle), 8));
     WriteLn;
 
     // Load EVP functions
@@ -293,7 +294,7 @@ begin
 
   finally
     UnloadEVP;
-    FreeLibrary(libHandle);
+    platform_dl_release(libHandle);
   end;
 
   WriteLn;

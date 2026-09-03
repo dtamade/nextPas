@@ -8,14 +8,13 @@ program test_hmac_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, ctypes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.hmac,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -51,7 +50,7 @@ begin
   begin
     hex_digest := BytesToHex(digest, 20);
     Runner.Check('Verify HMAC-SHA1 digest', hex_digest = expected,
-            Format('got: %s', [hex_digest]));
+            TextFormat('got: %s', [hex_digest]));
   end;
 end;
 
@@ -77,7 +76,7 @@ begin
   begin
     hex_digest := BytesToHex(digest, 32);
     Runner.Check('Verify HMAC-SHA256 digest', hex_digest = expected,
-            Format('got: %s', [hex_digest]));
+            TextFormat('got: %s', [hex_digest]));
   end;
 end;
 
@@ -102,7 +101,7 @@ begin
   begin
     hex_digest := BytesToHex(digest, 64);
     Runner.Check('Verify HMAC-SHA512 length', Length(hex_digest) = 128,
-            Format('%d bytes', [Length(hex_digest) div 2]));
+            TextFormat('%d bytes', [Length(hex_digest) div 2]));
   end;
 end;
 
@@ -136,7 +135,7 @@ begin
   FillChar(digest, SizeOf(digest), 0);
   digest_len := 0;
   Runner.Check('Finalize HMAC', HMAC_Final(ctx, @digest[0], @digest_len) = 1);
-  Runner.Check('Digest length', digest_len = 32, Format('%d bytes', [digest_len]));
+  Runner.Check('Digest length', digest_len = 32, TextFormat('%d bytes', [digest_len]));
 
   hex_digest := BytesToHex(digest, digest_len);
   Runner.Check('Compare with one-shot',
@@ -257,7 +256,7 @@ begin
 
   HMAC_Init_ex(ctx, @key[1], Length(key), EVP_sha256(), nil);
   size := HMAC_size(ctx);
-  Runner.Check('Query HMAC size', size = 32, Format('%d bytes for SHA256', [size]));
+  Runner.Check('Query HMAC size', size = 32, TextFormat('%d bytes for SHA256', [size]));
 
   HMAC_CTX_free(ctx);
 end;

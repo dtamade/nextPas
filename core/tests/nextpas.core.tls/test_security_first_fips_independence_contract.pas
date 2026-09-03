@@ -3,11 +3,10 @@ program test_security_first_fips_independence_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.backend.selector,
-  nextpas.core.tls.context.builder;
+  nextpas.core.tls.context.builder, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.io.intf;
 
 type
   ITestContextBackendInfo = interface

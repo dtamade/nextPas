@@ -13,7 +13,6 @@ program test_cert_pinning;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.cert.pinning,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.api.x509,
@@ -21,8 +20,7 @@ uses
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.crypto.utils,
-  Base64;
+  nextpas.core.tls.crypto.utils, nextpas.core.base, nextpas.core.exception;
 
 var
   TestsPassed: Integer = 0;

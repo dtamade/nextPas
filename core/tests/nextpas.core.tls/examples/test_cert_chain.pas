@@ -3,10 +3,9 @@ program test_cert_chain;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.fs.path;
 
 var
   GRootCert, GRootKey: string;
@@ -21,7 +20,7 @@ begin
   WriteLn('Setting up test environment...');
   GTempDir := 'temp_certs';
   if not DirectoryExists(GTempDir) then
-    CreateDir(GTempDir);
+    ForceDirectories(GTempDir);
 
   // 1. Generate Root CA
   Write('Generating Root CA... ');

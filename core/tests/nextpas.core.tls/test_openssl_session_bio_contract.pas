@@ -3,12 +3,11 @@ program test_openssl_session_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.session;
+  nextpas.core.tls.openssl.session, nextpas.core.base, nextpas.core.exception;
 
 var
   TotalTests: Integer = 0;

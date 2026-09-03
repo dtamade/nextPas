@@ -3,11 +3,10 @@ program test_p2_pkcs12_simple;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.base;
+  nextpas.core.tls.openssl.base, nextpas.core.exception, nextpas.core.text.format, nextpas.core.platform.dl;
 
 type
   PPKCS12 = ^PKCS12;
@@ -45,13 +44,13 @@ end;
 
 procedure LoadPKCS12Functions;
 var
-  CryptoHandle: THandle;
+  CryptoHandle: TPlatformLibrary;
 begin
   CryptoHandle := GetCryptoLibHandle;
-  if CryptoHandle = 0 then Exit;
+  if CryptoHandle.IsInvalid then Exit;
 
-  PKCS12_new := TPKCS12_new(GetProcAddress(CryptoHandle, 'PKCS12_new'));
-  PKCS12_free := TPKCS12_free(GetProcAddress(CryptoHandle, 'PKCS12_free'));
+  PKCS12_new := TPKCS12_new(platform_dl_symbol(CryptoHandle, 'PKCS12_new'));
+  PKCS12_free := TPKCS12_free(platform_dl_symbol(CryptoHandle, 'PKCS12_free'));
 end;
 
 procedure TestPKCS12FunctionsAvailable;
@@ -108,8 +107,8 @@ begin
   WriteLn('Test Summary');
   WriteLn('============================================');
   WriteLn('Total Tests:  ', TotalTests);
-  WriteLn('Passed:       ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
-  WriteLn('Failed:       ', FailedTests, ' (', Format('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
+  WriteLn('Passed:       ', PassedTests, ' (', TextFormat('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
+  WriteLn('Failed:       ', FailedTests, ' (', TextFormat('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
   WriteLn('============================================');
 
   if FailedTests = 0 then

@@ -3,9 +3,8 @@ program test_chacha20;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv;
 
 type
   TTestResult = record
@@ -57,7 +56,7 @@ begin
   for i := 0 to 15 do
     iv[i] := Byte(i);
 
-  plaindata := BytesOf(PlainText);
+  plaindata := StringToUTF8Bytes(PlainText);
 
   // Get cipher
   cipher := EVP_get_cipherbyname(PAnsiChar(CipherName));

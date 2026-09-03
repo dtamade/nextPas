@@ -414,7 +414,7 @@ begin
   if Pos('BEGIN PRIVATE KEY', LKeyPEM) = 0 then
     Exit;
 
-  AFileName := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_ed25519.pem';
+  AFileName := GetTempDir() + 'nextpas_openssl_context_der_private_key_ed25519.pem';
   Result := WriteTempTextFile(AFileName, LKeyPEM);
 end;
 
@@ -450,14 +450,14 @@ begin
   if not BuildEncryptedPKCS8DERFromPEM(GEd25519PEMFile, ENCRYPTED_DER_PASSWORD, GEncryptedEd25519PKCS8DER) then
     raise Exception.Create('failed to generate encrypted Ed25519 PKCS#8 DER fixture');
 
-  GPKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_pkcs8.der';
-  GPKCS1DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_pkcs1.der';
-  GEncryptedPKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_encrypted_pkcs8.der';
-  GECSEC1DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_ec_sec1.der';
-  GECPKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_ec_pkcs8.der';
-  GEncryptedECPKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_encrypted_ec_pkcs8.der';
-  GEd25519PKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_ed25519_pkcs8.der';
-  GEncryptedEd25519PKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_encrypted_ed25519_pkcs8.der';
+  GPKCS8DERFile := GetTempDir() + 'nextpas_openssl_context_der_private_key_pkcs8.der';
+  GPKCS1DERFile := GetTempDir() + 'nextpas_openssl_context_der_private_key_pkcs1.der';
+  GEncryptedPKCS8DERFile := GetTempDir() + 'nextpas_openssl_context_der_private_key_encrypted_pkcs8.der';
+  GECSEC1DERFile := GetTempDir() + 'nextpas_openssl_context_der_private_key_ec_sec1.der';
+  GECPKCS8DERFile := GetTempDir() + 'nextpas_openssl_context_der_private_key_ec_pkcs8.der';
+  GEncryptedECPKCS8DERFile := GetTempDir() + 'nextpas_openssl_context_der_private_key_encrypted_ec_pkcs8.der';
+  GEd25519PKCS8DERFile := GetTempDir() + 'nextpas_openssl_context_der_private_key_ed25519_pkcs8.der';
+  GEncryptedEd25519PKCS8DERFile := GetTempDir() + 'nextpas_openssl_context_der_private_key_encrypted_ed25519_pkcs8.der';
 
   if not WriteTempBytesFile(GPKCS8DERFile, GPKCS8DER) then
     raise Exception.Create('failed to create PKCS#8 DER temp file');

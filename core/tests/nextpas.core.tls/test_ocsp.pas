@@ -3,8 +3,7 @@ program test_ocsp;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.tls.ocsp, nextpas.core.crypto.hash;
+  nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.tls.ocsp, nextpas.core.crypto.hash, nextpas.core.base, nextpas.core.time;
 
 var
   TestsPassed, TestsFailed: Integer;
@@ -296,10 +295,10 @@ begin
 
   // 设置值
   SingleResp.CertStatus := ocspRevoked;
-  SingleResp.RevokedTime := Now;
+  SingleResp.RevokedTime := DateTimeNow;
   SingleResp.RevokeReason := ocsprrKeyCompromise;
-  SingleResp.ThisUpdate := Now - 1;
-  SingleResp.NextUpdate := Now + 1;
+  SingleResp.ThisUpdate := DateTimeNow - 1;
+  SingleResp.NextUpdate := DateTimeNow + 1;
   SingleResp.HasNextUpdate := True;
 
   Check('设置 CertStatus', SingleResp.CertStatus = ocspRevoked);

@@ -13,11 +13,10 @@ program test_convenience_methods;
  *}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.openssl.backed;  // 确保 OpenSSL 后端注册
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.text;  // 确保 OpenSSL 后端注册
 
 var
   GTestsPassed: Integer = 0;

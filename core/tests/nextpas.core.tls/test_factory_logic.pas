@@ -31,9 +31,8 @@ program test_factory_logic;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.factory;
+  nextpas.core.tls.factory, nextpas.core.exception, nextpas.core.time;
 
 var
   GTestsPassed: Integer = 0;
@@ -525,7 +524,7 @@ end;
 begin
   WriteLn('=========================================');
   WriteLn('工厂模式逻辑测试');
-  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn('=========================================');
   WriteLn;
 

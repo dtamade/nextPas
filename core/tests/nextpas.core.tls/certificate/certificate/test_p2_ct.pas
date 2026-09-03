@@ -3,14 +3,13 @@ program test_p2_ct;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ct,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.consts;
+  nextpas.core.tls.openssl.api.consts, nextpas.core.exception, nextpas.core.text.format;
 
 var
   TotalTests: Integer = 0;
@@ -440,8 +439,8 @@ begin
   WriteLn('Test Summary');
   WriteLn('============================================');
   WriteLn('Total Tests:  ', TotalTests);
-  WriteLn('Passed:       ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
-  WriteLn('Failed:       ', FailedTests, ' (', Format('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
+  WriteLn('Passed:       ', PassedTests, ' (', TextFormat('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
+  WriteLn('Failed:       ', FailedTests, ' (', TextFormat('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
   WriteLn('============================================');
 
   if FailedTests = 0 then

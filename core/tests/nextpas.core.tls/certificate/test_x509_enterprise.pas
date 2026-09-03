@@ -2,7 +2,7 @@ program test_x509_enterprise;
 
 {$mode ObjFPC}{$H+}
 {$J-}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 {*
   企业级 X.509 证书模块测试
@@ -26,14 +26,13 @@ program test_x509_enterprise;
 *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.x509v3,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.text.format, nextpas.core.time;
 
 var
   TotalTests, PassedTests, FailedTests: Integer;
@@ -152,13 +151,13 @@ begin
   WriteLn;
   WriteLn('=== X.509 性能基准测试 ===');
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
   // 基线循环用于 API 可用性与吞吐估算
   for i := 1 to ITERATIONS do
   begin
     LResult := Assigned(@X509_new);
   end;
-  EndTime := Now;
+  EndTime := DateTimeNow;
 
   DurationMs := (EndTime - StartTime) * 24 * 60 * 60 * 1000;
 
@@ -167,8 +166,8 @@ begin
   else
     PerformanceRate := ITERATIONS * 1000000;
 
-  WriteLn(Format('处理 %d 个证书耗时: %.2f ms', [ITERATIONS, DurationMs]));
-  WriteLn(Format('平均性能: %.2f 证书/秒', [PerformanceRate]));
+  WriteLn(TextFormat('处理 %d 个证书耗时: %.2f ms', [ITERATIONS, DurationMs]));
+  WriteLn(TextFormat('平均性能: %.2f 证书/秒', [PerformanceRate]));
 
   Test('性能基准达标 (>= 1000 证书/秒)', PerformanceRate >= 1000);
 end;
@@ -262,11 +261,11 @@ begin
   WriteLn('=' + StringOfChar('=', 60));
   WriteLn('企业级测试结果总结');
   WriteLn('=' + StringOfChar('=', 60));
-  WriteLn(Format('总测试数: %d', [TotalTests]));
-  WriteLn(Format('通过: %d', [PassedTests]));
-  WriteLn(Format('失败: %d', [FailedTests]));
+  WriteLn(TextFormat('总测试数: %d', [TotalTests]));
+  WriteLn(TextFormat('通过: %d', [PassedTests]));
+  WriteLn(TextFormat('失败: %d', [FailedTests]));
   if TotalTests > 0 then
-    WriteLn(Format('通过率: %.1f%%', [PassedTests * 100.0 / TotalTests]))
+    WriteLn(TextFormat('通过率: %.1f%%', [PassedTests * 100.0 / TotalTests]))
   else
     WriteLn('通过率: 0.0%');
   WriteLn;

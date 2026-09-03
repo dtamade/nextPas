@@ -3,7 +3,7 @@ program benchmark_cert_verify_cache;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.x509,
@@ -11,7 +11,7 @@ uses
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.cert.verify.cache;
+  nextpas.core.tls.cert.verify.cache, nextpas.core.exception, nextpas.core.fs, nextpas.core.os.env, nextpas.core.path, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   TestCert: PX509;
@@ -120,7 +120,7 @@ begin
       Result.Valid := True;
       Result.ErrorCode := 0;
       Result.ErrorMessage := '';
-      Result.VerifiedAt := Now;
+      Result.VerifiedAt := DateTimeNow;
       Cache.Put(TestCert, Result);
     end;
   end;
@@ -129,9 +129,9 @@ begin
   Duration := EndTime - StartTime;
 
   WriteLn('  Iterations: ', GIterations);
-  WriteLn('  Time: ', Format('%.1f', [Duration]), ' ms');
-  WriteLn('  Avg: ', Format('%.3f', [SafeAverageMs(Duration, GIterations)]), ' ms/op');
-  WriteLn('  Throughput: ', Format('%.0f', [SafeThroughput(Duration, GIterations)]), ' ops/s');
+  WriteLn('  Time: ', TextFormat('%.1f', [Duration]), ' ms');
+  WriteLn('  Avg: ', TextFormat('%.3f', [SafeAverageMs(Duration, GIterations)]), ' ms/op');
+  WriteLn('  Throughput: ', TextFormat('%.0f', [SafeThroughput(Duration, GIterations)]), ' ops/s');
   WriteLn;
 
   // 测试 2：重复访问（缓存命中）
@@ -151,15 +151,15 @@ begin
   Duration := EndTime - StartTime;
 
   WriteLn('  Iterations: ', GIterations);
-  WriteLn('  Time: ', Format('%.1f', [Duration]), ' ms');
-  WriteLn('  Avg: ', Format('%.3f', [SafeAverageMs(Duration, GIterations)]), ' ms/op');
-  WriteLn('  Throughput: ', Format('%.0f', [SafeThroughput(Duration, GIterations)]), ' ops/s');
+  WriteLn('  Time: ', TextFormat('%.1f', [Duration]), ' ms');
+  WriteLn('  Avg: ', TextFormat('%.3f', [SafeAverageMs(Duration, GIterations)]), ' ms/op');
+  WriteLn('  Throughput: ', TextFormat('%.0f', [SafeThroughput(Duration, GIterations)]), ' ops/s');
   WriteLn;
 
   // 统计信息
   Cache.GetStats(Hits, Misses, Size);
   WriteLn('Cache Statistics:');
-  WriteLn('  Hit Rate: ', Format('%.1f', [Cache.GetHitRate]), '%');
+  WriteLn('  Hit Rate: ', TextFormat('%.1f', [Cache.GetHitRate]), '%');
   WriteLn('  Hits: ', Hits);
   WriteLn('  Misses: ', Misses);
   WriteLn('  Size: ', Size);
@@ -186,14 +186,14 @@ begin
   begin
     // 模拟证书验证耗时（实际约 10-50ms）
     // 这里用轻量级操作模拟
-    Sleep(0);  // 让出 CPU，模拟 I/O
+    MsSleep(0);  // 让出 CPU，模拟 I/O
     Result.Valid := True;
   end;
 
   EndTime := GetTickMs;
   WithoutCache := EndTime - StartTime;
 
-  WriteLn('  Time: ', Format('%.1f', [WithoutCache]), ' ms');
+  WriteLn('  Time: ', TextFormat('%.1f', [WithoutCache]), ' ms');
   WriteLn;
 
   // 使用缓存
@@ -204,7 +204,7 @@ begin
   Result.Valid := True;
   Result.ErrorCode := 0;
   Result.ErrorMessage := '';
-  Result.VerifiedAt := Now;
+  Result.VerifiedAt := DateTimeNow;
   Cache.Put(TestCert, Result);
 
   StartTime := GetTickMs;
@@ -218,7 +218,7 @@ begin
   EndTime := GetTickMs;
   WithCache := EndTime - StartTime;
 
-  WriteLn('  Time: ', Format('%.1f', [WithCache]), ' ms');
+  WriteLn('  Time: ', TextFormat('%.1f', [WithCache]), ' ms');
   WriteLn;
 
   // 计算加速比
@@ -232,9 +232,9 @@ begin
   else
     TimeSavedPercent := 0.0;
 
-  WriteLn('Speedup Factor: ', Format('%.1f', [Speedup]), 'x');
-  WriteLn('Time Saved: ', Format('%.1f', [WithoutCache - WithCache]), ' ms (',
-    Format('%.1f', [TimeSavedPercent]), '%)');
+  WriteLn('Speedup Factor: ', TextFormat('%.1f', [Speedup]), 'x');
+  WriteLn('Time Saved: ', TextFormat('%.1f', [WithoutCache - WithCache]), ' ms (',
+    TextFormat('%.1f', [TimeSavedPercent]), '%)');
   WriteLn;
 end;
 

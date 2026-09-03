@@ -6,12 +6,11 @@ program test_context_builder_server_name_compatibility_warning;
   WithSNI compatibility warnings on builder paths. }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.freepascal.lib,
-  nextpas.core.tls.logging;
+  nextpas.core.tls.logging, nextpas.core.exception, nextpas.core.text;
 
 type
   TWarningCaptureLogger = class(TBaseLogger)

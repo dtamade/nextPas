@@ -4,11 +4,10 @@ program test_actual_implementation;
 
 uses
   nextpas.core.tls.factory,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.utils,
   nextpas.core.tls.encoding,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 var
   GChecksPassed: Integer = 0;
   GChecksFailed: Integer = 0;
@@ -32,7 +31,7 @@ var
 begin
   WriteLn('=== Test 1: HashData Implementation ===');
 
-  LData := BytesOf('Hello, World!');
+  LData := StringToUTF8Bytes('Hello, World!');
 
   // Test SHA256
   LHash := TSSLHelper.HashData(LData, sslHashSHA256);
@@ -63,7 +62,7 @@ var
 begin
   WriteLn('=== Test 2: Base64 Encoding/Decoding ===');
 
-  LData := BytesOf('Test Data');
+  LData := StringToUTF8Bytes('Test Data');
 
   // Encode
   LBase64 := TEncodingUtils.Base64Encode(LData);
@@ -71,9 +70,9 @@ begin
 
   // Decode
   LDecoded := TEncodingUtils.Base64Decode(LBase64);
-  WriteLn('Decoded: ', StringOf(LDecoded));
+  WriteLn('Decoded: ', UTF8BytesToString(LDecoded));
 
-  if StringOf(LDecoded) = 'Test Data' then
+  if UTF8BytesToString(LDecoded) = 'Test Data' then
     MarkPass('Base64 encode/decode is implemented')
   else
     MarkFail('Base64 encode/decode failed');

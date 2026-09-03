@@ -3,8 +3,7 @@ program test_ecdsa_comprehensive;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.api;
+  nextpas.core.tls.openssl.api, nextpas.core.exception, nextpas.core.platform.dl, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.time;
 
 type
   TTestResult = record
@@ -115,54 +114,54 @@ var
 
 function LoadOpenSSL: Boolean;
 var
-  LibHandle: THandle;
+  LibHandle: TPlatformLibrary;
 begin
   Result := False;
-  LibHandle := LoadLibrary(CRYPTO_LIB);
-  if LibHandle = 0 then
+  if not platform_dl_load(CRYPTO_LIB, [dlfLazy], LibHandle) then LibHandle := PLATFORM_DL_NIL_LIBRARY;
+  if LibHandle.IsInvalid then
     Exit;
 
-  Pointer(OpenSSL_version) := GetProcAddress(LibHandle, 'OpenSSL_version');
+  Pointer(OpenSSL_version) := platform_dl_symbol(LibHandle, 'OpenSSL_version');
   Result := Assigned(OpenSSL_version);
 end;
 
 procedure LoadECDSAFunctions;
 var
-  LibHandle: THandle;
+  LibHandle: TPlatformLibrary;
 begin
-  LibHandle := LoadLibrary(CRYPTO_LIB);
-  if LibHandle = 0 then
+  if not platform_dl_load(CRYPTO_LIB, [dlfLazy], LibHandle) then LibHandle := PLATFORM_DL_NIL_LIBRARY;
+  if LibHandle.IsInvalid then
     raise Exception.Create('Failed to load ' + CRYPTO_LIB);
 
-  Pointer(EC_KEY_new) := GetProcAddress(LibHandle, 'EC_KEY_new');
-  Pointer(EC_KEY_free) := GetProcAddress(LibHandle, 'EC_KEY_free');
-  Pointer(EC_KEY_new_by_curve_name) := GetProcAddress(LibHandle, 'EC_KEY_new_by_curve_name');
-  Pointer(EC_KEY_generate_key) := GetProcAddress(LibHandle, 'EC_KEY_generate_key');
-  Pointer(EC_KEY_check_key) := GetProcAddress(LibHandle, 'EC_KEY_check_key');
-  Pointer(EC_KEY_get0_group) := GetProcAddress(LibHandle, 'EC_KEY_get0_group');
-  Pointer(EC_GROUP_get_curve_name) := GetProcAddress(LibHandle, 'EC_GROUP_get_curve_name');
-  Pointer(EC_GROUP_get_degree) := GetProcAddress(LibHandle, 'EC_GROUP_get_degree');
-  Pointer(ECDSA_sign) := GetProcAddress(LibHandle, 'ECDSA_sign');
-  Pointer(ECDSA_verify) := GetProcAddress(LibHandle, 'ECDSA_verify');
-  Pointer(ECDSA_size) := GetProcAddress(LibHandle, 'ECDSA_size');
-  Pointer(ECDSA_SIG_new) := GetProcAddress(LibHandle, 'ECDSA_SIG_new');
-  Pointer(ECDSA_SIG_free) := GetProcAddress(LibHandle, 'ECDSA_SIG_free');
-  Pointer(d2i_ECDSA_SIG) := GetProcAddress(LibHandle, 'd2i_ECDSA_SIG');
-  Pointer(i2d_ECDSA_SIG) := GetProcAddress(LibHandle, 'i2d_ECDSA_SIG');
-  Pointer(EVP_PKEY_set1_EC_KEY) := GetProcAddress(LibHandle, 'EVP_PKEY_set1_EC_KEY');
-  Pointer(EVP_PKEY_get0_EC_KEY) := GetProcAddress(LibHandle, 'EVP_PKEY_get0_EC_KEY');
-  Pointer(EVP_PKEY_CTX_new) := GetProcAddress(LibHandle, 'EVP_PKEY_CTX_new');
-  Pointer(EVP_PKEY_CTX_free) := GetProcAddress(LibHandle, 'EVP_PKEY_CTX_free');
-  Pointer(EVP_PKEY_sign_init) := GetProcAddress(LibHandle, 'EVP_PKEY_sign_init');
-  Pointer(EVP_PKEY_sign) := GetProcAddress(LibHandle, 'EVP_PKEY_sign');
-  Pointer(EVP_PKEY_verify_init) := GetProcAddress(LibHandle, 'EVP_PKEY_verify_init');
-  Pointer(EVP_PKEY_verify) := GetProcAddress(LibHandle, 'EVP_PKEY_verify');
-  Pointer(EVP_Digest) := GetProcAddress(LibHandle, 'EVP_Digest');
-  Pointer(EVP_sha256) := GetProcAddress(LibHandle, 'EVP_sha256');
-  Pointer(EVP_sha384) := GetProcAddress(LibHandle, 'EVP_sha384');
-  Pointer(EVP_sha512) := GetProcAddress(LibHandle, 'EVP_sha512');
-  Pointer(EVP_PKEY_new) := GetProcAddress(LibHandle, 'EVP_PKEY_new');
-  Pointer(EVP_PKEY_free) := GetProcAddress(LibHandle, 'EVP_PKEY_free');
+  Pointer(EC_KEY_new) := platform_dl_symbol(LibHandle, 'EC_KEY_new');
+  Pointer(EC_KEY_free) := platform_dl_symbol(LibHandle, 'EC_KEY_free');
+  Pointer(EC_KEY_new_by_curve_name) := platform_dl_symbol(LibHandle, 'EC_KEY_new_by_curve_name');
+  Pointer(EC_KEY_generate_key) := platform_dl_symbol(LibHandle, 'EC_KEY_generate_key');
+  Pointer(EC_KEY_check_key) := platform_dl_symbol(LibHandle, 'EC_KEY_check_key');
+  Pointer(EC_KEY_get0_group) := platform_dl_symbol(LibHandle, 'EC_KEY_get0_group');
+  Pointer(EC_GROUP_get_curve_name) := platform_dl_symbol(LibHandle, 'EC_GROUP_get_curve_name');
+  Pointer(EC_GROUP_get_degree) := platform_dl_symbol(LibHandle, 'EC_GROUP_get_degree');
+  Pointer(ECDSA_sign) := platform_dl_symbol(LibHandle, 'ECDSA_sign');
+  Pointer(ECDSA_verify) := platform_dl_symbol(LibHandle, 'ECDSA_verify');
+  Pointer(ECDSA_size) := platform_dl_symbol(LibHandle, 'ECDSA_size');
+  Pointer(ECDSA_SIG_new) := platform_dl_symbol(LibHandle, 'ECDSA_SIG_new');
+  Pointer(ECDSA_SIG_free) := platform_dl_symbol(LibHandle, 'ECDSA_SIG_free');
+  Pointer(d2i_ECDSA_SIG) := platform_dl_symbol(LibHandle, 'd2i_ECDSA_SIG');
+  Pointer(i2d_ECDSA_SIG) := platform_dl_symbol(LibHandle, 'i2d_ECDSA_SIG');
+  Pointer(EVP_PKEY_set1_EC_KEY) := platform_dl_symbol(LibHandle, 'EVP_PKEY_set1_EC_KEY');
+  Pointer(EVP_PKEY_get0_EC_KEY) := platform_dl_symbol(LibHandle, 'EVP_PKEY_get0_EC_KEY');
+  Pointer(EVP_PKEY_CTX_new) := platform_dl_symbol(LibHandle, 'EVP_PKEY_CTX_new');
+  Pointer(EVP_PKEY_CTX_free) := platform_dl_symbol(LibHandle, 'EVP_PKEY_CTX_free');
+  Pointer(EVP_PKEY_sign_init) := platform_dl_symbol(LibHandle, 'EVP_PKEY_sign_init');
+  Pointer(EVP_PKEY_sign) := platform_dl_symbol(LibHandle, 'EVP_PKEY_sign');
+  Pointer(EVP_PKEY_verify_init) := platform_dl_symbol(LibHandle, 'EVP_PKEY_verify_init');
+  Pointer(EVP_PKEY_verify) := platform_dl_symbol(LibHandle, 'EVP_PKEY_verify');
+  Pointer(EVP_Digest) := platform_dl_symbol(LibHandle, 'EVP_Digest');
+  Pointer(EVP_sha256) := platform_dl_symbol(LibHandle, 'EVP_sha256');
+  Pointer(EVP_sha384) := platform_dl_symbol(LibHandle, 'EVP_sha384');
+  Pointer(EVP_sha512) := platform_dl_symbol(LibHandle, 'EVP_sha512');
+  Pointer(EVP_PKEY_new) := platform_dl_symbol(LibHandle, 'EVP_PKEY_new');
+  Pointer(EVP_PKEY_free) := platform_dl_symbol(LibHandle, 'EVP_PKEY_free');
 end;
 
 procedure AddResult(const AName: string; ASuccess: Boolean; const AError: string = '');
@@ -226,7 +225,7 @@ begin
 
   WriteLn;
   PrintSeparator;
-  WriteLn(Format('Total: %d tests, %d passed, %d failed (%.1f%%)',
+  WriteLn(TextFormat('Total: %d tests, %d passed, %d failed (%.1f%%)',
     [TotalTests, PassedTests, TotalTests - PassedTests,
      (PassedTests / TotalTests) * 100]));
   PrintSeparator;
@@ -539,7 +538,7 @@ begin
       Continue;
     end;
 
-    start_time := Now();
+    start_time := DateTimeNow();
 
     if EC_KEY_generate_key(ec_key) <> 1 then
     begin
@@ -549,7 +548,7 @@ begin
       Continue;
     end;
 
-    end_time := Now();
+    end_time := DateTimeNow();
     duration_ms := (end_time - start_time) * 24 * 60 * 60 * 1000;
 
     group := EC_KEY_get0_group(ec_key);

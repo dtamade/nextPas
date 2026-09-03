@@ -16,13 +16,12 @@ program test_config_validation;
  *}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.freepascal.lib,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.exception, nextpas.core.text;
 
 var
   GTestsPassed: Integer = 0;

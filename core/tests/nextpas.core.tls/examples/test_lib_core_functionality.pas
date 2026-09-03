@@ -10,12 +10,11 @@ program test_lib_core_functionality;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.encoding,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.exception, nextpas.core.text.format;
 
 type
   TTestResult = record
@@ -138,7 +137,7 @@ begin
     LHash := TCryptoUtils.SHA256('test');
     if Length(LHash) <> 32 then
     begin
-      AddResult('SHA256', False, Format('Expected 32 bytes, got %d', [Length(LHash)]));
+      AddResult('SHA256', False, TextFormat('Expected 32 bytes, got %d', [Length(LHash)]));
       WriteLn('✗');
       Exit;
     end;
@@ -196,7 +195,7 @@ begin
       LLib := TSSLFactory.GetLibraryInstance(sslOpenSSL);
       if not LLib.Initialize then
       begin
-        AddResult('Multiple Init/Finalize', False, Format('Failed at iteration %d', [I]));
+        AddResult('Multiple Init/Finalize', False, TextFormat('Failed at iteration %d', [I]));
         WriteLn('✗');
         Exit;
       end;
@@ -272,7 +271,7 @@ begin
   WriteLn('================================================================');
   WriteLn('Test Summary:');
   WriteLn('  Total:  ', GTotalTests);
-  WriteLn('  Passed: ', GPassedTests, Format('  (%.1f%%)', [GPassedTests * 100.0 / GTotalTests]));
+  WriteLn('  Passed: ', GPassedTests, TextFormat('  (%.1f%%)', [GPassedTests * 100.0 / GTotalTests]));
   WriteLn('  Failed: ', GTotalTests - GPassedTests);
   WriteLn('================================================================');
   WriteLn;

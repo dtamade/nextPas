@@ -3,9 +3,8 @@ program test_crypto_utils_direct;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.utils,
-  nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.api.core, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   LData, LKey, LIV, LCipher, LDecrypt, LHash: TBytes;
@@ -15,7 +14,7 @@ begin
 
   try
     WriteLn('[1] Testing AES-GCM...');
-    LData := BytesOf('Hello!');
+    LData := StringToUTF8Bytes('Hello!');
     LKey := TCryptoUtils.GenerateKey(256);
     LIV := TCryptoUtils.GenerateIV(12);
 
@@ -23,7 +22,7 @@ begin
     WriteLn('  ✓ Encrypted: ', Length(LCipher), ' bytes');
 
     LDecrypt := TCryptoUtils.AES_GCM_Decrypt(LCipher, LKey, LIV);
-    WriteLn('  ✓ Decrypted: ', StringOf(LDecrypt));
+    WriteLn('  ✓ Decrypted: ', UTF8BytesToString(LDecrypt));
 
     WriteLn;
     WriteLn('[2] Testing SHA-256...');

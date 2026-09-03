@@ -3,9 +3,8 @@ program test_capability_matrix_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception;
 
 procedure Require(ACondition: Boolean; const AMessage: string);
 begin

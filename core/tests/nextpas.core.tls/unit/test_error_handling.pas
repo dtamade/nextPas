@@ -3,8 +3,7 @@ program test_error_handling;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.errors;
+  nextpas.core.tls.errors, nextpas.core.text.conv;
 
 type
   TStringResult = specialize TSSLResult<string>;

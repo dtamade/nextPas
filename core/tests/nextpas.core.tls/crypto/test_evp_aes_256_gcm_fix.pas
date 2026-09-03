@@ -3,15 +3,14 @@ program test_evp_aes_256_gcm_fix;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, DynLibs,
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.platform.dl;
 
 var
   LCipher: PEVP_CIPHER;
   LSuccess: Boolean;
   LTestsPassed, LTestsFailed: Integer;
-  LLibHandle: THandle;
+  LLibHandle: TPlatformLibrary;
 
 procedure RunTest(const ATestName: string; ACondition: Boolean);
 begin
@@ -38,18 +37,18 @@ begin
   // Test 1: Load OpenSSL library manually
   WriteLn('[Test 1] Loading OpenSSL library...');
   {$IFDEF MSWINDOWS}
-  LLibHandle := LoadLibrary('libcrypto-3.dll');
-  if LLibHandle = 0 then
-    LLibHandle := LoadLibrary('libcrypto-1_1.dll');
+  if not platform_dl_load('libcrypto-3.dll', [dlfLazy], LLibHandle) then LLibHandle := PLATFORM_DL_NIL_LIBRARY;
+  if LLibHandle.IsInvalid then
+    if not platform_dl_load('libcrypto-1_1.dll', [dlfLazy], LLibHandle) then LLibHandle := PLATFORM_DL_NIL_LIBRARY;
   {$ELSE}
-  LLibHandle := LoadLibrary('libcrypto.so.3');
-  if LLibHandle = 0 then
-    LLibHandle := LoadLibrary('libcrypto.so.1.1');
+  if not platform_dl_load('libcrypto.so.3', [dlfLazy], LLibHandle) then LLibHandle := PLATFORM_DL_NIL_LIBRARY;
+  if LLibHandle.IsInvalid then
+    if not platform_dl_load('libcrypto.so.1.1', [dlfLazy], LLibHandle) then LLibHandle := PLATFORM_DL_NIL_LIBRARY;
   {$ENDIF}
 
-  RunTest('  OpenSSL library loaded', LLibHandle <> 0);
+  RunTest('  OpenSSL library loaded', LLibHandle.IsValid);
 
-  if LLibHandle = 0 then
+  if LLibHandle.IsInvalid then
   begin
     WriteLn('  ERROR: Could not load OpenSSL library');
     WriteLn('  Please ensure OpenSSL 3.x is installed');
@@ -122,6 +121,6 @@ begin
   end;
 
   // Cleanup
-  if LLibHandle <> 0 then
-    FreeLibrary(LLibHandle);
+  if LLibHandle.IsValid then
+    platform_dl_release(LLibHandle);
 end.

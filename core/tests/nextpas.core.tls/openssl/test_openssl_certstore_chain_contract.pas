@@ -4,10 +4,9 @@ program test_openssl_certstore_chain_contract;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.factory;
+  nextpas.core.tls.factory, nextpas.core.exception, nextpas.core.text.conv;
 
 procedure AssertTrue(const AName: string; ACondition: Boolean; const ADetail: string = '');
 begin

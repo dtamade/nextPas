@@ -6,13 +6,11 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils,
-  Math,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.rotation,
   nextpas.core.tls.factory,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.math, nextpas.core.text.format;
 procedure Fail(const AMessage: string);
 begin
   WriteLn('❌ ', AMessage);
@@ -54,15 +52,15 @@ begin
     LMgr.Stop;
 
     LInfo := TSSLHelper.GetCertificateInfo(LCfg.CertificatePath);
-    LExpectedDays := Floor(LInfo.NotAfter - Now);
+    LExpectedDays := Floor(LInfo.NotAfter - DateTimeNow);
 
     LActualValid := LMgr.CheckExpiry(LDaysRemaining);
 
     AssertTrue(LActualValid, 'Expected valid certificate to be reported as valid');
     AssertTrue(LDaysRemaining > 0,
-      Format('Expected days remaining > 0, got %d', [LDaysRemaining]));
+      TextFormat('Expected days remaining > 0, got %d', [LDaysRemaining]));
     AssertTrue(Abs(LDaysRemaining - LExpectedDays) <= 1,
-      Format('DaysRemaining should track certificate NotAfter (expected around %d, got %d)',
+      TextFormat('DaysRemaining should track certificate NotAfter (expected around %d, got %d)',
         [LExpectedDays, LDaysRemaining]));
   finally
     LMgr.Free;
@@ -97,7 +95,7 @@ begin
     AssertTrue(not LActualValid,
       'CheckExpiry should return False when certificate path is invalid');
     AssertTrue(LDaysRemaining = 0,
-      Format('Expected 0 days remaining for missing certificate, got %d', [LDaysRemaining]));
+      TextFormat('Expected 0 days remaining for missing certificate, got %d', [LDaysRemaining]));
   finally
     LMgr.Free;
   end;

@@ -3,11 +3,10 @@ program test_p1_fixes;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.certificate,
-  nextpas.core.tls.openssl.base;
+  nextpas.core.tls.openssl.base, nextpas.core.fs;
 
 var
   Lib: TOpenSSLLibrary;

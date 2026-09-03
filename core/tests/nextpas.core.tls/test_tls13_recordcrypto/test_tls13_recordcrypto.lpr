@@ -3,9 +3,8 @@ program test_tls13_recordcrypto;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.recordcrypto,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.text.conv;
 
 function HexToBytes(const AHex: string): TBytes;
 var I: Integer;

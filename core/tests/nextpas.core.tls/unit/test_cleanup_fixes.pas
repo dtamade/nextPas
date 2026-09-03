@@ -3,10 +3,9 @@ program test_cleanup_fixes;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.secure,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.rand;
+  nextpas.core.tls.openssl.api.rand, nextpas.core.base, nextpas.core.exception;
 
 procedure TestSecureRandom;
 var

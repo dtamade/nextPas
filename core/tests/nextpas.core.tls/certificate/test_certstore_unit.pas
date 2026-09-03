@@ -8,10 +8,9 @@ program test_certstore_unit;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Math,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.fs, nextpas.core.math, nextpas.core.path, nextpas.core.text.format;
 
 var
   TestsPassed: Integer = 0;
@@ -238,8 +237,8 @@ begin
   Verified := LeafCert.Verify(Store);
   AssertTrue('Verify fails without CA loaded', not Verified);
 
-  TempCAFile := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    Format('nextpas_ssl_test_ca_%d.pem', [Random(1000000)]);
+  TempCAFile := IncludeTrailingPathDelimiter(GetTempDir()) +
+    TextFormat('nextpas_ssl_test_ca_%d.pem', [Random(1000000)]);
 
   AssertTrue('Write CA PEM to temp file', TCertificateUtils.SaveToFile(TempCAFile, CACertPEM));
   try

@@ -4,7 +4,6 @@ program test_openssl_chain_issuer_selection;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.cert.builder,
@@ -12,7 +11,7 @@ uses
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.stack,
-  nextpas.core.tls.openssl.x509.chain;
+  nextpas.core.tls.openssl.x509.chain, nextpas.core.base.utils, nextpas.core.exception;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin

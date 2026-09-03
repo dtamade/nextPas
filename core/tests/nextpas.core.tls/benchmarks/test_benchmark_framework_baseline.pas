@@ -3,8 +3,7 @@ program test_benchmark_framework_baseline;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  benchmark_framework;
+  benchmark_framework, nextpas.core.fs;
 
 var
   GPassed: Integer = 0;

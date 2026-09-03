@@ -3,12 +3,11 @@ program test_pkcs12_create_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.pkcs;
+  nextpas.core.tls.openssl.api.pkcs, nextpas.core.exception, nextpas.core.fs;
 
 var
   TotalTests: Integer = 0;
@@ -52,7 +51,7 @@ begin
   WriteLn('=== PKCS12 create symbol guard ===');
 
   LOriginalPKCS12Create := PKCS12_create;
-  LOutputFile := GetTempDir(False) + 'nextpas_pkcs12_create_symbol_contract.p12';
+  LOutputFile := GetTempDir() + 'nextpas_pkcs12_create_symbol_contract.p12';
   if FileExists(LOutputFile) then
     DeleteFile(LOutputFile);
 

@@ -4,14 +4,14 @@ program benchmark_crypto;
 {$CODEPAGE UTF8}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.rsa,
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.api.aes,
-  nextpas.core.tls.openssl.api.sha;
+  nextpas.core.tls.openssl.api.sha, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 const
   ITERATIONS_HASH = 10000;      // 哈希测试迭代次数
@@ -55,7 +55,7 @@ begin
     AvgTimeUS := 0;
   end;
 
-  WriteLn(Format('%-30s %8d ops in %6d ms | %10.2f ops/sec | %8.2f µs/op',
+  WriteLn(TextFormat('%-30s %8d ops in %6d ms | %10.2f ops/sec | %8.2f µs/op',
     [TestName, Iterations, ElapsedMS, OpsPerSec, AvgTimeUS]));
 end;
 
@@ -76,7 +76,7 @@ begin
     Exit;
   end;
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   for I := 1 to ITERATIONS_HASH do
   begin
@@ -90,7 +90,7 @@ begin
     end;
   end;
 
-  EndTime := Now;
+  EndTime := DateTimeNow;
   ElapsedMS := GetElapsedMS(StartTime, EndTime);
 
   WriteLn(' ✓');
@@ -98,7 +98,7 @@ begin
 
   // 计算吞吐量
   ThroughputMBs := (ITERATIONS_HASH * TEST_DATA_SIZE / 1024.0 / 1024.0) / (ElapsedMS / 1000.0);
-  WriteLn(Format('  Throughput: %.2f MB/s', [ThroughputMBs]));
+  WriteLn(TextFormat('  Throughput: %.2f MB/s', [ThroughputMBs]));
 end;
 
 procedure BenchmarkSHA512;
@@ -118,7 +118,7 @@ begin
     Exit;
   end;
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   for I := 1 to ITERATIONS_HASH do
   begin
@@ -132,14 +132,14 @@ begin
     end;
   end;
 
-  EndTime := Now;
+  EndTime := DateTimeNow;
   ElapsedMS := GetElapsedMS(StartTime, EndTime);
 
   WriteLn(' ✓');
   PrintResult('  SHA-512', ITERATIONS_HASH, ElapsedMS);
 
   ThroughputMBs := (ITERATIONS_HASH * TEST_DATA_SIZE / 1024.0 / 1024.0) / (ElapsedMS / 1000.0);
-  WriteLn(Format('  Throughput: %.2f MB/s', [ThroughputMBs]));
+  WriteLn(TextFormat('  Throughput: %.2f MB/s', [ThroughputMBs]));
 end;
 
 procedure BenchmarkAES256_CBC;
@@ -165,7 +165,7 @@ begin
   FillChar(Key, SizeOf(Key), $AA);
   FillChar(IV, SizeOf(IV), $BB);
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   for I := 1 to ITERATIONS_SYMMETRIC do
   begin
@@ -179,14 +179,14 @@ begin
     end;
   end;
 
-  EndTime := Now;
+  EndTime := DateTimeNow;
   ElapsedMS := GetElapsedMS(StartTime, EndTime);
 
   WriteLn(' ✓');
   PrintResult('  AES-256-CBC Encrypt', ITERATIONS_SYMMETRIC, ElapsedMS);
 
   ThroughputMBs := (ITERATIONS_SYMMETRIC * TEST_DATA_SIZE / 1024.0 / 1024.0) / (ElapsedMS / 1000.0);
-  WriteLn(Format('  Throughput: %.2f MB/s', [ThroughputMBs]));
+  WriteLn(TextFormat('  Throughput: %.2f MB/s', [ThroughputMBs]));
 end;
 
 procedure BenchmarkRSA2048_Sign;

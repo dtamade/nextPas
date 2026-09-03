@@ -3,9 +3,8 @@ program test_ocsp_pure;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.time,
-  nextpas.core.tls.ocsp.pure;
+  nextpas.core.tls.ocsp.pure, nextpas.core.base;
 
 var
   TestsPassed, TestsFailed: Integer;

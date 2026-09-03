@@ -19,8 +19,7 @@ program benchmark_ssl;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  benchmark_framework;
+  benchmark_framework, nextpas.core.base, nextpas.core.text.conv, nextpas.core.time;
 
 const
   { Test data sizes }

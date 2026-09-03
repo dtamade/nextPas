@@ -5,8 +5,7 @@ program test_tssllibrarydefaults_surface;
 uses
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.text;
 type
   TLogRecorder = class
   public

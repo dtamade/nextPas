@@ -7,8 +7,7 @@ program test_alpn_syntax;
   It does NOT perform functional testing. }
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.api.consts;
+  nextpas.core.tls.openssl.api.consts, nextpas.core.exception;
 
 var
   LTestsPassed: Integer = 0;

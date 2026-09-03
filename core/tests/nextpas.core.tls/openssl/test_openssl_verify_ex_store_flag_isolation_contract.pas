@@ -4,9 +4,8 @@ program test_openssl_verify_ex_store_flag_isolation_contract;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.factory;
+  nextpas.core.tls.factory, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv, nextpas.core.text.format;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin
@@ -67,11 +66,11 @@ begin
   LVerified := LExpiredLeaf.VerifyEx(LStore, [], LVerifyResult);
   Check(
     (not LVerified) and (not LVerifyResult.Success),
-    Format(
+    TextFormat(
       'IgnoreExpiry must not leak into subsequent calls on the same store; actual verified=%s success=%s error=%d msg=%s details=%s',
       [
-        BoolToStr(LVerified, True),
-        BoolToStr(LVerifyResult.Success, True),
+        BoolToStr(LVerified),
+        BoolToStr(LVerifyResult.Success),
         LVerifyResult.ErrorCode,
         LVerifyResult.ErrorMessage,
         LVerifyResult.DetailedInfo
@@ -113,11 +112,11 @@ begin
   LVerified := LSelfSignedLeaf.VerifyEx(LEmptyStore, [sslCertVerifyAllowSelfSigned], LVerifyResult);
   Check(
     LVerified and LVerifyResult.Success,
-    Format(
+    TextFormat(
       'Self-signed leaf with AllowSelfSigned should succeed; actual verified=%s success=%s error=%d msg=%s details=%s',
       [
-        BoolToStr(LVerified, True),
-        BoolToStr(LVerifyResult.Success, True),
+        BoolToStr(LVerified),
+        BoolToStr(LVerifyResult.Success),
         LVerifyResult.ErrorCode,
         LVerifyResult.ErrorMessage,
         LVerifyResult.DetailedInfo
@@ -128,11 +127,11 @@ begin
   LVerified := LSelfSignedLeaf.VerifyEx(LEmptyStore, [], LVerifyResult);
   Check(
     (not LVerified) and (not LVerifyResult.Success),
-    Format(
+    TextFormat(
       'AllowSelfSigned must not leak into subsequent calls on the same store; actual verified=%s success=%s error=%d msg=%s details=%s',
       [
-        BoolToStr(LVerified, True),
-        BoolToStr(LVerifyResult.Success, True),
+        BoolToStr(LVerified),
+        BoolToStr(LVerifyResult.Success),
         LVerifyResult.ErrorCode,
         LVerifyResult.ErrorMessage,
         LVerifyResult.DetailedInfo

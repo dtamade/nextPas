@@ -12,12 +12,11 @@ program test_new_api;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.factory,
   nextpas.core.tls.connection.builder,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv;
 var
   TestsPassed: Integer = 0;
   TestsFailed: Integer = 0;
@@ -81,7 +80,7 @@ begin
   WriteLn;
   WriteLn('=== Testing Try Methods ===');
 
-  Data := BytesOf('Test data');
+  Data := StringToUTF8Bytes('Test data');
 
   // Test TrySHA256 with TBytes
   OK := TCryptoUtils.TrySHA256(Data, Hash);
@@ -125,7 +124,7 @@ begin
   WriteLn;
   WriteLn('=== Testing Hash Consistency ===');
 
-  Data := BytesOf('Hello World');
+  Data := StringToUTF8Bytes('Hello World');
 
   // Test SHA256 produces consistent results
   TCryptoUtils.TrySHA256(Data, Hash1);

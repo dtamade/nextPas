@@ -2,11 +2,6 @@ program test_sockets_lowercase;
 
 {$mode objfpc}{$H+}
 
-uses
-  {$IFDEF UNIX}
-  sockets,
-  {$ENDIF}
-  nextpas.core.system.sysutils;
 
 begin
   {$IFDEF UNIX}

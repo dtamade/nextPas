@@ -3,7 +3,6 @@ program test_auto_backend_hardware_accel_preference_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.backend.selector,
@@ -23,7 +22,7 @@ uses
   , nextpas.core.tls.mbedtls.lib
   , nextpas.core.tls.wolfssl.lib
   {$ENDIF}
-  ;
+  , nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.format;
 
 const
   // Current selector formula:
@@ -118,7 +117,7 @@ begin
       LExpectedScore := ABaselineMatches[I].MatchScore;
 
     Require(LPreferredMatch.MatchScore = LExpectedScore,
-      Format('Backend %s score must follow hardware-accel preference truth (expected %d, got %d)',
+      TextFormat('Backend %s score must follow hardware-accel preference truth (expected %d, got %d)',
         [LibraryTypeToString(ABaselineMatches[I].BackendType), LExpectedScore, LPreferredMatch.MatchScore]));
   end;
 end;

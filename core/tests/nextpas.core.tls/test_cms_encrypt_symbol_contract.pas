@@ -3,12 +3,11 @@ program test_cms_encrypt_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.cms;
+  nextpas.core.tls.openssl.api.cms, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;
@@ -51,7 +50,7 @@ begin
   WriteLn;
   WriteLn('=== CMS encrypt symbol guard ===');
 
-  LData := BytesOf('cms-encrypt-symbol-contract');
+  LData := StringToUTF8Bytes('cms-encrypt-symbol-contract');
   LOriginalCMSEncrypt := CMS_encrypt;
 
   LEncryptRaised := False;

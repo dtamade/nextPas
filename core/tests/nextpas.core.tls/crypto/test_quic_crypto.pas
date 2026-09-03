@@ -4,10 +4,9 @@ program test_quic_crypto;
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.system.sysutils,
   nextpas.core.crypto.aesgcm,
   nextpas.core.errors,
-  nextpas.core.tls.quic.crypto;
+  nextpas.core.tls.quic.crypto, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   GPassCount: Integer = 0;
@@ -454,7 +453,7 @@ begin
   TestPacketProtectionHelpersRejectInvalidArguments;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPassCount, GFailCount]));
   if GFailCount > 0 then
     Halt(1);
 end.

@@ -3,8 +3,7 @@ program test_security;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.secure;
+  nextpas.core.tls.secure, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 procedure TestSecureString;
 var

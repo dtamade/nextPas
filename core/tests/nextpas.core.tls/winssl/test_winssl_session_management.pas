@@ -29,14 +29,11 @@ program test_winssl_session_management;
 }
 
 uses
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.winssl.base,
-  nextpas.core.tls.winssl.connection;
+  nextpas.core.tls.winssl.connection, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.time;
 
 var
   GTestsPassed: Integer = 0;
@@ -418,7 +415,7 @@ begin
       LManager.AddSession('long-timeout', LSession2);
 
       // 等待短超时 Session 过期
-      Sleep(1500);
+      MsSleep(1500);
 
       // 清理过期 Session
       LManager.CleanupExpired;
@@ -491,7 +488,7 @@ begin
 
     // 设置极短超时
     LSession.SetTimeout(1);
-    Sleep(1500);
+    MsSleep(1500);
 
     // 过期后 Session 可能无效（取决于实现）
     Assert(LSession.IsValid or not LSession.IsValid, 'Session 有效性检查可访问');

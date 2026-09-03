@@ -13,7 +13,7 @@ unit openssl_hmac_interface;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils;
+  nextpas.core.base;
 
 type
   THMACAlgorithm = (haMD5, haSHA1, haSHA224, haSHA256, haSHA384, haSHA512,

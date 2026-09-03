@@ -78,7 +78,7 @@ begin
   WriteLn;
   WriteLn('=== PEM certificate symbol guard ===');
 
-  LTempFile := GetTempDir(False) + 'nextpas_pem_certificate_symbol_contract.pem';
+  LTempFile := GetTempDir() + 'nextpas_pem_certificate_symbol_contract.pem';
   LTempOut := LTempFile + '.out';
   if not WriteTempTextFile(LTempFile, 'not-a-real-pem') then
   begin

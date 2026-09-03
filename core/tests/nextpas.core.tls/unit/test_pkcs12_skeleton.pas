@@ -4,7 +4,7 @@ program test_pkcs12_skeleton;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.pkcs12;
+   nextpas.core.tls.pkcs12, nextpas.core.base, nextpas.core.text;
 
 var
   LTotal, LPassed: Integer;

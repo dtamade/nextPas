@@ -3,9 +3,8 @@ program test_tls13_recordcrypto;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.wire,
-  nextpas.core.tls.tls13.recordcrypto;
+  nextpas.core.tls.tls13.recordcrypto, nextpas.core.base, nextpas.core.text.format;
 
 procedure Fail(const AMessage: string);
 begin
@@ -22,7 +21,7 @@ end;
 procedure AssertEqualsByte(AExpected, AActual: Byte; const AMessage: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
+    Fail(TextFormat('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
 end;
 
 function BytesEqual(const ALeft, ARight: TBytes): Boolean;

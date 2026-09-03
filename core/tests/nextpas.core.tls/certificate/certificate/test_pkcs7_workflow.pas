@@ -20,7 +20,6 @@ program test_pkcs7_workflow;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.pkcs7,
@@ -29,7 +28,7 @@ uses
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.stack,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader, nextpas.core.exception, nextpas.core.text, nextpas.core.text.format, nextpas.core.time;
 
 type
   { 工作流测试结果 }
@@ -48,7 +47,7 @@ var
 { 性能计时 }
 function GetTickCount64: QWord;
 begin
-  Result := {$IFDEF UNIX}GetTickCount{$ELSE}Windows.GetTickCount64{$ENDIF};
+  Result := nextpas.core.time.GetTickCount64;
 end;
 
 procedure StartTimer;
@@ -81,7 +80,7 @@ begin
   // 实时输出
   Write(ATestName, ': ');
   if ASuccess then
-    WriteLn('✅ PASS (', Format('%.1f', [ADuration]), ' ms)')
+    WriteLn('✅ PASS (', TextFormat('%.1f', [ADuration]), ' ms)')
   else
     WriteLn('❌ FAIL - ', AError);
 end;
@@ -593,10 +592,10 @@ begin
       TotalDuration := TotalDuration + TestResults[i].Duration;
 
     WriteLn('Total Tests:   ', TotalTests);
-    WriteLn('Passed:        ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
+    WriteLn('Passed:        ', PassedTests, ' (', TextFormat('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
     WriteLn('Failed:        ', TotalTests - PassedTests);
-    WriteLn('Total Time:    ', Format('%.1f', [TotalDuration]), ' ms');
-    WriteLn('Avg Time:      ', Format('%.1f', [TotalDuration / TotalTests]), ' ms/test');
+    WriteLn('Total Time:    ', TextFormat('%.1f', [TotalDuration]), ' ms');
+    WriteLn('Avg Time:      ', TextFormat('%.1f', [TotalDuration / TotalTests]), ' ms/test');
     WriteLn;
 
     // 性能分析
@@ -605,7 +604,7 @@ begin
     begin
       if TestResults[i].Success then
         WriteLn('  ', TestResults[i].TestName, ': ',
-          Format('%.1f', [TestResults[i].Duration]), ' ms');
+          TextFormat('%.1f', [TestResults[i].Duration]), ' ms');
     end;
     WriteLn;
 

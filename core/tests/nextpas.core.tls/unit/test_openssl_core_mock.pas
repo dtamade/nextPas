@@ -15,9 +15,9 @@ unit test_openssl_core_mock;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
+  nextpas.core.test,
   test_base,
-  openssl_core_interface;
+  openssl_core_interface, nextpas.core.platform.dl, nextpas.core.text;
 
 type
   { TTestOpenSSLCoreMock - True unit test with mocks }
@@ -212,7 +212,7 @@ end;
 
 procedure TTestOpenSSLCoreMock.TestGetCryptoHandle_ShouldReturnZero_WhenNotLoaded;
 var
-  Handle: TLibHandle;
+  Handle: TPlatformLibrary;
 begin
   // Given
   // (Not loaded)
@@ -221,12 +221,12 @@ begin
   Handle := FCore.GetCryptoLibHandle;
 
   // Then
-  CheckEqual(NilHandle, Handle, 'Handle should be NilHandle when not loaded');
+  CheckTrue(Handle.IsInvalid, 'Handle should be NilHandle when not loaded');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetCryptoHandle_ShouldReturnNonZero_WhenLoaded;
 var
-  Handle: TLibHandle;
+  Handle: TPlatformLibrary;
 begin
   // Given
   FCore.LoadLibrary;
@@ -235,12 +235,12 @@ begin
   Handle := FCore.GetCryptoLibHandle;
 
   // Then
-  CheckTrue(Handle <> NilHandle, 'Handle should be non-zero when loaded');
+  CheckTrue(Handle.IsValid, 'Handle should be non-zero when loaded');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetSSLHandle_ShouldReturnZero_WhenNotLoaded;
 var
-  Handle: TLibHandle;
+  Handle: TPlatformLibrary;
 begin
   // Given
   // (Not loaded)
@@ -249,12 +249,12 @@ begin
   Handle := FCore.GetSSLLibHandle;
 
   // Then
-  CheckEqual(NilHandle, Handle, 'Handle should be NilHandle when not loaded');
+  CheckTrue(Handle.IsInvalid, 'Handle should be NilHandle when not loaded');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetSSLHandle_ShouldReturnNonZero_WhenLoaded;
 var
-  Handle: TLibHandle;
+  Handle: TPlatformLibrary;
 begin
   // Given
   FCore.LoadLibrary;
@@ -263,7 +263,7 @@ begin
   Handle := FCore.GetSSLLibHandle;
 
   // Then
-  CheckTrue(Handle <> NilHandle, 'Handle should be non-zero when loaded');
+  CheckTrue(Handle.IsValid, 'Handle should be non-zero when loaded');
 end;
 
 procedure TTestOpenSSLCoreMock.TestLoad_ShouldHandleMultipleFailures;

@@ -3,10 +3,9 @@ program test_openssl_certificate_metadata_truth;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.text.conv;
 
 const
   ECDSA_CA_FIXTURE = 'tests/certificate/test_certs/signer_ecdsa_cert.pem';
@@ -124,7 +123,7 @@ begin
     'Actual=' + IntToStr(LActualInfo.PublicKeySize) + ' Expected=' + IntToStr(LTruthInfo.PublicKeySize));
   Check('ECDSA CA fixture GetInfo exposes IsCA truth',
     LActualInfo.IsCA = LTruthInfo.IsCA,
-    'Actual=' + BoolToStr(LActualInfo.IsCA, True) + ' Expected=' + BoolToStr(LTruthInfo.IsCA, True));
+    'Actual=' + BoolToStr(LActualInfo.IsCA) + ' Expected=' + BoolToStr(LTruthInfo.IsCA));
   Check('ECDSA CA fixture GetInfo path length matches parser truth',
     LActualInfo.PathLength = LTruthInfo.PathLength,
     'Actual=' + IntToStr(LActualInfo.PathLength) + ' Expected=' + IntToStr(LTruthInfo.PathLength));

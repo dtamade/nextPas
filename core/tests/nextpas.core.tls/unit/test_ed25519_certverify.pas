@@ -4,7 +4,7 @@ program test_ed25519_certverify;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.tls13.servercertverify, nextpas.core.tls.x509;
+   nextpas.core.tls.tls13.servercertverify, nextpas.core.tls.x509, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv;
 
 var
   LTotal, LPassed: Integer;

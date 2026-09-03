@@ -8,7 +8,6 @@ program test_dsa_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -16,7 +15,7 @@ uses
   nextpas.core.tls.openssl.api.dsa,
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -45,7 +44,7 @@ begin
       begin
         KeyBits := DSA_bits(Dsa);
         Runner.Check('Generate DSA key pair', True,
-                Format('Key size: %d bits', [KeyBits]));
+                TextFormat('Key size: %d bits', [KeyBits]));
         Runner.Check('Verify key size', KeyBits = 1024);
       end
       else
@@ -67,7 +66,7 @@ begin
       begin
         KeyBits := DSA_bits(Dsa);
         Runner.Check('Generate 2048-bit DSA key', KeyBits = 2048,
-                Format('Key size: %d bits', [KeyBits]));
+                TextFormat('Key size: %d bits', [KeyBits]));
       end
       else
         Runner.Check('Generate 2048-bit DSA key', False);
@@ -123,18 +122,18 @@ begin
     SigLen := SizeOf(Signature);
     if DSA_sign(0, @Digest[0], 20, @Signature[0], @SigLen, Dsa) = 1 then
     begin
-      Runner.Check('Sign digest', True, Format('Generated %d byte signature', [SigLen]));
+      Runner.Check('Sign digest', True, TextFormat('Generated %d byte signature', [SigLen]));
 
       // Verify the signature
       VerifyResult := DSA_verify(0, @Digest[0], 20, @Signature[0], SigLen, Dsa);
       Runner.Check('Verify signature', VerifyResult = 1,
-              Format('Verification result: %d', [VerifyResult]));
+              TextFormat('Verification result: %d', [VerifyResult]));
 
       // Test tamper detection: modify digest
       Digest[0] := Digest[0] xor $FF;
       VerifyResult := DSA_verify(0, @Digest[0], 20, @Signature[0], SigLen, Dsa);
       Runner.Check('Detect tampered data', VerifyResult = 0,
-              Format('Tamper detection result: %d (should be 0)', [VerifyResult]));
+              TextFormat('Tamper detection result: %d (should be 0)', [VerifyResult]));
     end
     else
       Runner.Check('Sign digest', False, 'DSA_sign failed');
@@ -197,7 +196,7 @@ begin
       // Verify signature
       VerifyResult := DSA_do_verify(@Digest[0], 20, Sig, Dsa);
       Runner.Check('DSA_do_verify verification', VerifyResult = 1,
-              Format('Verification result: %d', [VerifyResult]));
+              TextFormat('Verification result: %d', [VerifyResult]));
 
       DSA_SIG_free(Sig);
     end
@@ -226,7 +225,7 @@ begin
     begin
       SigSize := DSA_size(Dsa);
       Runner.Check('1024-bit signature size', SigSize > 0,
-              Format('Max signature size: %d bytes', [SigSize]));
+              TextFormat('Max signature size: %d bytes', [SigSize]));
     end;
     DSA_free(Dsa);
   end;
@@ -240,7 +239,7 @@ begin
     begin
       SigSize := DSA_size(Dsa);
       Runner.Check('2048-bit signature size', SigSize > 0,
-              Format('Max signature size: %d bytes', [SigSize]));
+              TextFormat('Max signature size: %d bytes', [SigSize]));
     end;
     DSA_free(Dsa);
   end;

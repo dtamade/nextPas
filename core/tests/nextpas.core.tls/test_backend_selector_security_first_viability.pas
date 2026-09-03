@@ -3,12 +3,11 @@ program test_backend_selector_security_first_viability;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.backend.selector,
   nextpas.core.tls.openssl.backed,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.exception;
 
 var
   GTestsPassed: Integer = 0;

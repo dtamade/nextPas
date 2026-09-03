@@ -3,9 +3,8 @@ program test_capability_deserialization_truth_precedence;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.capability.serializer;
+  nextpas.core.tls.capability.serializer, nextpas.core.text.format, nextpas.core.text.conv;
 
 procedure Fail(const AMessage: string);
 begin
@@ -16,15 +15,15 @@ end;
 procedure AssertEqualBool(AExpected, AActual: Boolean; const AField: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s mismatch: expected=%s actual=%s',
-      [AField, BoolToStr(AExpected, True), BoolToStr(AActual, True)]));
+    Fail(TextFormat('%s mismatch: expected=%s actual=%s',
+      [AField, BoolToStr(AExpected), BoolToStr(AActual)]));
 end;
 
 procedure AssertEqualLevel(AExpected, AActual: TSSLFeatureSupportLevel;
   const AField: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s mismatch: expected=%d actual=%d',
+    Fail(TextFormat('%s mismatch: expected=%d actual=%d',
       [AField, Ord(AExpected), Ord(AActual)]));
 end;
 

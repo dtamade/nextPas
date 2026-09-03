@@ -3,10 +3,9 @@ program test_tls13_aead;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.aead,
   nextpas.core.tls.tls13.wire,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv;
 
 function HexToBytes(const AHex: string): TBytes;
 var I: Integer;

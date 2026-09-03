@@ -16,7 +16,7 @@ unit openssl_kdf_interface;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils;
+  nextpas.core.base;
 
 type
   // KDF算法类型

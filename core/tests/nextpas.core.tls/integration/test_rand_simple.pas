@@ -8,13 +8,12 @@ program test_rand_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, ctypes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.rand,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -53,7 +52,7 @@ begin
       Runner.Check('RAND status', True, 'OpenSSL 3.0 auto-seeds');
   end
   else
-    Runner.Check('RAND status', False, Format('Unknown status: %d', [status]));
+    Runner.Check('RAND status', False, TextFormat('Unknown status: %d', [status]));
 end;
 
 procedure TestRANDBytesBasic;
@@ -99,7 +98,7 @@ begin
       Inc(same_count);
 
   Runner.Check('Buffers are different', same_count < 10,
-          Format('Same bytes: %d/32', [same_count]));
+          TextFormat('Same bytes: %d/32', [same_count]));
 end;
 
 procedure TestRANDBytesSizes;
@@ -161,7 +160,7 @@ begin
 
   variance := max_count - min_count;
   Runner.Check('Distribution variance reasonable', variance < 20,
-          Format('Min=%d, Max=%d, Variance=%d', [min_count, max_count, variance]));
+          TextFormat('Min=%d, Max=%d, Variance=%d', [min_count, max_count, variance]));
 end;
 
 begin

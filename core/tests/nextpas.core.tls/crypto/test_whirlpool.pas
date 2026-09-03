@@ -3,11 +3,10 @@ program test_whirlpool;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 type
   TTestResult = record
@@ -104,7 +103,7 @@ var
 begin
   WriteLn('Testing Whirlpool Basic...');
 
-  Data := BytesOf('The quick brown fox jumps over the lazy dog');
+  Data := StringToUTF8Bytes('The quick brown fox jumps over the lazy dog');
   Hash := HashDataEVP('whirlpool', Data);
 
   if Length(Hash) = 0 then
@@ -192,9 +191,9 @@ begin
       Exit;
     end;
 
-    Part1 := BytesOf('The quick ');
-    Part2 := BytesOf('brown fox ');
-    Part3 := BytesOf('jumps over the lazy dog');
+    Part1 := StringToUTF8Bytes('The quick ');
+    Part2 := StringToUTF8Bytes('brown fox ');
+    Part3 := StringToUTF8Bytes('jumps over the lazy dog');
 
     if EVP_DigestUpdate(ctx, @Part1[0], Length(Part1)) <> 1 then
     begin

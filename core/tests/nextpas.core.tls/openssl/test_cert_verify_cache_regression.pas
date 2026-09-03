@@ -3,7 +3,6 @@ program test_cert_verify_cache_regression;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.evp,
@@ -11,7 +10,7 @@ uses
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.cert.verify.cache;
+  nextpas.core.tls.cert.verify.cache, nextpas.core.exception, nextpas.core.platform.dl, nextpas.core.text.format, nextpas.core.time;
 
 var
   TestsPassed: Integer = 0;
@@ -71,7 +70,7 @@ begin
     Res.Valid := True;
     Res.ErrorCode := 0;
     Res.ErrorMessage := '';
-    Res.VerifiedAt := Now;
+    Res.VerifiedAt := DateTimeNow;
     Cache.Put(nil, Res);
 
     Cache.GetStats(Hits, Misses, Size);
@@ -104,14 +103,14 @@ begin
     Res.Valid := True;
     Res.ErrorCode := 0;
     Res.ErrorMessage := '';
-    Res.VerifiedAt := Now;
+    Res.VerifiedAt := DateTimeNow;
 
     Cache.Put(TestCert, Res);
     Cache.GetStats(Hits, Misses, Size);
     if Size = 1 then
       LogPass('Put(cert) adds one cache entry')
     else
-      LogFail(Format('Put(cert) expected size=1, got %d', [Size]));
+      LogFail(TextFormat('Put(cert) expected size=1, got %d', [Size]));
 
     if Cache.TryGet(TestCert, Got) and Got.Valid then
       LogPass('TryGet(cert) hits and returns stored result')
@@ -131,7 +130,7 @@ end;
 
 function InitializeOpenSSLForTest: Boolean;
 var
-  CryptoLib: TLibHandle;
+  CryptoLib: TPlatformLibrary;
 begin
   Result := False;
 
@@ -139,7 +138,7 @@ begin
     LoadOpenSSLCore;
 
     CryptoLib := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-    if CryptoLib = NilHandle then
+    if CryptoLib.IsInvalid then
       Exit;
 
     LoadOpenSSLBIO;

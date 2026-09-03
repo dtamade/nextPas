@@ -3,8 +3,7 @@ program test_aead_comprehensive;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.api;
+  nextpas.core.tls.openssl.api, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 type
   TTestResult = record
@@ -66,7 +65,7 @@ begin
 
   WriteLn;
   PrintSeparator;
-  WriteLn(Format('Total: %d tests, %d passed, %d failed (%.1f%%)',
+  WriteLn(TextFormat('Total: %d tests, %d passed, %d failed (%.1f%%)',
     [TotalTests, PassedTests, TotalTests - PassedTests,
      (PassedTests / TotalTests) * 100]));
   PrintSeparator;

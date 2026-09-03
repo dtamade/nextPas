@@ -5,7 +5,6 @@ program test_tsslcontextconfig_surface;
 uses
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.freepascal.lib;
 procedure AssertTrue(const AName: string; AValue: Boolean);
 begin

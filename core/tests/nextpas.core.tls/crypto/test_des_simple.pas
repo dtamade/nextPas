@@ -3,9 +3,8 @@ program test_des_simple;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.des;
+  nextpas.core.tls.openssl.api.des, nextpas.core.exception;
 
 begin
   WriteLn('========================================');

@@ -3,12 +3,11 @@ program test_cms_verify_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.cms;
+  nextpas.core.tls.openssl.api.cms, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;
@@ -51,7 +50,7 @@ begin
   WriteLn;
   WriteLn('=== CMS verify symbol guard ===');
 
-  LData := BytesOf('cms-verify-symbol-contract');
+  LData := StringToUTF8Bytes('cms-verify-symbol-contract');
   LOriginalCMSVerify := CMS_verify;
 
   LVerifyRaised := False;

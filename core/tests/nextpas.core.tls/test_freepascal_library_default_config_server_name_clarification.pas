@@ -6,10 +6,9 @@ program test_freepascal_library_default_config_server_name_clarification;
   TSSLConfig.ServerName compatibility on the FreePascal direct-library path. }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.exception, nextpas.core.text;
 
 type
   TLogRecorder = class

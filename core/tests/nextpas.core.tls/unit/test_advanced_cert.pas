@@ -3,9 +3,8 @@ program test_advanced_cert;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.cert.advanced,
-  nextpas.core.tls.cert.builder;
+  nextpas.core.tls.cert.builder, nextpas.core.exception;
 
 procedure TestOCSPClient;
 var

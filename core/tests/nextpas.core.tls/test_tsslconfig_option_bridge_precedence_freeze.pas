@@ -7,10 +7,9 @@ program test_tsslconfig_option_bridge_precedence_freeze;
   cannot silently drift back into an unspecified surface. }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.exception;
 var
   GTestsPassed: Integer = 0;
   GTestsFailed: Integer = 0;

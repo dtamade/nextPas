@@ -3,12 +3,11 @@ program test_cms_helper_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.cms;
+  nextpas.core.tls.openssl.api.cms, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;
@@ -64,7 +63,7 @@ begin
   WriteLn;
   WriteLn('=== CMS helper BIO guard ===');
 
-  LData := BytesOf('not-a-real-cms-payload');
+  LData := StringToUTF8Bytes('not-a-real-cms-payload');
 
   LOriginalBIONewMemBuf := BIO_new_mem_buf;
   LOriginalBIONew := BIO_new;

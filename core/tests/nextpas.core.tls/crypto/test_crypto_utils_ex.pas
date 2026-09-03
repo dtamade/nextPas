@@ -3,8 +3,7 @@ program test_crypto_utils_ex;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.crypto.utils;
+  nextpas.core.tls.crypto.utils, nextpas.core.base, nextpas.core.text.conv;
 
 var
   Key, IV, Data, AAD: TBytes;
@@ -27,8 +26,8 @@ begin
   // Initialize data
   Key := TCryptoUtils.GenerateKey(256);
   IV := TCryptoUtils.GenerateIV(12);
-  Data := BytesOf('Hello, World!');
-  AAD := BytesOf('header');
+  Data := StringToUTF8Bytes('Hello, World!');
+  AAD := StringToUTF8Bytes('header');
 
   // Test EncryptEx
   EncResult := TCryptoUtils.AES_GCM_EncryptEx(Data, Key, IV, AAD);

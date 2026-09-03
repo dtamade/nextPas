@@ -4,10 +4,8 @@ program test_cert_store;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.classes,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.factory;
+  nextpas.core.tls.factory, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.format;
 
 var
   Factory: ISSLLibrary;
@@ -158,7 +156,7 @@ begin
     WriteLn('Passed: ', Passed);
     WriteLn('Failed: ', Failed);
     WriteLn('Total:  ', Passed + Failed);
-    WriteLn('Success Rate: ', Format('%.1f%%', [(Passed / (Passed + Failed)) * 100]));
+    WriteLn('Success Rate: ', TextFormat('%.1f%%', [(Passed / (Passed + Failed)) * 100]));
     WriteLn('==========================================================');
 
     if Failed = 0 then

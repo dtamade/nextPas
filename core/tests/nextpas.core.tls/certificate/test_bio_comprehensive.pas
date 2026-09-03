@@ -3,7 +3,7 @@ program test_bio_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.bio;
+  nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.bio, nextpas.core.text;
 
 var
   TestsPassed, TestsFailed: Integer;

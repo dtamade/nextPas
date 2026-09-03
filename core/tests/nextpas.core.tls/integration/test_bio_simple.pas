@@ -8,13 +8,12 @@ program test_bio_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, ctypes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -55,16 +54,16 @@ begin
 
   bytes_written := BIO_write(bio, PAnsiChar(test_data), Length(test_data));
   Runner.Check('Write to memory BIO', bytes_written = Length(test_data),
-          Format('%d bytes written', [bytes_written]));
+          TextFormat('%d bytes written', [bytes_written]));
 
   pending := BIO_pending(bio);
   Runner.Check('Check pending data', pending = Length(test_data),
-          Format('%d bytes pending', [pending]));
+          TextFormat('%d bytes pending', [pending]));
 
   FillChar(read_buf, SizeOf(read_buf), 0);
   bytes_read := BIO_read(bio, @read_buf[0], SizeOf(read_buf));
   Runner.Check('Read from memory BIO', bytes_read = Length(test_data),
-          Format('%d bytes read', [bytes_read]));
+          TextFormat('%d bytes read', [bytes_read]));
 
   BIO_free(bio);
 end;
@@ -87,11 +86,11 @@ begin
 
   // Use BIO_write instead of BIO_puts (which is not exported)
   bytes_written := BIO_write(bio, PAnsiChar(test_line), Length(test_line));
-  Runner.Check('Write line data', bytes_written > 0, Format('%d bytes', [bytes_written]));
+  Runner.Check('Write line data', bytes_written > 0, TextFormat('%d bytes', [bytes_written]));
 
   FillChar(read_buf, SizeOf(read_buf), 0);
   bytes_read := BIO_read(bio, @read_buf[0], SizeOf(read_buf));
-  Runner.Check('Read line data', bytes_read > 0, Format('%d bytes', [bytes_read]));
+  Runner.Check('Read line data', bytes_read > 0, TextFormat('%d bytes', [bytes_read]));
 
   BIO_free(bio);
 end;
@@ -122,7 +121,7 @@ begin
   Runner.Check('Reset BIO', BIO_ctrl(bio, BIO_CTRL_RESET, 0, nil) >= 0);
 
   pending := BIO_pending(bio);
-  Runner.Check('Data pending after reset', pending = 0, Format('%d bytes', [pending]));
+  Runner.Check('Data pending after reset', pending = 0, TextFormat('%d bytes', [pending]));
 
   BIO_free(bio);
 end;
@@ -146,7 +145,7 @@ begin
   FillChar(read_buf, SizeOf(read_buf), 0);
   bytes_read := BIO_read(bio, @read_buf[0], SizeOf(read_buf));
   Runner.Check('Read from buffer BIO', bytes_read = Length(test_data),
-          Format('%d bytes', [bytes_read]));
+          TextFormat('%d bytes', [bytes_read]));
 
   // Check EOF by trying to read again (should return 0 or -1)
   bytes_read := BIO_read(bio, @read_buf[0], SizeOf(read_buf));
@@ -172,7 +171,7 @@ begin
 
   bytes_written := BIO_write(bio, PAnsiChar(test_data), Length(test_data));
   Runner.Check('Write to null BIO', bytes_written = Length(test_data),
-          Format('%d bytes discarded', [bytes_written]));
+          TextFormat('%d bytes discarded', [bytes_written]));
 
   BIO_free(bio);
 end;

@@ -4,8 +4,7 @@ program test_pem_der_conversion;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.cert.utils;
+  nextpas.core.tls.cert.utils, nextpas.core.base, nextpas.core.exception, nextpas.core.text;
 
 var
   GPassed, GFailed: Integer;

@@ -3,7 +3,6 @@ program test_backend_callback_capability_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib
@@ -22,7 +21,7 @@ uses
   , nextpas.core.tls.mbedtls.lib
   , nextpas.core.tls.wolfssl.lib
   {$ENDIF}
-  ;
+  , nextpas.core.exception, nextpas.core.text.format;
 
 procedure Require(ACondition: Boolean; const AMessage: string);
 begin
@@ -46,11 +45,11 @@ begin
 
   LActual := LLib.GetCapabilities.SupportsCallbacks;
   Require(LActual = AExpected,
-    Format('%s SupportsCallbacks mismatch: expected=%s actual=%s',
-      [SSL_LIBRARY_NAMES[ABackend], BoolToStr(AExpected, True), BoolToStr(LActual, True)]));
+    TextFormat('%s SupportsCallbacks mismatch: expected=%s actual=%s',
+      [SSL_LIBRARY_NAMES[ABackend], BoolToStr(AExpected), BoolToStr(LActual)]));
 
   WriteLn('[PASS] ', SSL_LIBRARY_NAMES[ABackend], ' SupportsCallbacks = ',
-    BoolToStr(LActual, True));
+    BoolToStr(LActual));
 end;
 
 procedure CheckOpenSSLBackendCapability;
@@ -71,10 +70,10 @@ begin
   LExpected := OpenSSLPublishedContextCallbackSurfaceReady;
   LActual := LLib.GetCapabilities.SupportsCallbacks;
   Require(LActual = LExpected,
-    Format('OpenSSL SupportsCallbacks mismatch: expected=%s actual=%s',
-      [BoolToStr(LExpected, True), BoolToStr(LActual, True)]));
+    TextFormat('OpenSSL SupportsCallbacks mismatch: expected=%s actual=%s',
+      [BoolToStr(LExpected), BoolToStr(LActual)]));
 
-  WriteLn('[PASS] OpenSSL SupportsCallbacks = ', BoolToStr(LActual, True));
+  WriteLn('[PASS] OpenSSL SupportsCallbacks = ', BoolToStr(LActual));
 end;
 
 procedure CheckOpenSSLCallbackRuntimeGateContract;

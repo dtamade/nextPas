@@ -3,7 +3,6 @@ program test_get_proc;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.platform.dl,
   nextpas.core.tls.openssl.api.core;
 

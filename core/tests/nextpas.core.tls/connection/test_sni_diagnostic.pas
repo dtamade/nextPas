@@ -3,12 +3,12 @@ program test_sni_diagnostic;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, DynLibs,
+  nextpas.core.platform.dl, nextpas.core.text.conv,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ssl;
 
 var
-  SSLLib: TLibHandle;
+  SSLLib: TPlatformLibrary;
   FuncPtr: Pointer;
 
 begin
@@ -35,41 +35,41 @@ begin
 
   // Get SSL library handle
   SSLLib := GetSSLLibHandle;
-  if SSLLib = 0 then
+  if SSLLib.IsInvalid then
   begin
     WriteLn('[ERROR] Could not get SSL library handle');
     Halt(1);
   end;
 
-  WriteLn('[OK] SSL library handle obtained: ', IntToHex(SSLLib, 16));
+  WriteLn('[OK] SSL library handle obtained: ', IntToHex(PtrUInt(SSLLib.Handle), 16));
   WriteLn;
 
   // Check for SNI functions
-  FuncPtr := GetProcAddress(SSLLib, 'SSL_CTX_set_tlsext_servername_callback');
+  FuncPtr := platform_dl_symbol(SSLLib, 'SSL_CTX_set_tlsext_servername_callback');
   if FuncPtr <> nil then
     WriteLn('[OK] SSL_CTX_set_tlsext_servername_callback found at: ', IntToHex(PtrUInt(FuncPtr), 16))
   else
     WriteLn('[MISSING] SSL_CTX_set_tlsext_servername_callback not found');
 
-  FuncPtr := GetProcAddress(SSLLib, 'SSL_CTX_set_tlsext_servername_arg');
+  FuncPtr := platform_dl_symbol(SSLLib, 'SSL_CTX_set_tlsext_servername_arg');
   if FuncPtr <> nil then
     WriteLn('[OK] SSL_CTX_set_tlsext_servername_arg found at: ', IntToHex(PtrUInt(FuncPtr), 16))
   else
     WriteLn('[MISSING] SSL_CTX_set_tlsext_servername_arg not found');
 
-  FuncPtr := GetProcAddress(SSLLib, 'SSL_set_tlsext_host_name');
+  FuncPtr := platform_dl_symbol(SSLLib, 'SSL_set_tlsext_host_name');
   if FuncPtr <> nil then
     WriteLn('[OK] SSL_set_tlsext_host_name found at: ', IntToHex(PtrUInt(FuncPtr), 16))
   else
     WriteLn('[MISSING] SSL_set_tlsext_host_name not found (Note: This is a macro, not a function)');
 
-  FuncPtr := GetProcAddress(SSLLib, 'SSL_get_servername');
+  FuncPtr := platform_dl_symbol(SSLLib, 'SSL_get_servername');
   if FuncPtr <> nil then
     WriteLn('[OK] SSL_get_servername found at: ', IntToHex(PtrUInt(FuncPtr), 16))
   else
     WriteLn('[MISSING] SSL_get_servername not found');
 
-  FuncPtr := GetProcAddress(SSLLib, 'SSL_get_servername_type');
+  FuncPtr := platform_dl_symbol(SSLLib, 'SSL_get_servername_type');
   if FuncPtr <> nil then
     WriteLn('[OK] SSL_get_servername_type found at: ', IntToHex(PtrUInt(FuncPtr), 16))
   else

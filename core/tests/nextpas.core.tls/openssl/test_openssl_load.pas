@@ -4,7 +4,6 @@ program test_openssl_load;
 {$CODEPAGE UTF8}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Windows,
   // OpenSSL 类型和常量
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -59,7 +58,7 @@ uses
   nextpas.core.tls.openssl.api.modes,
   nextpas.core.tls.openssl.api.cmac.evp,  // Phase 2.2: 使用EVP API替代废弃的cmac.pas
   // 国密算法
-  nextpas.core.tls.openssl.api.sm;
+  nextpas.core.tls.openssl.api.sm, nextpas.core.exception, nextpas.core.platform.dl, nextpas.core.text.format;
 
 type
   TModuleTest = record
@@ -153,7 +152,7 @@ end;
 
 procedure TestModule(const Module: TModuleTest);
 begin
-  Write(Format('  %-30s: ', [Module.Name]));
+  Write(TextFormat('  %-30s: ', [Module.Name]));
 
   try
     // 加载模块
@@ -186,8 +185,8 @@ const
   LIBCRYPTO_NAME_3 = 'libcrypto-3-x64.dll';
 begin
   // 尝试加载 OpenSSL 3.0
-  LibSSL := LoadLibrary(LIBSSL_NAME_3);
-  LibCrypto := LoadLibrary(LIBCRYPTO_NAME_3);
+  if not platform_dl_load(LIBSSL_NAME_3, [dlfLazy], LibSSL) then LibSSL := PLATFORM_DL_NIL_LIBRARY;
+  if not platform_dl_load(LIBCRYPTO_NAME_3, [dlfLazy], LibCrypto) then LibCrypto := PLATFORM_DL_NIL_LIBRARY;
 
   // 如果失败，尝试加载 OpenSSL 1.1
   if (LibSSL = 0) or (LibCrypto = 0) then
@@ -195,8 +194,8 @@ begin
     if LibSSL <> 0 then FreeLibrary(LibSSL);
     if LibCrypto <> 0 then FreeLibrary(LibCrypto);
 
-    LibSSL := LoadLibrary(LIBSSL_NAME);
-    LibCrypto := LoadLibrary(LIBCRYPTO_NAME);
+    if not platform_dl_load(LIBSSL_NAME, [dlfLazy], LibSSL) then LibSSL := PLATFORM_DL_NIL_LIBRARY;
+    if not platform_dl_load(LIBCRYPTO_NAME, [dlfLazy], LibCrypto) then LibCrypto := PLATFORM_DL_NIL_LIBRARY;
   end;
 
   if (LibSSL = 0) or (LibCrypto = 0) then
@@ -222,10 +221,10 @@ begin
   WriteLn('========================================');
   WriteLn('           测试结果汇总');
   WriteLn('========================================');
-  WriteLn(Format('  总模块数: %d', [Total]));
-  WriteLn(Format('  成功加载: %d', [SuccessCount]));
-  WriteLn(Format('  加载失败: %d', [FailCount]));
-  WriteLn(Format('  成功率:   %.1f%%', [SuccessRate]));
+  WriteLn(TextFormat('  总模块数: %d', [Total]));
+  WriteLn(TextFormat('  成功加载: %d', [SuccessCount]));
+  WriteLn(TextFormat('  加载失败: %d', [FailCount]));
+  WriteLn(TextFormat('  成功率:   %.1f%%', [SuccessRate]));
   WriteLn('========================================');
 
   if FailCount > 0 then
@@ -240,7 +239,7 @@ begin
   if Assigned(OpenSSL_version_num) then
   begin
     Version := OpenSSL_version_num();
-    WriteLn(Format('OpenSSL 版本号: 0x%x', [Version]));
+    WriteLn(TextFormat('OpenSSL 版本号: 0x%x', [Version]));
   end;
 
   if Assigned(OpenSSL_version) then

@@ -4,9 +4,8 @@ program test_tls13_record_e2e;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  nextpas.core.system.sysutils,
   nextpas.core.crypto.aesgcm,
-  nextpas.core.tls.tls13.recordcrypto;
+  nextpas.core.tls.tls13.recordcrypto, nextpas.core.base, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   GPass, GFail: Integer;
@@ -105,19 +104,19 @@ begin
     LOk := PurePascalAESGCMEncrypt(LKey, LNonce, LInner, LAAD, LCiphertext, LTag);
     if not LOk then
     begin
-      Check(Format('record %d encrypt', [I]), False);
+      Check(TextFormat('record %d encrypt', [I]), False);
       Continue;
     end;
 
     LOk := PurePascalAESGCMDecrypt(LKey, LNonce, LCiphertext, LTag, LAAD, LDecrypted);
     if not LOk then
     begin
-      Check(Format('record %d decrypt', [I]), False);
+      Check(TextFormat('record %d decrypt', [I]), False);
       Continue;
     end;
 
     LOk := TryParseTLS13InnerPlaintext(LDecrypted, LFragment, LContentType);
-    Check(Format('record %d roundtrip', [I]), LOk and (BytesToHex(LFragment) = BytesToHex(LMsg)));
+    Check(TextFormat('record %d roundtrip', [I]), LOk and (BytesToHex(LFragment) = BytesToHex(LMsg)));
 
     IncrementTLS13Sequence(LSeq);
   end;
@@ -207,7 +206,7 @@ begin
   TestWrongKey;
 
   WriteLn;
-  WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPass, GFail]));
   if GFail > 0 then
     Halt(1);
 end.

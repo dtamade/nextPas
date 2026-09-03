@@ -3,13 +3,12 @@ program test_auto_backend_pkcs11_capability_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.backend.selector,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.freepascal.lib,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.text;
 
 procedure Require(ACondition: Boolean; const AMessage: string);
 begin

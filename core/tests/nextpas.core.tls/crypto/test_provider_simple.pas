@@ -3,9 +3,8 @@ program test_provider_simple;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.provider;
+  nextpas.core.tls.openssl.api.provider, nextpas.core.exception;
 
 begin
   WriteLn('========================================');

@@ -4,7 +4,6 @@ program test_crypto_basics;
 {$CODEPAGE UTF8}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Windows,
   // OpenSSL 模块
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.err,
@@ -15,7 +14,7 @@ uses
   nextpas.core.tls.openssl.api.aes,
   nextpas.core.tls.openssl.api.hmac,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.pem;
+  nextpas.core.tls.openssl.api.pem, nextpas.core.base, nextpas.core.exception, nextpas.core.platform.dl, nextpas.core.text.conv;
 
 var
   LibCrypto: THandle;
@@ -56,7 +55,7 @@ begin
   Result := False;
   try
     Input := 'Hello, OpenSSL!';
-    InputBytes := BytesOf(Input);
+    InputBytes := StringToUTF8Bytes(Input);
 
     // 计算 SHA256
     if not Assigned(SHA256) then Exit;
@@ -92,8 +91,8 @@ begin
   try
     Key := 'secret_key';
     Data := 'message to authenticate';
-    KeyBytes := BytesOf(Key);
-    DataBytes := BytesOf(Data);
+    KeyBytes := StringToUTF8Bytes(Key);
+    DataBytes := StringToUTF8Bytes(Data);
     HashLen := 32;
 
     // 计算 HMAC-SHA256
@@ -143,7 +142,7 @@ begin
     if Ctx = nil then Exit;
 
     try
-      PlainBytes := BytesOf(PlainText);
+      PlainBytes := StringToUTF8Bytes(PlainText);
       SetLength(CipherBytes, Length(PlainBytes) + 16); // 预留空间
 
       // 初始化加密
@@ -180,7 +179,7 @@ begin
       if EVP_DecryptFinal_ex(Ctx, @DecryptedBytes[OutLen], FinalLen) <> 1 then Exit;
       SetLength(DecryptedBytes, OutLen + FinalLen);
 
-      DecryptedText := StringOf(DecryptedBytes);
+      DecryptedText := UTF8BytesToString(DecryptedBytes);
       WriteLn('    解密结果匹配: ', (DecryptedText = PlainText));
 
       Result := DecryptedText = PlainText;
@@ -237,7 +236,7 @@ begin
 
       // 准备消息
       Message := 'This is a message to be signed with RSA';
-      MessageBytes := BytesOf(Message);
+      MessageBytes := StringToUTF8Bytes(Message);
 
       // 创建签名上下文
       if not Assigned(EVP_MD_CTX_new) then Exit;
@@ -328,11 +327,11 @@ const
   LIBCRYPTO_NAME_3 = 'libcrypto-3-x64.dll';
 begin
   // 尝试加载 OpenSSL 3.0
-  LibCrypto := LoadLibrary(LIBCRYPTO_NAME_3);
+  if not platform_dl_load(LIBCRYPTO_NAME_3, [dlfLazy], LibCrypto) then LibCrypto := PLATFORM_DL_NIL_LIBRARY;
 
   // 如果失败，尝试加载 OpenSSL 1.1
   if LibCrypto = 0 then
-    LibCrypto := LoadLibrary(LIBCRYPTO_NAME);
+    if not platform_dl_load(LIBCRYPTO_NAME, [dlfLazy], LibCrypto) then LibCrypto := PLATFORM_DL_NIL_LIBRARY;
 
   if LibCrypto = 0 then
   begin

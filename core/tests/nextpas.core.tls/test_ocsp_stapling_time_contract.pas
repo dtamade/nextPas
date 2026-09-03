@@ -3,12 +3,11 @@ program test_ocsp_stapling_time_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.time,
   nextpas.core.tls.ocsp,
   nextpas.core.tls.ocsp.cache,
   nextpas.core.tls.ocsp.stapling,
-  nextpas.core.tls.x509;
+  nextpas.core.tls.x509, nextpas.core.base, nextpas.core.text.format;
 
 var
   GPassCount: Integer = 0;
@@ -116,7 +115,7 @@ begin
   TestStaplingClientEmptyResponseContract;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPassCount, GFailCount]));
   if GFailCount > 0 then
     Halt(1);
 end.

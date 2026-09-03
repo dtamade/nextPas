@@ -15,8 +15,7 @@ program test_mbedtls_simple_connection;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  TypInfo,
+  nextpas.core.exception,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.context,
@@ -117,7 +116,7 @@ begin
       if LState = sslHsCompleted then
       begin
         WriteLn('   ✅ Handshake successful!');
-        WriteLn('   Protocol Version: ', GetEnumName(TypeInfo(TSSLProtocolVersion), Ord(LConn.GetProtocolVersion)));
+        WriteLn('   Protocol Version: ', ProtocolVersionToString(LConn.GetProtocolVersion));
         WriteLn('   Cipher: ', LConn.GetCipherName);
         WriteLn('   Peer Certificate: ', LConn.GetPeerCertificate <> nil);
         WriteLn('   Verify Result: ', LConn.GetVerifyResult);

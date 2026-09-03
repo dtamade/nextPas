@@ -8,7 +8,6 @@ program test_rsa_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, Math,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -17,7 +16,7 @@ uses
   nextpas.core.tls.openssl.api.rsa,
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.base, nextpas.core.math, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -60,7 +59,7 @@ begin
         KeySize := RSA_size(Rsa);
         Bits := RSA_bits(Rsa);
         Runner.Check('Generate 1024-bit RSA key', (KeySize = 128) and (Bits = 1024),
-                Format('Key size: %d bytes (%d bits)', [KeySize, Bits]));
+                TextFormat('Key size: %d bytes (%d bits)', [KeySize, Bits]));
       end
       else
         Runner.Check('Generate 1024-bit RSA key', False, 'Key generation failed');
@@ -81,7 +80,7 @@ begin
         KeySize := RSA_size(Rsa);
         Bits := RSA_bits(Rsa);
         Runner.Check('Generate 2048-bit RSA key', (KeySize = 256) and (Bits = 2048),
-                Format('Key size: %d bytes (%d bits)', [KeySize, Bits]));
+                TextFormat('Key size: %d bytes (%d bits)', [KeySize, Bits]));
       end
       else
         Runner.Check('Generate 2048-bit RSA key', False, 'Key generation failed');
@@ -103,7 +102,7 @@ begin
         KeySize := RSA_size(Rsa);
         Bits := RSA_bits(Rsa);
         Runner.Check('Generate 4096-bit RSA key', (KeySize = 512) and (Bits = 4096),
-                Format('Key size: %d bytes (%d bits)', [KeySize, Bits]));
+                TextFormat('Key size: %d bytes (%d bits)', [KeySize, Bits]));
       end
       else
         Runner.Check('Generate 4096-bit RSA key', False, 'Key generation failed');
@@ -166,9 +165,9 @@ begin
         n_bits := BN_num_bits(n);
         e_bits := BN_num_bits(e);
         Runner.Check('Verify modulus size', n_bits = 2048,
-                Format('Modulus: %d bits', [n_bits]));
+                TextFormat('Modulus: %d bits', [n_bits]));
         Runner.Check('Verify exponent', e_bits = 17,
-                Format('Exponent: %d bits (65537 = 2^16+1)', [e_bits]));
+                TextFormat('Exponent: %d bits (65537 = 2^16+1)', [e_bits]));
       end;
 
       // Test 6: Access private key factors (p, q)
@@ -182,7 +181,7 @@ begin
       begin
         Runner.Check('Verify factor sizes',
                 (BN_num_bits(p) > 1000) and (BN_num_bits(q) > 1000),
-                Format('p: %d bits, q: %d bits', [BN_num_bits(p), BN_num_bits(q)]));
+                TextFormat('p: %d bits, q: %d bits', [BN_num_bits(p), BN_num_bits(q)]));
       end;
 
       // Test 7: Individual accessors
@@ -245,7 +244,7 @@ begin
     if RSA_sign(NID_sha256, @hash[0], Length(hash), @sig[0], @siglen, Rsa) = 1 then
     begin
       Runner.Check('RSA sign operation', True,
-              Format('Signature: %d bytes', [siglen]));
+              TextFormat('Signature: %d bytes', [siglen]));
 
       // Test 9: Verify correct signature
       Runner.Check('RSA verify correct signature',
@@ -316,7 +315,7 @@ begin
     if ct_len > 0 then
     begin
       Runner.Check('RSA PKCS#1 encrypt', True,
-              Format('Encrypted %d bytes to %d bytes', [Length(plaintext), ct_len]));
+              TextFormat('Encrypted %d bytes to %d bytes', [Length(plaintext), ct_len]));
 
       dec_len := RSA_private_decrypt(ct_len, @ciphertext[0],
                                      @decrypted[0], Rsa, RSA_PKCS1_PADDING);
@@ -325,7 +324,7 @@ begin
       begin
         SetString(recovered, PAnsiChar(@decrypted[0]), dec_len);
         Runner.Check('RSA PKCS#1 decrypt', recovered = plaintext,
-                Format('Recovered: "%s"', [recovered]));
+                TextFormat('Recovered: "%s"', [recovered]));
       end
       else
         Runner.Check('RSA PKCS#1 decrypt', False);
@@ -341,7 +340,7 @@ begin
     if ct_len > 0 then
     begin
       Runner.Check('RSA OAEP encrypt', True,
-              Format('Encrypted %d bytes to %d bytes', [Length(plaintext), ct_len]));
+              TextFormat('Encrypted %d bytes to %d bytes', [Length(plaintext), ct_len]));
 
       dec_len := RSA_private_decrypt(ct_len, @ciphertext[0],
                                      @decrypted[0], Rsa, RSA_PKCS1_OAEP_PADDING);
@@ -350,7 +349,7 @@ begin
       begin
         SetString(recovered, PAnsiChar(@decrypted[0]), dec_len);
         Runner.Check('RSA OAEP decrypt', recovered = plaintext,
-                Format('Recovered: "%s"', [recovered]));
+                TextFormat('Recovered: "%s"', [recovered]));
       end
       else
         Runner.Check('RSA OAEP decrypt', False);
@@ -372,7 +371,7 @@ begin
         SetString(recovered, PAnsiChar(@decrypted[0]), dec_len);
         Runner.Check('RSA max plaintext size (PKCS#1)',
                 Length(recovered) = Length(plaintext),
-                Format('Max size: %d bytes', [Length(plaintext)]));
+                TextFormat('Max size: %d bytes', [Length(plaintext)]));
       end;
     end
     else
@@ -425,7 +424,7 @@ begin
     if ct_len > 0 then
     begin
       Runner.Check('RSA private encrypt', True,
-              Format('Encrypted %d bytes', [ct_len]));
+              TextFormat('Encrypted %d bytes', [ct_len]));
 
       dec_len := RSA_public_decrypt(ct_len, @ciphertext[0],
                                     @decrypted[0], Rsa, RSA_PKCS1_PADDING);
@@ -434,7 +433,7 @@ begin
       begin
         SetString(recovered, PAnsiChar(@decrypted[0]), dec_len);
         Runner.Check('RSA public decrypt', recovered = plaintext,
-                Format('Recovered: "%s"', [recovered]));
+                TextFormat('Recovered: "%s"', [recovered]));
       end
       else
         Runner.Check('RSA public decrypt', False);

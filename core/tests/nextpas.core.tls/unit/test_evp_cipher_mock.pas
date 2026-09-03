@@ -17,8 +17,8 @@ unit test_evp_cipher_mock;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
-  openssl_evp_cipher_interface;
+  nextpas.core.test,
+  openssl_evp_cipher_interface, nextpas.core.base, nextpas.core.text.conv;
 
 type
   { TTestEVPCipherMock - Test suite for EVP cipher mock }

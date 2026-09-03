@@ -3,14 +3,13 @@ program test_tls13_resumption;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.keyschedule,
-  nextpas.core.tls.tls13.appschedule;
+  nextpas.core.tls.tls13.appschedule, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv, nextpas.core.text.format;
 
 procedure Fail(const AMessage: string);
 begin
@@ -27,13 +26,13 @@ end;
 procedure AssertEqualsInt(AExpected, AActual: Int64; const AMessage: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
+    Fail(TextFormat('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
 end;
 
 procedure AssertEqualsWord(AExpected, AActual: Word; const AMessage: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s (expected=0x%.4x actual=0x%.4x)', [AMessage, AExpected, AActual]));
+    Fail(TextFormat('%s (expected=0x%.4x actual=0x%.4x)', [AMessage, AExpected, AActual]));
 end;
 
 function HexNibble(AChar: Char): Byte;

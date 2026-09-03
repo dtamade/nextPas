@@ -3,7 +3,7 @@ program test_p2_pkcs7;
 {$mode delphi}
 
 uses
-  nextpas.core.system.sysutils, ctypes,  // For clong type
+    // For clong type
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api,  // For MBSTRING_ASC constant
@@ -18,7 +18,7 @@ uses
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.err,
   nextpas.core.tls.openssl.api.pkcs7,
-  nextpas.core.tls.openssl.api.consts;  // For BIO_CTRL_RESET
+  nextpas.core.tls.openssl.api.consts, nextpas.core.base, nextpas.core.exception, nextpas.core.text.format;  // For BIO_CTRL_RESET
 
 const
   TEST_DATA = 'This is test data for PKCS7 signing and encryption.';
@@ -581,11 +581,11 @@ begin
   WriteLn('                             Test Results Summary');
   WriteLn('================================================================================');
   WriteLn;
-  WriteLn(Format('Total Tests:  %d', [TestsPassed + TestsFailed + TestsSkipped]));
-  WriteLn(Format('Passed:       %d', [TestsPassed]));
-  WriteLn(Format('Failed:       %d', [TestsFailed]));
-  WriteLn(Format('Skipped:      %d', [TestsSkipped]));
-  WriteLn(Format('Skip breakdown: dependency=%d, version=%d, environment=%d, capability=%d, other=%d, stack-partial=%d',
+  WriteLn(TextFormat('Total Tests:  %d', [TestsPassed + TestsFailed + TestsSkipped]));
+  WriteLn(TextFormat('Passed:       %d', [TestsPassed]));
+  WriteLn(TextFormat('Failed:       %d', [TestsFailed]));
+  WriteLn(TextFormat('Skipped:      %d', [TestsSkipped]));
+  WriteLn(TextFormat('Skip breakdown: dependency=%d, version=%d, environment=%d, capability=%d, other=%d, stack-partial=%d',
     [SkipDependency, SkipVersion, SkipEnvironment, SkipCapability, SkipOther, SkipStackPartialCount]));
 
   if TestsSkipped = 0 then
@@ -604,7 +604,7 @@ begin
   else
   begin
     WriteLn;
-    WriteLn(Format('Result: %d TEST(S) FAILED [FAIL]', [TestsFailed]));
+    WriteLn(TextFormat('Result: %d TEST(S) FAILED [FAIL]', [TestsFailed]));
     WriteLn;
     WriteLn('================================================================================');
     Halt(1);

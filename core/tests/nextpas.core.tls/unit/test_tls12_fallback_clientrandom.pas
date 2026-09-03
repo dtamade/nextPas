@@ -1,10 +1,9 @@
 program test_tls12_fallback_clientrandom;
 {$mode objfpc}{$H+}{$J-}
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.wire,
-  nextpas.core.tls.crypto.x25519;
+  nextpas.core.tls.crypto.x25519, nextpas.core.base;
 
 var
   GTotal: Integer = 0;

@@ -3,10 +3,9 @@ program test_phase2_simple;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.aead;
+  nextpas.core.tls.openssl.api.aead, nextpas.core.base, nextpas.core.exception, nextpas.core.text.format;
 
 var
   TotalTests, PassedTests: Integer;
@@ -174,7 +173,7 @@ begin
 
     WriteLn;
     WriteLn('========================================');
-    WriteLn(Format('Results: %d/%d tests passed (%.1f%%)',
+    WriteLn(TextFormat('Results: %d/%d tests passed (%.1f%%)',
       [PassedTests, TotalTests, (PassedTests / TotalTests) * 100]));
     WriteLn('========================================');
     WriteLn;

@@ -3,14 +3,13 @@ program test_tls13_handshake_sim;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.crypto.aesgcm,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.text.conv;
 
 function BytesToHex(const AData: TBytes): string;
 var I: Integer;

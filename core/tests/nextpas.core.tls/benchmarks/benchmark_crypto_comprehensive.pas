@@ -21,9 +21,8 @@ program benchmark_crypto_comprehensive;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   benchmark_framework,
-  nextpas.core.tls.crypto.utils;
+  nextpas.core.tls.crypto.utils, nextpas.core.base, nextpas.core.path, nextpas.core.text.conv;
 
 const
   { Test data sizes }

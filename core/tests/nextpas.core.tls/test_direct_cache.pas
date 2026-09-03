@@ -3,12 +3,11 @@ program test_direct_cache;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.time.cpu,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.wolfssl.lib,
-  nextpas.core.tls.mbedtls.lib;
+  nextpas.core.tls.mbedtls.lib, nextpas.core.exception;
 
 procedure TestCache(Lib: ISSLLibrary; const Name: string);
 var

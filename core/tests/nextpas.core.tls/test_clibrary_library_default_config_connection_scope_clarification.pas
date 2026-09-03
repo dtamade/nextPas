@@ -3,13 +3,12 @@ program test_clibrary_library_default_config_connection_scope_clarification;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.mbedtls.lib,
-  nextpas.core.tls.wolfssl.lib;
+  nextpas.core.tls.wolfssl.lib, nextpas.core.exception, nextpas.core.text;
 
 type
   TConfigMutator = procedure(var AConfig: TSSLConfig);

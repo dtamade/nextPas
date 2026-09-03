@@ -15,12 +15,9 @@ program test_mbedtls_cert_errors;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
-  TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
-  tls_test_sockets;
+  tls_test_sockets, nextpas.core.exception, nextpas.core.text.format;
 
 type
   TTestResult = record
@@ -226,7 +223,7 @@ begin
           begin
             WriteLn('✅ Fingerprint retrieved');
             AddResult('Cert Pinning', True,
-              Format('Fingerprint length: %d', [Length(LFingerprint)]));
+              TextFormat('Fingerprint length: %d', [Length(LFingerprint)]));
           end
           else
           begin

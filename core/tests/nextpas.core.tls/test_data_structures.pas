@@ -31,8 +31,7 @@ program test_data_structures;
 }
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base, nextpas.core.exception, nextpas.core.math, nextpas.core.time;
 
 var
   GTestsPassed: Integer = 0;
@@ -76,10 +75,10 @@ begin
   Assert(LCertInfo.SerialNumber = '123456', 'SerialNumber 字段可访问');
 
   // 测试日期字段
-  LCertInfo.NotBefore := Now;
+  LCertInfo.NotBefore := DateTimeNow;
   Assert(LCertInfo.NotBefore > 0, 'NotBefore 字段可访问');
 
-  LCertInfo.NotAfter := Now + 365;
+  LCertInfo.NotAfter := DateTimeNow + 365;
   Assert(LCertInfo.NotAfter > LCertInfo.NotBefore, 'NotAfter 字段可访问');
 
   // 测试整数字段
@@ -526,7 +525,7 @@ end;
 begin
   WriteLn('=========================================');
   WriteLn('数据结构测试');
-  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn('=========================================');
   WriteLn;
 

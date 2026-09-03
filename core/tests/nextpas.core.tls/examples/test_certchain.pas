@@ -1,16 +1,14 @@
 program test_certchain;
 
 {$mode objfpc}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   tls_test_sockets,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.certchain;
+  nextpas.core.tls.certchain, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.format, nextpas.core.time;
 
 procedure TestCertificateChainValidation;
 var
@@ -128,8 +126,8 @@ begin
       for i := 0 to High(CertChain) do
       begin
         CertInfo := CertChain[i].GetInfo;
-        WriteLn(Format('  [%d] Subject: %s', [i, CertInfo.Subject]));
-        WriteLn(Format('      Issuer: %s', [CertInfo.Issuer]));
+        WriteLn(TextFormat('  [%d] Subject: %s', [i, CertInfo.Subject]));
+        WriteLn(TextFormat('      Issuer: %s', [CertInfo.Issuer]));
       end;
     end;
     WriteLn;

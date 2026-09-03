@@ -3,12 +3,11 @@ program test_quick_all;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.quick,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.builder,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.text;
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then

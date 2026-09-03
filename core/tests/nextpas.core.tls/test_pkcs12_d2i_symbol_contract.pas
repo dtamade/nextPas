@@ -72,7 +72,7 @@ begin
   WriteLn;
   WriteLn('=== PKCS12 d2i symbol guard ===');
 
-  LTempFile := GetTempDir(False) + 'nextpas_pkcs12_d2i_symbol_contract.p12';
+  LTempFile := GetTempDir() + 'nextpas_pkcs12_d2i_symbol_contract.p12';
   if not WriteTempTextFile(LTempFile, 'not-a-real-pkcs12') then
   begin
     MarkSkip('pkcs12 d2i symbol contract', 'failed to create temp file');

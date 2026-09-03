@@ -3,11 +3,10 @@ program test_capability_serialization;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
-  nextpas.core.tls.capability.serializer;
+  nextpas.core.tls.capability.serializer, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 procedure TestJSONSerialization;
 var
@@ -183,7 +182,7 @@ begin
       Caps := Lib.GetCapabilities;
 
       // 保存为 JSON
-      FileName := Format('capability_%s.json',
+      FileName := TextFormat('capability_%s.json',
         [LowerCase(SSL_LIBRARY_NAMES[Backends[I]])]);
       SaveCapabilitiesToFile(Caps, FileName, 'json');
       WriteLn('  ✓ Saved to: ', FileName);

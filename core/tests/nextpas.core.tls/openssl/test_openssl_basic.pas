@@ -3,10 +3,10 @@ program test_openssl_basic;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.text.conv;
 
 var
   Lib: ISSLLibrary;
@@ -45,8 +45,8 @@ begin
 
   // 测试3: 协议支持
   WriteLn('[TEST 3] Protocol support...');
-  WriteLn('  TLS 1.2: ', BoolToStr(Lib.IsProtocolSupported(sslProtocolTLS12), True));
-  WriteLn('  TLS 1.3: ', BoolToStr(Lib.IsProtocolSupported(sslProtocolTLS13), True));
+  WriteLn('  TLS 1.2: ', BoolToStr(Lib.IsProtocolSupported(sslProtocolTLS12)));
+  WriteLn('  TLS 1.3: ', BoolToStr(Lib.IsProtocolSupported(sslProtocolTLS13)));
 
   // 测试4: 创建Context
   WriteLn('[TEST 4] Creating SSL context...');

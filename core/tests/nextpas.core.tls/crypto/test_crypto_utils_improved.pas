@@ -12,9 +12,8 @@ program test_crypto_utils_improved;
 }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.utils,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 procedure TestHashFunctions;
 var
@@ -24,7 +23,7 @@ begin
   WriteLn('[1] 测试哈希函数...');
 
   // SHA-256 (TBytes)
-  LHash := TCryptoUtils.SHA256(BytesOf('Hello'));
+  LHash := TCryptoUtils.SHA256(StringToUTF8Bytes('Hello'));
   LHashHex := TCryptoUtils.BytesToHex(LHash);
   WriteLn('  SHA-256(Hello): ', Copy(LHashHex, 1, 32), '...');
   Assert(Length(LHash) = 32, 'SHA-256 should return 32 bytes');
@@ -94,7 +93,7 @@ var
 begin
   WriteLn('[3] 测试AES-256-GCM加密...');
 
-  LPlaintext := BytesOf('Secret Message!');
+  LPlaintext := StringToUTF8Bytes('Secret Message!');
   LKey := TCryptoUtils.GenerateKey(256);
   LIV := TCryptoUtils.GenerateIV(12);
 
@@ -146,7 +145,7 @@ begin
   LCaught := False;
   try
     SetLength(LBadKey, 16);  // 错误的密钥长度
-    TCryptoUtils.AES_GCM_Encrypt(BytesOf('test'), LBadKey, LBadKey);
+    TCryptoUtils.AES_GCM_Encrypt(StringToUTF8Bytes('test'), LBadKey, LBadKey);
   except
     on E: ESSLInvalidArgument do
     begin

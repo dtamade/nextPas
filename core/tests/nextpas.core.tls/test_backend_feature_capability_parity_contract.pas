@@ -3,7 +3,6 @@ program test_backend_feature_capability_parity_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib
@@ -21,7 +20,7 @@ uses
   , nextpas.core.tls.mbedtls.lib
   , nextpas.core.tls.wolfssl.lib
   {$ENDIF}
-  ;
+  , nextpas.core.exception, nextpas.core.text.format;
 
 procedure Require(ACondition: Boolean; const AMessage: string);
 begin
@@ -105,16 +104,16 @@ begin
     LPublishedTruth := PublishedFeatureTruth(LCaps, LFeature);
 
     Require(LRuntimeTruth = LPublishedTruth,
-      Format('%s %s parity mismatch: runtime=%s published=%s',
+      TextFormat('%s %s parity mismatch: runtime=%s published=%s',
         [
           SSL_LIBRARY_NAMES[ABackend],
           FeatureName(LFeature),
-          BoolToStr(LRuntimeTruth, True),
-          BoolToStr(LPublishedTruth, True)
+          BoolToStr(LRuntimeTruth),
+          BoolToStr(LPublishedTruth)
         ]));
 
     WriteLn('  [PASS] ', FeatureName(LFeature), ' runtime/published parity = ',
-      BoolToStr(LRuntimeTruth, True));
+      BoolToStr(LRuntimeTruth));
   end;
 end;
 

@@ -3,8 +3,7 @@ program test_hash_comprehensive;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.api;
+  nextpas.core.tls.openssl.api, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 type
   TTestResult = record
@@ -78,11 +77,11 @@ begin
   WriteLn;
   PrintSeparator;
   if (TotalTests - SkippedTests) > 0 then
-    WriteLn(Format('Total: %d tests, %d passed, %d failed, %d skipped (%.1f%% executed pass rate)',
+    WriteLn(TextFormat('Total: %d tests, %d passed, %d failed, %d skipped (%.1f%% executed pass rate)',
       [TotalTests, PassedTests, TotalTests - PassedTests - SkippedTests, SkippedTests,
        (PassedTests / (TotalTests - SkippedTests)) * 100]))
   else
-    WriteLn(Format('Total: %d tests, %d passed, %d failed, %d skipped (all skipped)',
+    WriteLn(TextFormat('Total: %d tests, %d passed, %d failed, %d skipped (all skipped)',
       [TotalTests, PassedTests, TotalTests - PassedTests - SkippedTests, SkippedTests]));
   PrintSeparator;
 end;

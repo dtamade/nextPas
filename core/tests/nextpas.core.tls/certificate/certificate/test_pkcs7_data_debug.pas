@@ -9,12 +9,11 @@ program test_pkcs7_data_debug;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.pkcs7,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader, nextpas.core.exception;
 
 procedure TestPKCS7_DataInit_Debug;
 var

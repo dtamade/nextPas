@@ -13,12 +13,11 @@ program test_preset_configurations;
  *}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.freepascal.lib,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.exception;
 
 var
   GTestsPassed: Integer = 0;

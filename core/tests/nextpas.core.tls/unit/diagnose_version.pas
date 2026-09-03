@@ -3,8 +3,7 @@ program diagnose_version;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.text, nextpas.core.text.conv;
 
 var
   Version: string;

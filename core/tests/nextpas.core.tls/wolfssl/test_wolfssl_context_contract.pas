@@ -15,14 +15,13 @@ program test_wolfssl_context_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.native_handle,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.lib,
-  nextpas.core.tls.wolfssl.session;
+  nextpas.core.tls.wolfssl.session, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.format;
 
 var
   GTestsPassed: Integer = 0;
@@ -153,7 +152,7 @@ begin
     end;
   end;
   WriteLn;
-  WriteLn(Format('Results: %d passed, %d failed, %d skipped',
+  WriteLn(TextFormat('Results: %d passed, %d failed, %d skipped',
     [GTestsPassed, GTestsFailed, GTestsSkipped]));
   if GTestsFailed > 0 then
     Halt(1);

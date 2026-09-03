@@ -4,10 +4,9 @@ program test_tls12_secure_renegotiation;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls12.clienthello,
   nextpas.core.tls.tls12.parser,
-  nextpas.core.tls.tls12.wire;
+  nextpas.core.tls.tls12.wire, nextpas.core.base, nextpas.core.text;
 
 var
   LTotal, LPassed: Integer;

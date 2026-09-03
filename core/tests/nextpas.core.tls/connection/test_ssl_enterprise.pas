@@ -27,12 +27,11 @@ program test_ssl_enterprise;
 *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ssl,
   nextpas.core.tls.openssl.api.err,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.text.format, nextpas.core.time, nextpas.core.text.conv;
 
 var
   TotalTests, PassedTests, FailedTests, SkippedTests: Integer;
@@ -182,27 +181,27 @@ begin
   WriteLn;
   WriteLn('=== SSL/TLS 性能基准测试 ===');
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
   // 基线循环用于 API 可用性与吞吐估算
   for i := 1 to ITERATIONS do
   begin
     // 模拟 SSL 连接操作
     LResult := Assigned(@SSL_new);
   end;
-  EndTime := Now;
+  EndTime := DateTimeNow;
 
   Duration := (EndTime - StartTime) * 24 * 60 * 60 * 1000;
   if Duration <= 0 then
     Duration := 1;
   ConnectionsPerSec := ITERATIONS / (Duration / 1000);
 
-  WriteLn(Format('处理 %d 个连接耗时: %.2f ms', [ITERATIONS, Duration]));
-  WriteLn(Format('平均性能: %.2f 连接/秒', [ConnectionsPerSec]));
+  WriteLn(TextFormat('处理 %d 个连接耗时: %.2f ms', [ITERATIONS, Duration]));
+  WriteLn(TextFormat('平均性能: %.2f 连接/秒', [ConnectionsPerSec]));
 
   // 企业级要求：1000+ 连接/秒
   LResult := ConnectionsPerSec >= 1000;
   Test('性能基准达标 (>= 1000 连接/秒)', LResult);
-  WriteLn(Format('目标: %.2f 连接/秒 (达标: %s)', [ConnectionsPerSec,
+  WriteLn(TextFormat('目标: %.2f 连接/秒 (达标: %s)', [ConnectionsPerSec,
     BoolToStr(LResult, '是', '否')]));
 end;
 
@@ -300,12 +299,12 @@ begin
   WriteLn('=' + StringOfChar('=', 60));
   WriteLn('企业级测试结果总结');
   WriteLn('=' + StringOfChar('=', 60));
-  WriteLn(Format('总测试数: %d', [TotalTests]));
-  WriteLn(Format('通过: %d', [PassedTests]));
-  WriteLn(Format('失败: %d', [FailedTests]));
-  WriteLn(Format('跳过: %d (external-tool=%d)', [SkippedTests, SkipExternalTool]));
+  WriteLn(TextFormat('总测试数: %d', [TotalTests]));
+  WriteLn(TextFormat('通过: %d', [PassedTests]));
+  WriteLn(TextFormat('失败: %d', [FailedTests]));
+  WriteLn(TextFormat('跳过: %d (external-tool=%d)', [SkippedTests, SkipExternalTool]));
   if TotalTests > 0 then
-    WriteLn(Format('通过率: %.1f%%', [PassedTests * 100.0 / TotalTests]))
+    WriteLn(TextFormat('通过率: %.1f%%', [PassedTests * 100.0 / TotalTests]))
   else
     WriteLn('通过率: 0.0%');
   WriteLn;

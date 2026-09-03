@@ -4,9 +4,8 @@ program test_type_safety;
 {$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.safety,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.math;
 
 type
   TIntSecureData = specialize TSecureData<Integer>;

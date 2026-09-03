@@ -7,10 +7,10 @@ program test_connection_builder_hostname_precedence;
   fallback unless callers set an explicit hostname. }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
-  nextpas.core.tls.connection.builder;
+  nextpas.core.tls.connection.builder, nextpas.core.base, nextpas.core.base.utils, nextpas.core.io.intf, nextpas.core.text.conv;
 
 type
   TMockCertificate = class(TInterfacedObject, ISSLCertificate)
@@ -385,7 +385,7 @@ end;
 
 function TMockCertificate.GetDaysUntilExpiry: Integer;
 begin
-  Result := Trunc(FInfo.NotAfter - Date);
+  Result := Trunc(FInfo.NotAfter - Trunc(DateTimeNow));
 end;
 
 function TMockCertificate.GetSubjectCN: string;

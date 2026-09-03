@@ -3,8 +3,8 @@ program test_ringbuffer_perf;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
-  nextpas.core.tls.ringbuffer;
+  nextpas.core.time,
+  nextpas.core.tls.ringbuffer, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 const
   TEST_SIZE = 1024 * 1024 * 10;  // 10MB
@@ -25,7 +25,7 @@ begin
   for i := 0 to CHUNK_SIZE-1 do
     WriteData[i] := Byte(i mod 256);
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
   TotalWritten := 0;
 
   // Write phase
@@ -55,7 +55,7 @@ begin
     end;
   end;
 
-  EndTime := Now;
+  EndTime := DateTimeNow;
 
   WriteLn('Time: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
   WriteLn('Throughput: ', FormatFloat('0.##',
@@ -78,7 +78,7 @@ begin
     for i := 0 to CHUNK_SIZE-1 do
       WriteData[i] := Byte(i mod 256);
 
-    StartTime := Now;
+    StartTime := DateTimeNow;
     TotalWritten := 0;
     TotalRead := 0;
 
@@ -100,7 +100,7 @@ begin
       end;
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     WriteLn('Time: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
     WriteLn('Throughput: ', FormatFloat('0.##',
@@ -128,7 +128,7 @@ begin
     for i := 0 to CHUNK_SIZE-1 do
       WriteData[i] := Byte(i mod 256);
 
-    StartTime := Now;
+    StartTime := DateTimeNow;
     TotalWritten := 0;
     TotalRead := 0;
 
@@ -156,7 +156,7 @@ begin
       end;
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     WriteLn('Time: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
     WriteLn('Throughput: ', FormatFloat('0.##',
@@ -178,12 +178,12 @@ begin
   for i := 0 to TEST_SIZE-1 do
     Source[i] := Byte(i mod 256);
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   // Single large copy
   Move(Source[0], Dest[0], TEST_SIZE);
 
-  EndTime := Now;
+  EndTime := DateTimeNow;
 
   WriteLn('Time: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
   WriteLn('Throughput: ', FormatFloat('0.##',

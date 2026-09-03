@@ -6,11 +6,10 @@ program test_factory_server_name_scope_clarification;
   TSSLConfig.ServerName compatibility-only semantics on factory paths. }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.base.utils, nextpas.core.exception;
 
 var
   GTestsPassed: Integer = 0;

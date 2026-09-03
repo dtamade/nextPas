@@ -17,14 +17,13 @@ program fuzz_openssl;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fuzz_framework,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.pem;
+  nextpas.core.tls.openssl.api.pem, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   GOpenSSLReady: Boolean = False;

@@ -1,13 +1,11 @@
 program test_evp_simple;
 
 {$mode objfpc}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
-  nextpas.core.system.sysutils,
-  DynLibs,
   nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.platform.dl, nextpas.core.text.conv;
 
 // Helper function to convert bytes to hex string
 function BytesToHex(const Data: array of Byte): string;
@@ -165,7 +163,7 @@ begin
 end;
 
 var
-  LCryptoLib: TLibHandle;
+  LCryptoLib: TPlatformLibrary;
 
 begin
   WriteLn('========================================');
@@ -190,18 +188,18 @@ begin
 
   // Load libcrypto for EVP functions
   {$IFDEF MSWINDOWS}
-  LCryptoLib := LoadLibrary('libcrypto-3-x64.dll');
-  if LCryptoLib = NilHandle then
-    LCryptoLib := LoadLibrary('libcrypto-3.dll');
-  if LCryptoLib = NilHandle then
-    LCryptoLib := LoadLibrary('libcrypto.dll');
+  if not platform_dl_load('libcrypto-3-x64.dll', [dlfLazy], LCryptoLib) then LCryptoLib := PLATFORM_DL_NIL_LIBRARY;
+  if LCryptoLib.IsInvalid then
+    if not platform_dl_load('libcrypto-3.dll', [dlfLazy], LCryptoLib) then LCryptoLib := PLATFORM_DL_NIL_LIBRARY;
+  if LCryptoLib.IsInvalid then
+    if not platform_dl_load('libcrypto.dll', [dlfLazy], LCryptoLib) then LCryptoLib := PLATFORM_DL_NIL_LIBRARY;
   {$ELSE}
-  LCryptoLib := LoadLibrary('libcrypto.so.3');
-  if LCryptoLib = NilHandle then
-    LCryptoLib := LoadLibrary('libcrypto.so');
+  if not platform_dl_load('libcrypto.so.3', [dlfLazy], LCryptoLib) then LCryptoLib := PLATFORM_DL_NIL_LIBRARY;
+  if LCryptoLib.IsInvalid then
+    if not platform_dl_load('libcrypto.so', [dlfLazy], LCryptoLib) then LCryptoLib := PLATFORM_DL_NIL_LIBRARY;
   {$ENDIF}
 
-  if LCryptoLib = NilHandle then
+  if LCryptoLib.IsInvalid then
   begin
     WriteLn('ERROR: Failed to load libcrypto!');
     Halt(1);
@@ -213,7 +211,7 @@ begin
   if not LoadEVP(LCryptoLib) then
   begin
     WriteLn('ERROR: Failed to load EVP module!');
-    FreeLibrary(LCryptoLib);
+    platform_dl_release(LCryptoLib);
     Halt(1);
   end;
 

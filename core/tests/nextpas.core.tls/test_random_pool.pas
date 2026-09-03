@@ -3,9 +3,9 @@ program test_random_pool;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.random.pool,
-  nextpas.core.tls.random;
+  nextpas.core.tls.random, nextpas.core.exception, nextpas.core.text.format;
 
 procedure TestBasicFunctionality;
 var
@@ -27,10 +27,10 @@ begin
 
     // Test 2: Check statistics
     LStats := LPool.GetStats;
-    WriteLn(Format('[INFO] Total requests: %d', [LStats.TotalRequests]));
-    WriteLn(Format('[INFO] Cache hits: %d', [LStats.CacheHits]));
-    WriteLn(Format('[INFO] Cache misses: %d', [LStats.CacheMisses]));
-    WriteLn(Format('[INFO] Hit rate: %.2f%%', [LStats.HitRate]));
+    WriteLn(TextFormat('[INFO] Total requests: %d', [LStats.TotalRequests]));
+    WriteLn(TextFormat('[INFO] Cache hits: %d', [LStats.CacheHits]));
+    WriteLn(TextFormat('[INFO] Cache misses: %d', [LStats.CacheMisses]));
+    WriteLn(TextFormat('[INFO] Hit rate: %.2f%%', [LStats.HitRate]));
 
   finally
     LPool.Free;
@@ -54,7 +54,7 @@ var
   LThroughput: Double;
 begin
   WriteLn('=== Test 2: Performance Benchmark ===');
-  WriteLn(Format('Iterations: %d, Data size: %d bytes', [ITERATIONS, DATA_SIZE]));
+  WriteLn(TextFormat('Iterations: %d, Data size: %d bytes', [ITERATIONS, DATA_SIZE]));
 
   // Test with pool enabled
   WriteLn;
@@ -63,7 +63,7 @@ begin
   LConfig.Enabled := True;
   LPool := TRandomPool.Create(LConfig);
   try
-    LStartTime := Now;
+    LStartTime := DateTimeNow;
     for I := 1 to ITERATIONS do
     begin
       if not LPool.GetBytes(@LBuffer[0], DATA_SIZE) then
@@ -72,18 +72,18 @@ begin
         Exit;
       end;
     end;
-    LEndTime := Now;
+    LEndTime := DateTimeNow;
 
     LElapsedMs := DateTimeMillisecondsBetween(LEndTime, LStartTime);
     LThroughput := (ITERATIONS * 1000.0) / LElapsedMs;
 
-    WriteLn(Format('[RESULT] Time: %d ms', [LElapsedMs]));
-    WriteLn(Format('[RESULT] Throughput: %.0f ops/s', [LThroughput]));
-    WriteLn(Format('[RESULT] Avg latency: %.3f ms', [LElapsedMs / ITERATIONS]));
+    WriteLn(TextFormat('[RESULT] Time: %d ms', [LElapsedMs]));
+    WriteLn(TextFormat('[RESULT] Throughput: %.0f ops/s', [LThroughput]));
+    WriteLn(TextFormat('[RESULT] Avg latency: %.3f ms', [LElapsedMs / ITERATIONS]));
 
     LStats := LPool.GetStats;
-    WriteLn(Format('[STATS] Cache hit rate: %.2f%%', [LStats.HitRate]));
-    WriteLn(Format('[STATS] Refill count: %d', [LStats.RefillCount]));
+    WriteLn(TextFormat('[STATS] Cache hit rate: %.2f%%', [LStats.HitRate]));
+    WriteLn(TextFormat('[STATS] Refill count: %d', [LStats.RefillCount]));
 
   finally
     LPool.Free;
@@ -92,7 +92,7 @@ begin
   // Test without pool (direct generation)
   WriteLn;
   WriteLn('--- Without Random Pool (Direct) ---');
-  LStartTime := Now;
+  LStartTime := DateTimeNow;
   for I := 1 to ITERATIONS do
   begin
     if not SecureRandomBytes(@LBuffer[0], DATA_SIZE) then
@@ -101,14 +101,14 @@ begin
       Exit;
     end;
   end;
-  LEndTime := Now;
+  LEndTime := DateTimeNow;
 
   LElapsedMs := DateTimeMillisecondsBetween(LEndTime, LStartTime);
   LThroughput := (ITERATIONS * 1000.0) / LElapsedMs;
 
-  WriteLn(Format('[RESULT] Time: %d ms', [LElapsedMs]));
-  WriteLn(Format('[RESULT] Throughput: %.0f ops/s', [LThroughput]));
-  WriteLn(Format('[RESULT] Avg latency: %.3f ms', [LElapsedMs / ITERATIONS]));
+  WriteLn(TextFormat('[RESULT] Time: %d ms', [LElapsedMs]));
+  WriteLn(TextFormat('[RESULT] Throughput: %.0f ops/s', [LThroughput]));
+  WriteLn(TextFormat('[RESULT] Avg latency: %.3f ms', [LElapsedMs / ITERATIONS]));
 
   WriteLn;
 end;
@@ -165,7 +165,7 @@ begin
       WriteLn('[FAIL] Direct generation failed');
 
     LStats := LPool.GetStats;
-    WriteLn(Format('[INFO] Cache misses (expected): %d', [LStats.CacheMisses]));
+    WriteLn(TextFormat('[INFO] Cache misses (expected): %d', [LStats.CacheMisses]));
 
   finally
     LPool.Free;
@@ -185,7 +185,7 @@ begin
       WriteLn('[FAIL] Large request failed');
 
     LStats := LPool.GetStats;
-    WriteLn(Format('[INFO] Cache misses (expected for large request): %d', [LStats.CacheMisses]));
+    WriteLn(TextFormat('[INFO] Cache misses (expected for large request): %d', [LStats.CacheMisses]));
 
   finally
     LPool.Free;

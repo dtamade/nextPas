@@ -15,7 +15,7 @@ program test_openssl_basic_validation;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, TypInfo,
+  nextpas.core.text.format, nextpas.core.text.conv, nextpas.core.time, nextpas.core.exception, nextpas.core.base.utils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.backed,
@@ -228,7 +228,7 @@ begin
     // 测试最佳库检测
     LibType := TSSLFactory.DetectBestLibrary;
     LogTest('DetectBestLibrary', LibType <> sslAutoDetect,
-            '检测到: ' + GetEnumName(TypeInfo(TSSLLibraryType), Ord(LibType)));
+            '检测到: ' + LibraryTypeToString(LibType));
 
     // 测试获取库实例
     Lib := TSSLFactory.GetLibraryInstance(sslOpenSSL);
@@ -362,7 +362,7 @@ begin
     Percentage := TestsPassed * 100.0 / TestsTotal
   else
     Percentage := 0.0;
-  WriteLn('  通过: ', TestsPassed, ' (', Format('%.1f', [Percentage]), '%)');
+  WriteLn('  通过: ', TestsPassed, ' (', TextFormat('%.1f', [Percentage]), '%)');
   WriteLn('  失败: ', TestsFailed);
   WriteLn('=====================================');
 
@@ -385,7 +385,7 @@ end;
 begin
   WriteLn('OpenSSL基础功能验证测试');
   WriteLn('版本: 1.0');
-  WriteLn('日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn;
 
   try

@@ -21,14 +21,13 @@ program test_openssl_1_1_compatibility;
 }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.hmac,
   nextpas.core.tls.openssl.api.rand,
-  nextpas.core.tls.openssl.api.bn;
+  nextpas.core.tls.openssl.api.bn, nextpas.core.exception, nextpas.core.text, nextpas.core.text.format;
 
 var
   TotalTests, PassedTests, FailedTests: Integer;
@@ -470,7 +469,7 @@ begin
   WriteLn('Total tests: ', TotalTests);
   WriteLn('Passed: ', PassedTests);
   WriteLn('Failed: ', FailedTests);
-  WriteLn('Pass rate: ', Format('%.1f%%', [(PassedTests / TotalTests) * 100]));
+  WriteLn('Pass rate: ', TextFormat('%.1f%%', [(PassedTests / TotalTests) * 100]));
   WriteLn;
 
   if FailedTests = 0 then

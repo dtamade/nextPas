@@ -3,11 +3,10 @@ program test_tls12_handshake;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls12.wire,
   nextpas.core.tls.tls12.parser,
   nextpas.core.tls.tls12.recordcrypto,
-  nextpas.core.tls.tls12.handshakecrypto;
+  nextpas.core.tls.tls12.handshakecrypto, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   GPassCount: Integer = 0;
@@ -91,7 +90,7 @@ begin
   FillChar(LKey[0], 16, $11);
   SetLength(LIV, 4);
   FillChar(LIV[0], 4, $22);
-  LPlaintext := BytesOf('Hello TLS 1.2 GCM!');
+  LPlaintext := StringToUTF8Bytes('Hello TLS 1.2 GCM!');
 
   LOk := TLS12GCMEncryptRecord(LKey, LIV, 0, 23, LPlaintext, LEncrypted, LError);
   Check(LOk, 'GCM encrypt should succeed: ' + LError);
@@ -99,7 +98,7 @@ begin
 
   LOk := TLS12GCMDecryptRecord(LKey, LIV, 0, 23, LEncrypted, LDecrypted, LError);
   Check(LOk, 'GCM decrypt should succeed: ' + LError);
-  Check(StringOf(LDecrypted) = 'Hello TLS 1.2 GCM!', 'Decrypted should match');
+  Check(UTF8BytesToString(LDecrypted) = 'Hello TLS 1.2 GCM!', 'Decrypted should match');
 end;
 
 procedure TestGCMRecordBadTag;
@@ -113,7 +112,7 @@ begin
   FillChar(LKey[0], 16, $33);
   SetLength(LIV, 4);
   FillChar(LIV[0], 4, $44);
-  LPlaintext := BytesOf('test');
+  LPlaintext := StringToUTF8Bytes('test');
 
   TLS12GCMEncryptRecord(LKey, LIV, 5, 23, LPlaintext, LEncrypted, LError);
   LEncrypted[Length(LEncrypted) - 1] := LEncrypted[Length(LEncrypted) - 1] xor $FF;
@@ -190,7 +189,7 @@ begin
   TestFinishedComputation;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPassCount, GFailCount]));
   if GFailCount > 0 then
     Halt(1);
 end.

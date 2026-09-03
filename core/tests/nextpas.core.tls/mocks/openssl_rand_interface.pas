@@ -16,7 +16,7 @@ unit openssl_rand_interface;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils;
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.time;
 
 type
   // 随机数生成模式

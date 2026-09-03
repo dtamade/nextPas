@@ -3,11 +3,10 @@ program test_hkdf_rfc5869;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.api.kdf,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   GPassed, GFailed, GSkipped: Integer;

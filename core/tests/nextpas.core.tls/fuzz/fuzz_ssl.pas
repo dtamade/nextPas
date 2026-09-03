@@ -14,8 +14,7 @@ program fuzz_ssl;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fuzz_framework;
+  fuzz_framework, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 { ============================================================================ }
 { Pure Pascal Implementations for Fuzzing                                       }

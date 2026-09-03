@@ -3,9 +3,8 @@ program test_x509;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.time,
-  nextpas.core.tls.asn1, nextpas.core.tls.x509;
+  nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.text;
 
 var
   TestsPassed, TestsFailed, TestsSkipped: Integer;

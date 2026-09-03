@@ -3,8 +3,7 @@ program test_cmac_evp;
 {$mode Delphi}{$H+}
 
 uses
-  nextpas.core.system.sysutils, Dynlibs,
-  nextpas.core.tls.openssl.api.cmac.evp;
+  nextpas.core.tls.openssl.api.cmac.evp, nextpas.core.base, nextpas.core.text.conv;
 
 function BytesToHex(const Bytes: TBytes): string;
 var

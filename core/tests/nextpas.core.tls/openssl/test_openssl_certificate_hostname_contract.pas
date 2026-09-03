@@ -4,9 +4,8 @@ program test_openssl_certificate_hostname_contract;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.factory;
+  nextpas.core.tls.factory, nextpas.core.exception;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin

@@ -18,8 +18,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.classes, nextpas.core.system.sysutils,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base, nextpas.core.text.format;
 
 type
   { 回调行为 }
@@ -126,7 +125,7 @@ begin
   WriteLn('=== 测试验证回调行为 ===');
   for I := 0 to High(TestCases) do
   begin
-    Write(Format('测试 %d: %s ... ', [I + 1, TestCases[I].Description]));
+    Write(TextFormat('测试 %d: %s ... ', [I + 1, TestCases[I].Description]));
 
     if SimulateValidationWithCallback(TestCases[I].CertValid,
       TestCases[I].CallbackBehavior) = TestCases[I].ExpectedResult then
@@ -145,9 +144,9 @@ begin
   WriteLn('========================================');
   WriteLn('测试总结');
   WriteLn('========================================');
-  WriteLn(Format('通过: %d', [PassCount]));
-  WriteLn(Format('失败: %d', [FailCount]));
-  WriteLn(Format('总计: %d', [PassCount + FailCount]));
+  WriteLn(TextFormat('通过: %d', [PassCount]));
+  WriteLn(TextFormat('失败: %d', [FailCount]));
+  WriteLn(TextFormat('总计: %d', [PassCount + FailCount]));
   WriteLn;
 
   if FailCount = 0 then

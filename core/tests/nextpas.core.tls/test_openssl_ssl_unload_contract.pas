@@ -3,7 +3,6 @@ program test_openssl_ssl_unload_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.ssl;
 

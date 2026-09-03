@@ -3,10 +3,9 @@ program test_certificate_real;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
-  nextpas.core.tls.openssl.certificate;
+  nextpas.core.tls.openssl.certificate, nextpas.core.exception;
 
 var
   SSLLib: ISSLLibrary;

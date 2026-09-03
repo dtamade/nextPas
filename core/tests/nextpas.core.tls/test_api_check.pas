@@ -1,7 +1,6 @@
 program test_api_check;
 {$mode objfpc}{$H+}
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.api.bio,

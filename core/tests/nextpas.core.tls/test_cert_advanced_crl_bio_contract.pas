@@ -3,7 +3,6 @@ program test_cert_advanced_crl_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.advanced,
@@ -14,7 +13,7 @@ uses
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.pem,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception;
 const
   VALID_CRL_PEM =
     '-----BEGIN X509 CRL-----'#10 +

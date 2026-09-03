@@ -9,8 +9,7 @@ program test_asn1;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.asn1;
+  nextpas.core.tls.asn1, nextpas.core.base, nextpas.core.exception, nextpas.core.math, nextpas.core.text, nextpas.core.text.conv, nextpas.core.time;
 
 var
   TotalTests, PassedTests, FailedTests: Integer;

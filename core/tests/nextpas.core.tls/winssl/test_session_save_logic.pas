@@ -15,7 +15,7 @@ program test_session_save_logic;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time;
+  nextpas.core.time, nextpas.core.text.format;
 
 type
   TSSLProtocolVersion = (
@@ -118,7 +118,7 @@ constructor TMockSession.Create;
 begin
   inherited Create;
   FID := '';
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
   FTimeout := 3600;
   FProtocolVersion := sslProtocolTLS12;
   FCipherName := '';
@@ -147,7 +147,7 @@ end;
 
 function TMockSession.IsValid: Boolean;
 begin
-  Result := (FID <> '') and ((Now - FCreationTime) * 86400 < FTimeout);
+  Result := (FID <> '') and ((DateTimeNow - FCreationTime) * 86400 < FTimeout);
 end;
 
 function TMockSession.GetProtocolVersion: TSSLProtocolVersion;
@@ -208,7 +208,7 @@ var
   LPeerCert: ISSLCertificate;
 begin
   // 任务 11.2: 提取会话信息
-  LSessionID := Format('winssl-session-%p', [Pointer(Self)]);
+  LSessionID := TextFormat('winssl-session-%p', [Pointer(Self)]);
   LProtocol := GetProtocolVersion;
   LCipher := GetCipherName;
   LPeerCert := GetPeerCertificate;
@@ -372,7 +372,7 @@ begin
   WriteLn('通过: ', Passed);
   WriteLn('失败: ', Failed);
   if Total > 0 then
-    WriteLn('成功率: ', Format('%.1f%%', [Passed * 100.0 / Total]));
+    WriteLn('成功率: ', TextFormat('%.1f%%', [Passed * 100.0 / Total]));
   WriteLn('================================================================');
 end;
 

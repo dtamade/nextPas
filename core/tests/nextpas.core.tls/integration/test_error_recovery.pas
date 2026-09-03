@@ -8,7 +8,6 @@ program test_error_recovery;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.base,
@@ -25,7 +24,7 @@ uses
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.err,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.exception, nextpas.core.text.format;
 
 const
   MBSTRING_ASC = $1001;
@@ -131,7 +130,7 @@ begin
 
         // Expect WANT_READ (waiting for server response)
         Runner.Check('Handshake returns WANT_READ', Err = SSL_ERROR_WANT_READ,
-                  Format('Error code: %d', [Err]));
+                  TextFormat('Error code: %d', [Err]));
 
         // Verify cleanup works
         SSL_shutdown(ClientSSL);
@@ -221,7 +220,7 @@ begin
     Err := SSL_get_error(ClientSSL, Ret);
 
     Runner.Check('Client detects interrupt', (Ret <= 0) or (Err = SSL_ERROR_ZERO_RETURN),
-              Format('Return: %d, Error: %d', [Ret, Err]));
+              TextFormat('Return: %d, Error: %d', [Ret, Err]));
 
     SSL_shutdown(ClientSSL);
     SSL_free(ClientSSL);
@@ -305,7 +304,7 @@ begin
       VerifyResult := SSL_get_verify_result(ClientSSL);
       if VerifyResult <> 0 then
         Runner.Check('Certificate verification failed (expected)', True,
-                  Format('Verify result: %d', [VerifyResult]))
+                  TextFormat('Verify result: %d', [VerifyResult]))
       else
         Runner.Check('Certificate verification passed', True, 'May be in trust store');
     end
@@ -359,7 +358,7 @@ begin
         ErrCode := ERR_get_error();
       end;
 
-      Runner.Check('Error queue iteration', True, Format('Processed %d errors', [ErrCount]));
+      Runner.Check('Error queue iteration', True, TextFormat('Processed %d errors', [ErrCount]));
     end;
 
   except
@@ -558,7 +557,7 @@ begin
     begin
       // Test bidirectional shutdown
       Ret := SSL_shutdown(ClientSSL);
-      Runner.Check('Client shutdown initiate', True, Format('Return: %d', [Ret]));
+      Runner.Check('Client shutdown initiate', True, TextFormat('Return: %d', [Ret]));
 
       repeat
         Len := BIO_read(ClientWrite, @Buffer[0], SizeOf(Buffer));
@@ -566,7 +565,7 @@ begin
       until Len <= 0;
 
       Ret := SSL_shutdown(ServerSSL);
-      Runner.Check('Server shutdown response', True, Format('Return: %d', [Ret]));
+      Runner.Check('Server shutdown response', True, TextFormat('Return: %d', [Ret]));
 
       repeat
         Len := BIO_read(ServerWrite, @Buffer[0], SizeOf(Buffer));
@@ -574,7 +573,7 @@ begin
       until Len <= 0;
 
       Ret := SSL_shutdown(ClientSSL);
-      Runner.Check('Client shutdown complete', Ret >= 0, Format('Return: %d', [Ret]));
+      Runner.Check('Client shutdown complete', Ret >= 0, TextFormat('Return: %d', [Ret]));
     end;
 
     SSL_free(ClientSSL);

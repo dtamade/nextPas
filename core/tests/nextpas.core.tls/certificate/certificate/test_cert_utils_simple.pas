@@ -7,9 +7,8 @@ program test_cert_utils_simple;
 }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.exception;
 
 var
   LOptions: TCertGenOptions;

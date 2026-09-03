@@ -3,9 +3,8 @@ program test_ripemd;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 type
   TTestResult = record
@@ -102,7 +101,7 @@ var
 begin
   WriteLn('Testing RIPEMD160 Basic...');
 
-  Data := BytesOf('The quick brown fox jumps over the lazy dog');
+  Data := StringToUTF8Bytes('The quick brown fox jumps over the lazy dog');
   Hash := HashDataEVP('ripemd160', Data);
 
   if Length(Hash) = 0 then

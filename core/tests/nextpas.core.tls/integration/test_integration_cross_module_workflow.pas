@@ -6,10 +6,9 @@
 program test_integration_cross_module_workflow;
 
 {$mode ObjFPC}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.pkcs7,
@@ -20,7 +19,7 @@ uses
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.base,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.exception;
 
 var
   Runner: TSimpleTestRunner;

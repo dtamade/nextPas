@@ -3,7 +3,6 @@ program test_mbedtls_basic;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib;
 
@@ -37,8 +36,8 @@ begin
       WriteLn('   SNI: ', LCaps.SupportsSNI);
       WriteLn('   ECDHE: ', LCaps.SupportsECDHE);
       WriteLn('   ChaCha20: ', LCaps.SupportsChaChaPoly);
-      WriteLn('   Min TLS: ', GetEnumName(TypeInfo(TSSLProtocolVersion), Ord(LCaps.MinTLSVersion)));
-      WriteLn('   Max TLS: ', GetEnumName(TypeInfo(TSSLProtocolVersion), Ord(LCaps.MaxTLSVersion)));
+      WriteLn('   Min TLS: ', ProtocolVersionToString(LCaps.MinTLSVersion));
+      WriteLn('   Max TLS: ', ProtocolVersionToString(LCaps.MaxTLSVersion));
 
       WriteLn('Finalizing...');
       LLib.Finalize;

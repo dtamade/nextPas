@@ -13,14 +13,11 @@ program test_mbedtls_connection;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
-  Math,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.context,
   nextpas.core.tls.mbedtls.connection,
-  tls_test_sockets;
+  tls_test_sockets, nextpas.core.exception, nextpas.core.math;
 
 const
   TEST_HOST = 'www.google.com';

@@ -13,7 +13,7 @@ unit openssl_core_interface;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, DynLibs;
+  nextpas.core.platform.dl;
 
 type
   { IOpenSSLCore - Interface for OpenSSL Core functionality }
@@ -23,8 +23,8 @@ type
     // Library loading
     function LoadLibrary: Boolean;
     function IsLoaded: Boolean;
-    function GetCryptoLibHandle: TLibHandle;
-    function GetSSLLibHandle: TLibHandle;
+    function GetCryptoLibHandle: TPlatformLibrary;
+    function GetSSLLibHandle: TPlatformLibrary;
 
     // Version information
     function GetVersionString: string;
@@ -38,8 +38,8 @@ type
   TOpenSSLCoreReal = class(TInterfacedObject, IOpenSSLCore)
   private
     FLoaded: Boolean;
-    FCryptoHandle: TLibHandle;
-    FSSLHandle: TLibHandle;
+    FCryptoHandle: TPlatformLibrary;
+    FSSLHandle: TPlatformLibrary;
     FVersionString: string;
   public
     constructor Create;
@@ -48,8 +48,8 @@ type
     // IOpenSSLCore implementation
     function LoadLibrary: Boolean;
     function IsLoaded: Boolean;
-    function GetCryptoLibHandle: TLibHandle;
-    function GetSSLLibHandle: TLibHandle;
+    function GetCryptoLibHandle: TPlatformLibrary;
+    function GetSSLLibHandle: TPlatformLibrary;
     function GetVersionString: string;
     function GetVersionNumber: Cardinal;
     procedure UnloadLibrary;
@@ -69,8 +69,8 @@ type
     // IOpenSSLCore implementation
     function LoadLibrary: Boolean;
     function IsLoaded: Boolean;
-    function GetCryptoLibHandle: TLibHandle;
-    function GetSSLLibHandle: TLibHandle;
+    function GetCryptoLibHandle: TPlatformLibrary;
+    function GetSSLLibHandle: TPlatformLibrary;
     function GetVersionString: string;
     function GetVersionNumber: Cardinal;
     procedure UnloadLibrary;
@@ -105,8 +105,8 @@ constructor TOpenSSLCoreReal.Create;
 begin
   inherited Create;
   FLoaded := False;
-  FCryptoHandle := NilHandle;
-  FSSLHandle := NilHandle;
+  FCryptoHandle := PLATFORM_DL_NIL_LIBRARY;
+  FSSLHandle := PLATFORM_DL_NIL_LIBRARY;
   FVersionString := '';
 end;
 
@@ -137,14 +137,14 @@ begin
   Result := FLoaded or TOpenSSLLoader.IsModuleLoaded(osmCore);
 end;
 
-function TOpenSSLCoreReal.GetCryptoLibHandle: TLibHandle;
+function TOpenSSLCoreReal.GetCryptoLibHandle: TPlatformLibrary;
 begin
   if not FLoaded then
     LoadLibrary;
   Result := FCryptoHandle;
 end;
 
-function TOpenSSLCoreReal.GetSSLLibHandle: TLibHandle;
+function TOpenSSLCoreReal.GetSSLLibHandle: TPlatformLibrary;
 begin
   if not FLoaded then
     LoadLibrary;
@@ -192,20 +192,34 @@ begin
   Result := FLoaded;
 end;
 
-function TOpenSSLCoreMock.GetCryptoLibHandle: TLibHandle;
+function TOpenSSLCoreMock.GetCryptoLibHandle: TPlatformLibrary;
 begin
   if FLoaded then
-    Result := TLibHandle(12345) // Mock handle
+  begin
+    Result := PLATFORM_DL_NIL_LIBRARY;
+    {$IF defined(NEXTPAS_WINDOWS) or defined(WINDOWS)}
+    Result.Handle := PtrUInt(12345); // Mock handle
+    {$ELSE}
+    Result.Handle := Pointer(12345); // Mock handle
+    {$ENDIF}
+  end
   else
-    Result := NilHandle;
+    Result := PLATFORM_DL_NIL_LIBRARY;
 end;
 
-function TOpenSSLCoreMock.GetSSLLibHandle: TLibHandle;
+function TOpenSSLCoreMock.GetSSLLibHandle: TPlatformLibrary;
 begin
   if FLoaded then
-    Result := TLibHandle(67890) // Mock handle
+  begin
+    Result := PLATFORM_DL_NIL_LIBRARY;
+    {$IF defined(NEXTPAS_WINDOWS) or defined(WINDOWS)}
+    Result.Handle := PtrUInt(67890); // Mock handle
+    {$ELSE}
+    Result.Handle := Pointer(67890); // Mock handle
+    {$ENDIF}
+  end
   else
-    Result := NilHandle;
+    Result := PLATFORM_DL_NIL_LIBRARY;
 end;
 
 function TOpenSSLCoreMock.GetVersionString: string;

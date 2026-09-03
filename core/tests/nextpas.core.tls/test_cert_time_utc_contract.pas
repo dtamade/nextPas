@@ -3,12 +3,11 @@ program test_cert_time_utc_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.cert.builder.impl,
-  nextpas.core.tls.certchain;
+  nextpas.core.tls.certchain, nextpas.core.base, nextpas.core.io.intf;
 
 type
   TMockCertificate = class(TInterfacedObject, ISSLCertificate)
@@ -84,8 +83,8 @@ begin
   Result.ValidDays := 1;
   // 这里故意使用当前本地时间生成“应当现在有效”的证书。
   // 真正被验证的契约是消费侧必须按 UTC 判断这些 ASN.1/X.509 时间。
-  Result.NotBefore := Now - (1.0 / 24.0);
-  Result.NotAfter := Now + (1.0 / 24.0);
+  Result.NotBefore := DateTimeNow - (1.0 / 24.0);
+  Result.NotAfter := DateTimeNow + (1.0 / 24.0);
 end;
 
 procedure TestCertificateValidityUsesUtcTime;
@@ -279,7 +278,7 @@ end;
 
 function TMockCertificate.GetDaysUntilExpiry: Integer;
 begin
-  Result := Trunc(FInfo.NotAfter - Date);
+  Result := Trunc(FInfo.NotAfter - Trunc(DateTimeNow));
 end;
 
 function TMockCertificate.GetSubjectCN: string;

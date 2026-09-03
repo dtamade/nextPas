@@ -3,10 +3,9 @@ program test_openssl_bio;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.bio;
+  nextpas.core.tls.openssl.api.bio, nextpas.core.base.utils, nextpas.core.exception;
 
 var
   TestsPassed: Integer = 0;

@@ -6,7 +6,6 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.classes, nextpas.core.system.sysutils,
   nextpas.core.test,
   test_ocsp_stapling;
 

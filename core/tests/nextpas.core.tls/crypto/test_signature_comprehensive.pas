@@ -3,8 +3,7 @@ program test_signature_comprehensive;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.api;
+  nextpas.core.tls.openssl.api, nextpas.core.exception, nextpas.core.platform.dl, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.time;
 
 type
   TTestResult = record
@@ -86,34 +85,34 @@ var
 
 procedure LoadSignatureFunctions;
 var
-  LibHandle: THandle;
+  LibHandle: TPlatformLibrary;
 begin
-  LibHandle := LoadLibrary(CRYPTO_LIB);
-  if LibHandle = 0 then
+  if not platform_dl_load(CRYPTO_LIB, [dlfLazy], LibHandle) then LibHandle := PLATFORM_DL_NIL_LIBRARY;
+  if LibHandle.IsInvalid then
     raise Exception.Create('Failed to load ' + CRYPTO_LIB);
 
-  Pointer(RSA_new) := GetProcAddress(LibHandle, 'RSA_new');
-  Pointer(RSA_free) := GetProcAddress(LibHandle, 'RSA_free');
-  Pointer(RSA_generate_key_ex) := GetProcAddress(LibHandle, 'RSA_generate_key_ex');
-  Pointer(RSA_size) := GetProcAddress(LibHandle, 'RSA_size');
-  Pointer(RSA_sign) := GetProcAddress(LibHandle, 'RSA_sign');
-  Pointer(RSA_verify) := GetProcAddress(LibHandle, 'RSA_verify');
-  Pointer(BN_new) := GetProcAddress(LibHandle, 'BN_new');
-  Pointer(BN_free) := GetProcAddress(LibHandle, 'BN_free');
-  Pointer(BN_set_word) := GetProcAddress(LibHandle, 'BN_set_word');
-  Pointer(EVP_PKEY_new) := GetProcAddress(LibHandle, 'EVP_PKEY_new');
-  Pointer(EVP_PKEY_free) := GetProcAddress(LibHandle, 'EVP_PKEY_free');
-  Pointer(EVP_PKEY_assign) := GetProcAddress(LibHandle, 'EVP_PKEY_assign');
-  Pointer(EVP_PKEY_CTX_new) := GetProcAddress(LibHandle, 'EVP_PKEY_CTX_new');
-  Pointer(EVP_PKEY_CTX_free) := GetProcAddress(LibHandle, 'EVP_PKEY_CTX_free');
-  Pointer(EVP_PKEY_sign_init) := GetProcAddress(LibHandle, 'EVP_PKEY_sign_init');
-  Pointer(EVP_PKEY_sign) := GetProcAddress(LibHandle, 'EVP_PKEY_sign');
-  Pointer(EVP_PKEY_verify_init) := GetProcAddress(LibHandle, 'EVP_PKEY_verify_init');
-  Pointer(EVP_PKEY_verify) := GetProcAddress(LibHandle, 'EVP_PKEY_verify');
-  Pointer(EVP_PKEY_CTX_set_rsa_padding) := GetProcAddress(LibHandle, 'EVP_PKEY_CTX_set_rsa_padding');
-  Pointer(EVP_PKEY_CTX_set_signature_md) := GetProcAddress(LibHandle, 'EVP_PKEY_CTX_set_signature_md');
-  Pointer(EVP_Digest) := GetProcAddress(LibHandle, 'EVP_Digest');
-  Pointer(EVP_sha256) := GetProcAddress(LibHandle, 'EVP_sha256');
+  Pointer(RSA_new) := platform_dl_symbol(LibHandle, 'RSA_new');
+  Pointer(RSA_free) := platform_dl_symbol(LibHandle, 'RSA_free');
+  Pointer(RSA_generate_key_ex) := platform_dl_symbol(LibHandle, 'RSA_generate_key_ex');
+  Pointer(RSA_size) := platform_dl_symbol(LibHandle, 'RSA_size');
+  Pointer(RSA_sign) := platform_dl_symbol(LibHandle, 'RSA_sign');
+  Pointer(RSA_verify) := platform_dl_symbol(LibHandle, 'RSA_verify');
+  Pointer(BN_new) := platform_dl_symbol(LibHandle, 'BN_new');
+  Pointer(BN_free) := platform_dl_symbol(LibHandle, 'BN_free');
+  Pointer(BN_set_word) := platform_dl_symbol(LibHandle, 'BN_set_word');
+  Pointer(EVP_PKEY_new) := platform_dl_symbol(LibHandle, 'EVP_PKEY_new');
+  Pointer(EVP_PKEY_free) := platform_dl_symbol(LibHandle, 'EVP_PKEY_free');
+  Pointer(EVP_PKEY_assign) := platform_dl_symbol(LibHandle, 'EVP_PKEY_assign');
+  Pointer(EVP_PKEY_CTX_new) := platform_dl_symbol(LibHandle, 'EVP_PKEY_CTX_new');
+  Pointer(EVP_PKEY_CTX_free) := platform_dl_symbol(LibHandle, 'EVP_PKEY_CTX_free');
+  Pointer(EVP_PKEY_sign_init) := platform_dl_symbol(LibHandle, 'EVP_PKEY_sign_init');
+  Pointer(EVP_PKEY_sign) := platform_dl_symbol(LibHandle, 'EVP_PKEY_sign');
+  Pointer(EVP_PKEY_verify_init) := platform_dl_symbol(LibHandle, 'EVP_PKEY_verify_init');
+  Pointer(EVP_PKEY_verify) := platform_dl_symbol(LibHandle, 'EVP_PKEY_verify');
+  Pointer(EVP_PKEY_CTX_set_rsa_padding) := platform_dl_symbol(LibHandle, 'EVP_PKEY_CTX_set_rsa_padding');
+  Pointer(EVP_PKEY_CTX_set_signature_md) := platform_dl_symbol(LibHandle, 'EVP_PKEY_CTX_set_signature_md');
+  Pointer(EVP_Digest) := platform_dl_symbol(LibHandle, 'EVP_Digest');
+  Pointer(EVP_sha256) := platform_dl_symbol(LibHandle, 'EVP_sha256');
 end;
 
 procedure AddResult(const AName: string; ASuccess: Boolean; const AError: string = '');
@@ -165,7 +164,7 @@ begin
 
   WriteLn;
   PrintSeparator;
-  WriteLn(Format('Total: %d tests, %d passed, %d failed (%.1f%%)',
+  WriteLn(TextFormat('Total: %d tests, %d passed, %d failed (%.1f%%)',
     [TotalTests, PassedTests, TotalTests - PassedTests,
      (PassedTests / TotalTests) * 100]));
   PrintSeparator;
@@ -491,7 +490,7 @@ begin
       WriteLn('  Testing ', key_sizes[i], '-bit key...');
 
       rsa := RSA_new();
-      start_time := Now;
+      start_time := DateTimeNow;
 
       if RSA_generate_key_ex(rsa, key_sizes[i], e, nil) <> 1 then
       begin
@@ -501,7 +500,7 @@ begin
         Continue;
       end;
 
-      end_time := Now;
+      end_time := DateTimeNow;
       duration_ms := (end_time - start_time) * 24 * 60 * 60 * 1000;
 
       actual_size := RSA_size(rsa) * 8;

@@ -4,9 +4,8 @@ program test_openssl_verify_ex_strict_chain_contract;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.factory;
+  nextpas.core.tls.factory, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv, nextpas.core.text.format;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin
@@ -61,11 +60,11 @@ begin
 
   LVerified := LLeafCert.VerifyEx(LStore, [sslCertVerifyStrictChain], LVerifyResult);
   Check((not LVerified) and (not LVerifyResult.Success),
-    Format(
+    TextFormat(
       'VerifyEx with strict-chain should fail when serverAuth EKU is absent; actual verified=%s success=%s error=%d msg=%s details=%s',
       [
-        BoolToStr(LVerified, True),
-        BoolToStr(LVerifyResult.Success, True),
+        BoolToStr(LVerified),
+        BoolToStr(LVerifyResult.Success),
         LVerifyResult.ErrorCode,
         LVerifyResult.ErrorMessage,
         LVerifyResult.DetailedInfo

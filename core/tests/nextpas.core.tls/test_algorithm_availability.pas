@@ -3,10 +3,9 @@ program test_algorithm_availability;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.text.conv,
   nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.exception;
 
 var
   TotalAlgs, AvailableAlgs: Integer;

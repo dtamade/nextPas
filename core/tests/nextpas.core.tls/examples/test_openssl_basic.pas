@@ -6,14 +6,13 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   // Core units
   nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.err,
-  nextpas.core.tls.openssl.api.rand;
+  nextpas.core.tls.openssl.api.rand, nextpas.core.exception, nextpas.core.text.format;
 
 procedure TestOpenSSLInitialization;
 begin
@@ -26,7 +25,7 @@ begin
   begin
     WriteLn('OpenSSL loaded successfully!');
     WriteLn('Version: ', GetOpenSSLVersionText);
-    WriteLn('Version Number: ', Format('0x%x', [GetOpenSSLVersionNumber]));
+    WriteLn('Version Number: ', TextFormat('0x%x', [GetOpenSSLVersionNumber]));
     WriteLn;
   end
   else
@@ -52,7 +51,7 @@ begin
     WriteLn('OK');
     Write('Random bytes: ');
     for I := 0 to 15 do
-      Write(Format('%.2x', [Buffer[I]]));
+      Write(TextFormat('%.2x', [Buffer[I]]));
     WriteLn('...');
   end
   else
@@ -93,7 +92,7 @@ begin
           begin
             Write('SHA256 of "', Data, '": ');
             for I := 0 to DigestLen - 1 do
-              Write(Format('%.2x', [Digest[I]]));
+              Write(TextFormat('%.2x', [Digest[I]]));
             WriteLn;
           end
           else
@@ -134,7 +133,7 @@ begin
   ErrorCode := ERR_get_error;
   if ErrorCode <> 0 then
   begin
-    WriteLn('Error code: ', Format('0x%x', [ErrorCode]));
+    WriteLn('Error code: ', TextFormat('0x%x', [ErrorCode]));
     ERR_error_string(ErrorCode, @ErrorStr[0]);
     WriteLn('Error string: ', ErrorStr);
   end

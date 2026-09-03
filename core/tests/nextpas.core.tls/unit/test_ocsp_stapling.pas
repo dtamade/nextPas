@@ -20,12 +20,12 @@ unit test_ocsp_stapling;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
+  nextpas.core.test,
   nextpas.core.tls.ocsp.cache,
   nextpas.core.tls.ocsp.stapling,
   nextpas.core.tls.ocsp,
   nextpas.core.tls.x509,
-  nextpas.core.time;
+  nextpas.core.time, nextpas.core.base, nextpas.core.base.utils, nextpas.core.fs, nextpas.core.math, nextpas.core.text;
 
 type
   // ========================================================================
@@ -204,7 +204,7 @@ begin
   CheckTrue(FCache.Get(FTestSerialNumber, Retrieved), 'Should retrieve before expiry');
 
   // 等待过期
-  Sleep(1500);
+  MsSleep(1500);
 
   // 过期后获取应该失败
   CheckFalse(FCache.Get(FTestSerialNumber, Retrieved), 'Should not retrieve after expiry');

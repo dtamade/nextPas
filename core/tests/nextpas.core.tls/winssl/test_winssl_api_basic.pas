@@ -4,10 +4,9 @@ program test_winssl_api_basic;
 {$CODEPAGE UTF8}
 
 uses
-  nextpas.core.system.sysutils
+  nextpas.core.exception, nextpas.core.text.format, nextpas.core.text.conv
   {$IFDEF WINDOWS}
-  , Windows,
-  nextpas.core.tls.winssl.base,
+  , nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api
   {$ENDIF}
   ;
@@ -95,13 +94,13 @@ begin
   if SCHANNEL_CRED_VERSION = 4 then
     WritePass
   else
-    WriteFail(Format('期望 4, 实际 %d', [SCHANNEL_CRED_VERSION]));
+    WriteFail(TextFormat('期望 4, 实际 %d', [SCHANNEL_CRED_VERSION]));
 
   WriteTest('SECPKG_CRED_OUTBOUND');
   if SECPKG_CRED_OUTBOUND = $00000002 then
     WritePass
   else
-    WriteFail(Format('期望 $00000002, 实际 $%.8x', [SECPKG_CRED_OUTBOUND]));
+    WriteFail(TextFormat('期望 $00000002, 实际 $%.8x', [SECPKG_CRED_OUTBOUND]));
 
   WriteLn;
 end;
@@ -142,9 +141,9 @@ begin
   if Status = 0 then
     WritePass
   else if Status = SEC_E_NO_CREDENTIALS then
-    WriteCredentialSkip(Format('未获取凭据 (status=0x%.8x)', [Status]))
+    WriteCredentialSkip(TextFormat('未获取凭据 (status=0x%.8x)', [Status]))
   else
-    WriteFail(Format('返回状态码: 0x%.8x', [Status]));
+    WriteFail(TextFormat('返回状态码: 0x%.8x', [Status]));
 
   if Status = 0 then
   begin
@@ -153,7 +152,7 @@ begin
     if Status = 0 then
       WritePass
     else
-      WriteFail(Format('返回状态码: 0x%.8x', [Status]));
+      WriteFail(TextFormat('返回状态码: 0x%.8x', [Status]));
   end;
 
   WriteLn;

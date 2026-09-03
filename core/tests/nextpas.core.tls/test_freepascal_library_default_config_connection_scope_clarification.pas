@@ -3,10 +3,9 @@ program test_freepascal_library_default_config_connection_scope_clarification;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.exception, nextpas.core.text;
 
 type
   TConfigMutator = procedure(var AConfig: TSSLConfig);

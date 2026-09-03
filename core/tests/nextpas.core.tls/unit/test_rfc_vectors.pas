@@ -3,10 +3,9 @@ program test_rfc_vectors;
 {$mode ObjFPC}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.ed25519,
   nextpas.core.tls.crypto.primitives,
-  nextpas.core.tls.crypto.x25519;
+  nextpas.core.tls.crypto.x25519, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   GTotal: Integer = 0;

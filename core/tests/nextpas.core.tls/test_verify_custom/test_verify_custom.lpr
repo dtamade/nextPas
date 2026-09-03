@@ -1,10 +1,9 @@
 program test_verify_custom;
 {$mode ObjFPC}{$H+}
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.verify.custom,
-  nextpas.core.crypto.hash;
+  nextpas.core.crypto.hash, nextpas.core.base;
 
 var GPass: Integer = 0; GFail: Integer = 0;
 

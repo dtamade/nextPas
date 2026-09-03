@@ -16,9 +16,8 @@ program test_mbedtls_server_context;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.mbedtls.lib;
+  nextpas.core.tls.mbedtls.lib, nextpas.core.exception, nextpas.core.fs;
 
 type
   TTestResult = record

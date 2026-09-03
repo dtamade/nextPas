@@ -3,9 +3,8 @@ program test_evp_cipher;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv;
 
 // Helper function to convert bytes to hex string
 function BytesToHex(const Data: array of Byte): string;

@@ -3,14 +3,13 @@ program TestCertificatePinning;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.pinning,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.pem,
-  nextpas.core.tls.openssl.core;
+  nextpas.core.tls.openssl.core, nextpas.core.base, nextpas.core.exception;
 
 {**
  * Certificate Pinning Test Suite

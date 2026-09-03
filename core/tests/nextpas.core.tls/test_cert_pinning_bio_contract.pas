@@ -4,7 +4,6 @@ program test_cert_pinning_bio_contract;
 
 uses
   nextpas.core.tls.cert.builder,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert,
@@ -18,7 +17,7 @@ uses
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.pem,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception;
 var
   GLib: ISSLLibrary = nil;
   TotalTests: Integer = 0;

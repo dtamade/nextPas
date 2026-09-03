@@ -3,10 +3,9 @@ program test_openssl_des;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, DynLibs,
   nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.des;
+  nextpas.core.tls.openssl.api.des, nextpas.core.base, nextpas.core.exception, nextpas.core.platform.dl;
 
 var
   TestsPassed: Integer = 0;
@@ -28,7 +27,7 @@ end;
 
 function TestDESLoadFunctions: Boolean;
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
 begin
   Result := False;
 
@@ -46,7 +45,7 @@ begin
 
   // Get crypto library handle
   LLib := GetCryptoLibHandle;
-  if LLib = NilHandle then
+  if LLib.IsInvalid then
   begin
     WriteLn('Failed to get crypto library handle');
     PrintTestResult('DES - Load functions', False);

@@ -4,7 +4,7 @@ program test_x509_chain_ecdsa;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.x509verify, nextpas.core.tls.x509;
+   nextpas.core.tls.x509verify, nextpas.core.tls.x509, nextpas.core.text, nextpas.core.text.conv;
 
 var
   LTotal, LPassed: Integer;

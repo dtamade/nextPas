@@ -3,7 +3,6 @@ program test_cert_utils_generate_selfsigned_post_success_cleanup_family_contract
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
@@ -15,7 +14,7 @@ uses
   nextpas.core.tls.openssl.api.x509v3,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.text;
 type
   TBIOReadStubMode = (
     brmNone,

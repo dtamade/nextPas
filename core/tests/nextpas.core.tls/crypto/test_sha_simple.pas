@@ -3,9 +3,8 @@ program test_sha_simple;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.sha;
+  nextpas.core.tls.openssl.api.sha, nextpas.core.exception;
 
 begin
   WriteLn('========================================');

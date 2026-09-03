@@ -26,7 +26,7 @@ end;
 
 function TempCRLDir: string;
 begin
-  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  Result := IncludeTrailingPathDelimiter(GetTempDir()) +
     'nextpas_crl_' + IntToStr(GetProcessID);
 end;
 

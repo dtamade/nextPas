@@ -12,10 +12,10 @@
 program test_integration_winssl_openssl_comparison;
 
 {$mode ObjFPC}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
@@ -24,7 +24,7 @@ uses
   {$IFDEF WINDOWS}
   nextpas.core.tls.winssl.lib,
   {$ENDIF}
-  test_openssl_base;
+  test_openssl_base, nextpas.core.exception, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -43,15 +43,15 @@ begin
   WriteLn('=== Library Initialization ===');
 
   // Test OpenSSL
-  StartTime := Now;
+  StartTime := DateTimeNow;
   try
     OpenSSLLib := TOpenSSLLibrary.Create;
     OpenSSLInit := OpenSSLLib.Initialize;
-    Duration := DateTimeMillisecondsBetween(Now, StartTime);
+    Duration := DateTimeMillisecondsBetween(DateTimeNow, StartTime);
 
     if OpenSSLInit then
     begin
-      Runner.Check('OpenSSL initialization', True, Format('Version: %s, Time: %.2f ms',
+      Runner.Check('OpenSSL initialization', True, TextFormat('Version: %s, Time: %.2f ms',
         [OpenSSLLib.GetVersionString, Duration]));
     end
     else
@@ -63,13 +63,13 @@ begin
 
   // Test WinSSL
   {$IFDEF WINDOWS}
-  StartTime := Now;
+  StartTime := DateTimeNow;
   try
     WinSSLLib := TWinSSLLibrary.Create;
     if WinSSLLib.Initialize then
     begin
-      Duration := DateTimeMillisecondsBetween(Now, StartTime);
-      Runner.Check('WinSSL initialization', True, Format('Version: %s, Time: %.2f ms',
+      Duration := DateTimeMillisecondsBetween(DateTimeNow, StartTime);
+      Runner.Check('WinSSL initialization', True, TextFormat('Version: %s, Time: %.2f ms',
         [WinSSLLib.GetVersionString, Duration]));
     end
     else
@@ -248,7 +248,7 @@ begin
     end;
 
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
-    WriteLn('Test Date: ', DateTimeToStr(Now));
+    WriteLn('Test Date: ', DateTimeToStr(DateTimeNow));
 
     try
       TestLibraryInitialization;
@@ -262,7 +262,7 @@ begin
 
     {$IFNDEF WINDOWS}
     Runner.Check('Non-Windows skip accounting', Runner.SkipCount >= 4,
-      Format('Expected >=4 skips, got %d', [Runner.SkipCount]));
+      TextFormat('Expected >=4 skips, got %d', [Runner.SkipCount]));
     {$ENDIF}
 
     Runner.PrintSummary;

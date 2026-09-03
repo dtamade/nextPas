@@ -23,14 +23,13 @@ program test_p2_cms_boundary;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.cms,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.asn1,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader, nextpas.core.text.conv;
 
 var
   TotalTests, PassedTests, FailedTests: Integer;

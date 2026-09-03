@@ -13,8 +13,8 @@ program test_mbedtls_ocsp_capability;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  TypInfo,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   tls_test_sockets;
@@ -52,8 +52,7 @@ begin
   WriteLn;
   WriteLn('Backend Capabilities:');
   WriteLn('  SupportsOCSPStapling: ', LCaps.SupportsOCSPStapling);
-  WriteLn('  OCSPStaplingSupport: ', GetEnumName(TypeInfo(TSSLFeatureSupportLevel),
-    Ord(LCaps.OCSPStaplingSupport)));
+  WriteLn('  OCSPStaplingSupport: ', IntToStr(Ord(LCaps.OCSPStaplingSupport)));
 
   if not LCaps.SupportsOCSPStapling then
   begin

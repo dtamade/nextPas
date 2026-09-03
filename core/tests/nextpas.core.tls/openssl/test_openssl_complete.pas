@@ -4,9 +4,8 @@ program test_openssl_complete;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.factory,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base, nextpas.core.exception;
 
 procedure TestOpenSSL;
 var

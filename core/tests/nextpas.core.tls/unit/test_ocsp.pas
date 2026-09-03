@@ -4,12 +4,11 @@ program test_ocsp;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert,
   nextpas.core.tls.cert.advanced,
-  nextpas.core.tls.cert.builder;
+  nextpas.core.tls.cert.builder, nextpas.core.exception;
 
 var
   LOCSP: IOCSPClient;

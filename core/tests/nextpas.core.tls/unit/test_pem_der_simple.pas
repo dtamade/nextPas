@@ -4,9 +4,8 @@ program test_pem_der_simple;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.factory;
+  nextpas.core.tls.factory, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv;
 
 var
   LRootCert, LRootKey: string;

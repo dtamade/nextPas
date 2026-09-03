@@ -146,7 +146,7 @@ begin
   AssertTrue(not LInvalidCert.LoadFromPEM(LWrongTypePEM),
     'FreePascal certificate should reject PEM payload without CERTIFICATE block type');
 
-  LScanDir := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  LScanDir := IncludeTrailingPathDelimiter(GetTempDir()) +
     'nextpas_fp_store_scan_' + IntToStr(Int64(GetTickCount64));
   AssertTrue(ForceDirectories(LScanDir),
     'Temporary directory for LoadFromPath filtering contract should be created');

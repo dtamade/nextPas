@@ -5,7 +5,7 @@ program test_dtls_layer;
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.dtls.layer;
+   nextpas.core.tls.dtls.layer, nextpas.core.base;
 
 var
   LTotal, LPassed: Integer;

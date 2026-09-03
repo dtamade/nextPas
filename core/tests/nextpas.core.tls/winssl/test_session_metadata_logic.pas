@@ -16,7 +16,7 @@ program test_session_metadata_logic;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time;
+  nextpas.core.time, nextpas.core.math, nextpas.core.text.format;
 
 type
   TSSLProtocolVersion = (
@@ -62,7 +62,7 @@ constructor TMockSession.Create;
 begin
   inherited Create;
   FID := '';
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
   FTimeout := 300; // 默认 5 分钟
   FProtocolVersion := sslProtocolTLS12;
   FCipherName := '';
@@ -94,7 +94,7 @@ begin
   // 会话有效的条件:
   // 1. 有会话 ID
   // 2. 未超时
-  Result := (FID <> '') and ((Now - FCreationTime) * 86400 < FTimeout);
+  Result := (FID <> '') and ((DateTimeNow - FCreationTime) * 86400 < FTimeout);
 end;
 
 function TMockSession.IsResumable: Boolean;
@@ -261,7 +261,7 @@ begin
 
     // 等待 2 秒后应该过期
     WriteLn('    等待 2 秒测试超时...');
-    Sleep(2000);
+    MsSleep(2000);
     Check('超时后无效', not LSession.IsValid);
   finally
     LSession.Free;
@@ -287,7 +287,7 @@ begin
     // 过期会话不可复用
     LSession.SetTimeout(1);
     WriteLn('    等待 2 秒测试超时...');
-    Sleep(2000);
+    MsSleep(2000);
     Check('过期会话不可复用', not LSession.IsResumable);
   finally
     LSession.Free;
@@ -331,7 +331,7 @@ begin
     LCreationTime := LSession.GetCreationTime;
 
     // 创建时间应该接近当前时间(误差小于 1 秒)
-    Check('创建时间正确', Abs(Now - LCreationTime) < 1.0 / 86400);
+    Check('创建时间正确', Abs(DateTimeNow - LCreationTime) < 1.0 / 86400);
   finally
     LSession.Free;
   end;
@@ -371,7 +371,7 @@ begin
   WriteLn('通过: ', Passed);
   WriteLn('失败: ', Failed);
   if Total > 0 then
-    WriteLn('成功率: ', Format('%.1f%%', [Passed * 100.0 / Total]));
+    WriteLn('成功率: ', TextFormat('%.1f%%', [Passed * 100.0 / Total]));
   WriteLn('================================================================');
 end;
 

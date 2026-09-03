@@ -5,8 +5,7 @@ program test_early_data_public_api_contract;
 uses
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.exception;
 
 var
   GTestsPassed: Integer = 0;

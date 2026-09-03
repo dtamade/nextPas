@@ -9,10 +9,10 @@ program benchmark_ringbuffer;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.ringbuffer,
-  nextpas.core.tls.ringbuffer.lockfree;
+  nextpas.core.tls.ringbuffer.lockfree, nextpas.core.text.format;
 
 const
   BUFFER_SIZE_POW2 = 16;  // 64KB buffer
@@ -39,7 +39,7 @@ var
 begin
   Buffer := TLockFreeRingBuffer.Create(BUFFER_SIZE_POW2);
   try
-    StartTime := Now;
+    StartTime := DateTimeNow;
 
     for I := 1 to ITERATIONS do
     begin
@@ -47,7 +47,7 @@ begin
       Buffer.TryRead(ReadBuf, CHUNK_SIZE);
     end;
 
-    Result := DateTimeMillisecondsBetween(Now, StartTime);
+    Result := DateTimeMillisecondsBetween(DateTimeNow, StartTime);
   finally
     Buffer.Free;
   end;
@@ -61,7 +61,7 @@ var
 begin
   Buffer := TLockFreeRingBuffer.Create(BUFFER_SIZE_POW2);
   try
-    StartTime := Now;
+    StartTime := DateTimeNow;
 
     for I := 1 to ITERATIONS do
     begin
@@ -69,7 +69,7 @@ begin
       Buffer.TryRead(ReadBuf, CHUNK_SIZE);
     end;
 
-    Result := DateTimeMillisecondsBetween(Now, StartTime);
+    Result := DateTimeMillisecondsBetween(DateTimeNow, StartTime);
   finally
     Buffer.Free;
   end;
@@ -85,7 +85,7 @@ var
 begin
   Buffer := TLockFreeRingBuffer.Create(BUFFER_SIZE_POW2);
   try
-    StartTime := Now;
+    StartTime := DateTimeNow;
 
     for I := 1 to ITERATIONS do
     begin
@@ -104,7 +104,7 @@ begin
       end;
     end;
 
-    Result := DateTimeMillisecondsBetween(Now, StartTime);
+    Result := DateTimeMillisecondsBetween(DateTimeNow, StartTime);
   finally
     Buffer.Free;
   end;
@@ -120,7 +120,7 @@ var
 begin
   Buffer := TLockFreeRingBuffer.Create(BUFFER_SIZE_POW2);
   try
-    StartTime := Now;
+    StartTime := DateTimeNow;
 
     for I := 1 to ITERATIONS do
     begin
@@ -139,7 +139,7 @@ begin
       end;
     end;
 
-    Result := DateTimeMillisecondsBetween(Now, StartTime);
+    Result := DateTimeMillisecondsBetween(DateTimeNow, StartTime);
   finally
     Buffer.Free;
   end;
@@ -153,10 +153,10 @@ begin
   WriteLn('Ring Buffer Performance Benchmark');
   WriteLn('==================================');
   WriteLn;
-  WriteLn(Format('Buffer size: %d KB', [1 shl BUFFER_SIZE_POW2 div 1024]));
-  WriteLn(Format('Iterations: %d', [ITERATIONS]));
-  WriteLn(Format('Chunk size: %d bytes', [CHUNK_SIZE]));
-  WriteLn(Format('Total data: %d MB', [Int64(ITERATIONS) * CHUNK_SIZE * 2 div 1024 div 1024]));
+  WriteLn(TextFormat('Buffer size: %d KB', [1 shl BUFFER_SIZE_POW2 div 1024]));
+  WriteLn(TextFormat('Iterations: %d', [ITERATIONS]));
+  WriteLn(TextFormat('Chunk size: %d bytes', [CHUNK_SIZE]));
+  WriteLn(TextFormat('Total data: %d MB', [Int64(ITERATIONS) * CHUNK_SIZE * 2 div 1024 div 1024]));
   WriteLn;
 
   InitTestData;
@@ -171,54 +171,54 @@ begin
 
   Write('Locking version:   ');
   LockingTime := BenchmarkLocking;
-  WriteLn(Format('%d ms', [LockingTime]));
+  WriteLn(TextFormat('%d ms', [LockingTime]));
 
   Write('Lock-free version: ');
   LockFreeTime := BenchmarkLockFree;
-  WriteLn(Format('%d ms', [LockFreeTime]));
+  WriteLn(TextFormat('%d ms', [LockFreeTime]));
 
   if LockFreeTime > 0 then
     Speedup := LockingTime / LockFreeTime
   else
     Speedup := 0;
 
-  WriteLn(Format('Speedup: %.2fx', [Speedup]));
+  WriteLn(TextFormat('Speedup: %.2fx', [Speedup]));
 
   WriteLn;
   WriteLn('=== Zero-Copy Interface ===');
 
   Write('Locking version:   ');
   LockingZCTime := BenchmarkLockingZeroCopy;
-  WriteLn(Format('%d ms', [LockingZCTime]));
+  WriteLn(TextFormat('%d ms', [LockingZCTime]));
 
   Write('Lock-free version: ');
   LockFreeZCTime := BenchmarkLockFreeZeroCopy;
-  WriteLn(Format('%d ms', [LockFreeZCTime]));
+  WriteLn(TextFormat('%d ms', [LockFreeZCTime]));
 
   if LockFreeZCTime > 0 then
     Speedup := LockingZCTime / LockFreeZCTime
   else
     Speedup := 0;
 
-  WriteLn(Format('Speedup: %.2fx', [Speedup]));
+  WriteLn(TextFormat('Speedup: %.2fx', [Speedup]));
 
   WriteLn;
   WriteLn('=== Throughput ===');
 
   if LockingTime > 0 then
-    WriteLn(Format('Locking (standard):    %.2f MB/s', [
+    WriteLn(TextFormat('Locking (standard):    %.2f MB/s', [
       Int64(ITERATIONS) * CHUNK_SIZE * 2 / 1024 / 1024 / (LockingTime / 1000)]));
 
   if LockFreeTime > 0 then
-    WriteLn(Format('Lock-free (standard):  %.2f MB/s', [
+    WriteLn(TextFormat('Lock-free (standard):  %.2f MB/s', [
       Int64(ITERATIONS) * CHUNK_SIZE * 2 / 1024 / 1024 / (LockFreeTime / 1000)]));
 
   if LockingZCTime > 0 then
-    WriteLn(Format('Locking (zero-copy):   %.2f MB/s', [
+    WriteLn(TextFormat('Locking (zero-copy):   %.2f MB/s', [
       Int64(ITERATIONS) * CHUNK_SIZE * 2 / 1024 / 1024 / (LockingZCTime / 1000)]));
 
   if LockFreeZCTime > 0 then
-    WriteLn(Format('Lock-free (zero-copy): %.2f MB/s', [
+    WriteLn(TextFormat('Lock-free (zero-copy): %.2f MB/s', [
       Int64(ITERATIONS) * CHUNK_SIZE * 2 / 1024 / 1024 / (LockFreeZCTime / 1000)]));
 
   WriteLn;

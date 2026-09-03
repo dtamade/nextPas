@@ -3,7 +3,7 @@ program test_rsa_pkcs1_encrypt;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.tls.crypto.rsa;
+  nextpas.core.tls.crypto.rsa, nextpas.core.base, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   GPassCount: Integer = 0;
@@ -142,7 +142,7 @@ begin
   TestRSAES_PKCS1v15_Randomness;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPassCount, GFailCount]));
   if GFailCount > 0 then
     Halt(1);
 end.

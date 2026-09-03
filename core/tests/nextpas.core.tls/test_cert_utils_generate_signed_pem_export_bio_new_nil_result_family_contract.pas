@@ -3,7 +3,6 @@ program test_cert_utils_generate_signed_pem_export_bio_new_nil_result_family_con
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -15,7 +14,7 @@ uses
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception;
 const
   CERTIFICATE_EXPORT_BIO_NEW_CALL = 1;
   PRIVATE_KEY_EXPORT_BIO_NEW_CALL = 2;

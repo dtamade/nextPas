@@ -3,9 +3,8 @@ program test_sm3;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 type
   TTestResult = record
@@ -82,7 +81,7 @@ var
 begin
   WriteLn('Testing SM3 Basic...');
 
-  Data := BytesOf('abc');
+  Data := StringToUTF8Bytes('abc');
   Hash := HashDataEVP('sm3', Data);
 
   if Length(Hash) = 0 then
@@ -115,7 +114,7 @@ begin
   WriteLn('Testing SM3 Standard Test Vector...');
 
   // Standard test vector: "abc"
-  Data := BytesOf('abc');
+  Data := StringToUTF8Bytes('abc');
   Hash := HashDataEVP('sm3', Data);
 
   if Length(Hash) = 0 then
@@ -195,8 +194,8 @@ begin
       Exit;
     end;
 
-    Part1 := BytesOf('ab');
-    Part2 := BytesOf('c');
+    Part1 := StringToUTF8Bytes('ab');
+    Part2 := StringToUTF8Bytes('c');
 
     if EVP_DigestUpdate(ctx, @Part1[0], Length(Part1)) <> 1 then
     begin

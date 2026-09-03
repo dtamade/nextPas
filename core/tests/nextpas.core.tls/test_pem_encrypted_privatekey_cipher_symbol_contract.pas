@@ -3,13 +3,12 @@ program test_pem_encrypted_privatekey_cipher_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.pem;
+  nextpas.core.tls.openssl.api.pem, nextpas.core.exception, nextpas.core.fs;
 
 var
   TotalTests: Integer = 0;
@@ -52,7 +51,7 @@ begin
   WriteLn;
   WriteLn('=== PEM encrypted private key cipher symbol guard ===');
 
-  LTempOut := GetTempDir(False) + 'nextpas_pem_encrypted_privatekey_cipher_symbol_contract.pem';
+  LTempOut := GetTempDir() + 'nextpas_pem_encrypted_privatekey_cipher_symbol_contract.pem';
   LOriginalEVPAes256Cbc := EVP_aes_256_cbc;
   LRaised := False;
   LDetail := '';

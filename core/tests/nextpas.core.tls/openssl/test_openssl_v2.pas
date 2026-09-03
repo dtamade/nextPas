@@ -3,12 +3,11 @@ program test_openssl_v2;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.native_handle,
-  nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.api.core, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.time, nextpas.core.platform.dl;
 
 var
   TestsPassed, TestsFailed: Integer;
@@ -42,16 +41,20 @@ begin
 end;
 
 procedure TestCoreLoading;
+var
+  LCrypto, LSSL: TPlatformLibrary;
 begin
   WriteLn;
   WriteLn('========== Test 1: Core Loading ==========');
   try
     LoadOpenSSLCore;
+    LCrypto := GetCryptoLibHandle;
+    LSSL := GetSSLLibHandle;
     Test('LoadOpenSSLCore', TOpenSSLLoader.IsModuleLoaded(osmCore));
-    Test('GetCryptoLibHandle', GetCryptoLibHandle <> 0,
-         'Handle=' + IntToStr(PtrInt(GetCryptoLibHandle)));
-    Test('GetSSLLibHandle', GetSSLLibHandle <> 0,
-         'Handle=' + IntToStr(PtrInt(GetSSLLibHandle)));
+    Test('GetCryptoLibHandle', LCrypto.IsValid,
+         'Handle=' + IntToStr(PtrUInt(LCrypto.Handle)));
+    Test('GetSSLLibHandle', LSSL.IsValid,
+         'Handle=' + IntToStr(PtrUInt(LSSL.Handle)));
     Test('GetOpenSSLVersionString', GetOpenSSLVersionString <> '',
          'Version=' + GetOpenSSLVersionString);
   except
@@ -156,7 +159,7 @@ begin
 
   WriteLn('OpenSSL Basic Validation Test v2');
   WriteLn('=================================');
-  WriteLn('Date: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('Date: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
 
   TestCoreLoading;
   TestFactory;

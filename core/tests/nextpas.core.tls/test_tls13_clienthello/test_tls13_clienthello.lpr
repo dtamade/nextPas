@@ -3,9 +3,8 @@ program test_tls13_clienthello;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.clienthello,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv;
 
 function HexToBytes(const AHex: string): TBytes;
 var I: Integer;

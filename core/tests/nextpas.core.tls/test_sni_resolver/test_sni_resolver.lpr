@@ -3,7 +3,6 @@ program test_sni_resolver;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.sni.resolver,
   nextpas.core.test;

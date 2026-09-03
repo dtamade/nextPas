@@ -3,9 +3,8 @@ program test_ocsp_simple;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.ocsp;
+  nextpas.core.tls.openssl.api.ocsp, nextpas.core.exception, nextpas.core.text.format;
 
 var
   LResult: Boolean;
@@ -44,7 +43,7 @@ begin
   if Assigned(OCSP_parse_url) then Inc(LCount, 1);
   if Assigned(OCSP_check_validity) then Inc(LCount, 1);
 
-  WriteLn(Format('   可用函数数量: %d/8', [LCount]));
+  WriteLn(TextFormat('   可用函数数量: %d/8', [LCount]));
 
   if LCount >= 5 then
     WriteLn('   ✅ 大部分 OCSP 函数可用')
@@ -54,10 +53,10 @@ begin
 
   // 检查常量
   WriteLn('3. 检查 OCSP 常量...');
-  WriteLn(Format('   OCSP_RESPONSE_STATUS_SUCCESSFUL = %d', [OCSP_RESPONSE_STATUS_SUCCESSFUL]));
-  WriteLn(Format('   V_OCSP_CERTSTATUS_GOOD = %d', [V_OCSP_CERTSTATUS_GOOD]));
-  WriteLn(Format('   V_OCSP_CERTSTATUS_REVOKED = %d', [V_OCSP_CERTSTATUS_REVOKED]));
-  WriteLn(Format('   V_OCSP_CERTSTATUS_UNKNOWN = %d', [V_OCSP_CERTSTATUS_UNKNOWN]));
+  WriteLn(TextFormat('   OCSP_RESPONSE_STATUS_SUCCESSFUL = %d', [OCSP_RESPONSE_STATUS_SUCCESSFUL]));
+  WriteLn(TextFormat('   V_OCSP_CERTSTATUS_GOOD = %d', [V_OCSP_CERTSTATUS_GOOD]));
+  WriteLn(TextFormat('   V_OCSP_CERTSTATUS_REVOKED = %d', [V_OCSP_CERTSTATUS_REVOKED]));
+  WriteLn(TextFormat('   V_OCSP_CERTSTATUS_UNKNOWN = %d', [V_OCSP_CERTSTATUS_UNKNOWN]));
   WriteLn('   ✅ 常量定义正确');
   WriteLn;
 

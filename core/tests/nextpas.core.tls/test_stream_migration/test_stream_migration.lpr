@@ -103,7 +103,7 @@ end;
 
 function TempFileName(const APrefix: string): string;
 begin
-  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  Result := IncludeTrailingPathDelimiter(GetTempDir()) +
     APrefix + '_' + IntToStr(GetProcessID) + '_' + IntToStr(Random(1000000));
 end;
 

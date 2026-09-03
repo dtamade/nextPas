@@ -1,10 +1,9 @@
 program test_init_order;
 
 {$mode objfpc}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
-  nextpas.core.system.sysutils,
   // 引用顺序很重要：先引用 winssl，让它注册
   nextpas.core.tls.winssl.lib,
   nextpas.core.tls.factory,

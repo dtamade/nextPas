@@ -3,12 +3,11 @@ program test_early_data_context_scope_clarification;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.factory,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.base.utils, nextpas.core.exception;
 
 var
   GTestsPassed: Integer = 0;

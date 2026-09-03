@@ -3,10 +3,9 @@ program test_provider;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.api.provider;
+  nextpas.core.tls.openssl.api.provider, nextpas.core.exception;
 
 procedure TestProviderAvailability;
 begin

@@ -6,12 +6,11 @@ program test_context_builder_server_servername_runtime_consistency;
   WithSNI / direct context ServerName compatibility behavior. }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.base.utils, nextpas.core.exception;
 
 var
   GTestsPassed: Integer = 0;

@@ -3,7 +3,6 @@ program test_pkcs12_parse_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -11,7 +10,7 @@ uses
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.pkcs,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.exception, nextpas.core.fs;
 
 var
   TotalTests: Integer = 0;
@@ -89,7 +88,7 @@ begin
   WriteLn;
   WriteLn('=== PKCS12 parse symbol guard ===');
 
-  LTempFile := GetTempDir(False) + 'nextpas_pkcs12_parse_symbol_contract.p12';
+  LTempFile := GetTempDir() + 'nextpas_pkcs12_parse_symbol_contract.p12';
   LFixtureKey := nil;
   LFixtureCert := nil;
   if not PrepareValidPKCS12File(LTempFile, LFixtureKey, LFixtureCert) then

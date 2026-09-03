@@ -3,11 +3,10 @@ program test_srp_helper_optional_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.srp;
+  nextpas.core.tls.openssl.api.srp, nextpas.core.exception;
 
 var
   TotalTests: Integer = 0;

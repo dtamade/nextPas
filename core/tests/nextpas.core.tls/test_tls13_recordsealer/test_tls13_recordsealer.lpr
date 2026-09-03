@@ -3,10 +3,9 @@ program test_tls13_recordsealer;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.recordsealer,
   nextpas.core.tls.tls13.wire,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text;
 
 var
   LRunner: TSuiteRunner;

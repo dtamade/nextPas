@@ -3,11 +3,10 @@ program test_tls13_record_size_limit;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.parser,
-  nextpas.core.tls.tls13.wire;
+  nextpas.core.tls.tls13.wire, nextpas.core.base, nextpas.core.exception;
 
 var
   LTotal, LPassed: Integer;

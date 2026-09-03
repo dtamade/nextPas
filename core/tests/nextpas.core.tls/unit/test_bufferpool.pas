@@ -4,7 +4,7 @@ program test_bufferpool;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.bufferpool;
+   nextpas.core.tls.bufferpool, nextpas.core.base;
 
 var
   LTotal, LPassed: Integer;

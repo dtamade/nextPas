@@ -3,10 +3,9 @@ program test_winssl_utils;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
-  nextpas.core.tls.winssl.utils;
+  nextpas.core.tls.winssl.utils, nextpas.core.exception, nextpas.core.text;
 
 var
   TestsPassed: Integer = 0;

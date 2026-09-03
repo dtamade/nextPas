@@ -19,11 +19,11 @@ unit test_openssl_core_unit;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
+  nextpas.core.test,
   test_base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.api.crypto;
+  nextpas.core.tls.openssl.api.crypto, nextpas.core.exception, nextpas.core.platform.dl, nextpas.core.text, nextpas.core.text.conv;
 
 type
   { TTestOpenSSLCore - OpenSSL Core 模块单元测试 }

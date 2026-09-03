@@ -10,11 +10,10 @@ program test_openssl_early_data_context;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception;
 var
   Lib: ISSLLibrary;
   Ctx: ISSLContext;

@@ -3,7 +3,6 @@ program test_pkcs12_i2d_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -11,7 +10,7 @@ uses
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.pkcs,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.exception, nextpas.core.fs;
 
 var
   TotalTests: Integer = 0;
@@ -93,7 +92,7 @@ begin
   end;
 
   LOriginalI2DPKCS12Bio := i2d_PKCS12_bio;
-  LOutputFile := GetTempDir(False) + 'nextpas_pkcs12_i2d_symbol_contract.p12';
+  LOutputFile := GetTempDir() + 'nextpas_pkcs12_i2d_symbol_contract.p12';
   if FileExists(LOutputFile) then
     DeleteFile(LOutputFile);
 

@@ -3,18 +3,17 @@ program test_base64;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.encoding,  // Phase 2.3.6: Base64/Hex functions
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 procedure PrintResult(const AName: string; APassed: Boolean; const AMessage: string = '');
 begin
   if APassed then
-    WriteLn(Format('  ✓ %s', [AName]))
+    WriteLn(TextFormat('  ✓ %s', [AName]))
   else
-    WriteLn(Format('  ✗ %s: %s', [AName, AMessage]));
+    WriteLn(TextFormat('  ✗ %s: %s', [AName, AMessage]));
 end;
 
 procedure TestStringBase64;
@@ -87,7 +86,7 @@ begin
   LHexFromBase64 := TEncodingUtils.BytesToHex(LDecodedHash, False);
 
   PrintResult('SHA256 Hex vs Base64 consistency', LowerCase(LHashHex) = LowerCase(LHexFromBase64),
-    Format('Hex: %s, FromBase64: %s', [LHashHex, LHexFromBase64]));
+    TextFormat('Hex: %s, FromBase64: %s', [LHashHex, LHexFromBase64]));
 end;
 
 procedure TestEmpty;

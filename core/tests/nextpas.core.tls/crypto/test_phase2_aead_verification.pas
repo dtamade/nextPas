@@ -3,10 +3,9 @@ program test_phase2_aead_verification;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 type
   TTestResult = record
@@ -753,9 +752,9 @@ begin
 
   WriteLn;
   PrintSeparator('=');
-  WriteLn(Format('  Total: %d tests', [TotalTests]));
-  WriteLn(Format('  Passed: %d (%.1f%%)', [PassedTests, (PassedTests / TotalTests) * 100]));
-  WriteLn(Format('  Failed: %d (%.1f%%)', [FailedTests, (FailedTests / TotalTests) * 100]));
+  WriteLn(TextFormat('  Total: %d tests', [TotalTests]));
+  WriteLn(TextFormat('  Passed: %d (%.1f%%)', [PassedTests, (PassedTests / TotalTests) * 100]));
+  WriteLn(TextFormat('  Failed: %d (%.1f%%)', [FailedTests, (FailedTests / TotalTests) * 100]));
   PrintSeparator('=');
   WriteLn;
 

@@ -5,8 +5,7 @@ unit benchmark_utils;
 interface
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Math,
-  nextpas.core.time;
+  nextpas.core.time, nextpas.core.text.format;
 
 type
   { Benchmark timing and statistics }
@@ -109,13 +108,13 @@ end;
 
 procedure TBenchmark.Report;
 begin
-  WriteLn(Format('%-40s: %8.2f ms  (%10.0f ops/sec)',
+  WriteLn(TextFormat('%-40s: %8.2f ms  (%10.0f ops/sec)',
     [FName, ElapsedMs, OpsPerSecond]));
 end;
 
 procedure TBenchmark.ReportThroughput;
 begin
-  WriteLn(Format('%-40s: %8.2f ms  (%10.2f MB/s)',
+  WriteLn(TextFormat('%-40s: %8.2f ms  (%10.2f MB/s)',
     [FName, ElapsedMs, ThroughputMBps]));
 end;
 
@@ -209,7 +208,7 @@ end;
 
 procedure PrintResult(const AName: string; AValue: Double; const AUnit: string);
 begin
-  WriteLn(Format('  %-35s: %12.2f %s', [AName, AValue, AUnit]));
+  WriteLn(TextFormat('  %-35s: %12.2f %s', [AName, AValue, AUnit]));
 end;
 
 procedure PrintSeparator;

@@ -24,7 +24,6 @@ program test_p2_pkcs7_sign_verify;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.pkcs7,
@@ -33,7 +32,7 @@ uses
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.stack,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader, nextpas.core.exception, nextpas.core.text.format;
 
 var
   TotalTests, PassedTests, FailedTests: Integer;
@@ -536,10 +535,10 @@ begin
   WriteLn('=' + StringOfChar('=', 60));
   WriteLn('测试结果总结');
   WriteLn('=' + StringOfChar('=', 60));
-  WriteLn(Format('总测试数: %d', [TotalTests]));
-  WriteLn(Format('通过: %d', [PassedTests]));
-  WriteLn(Format('失败: %d', [FailedTests]));
-  WriteLn(Format('通过率: %.1f%%', [PassedTests * 100.0 / TotalTests]));
+  WriteLn(TextFormat('总测试数: %d', [TotalTests]));
+  WriteLn(TextFormat('通过: %d', [PassedTests]));
+  WriteLn(TextFormat('失败: %d', [FailedTests]));
+  WriteLn(TextFormat('通过率: %.1f%%', [PassedTests * 100.0 / TotalTests]));
 
   if FailedTests > 0 then
   begin

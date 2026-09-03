@@ -70,7 +70,7 @@ begin
   WriteLn;
   WriteLn('=== TXT_DB helper BIO guard ===');
 
-  LTempFile := GetTempDir(False) + 'nextpas_txt_db_helper_bio_contract.txt';
+  LTempFile := GetTempDir() + 'nextpas_txt_db_helper_bio_contract.txt';
   if not WriteTempTextFile(LTempFile, 'contract-data') then
   begin
     MarkSkip('TXT_DB helper BIO guard', 'failed to create temp file');

@@ -3,7 +3,6 @@ program test_cert_utils_generate_selfsigned_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -14,7 +13,7 @@ uses
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception;
 var
   GLib: ISSLLibrary = nil;
   TotalTests: Integer = 0;

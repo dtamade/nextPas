@@ -8,12 +8,11 @@ program test_asn1_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, DynLibs, ctypes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.base, nextpas.core.platform.dl, nextpas.core.text.format;
 
 type
   { ASN.1 Basic Function Types }
@@ -92,43 +91,43 @@ var
 
 function LoadASN1Functions: Boolean;
 var
-  LibHandle: TLibHandle;
+  LibHandle: TPlatformLibrary;
 begin
   Result := False;
   LibHandle := GetCryptoLibHandle;
-  if LibHandle = 0 then Exit;
+  if LibHandle.IsInvalid then Exit;
 
-  ASN1_INTEGER_new := TASN1_INTEGER_new(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_new'));
-  ASN1_INTEGER_free := TASN1_INTEGER_free(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_free'));
-  ASN1_INTEGER_set := TASN1_INTEGER_set(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_set'));
-  ASN1_INTEGER_get := TASN1_INTEGER_get(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_get'));
-  ASN1_INTEGER_set_int64 := TASN1_INTEGER_set_int64(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_set_int64'));
-  ASN1_INTEGER_get_int64 := TASN1_INTEGER_get_int64(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_get_int64'));
-  ASN1_INTEGER_dup := TASN1_INTEGER_dup(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_dup'));
-  ASN1_INTEGER_cmp := TASN1_INTEGER_cmp(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_cmp'));
+  ASN1_INTEGER_new := TASN1_INTEGER_new(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_new'));
+  ASN1_INTEGER_free := TASN1_INTEGER_free(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_free'));
+  ASN1_INTEGER_set := TASN1_INTEGER_set(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_set'));
+  ASN1_INTEGER_get := TASN1_INTEGER_get(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_get'));
+  ASN1_INTEGER_set_int64 := TASN1_INTEGER_set_int64(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_set_int64'));
+  ASN1_INTEGER_get_int64 := TASN1_INTEGER_get_int64(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_get_int64'));
+  ASN1_INTEGER_dup := TASN1_INTEGER_dup(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_dup'));
+  ASN1_INTEGER_cmp := TASN1_INTEGER_cmp(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_cmp'));
 
-  ASN1_STRING_new := TASN1_STRING_new(GetProcedureAddress(LibHandle, 'ASN1_STRING_new'));
-  ASN1_STRING_free := TASN1_STRING_free(GetProcedureAddress(LibHandle, 'ASN1_STRING_free'));
-  ASN1_STRING_type_new := TASN1_STRING_type_new(GetProcedureAddress(LibHandle, 'ASN1_STRING_type_new'));
-  ASN1_STRING_set := TASN1_STRING_set(GetProcedureAddress(LibHandle, 'ASN1_STRING_set'));
-  ASN1_STRING_length := TASN1_STRING_length(GetProcedureAddress(LibHandle, 'ASN1_STRING_length'));
-  ASN1_STRING_get0_data := TASN1_STRING_get0_data(GetProcedureAddress(LibHandle, 'ASN1_STRING_get0_data'));
-  ASN1_STRING_data := TASN1_STRING_data(GetProcedureAddress(LibHandle, 'ASN1_STRING_data'));
-  ASN1_STRING_type := TASN1_STRING_type(GetProcedureAddress(LibHandle, 'ASN1_STRING_type'));
-  ASN1_STRING_cmp := TASN1_STRING_cmp(GetProcedureAddress(LibHandle, 'ASN1_STRING_cmp'));
-  ASN1_STRING_dup := TASN1_STRING_dup(GetProcedureAddress(LibHandle, 'ASN1_STRING_dup'));
+  ASN1_STRING_new := TASN1_STRING_new(platform_dl_symbol(LibHandle, 'ASN1_STRING_new'));
+  ASN1_STRING_free := TASN1_STRING_free(platform_dl_symbol(LibHandle, 'ASN1_STRING_free'));
+  ASN1_STRING_type_new := TASN1_STRING_type_new(platform_dl_symbol(LibHandle, 'ASN1_STRING_type_new'));
+  ASN1_STRING_set := TASN1_STRING_set(platform_dl_symbol(LibHandle, 'ASN1_STRING_set'));
+  ASN1_STRING_length := TASN1_STRING_length(platform_dl_symbol(LibHandle, 'ASN1_STRING_length'));
+  ASN1_STRING_get0_data := TASN1_STRING_get0_data(platform_dl_symbol(LibHandle, 'ASN1_STRING_get0_data'));
+  ASN1_STRING_data := TASN1_STRING_data(platform_dl_symbol(LibHandle, 'ASN1_STRING_data'));
+  ASN1_STRING_type := TASN1_STRING_type(platform_dl_symbol(LibHandle, 'ASN1_STRING_type'));
+  ASN1_STRING_cmp := TASN1_STRING_cmp(platform_dl_symbol(LibHandle, 'ASN1_STRING_cmp'));
+  ASN1_STRING_dup := TASN1_STRING_dup(platform_dl_symbol(LibHandle, 'ASN1_STRING_dup'));
 
-  ASN1_OCTET_STRING_new := TASN1_OCTET_STRING_new(GetProcedureAddress(LibHandle, 'ASN1_OCTET_STRING_new'));
-  ASN1_OCTET_STRING_free := TASN1_OCTET_STRING_free(GetProcedureAddress(LibHandle, 'ASN1_OCTET_STRING_free'));
-  ASN1_OCTET_STRING_set := TASN1_OCTET_STRING_set(GetProcedureAddress(LibHandle, 'ASN1_OCTET_STRING_set'));
-  ASN1_OCTET_STRING_dup := TASN1_OCTET_STRING_dup(GetProcedureAddress(LibHandle, 'ASN1_OCTET_STRING_dup'));
-  ASN1_OCTET_STRING_cmp := TASN1_OCTET_STRING_cmp(GetProcedureAddress(LibHandle, 'ASN1_OCTET_STRING_cmp'));
+  ASN1_OCTET_STRING_new := TASN1_OCTET_STRING_new(platform_dl_symbol(LibHandle, 'ASN1_OCTET_STRING_new'));
+  ASN1_OCTET_STRING_free := TASN1_OCTET_STRING_free(platform_dl_symbol(LibHandle, 'ASN1_OCTET_STRING_free'));
+  ASN1_OCTET_STRING_set := TASN1_OCTET_STRING_set(platform_dl_symbol(LibHandle, 'ASN1_OCTET_STRING_set'));
+  ASN1_OCTET_STRING_dup := TASN1_OCTET_STRING_dup(platform_dl_symbol(LibHandle, 'ASN1_OCTET_STRING_dup'));
+  ASN1_OCTET_STRING_cmp := TASN1_OCTET_STRING_cmp(platform_dl_symbol(LibHandle, 'ASN1_OCTET_STRING_cmp'));
 
-  ASN1_TIME_new := TASN1_TIME_new(GetProcedureAddress(LibHandle, 'ASN1_TIME_new'));
-  ASN1_TIME_free := TASN1_TIME_free(GetProcedureAddress(LibHandle, 'ASN1_TIME_free'));
-  ASN1_TIME_set := TASN1_TIME_set(GetProcedureAddress(LibHandle, 'ASN1_TIME_set'));
-  ASN1_TIME_set_string := TASN1_TIME_set_string(GetProcedureAddress(LibHandle, 'ASN1_TIME_set_string'));
-  ASN1_TIME_check := TASN1_TIME_check(GetProcedureAddress(LibHandle, 'ASN1_TIME_check'));
+  ASN1_TIME_new := TASN1_TIME_new(platform_dl_symbol(LibHandle, 'ASN1_TIME_new'));
+  ASN1_TIME_free := TASN1_TIME_free(platform_dl_symbol(LibHandle, 'ASN1_TIME_free'));
+  ASN1_TIME_set := TASN1_TIME_set(platform_dl_symbol(LibHandle, 'ASN1_TIME_set'));
+  ASN1_TIME_set_string := TASN1_TIME_set_string(platform_dl_symbol(LibHandle, 'ASN1_TIME_set_string'));
+  ASN1_TIME_check := TASN1_TIME_check(platform_dl_symbol(LibHandle, 'ASN1_TIME_check'));
 
   Result := Assigned(ASN1_INTEGER_new) and Assigned(ASN1_STRING_new);
 end;
@@ -148,7 +147,7 @@ begin
   Runner.Check('Set value to 42', ASN1_INTEGER_set(int1, 42) = 1);
 
   value := ASN1_INTEGER_get(int1);
-  Runner.Check('Get value equals 42', value = 42, Format('Value: %d', [value]));
+  Runner.Check('Get value equals 42', value = 42, TextFormat('Value: %d', [value]));
 
   ASN1_INTEGER_free(int1);
 end;
@@ -168,11 +167,11 @@ begin
 
   test_val := 9876543210;
   Runner.Check('Set 64-bit value', ASN1_INTEGER_set_int64(int1, test_val) = 1,
-          Format('Value: %d', [test_val]));
+          TextFormat('Value: %d', [test_val]));
 
   value := 0;
   Runner.Check('Get 64-bit value', ASN1_INTEGER_get_int64(@value, int1) = 1);
-  Runner.Check('Value matches', value = test_val, Format('Got: %d', [value]));
+  Runner.Check('Value matches', value = test_val, TextFormat('Got: %d', [value]));
 
   ASN1_INTEGER_free(int1);
 end;
@@ -221,7 +220,7 @@ begin
   Runner.Check('Set string data', ASN1_STRING_set(str1, PAnsiChar(test_data), Length(test_data)) = 1);
 
   len := ASN1_STRING_length(str1);
-  Runner.Check('Get string length', len = Length(test_data), Format('Length: %d', [len]));
+  Runner.Check('Get string length', len = Length(test_data), TextFormat('Length: %d', [len]));
 
   data := ASN1_STRING_get0_data(str1);
   Runner.Check('Get string data', data <> nil);
@@ -243,7 +242,7 @@ begin
 
   str_type := ASN1_STRING_type(str1);
   Runner.Check('Verify string type', str_type = V_ASN1_UTF8STRING,
-          Format('Type: %d (expected %d)', [str_type, V_ASN1_UTF8STRING]));
+          TextFormat('Type: %d (expected %d)', [str_type, V_ASN1_UTF8STRING]));
 
   ASN1_STRING_free(str1);
 end;

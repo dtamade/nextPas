@@ -3,7 +3,7 @@ program test_aesni;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.crypto.aesni;
+  nextpas.core.crypto.aesni, nextpas.core.text.conv;
 
 function BytesToHex(const B: array of Byte; ALen: Integer): string;
 var I: Integer;

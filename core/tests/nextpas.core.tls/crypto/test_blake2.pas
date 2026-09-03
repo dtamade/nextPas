@@ -3,10 +3,9 @@ program test_blake2;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.blake2;
+  nextpas.core.tls.openssl.blake2, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   TotalTests, PassedTests: Integer;
@@ -245,7 +244,7 @@ begin
 
     // Summary
     WriteLn('========================================');
-    WriteLn(Format('Results: %d/%d tests passed (%.1f%%)',
+    WriteLn(TextFormat('Results: %d/%d tests passed (%.1f%%)',
       [PassedTests, TotalTests, (PassedTests / TotalTests) * 100]));
     WriteLn('========================================');
     WriteLn;

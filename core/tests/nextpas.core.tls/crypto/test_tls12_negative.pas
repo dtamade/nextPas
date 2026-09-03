@@ -3,9 +3,8 @@ program test_tls12_negative;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls12.parser,
-  nextpas.core.tls.tls12.recordcrypto;
+  nextpas.core.tls.tls12.recordcrypto, nextpas.core.base, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   GPass: Integer = 0;
@@ -97,7 +96,7 @@ begin
   WriteLn('Test: GCM record with corrupted tag');
   SetLength(LKey, 16); FillChar(LKey[0], 16, $AA);
   SetLength(LIV, 4); FillChar(LIV[0], 4, $BB);
-  LPlain := BytesOf('test data');
+  LPlain := StringToUTF8Bytes('test data');
 
   TLS12GCMEncryptRecord(LKey, LIV, 0, 23, LPlain, LEnc, LErr);
   // Corrupt last byte of tag
@@ -117,7 +116,7 @@ begin
   WriteLn('Test: GCM record with wrong sequence number');
   SetLength(LKey, 16); FillChar(LKey[0], 16, $CC);
   SetLength(LIV, 4); FillChar(LIV[0], 4, $DD);
-  LPlain := BytesOf('hello');
+  LPlain := StringToUTF8Bytes('hello');
 
   TLS12GCMEncryptRecord(LKey, LIV, 5, 23, LPlain, LEnc, LErr);
   LOk := TLS12GCMDecryptRecord(LKey, LIV, 6, 23, LEnc, LDec, LErr); // wrong seq
@@ -152,6 +151,6 @@ begin
   TestGCMTooShort;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPass, GFail]));
   if GFail > 0 then Halt(1);
 end.

@@ -14,9 +14,8 @@ program test_ocsp_crl_interface;
 uses
   nextpas.core.tls.cert.advanced,
   nextpas.core.tls.base,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.factory,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.time;
 var
   LContext: ISSLContext;
   LOCSPClient: IOCSPClient;
@@ -214,9 +213,9 @@ begin
   try
     // Initialize record
     LResponse.Status := ocspGood;
-    LResponse.RevokedAt := Now;
+    LResponse.RevokedAt := DateTimeNow;
     LResponse.Reason := 'Test reason';
-    LResponse.NextUpdate := Now + 1;
+    LResponse.NextUpdate := DateTimeNow + 1;
     LResponse.ErrorMessage := '';
 
     if LResponse.Status = ocspGood then

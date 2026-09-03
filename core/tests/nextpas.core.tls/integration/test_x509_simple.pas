@@ -8,12 +8,11 @@ program test_x509_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, DynLibs, ctypes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.base, nextpas.core.platform.dl, nextpas.core.text.format;
 
 type
   { X.509 Basic Function Types }
@@ -111,59 +110,59 @@ var
 
 function LoadX509Functions: Boolean;
 var
-  LibHandle: TLibHandle;
+  LibHandle: TPlatformLibrary;
 begin
   Result := False;
   LibHandle := GetCryptoLibHandle;
-  if LibHandle = 0 then Exit;
+  if LibHandle.IsInvalid then Exit;
 
   // Load X509 certificate functions
-  X509_new := TX509_new(GetProcedureAddress(LibHandle, 'X509_new'));
-  X509_free := TX509_free(GetProcedureAddress(LibHandle, 'X509_free'));
-  X509_set_version := TX509_set_version(GetProcedureAddress(LibHandle, 'X509_set_version'));
-  X509_get_version := TX509_get_version(GetProcedureAddress(LibHandle, 'X509_get_version'));
-  X509_set_serialNumber := TX509_set_serialNumber(GetProcedureAddress(LibHandle, 'X509_set_serialNumber'));
-  X509_get_serialNumber := TX509_get_serialNumber(GetProcedureAddress(LibHandle, 'X509_get_serialNumber'));
-  X509_set_issuer_name := TX509_set_issuer_name(GetProcedureAddress(LibHandle, 'X509_set_issuer_name'));
-  X509_get_issuer_name := TX509_get_issuer_name(GetProcedureAddress(LibHandle, 'X509_get_issuer_name'));
-  X509_set_subject_name := TX509_set_subject_name(GetProcedureAddress(LibHandle, 'X509_set_subject_name'));
-  X509_get_subject_name := TX509_get_subject_name(GetProcedureAddress(LibHandle, 'X509_get_subject_name'));
-  X509_set_pubkey := TX509_set_pubkey(GetProcedureAddress(LibHandle, 'X509_set_pubkey'));
-  X509_get_pubkey := TX509_get_pubkey(GetProcedureAddress(LibHandle, 'X509_get_pubkey'));
-  X509_sign := TX509_sign(GetProcedureAddress(LibHandle, 'X509_sign'));
-  X509_verify := TX509_verify(GetProcedureAddress(LibHandle, 'X509_verify'));
-  X509_dup := TX509_dup(GetProcedureAddress(LibHandle, 'X509_dup'));
-  X509_cmp := TX509_cmp(GetProcedureAddress(LibHandle, 'X509_cmp'));
+  X509_new := TX509_new(platform_dl_symbol(LibHandle, 'X509_new'));
+  X509_free := TX509_free(platform_dl_symbol(LibHandle, 'X509_free'));
+  X509_set_version := TX509_set_version(platform_dl_symbol(LibHandle, 'X509_set_version'));
+  X509_get_version := TX509_get_version(platform_dl_symbol(LibHandle, 'X509_get_version'));
+  X509_set_serialNumber := TX509_set_serialNumber(platform_dl_symbol(LibHandle, 'X509_set_serialNumber'));
+  X509_get_serialNumber := TX509_get_serialNumber(platform_dl_symbol(LibHandle, 'X509_get_serialNumber'));
+  X509_set_issuer_name := TX509_set_issuer_name(platform_dl_symbol(LibHandle, 'X509_set_issuer_name'));
+  X509_get_issuer_name := TX509_get_issuer_name(platform_dl_symbol(LibHandle, 'X509_get_issuer_name'));
+  X509_set_subject_name := TX509_set_subject_name(platform_dl_symbol(LibHandle, 'X509_set_subject_name'));
+  X509_get_subject_name := TX509_get_subject_name(platform_dl_symbol(LibHandle, 'X509_get_subject_name'));
+  X509_set_pubkey := TX509_set_pubkey(platform_dl_symbol(LibHandle, 'X509_set_pubkey'));
+  X509_get_pubkey := TX509_get_pubkey(platform_dl_symbol(LibHandle, 'X509_get_pubkey'));
+  X509_sign := TX509_sign(platform_dl_symbol(LibHandle, 'X509_sign'));
+  X509_verify := TX509_verify(platform_dl_symbol(LibHandle, 'X509_verify'));
+  X509_dup := TX509_dup(platform_dl_symbol(LibHandle, 'X509_dup'));
+  X509_cmp := TX509_cmp(platform_dl_symbol(LibHandle, 'X509_cmp'));
 
   // Load X509_NAME functions
-  X509_NAME_new := TX509_NAME_new(GetProcedureAddress(LibHandle, 'X509_NAME_new'));
-  X509_NAME_free := TX509_NAME_free(GetProcedureAddress(LibHandle, 'X509_NAME_free'));
-  X509_NAME_add_entry_by_txt := TX509_NAME_add_entry_by_txt(GetProcedureAddress(LibHandle, 'X509_NAME_add_entry_by_txt'));
-  X509_NAME_oneline := TX509_NAME_oneline(GetProcedureAddress(LibHandle, 'X509_NAME_oneline'));
+  X509_NAME_new := TX509_NAME_new(platform_dl_symbol(LibHandle, 'X509_NAME_new'));
+  X509_NAME_free := TX509_NAME_free(platform_dl_symbol(LibHandle, 'X509_NAME_free'));
+  X509_NAME_add_entry_by_txt := TX509_NAME_add_entry_by_txt(platform_dl_symbol(LibHandle, 'X509_NAME_add_entry_by_txt'));
+  X509_NAME_oneline := TX509_NAME_oneline(platform_dl_symbol(LibHandle, 'X509_NAME_oneline'));
 
   // Load ASN1 functions
-  ASN1_INTEGER_new := TASN1_INTEGER_new(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_new'));
-  ASN1_INTEGER_free := TASN1_INTEGER_free(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_free'));
-  ASN1_INTEGER_set := TASN1_INTEGER_set(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_set'));
-  ASN1_INTEGER_get := TASN1_INTEGER_get(GetProcedureAddress(LibHandle, 'ASN1_INTEGER_get'));
+  ASN1_INTEGER_new := TASN1_INTEGER_new(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_new'));
+  ASN1_INTEGER_free := TASN1_INTEGER_free(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_free'));
+  ASN1_INTEGER_set := TASN1_INTEGER_set(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_set'));
+  ASN1_INTEGER_get := TASN1_INTEGER_get(platform_dl_symbol(LibHandle, 'ASN1_INTEGER_get'));
 
   // Load EVP functions
-  EVP_PKEY_new := TEVP_PKEY_new(GetProcedureAddress(LibHandle, 'EVP_PKEY_new'));
-  EVP_PKEY_free := TEVP_PKEY_free(GetProcedureAddress(LibHandle, 'EVP_PKEY_free'));
-  EVP_PKEY_assign := TEVP_PKEY_assign(GetProcedureAddress(LibHandle, 'EVP_PKEY_assign'));
+  EVP_PKEY_new := TEVP_PKEY_new(platform_dl_symbol(LibHandle, 'EVP_PKEY_new'));
+  EVP_PKEY_free := TEVP_PKEY_free(platform_dl_symbol(LibHandle, 'EVP_PKEY_free'));
+  EVP_PKEY_assign := TEVP_PKEY_assign(platform_dl_symbol(LibHandle, 'EVP_PKEY_assign'));
 
   // Load RSA functions
-  RSA_new := TRSA_new(GetProcedureAddress(LibHandle, 'RSA_new'));
-  RSA_free := TRSA_free(GetProcedureAddress(LibHandle, 'RSA_free'));
-  RSA_generate_key_ex := TRSA_generate_key_ex(GetProcedureAddress(LibHandle, 'RSA_generate_key_ex'));
+  RSA_new := TRSA_new(platform_dl_symbol(LibHandle, 'RSA_new'));
+  RSA_free := TRSA_free(platform_dl_symbol(LibHandle, 'RSA_free'));
+  RSA_generate_key_ex := TRSA_generate_key_ex(platform_dl_symbol(LibHandle, 'RSA_generate_key_ex'));
 
   // Load BIGNUM functions
-  BN_new := TBN_new(GetProcedureAddress(LibHandle, 'BN_new'));
-  BN_free := TBN_free(GetProcedureAddress(LibHandle, 'BN_free'));
-  BN_set_word := TBN_set_word(GetProcedureAddress(LibHandle, 'BN_set_word'));
+  BN_new := TBN_new(platform_dl_symbol(LibHandle, 'BN_new'));
+  BN_free := TBN_free(platform_dl_symbol(LibHandle, 'BN_free'));
+  BN_set_word := TBN_set_word(platform_dl_symbol(LibHandle, 'BN_set_word'));
 
   // Load EVP_MD functions
-  EVP_sha256 := TEVP_sha256(GetProcedureAddress(LibHandle, 'EVP_sha256'));
+  EVP_sha256 := TEVP_sha256(platform_dl_symbol(LibHandle, 'EVP_sha256'));
 
   Result := Assigned(X509_new) and Assigned(X509_free);
 end;
@@ -200,7 +199,7 @@ begin
   Runner.Check('Set certificate version to 2 (X509v3)', X509_set_version(cert, 2) = 1);
 
   version := X509_get_version(cert);
-  Runner.Check('Get certificate version', version = 2, Format('Version=%d', [version]));
+  Runner.Check('Get certificate version', version = 2, TextFormat('Version=%d', [version]));
 
   X509_free(cert);
 end;
@@ -237,7 +236,7 @@ begin
   begin
     serial_value := ASN1_INTEGER_get(retrieved_serial);
     Runner.Check('Serial number value correct', serial_value = 12345,
-            Format('Serial=%d', [serial_value]));
+            TextFormat('Serial=%d', [serial_value]));
   end;
 
   ASN1_INTEGER_free(serial);

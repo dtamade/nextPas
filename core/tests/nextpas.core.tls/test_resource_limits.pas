@@ -13,11 +13,10 @@ program test_resource_limits;
 
 uses
   nextpas.core.tls.factory,
-  nextpas.core.system.sysutils, nextpas.core.system.classes, StrUtils,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.cert,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.text, nextpas.core.text.conv;
 type
   TTestResult = record
     TestName: string;
@@ -63,9 +62,21 @@ begin
   begin
     Write('[', I + 1, '] ', Results[I].TestName, ': ');
     if Results[I].Skipped then
-      WriteLn('SKIP', IfThen(Results[I].Message <> '', ' - ' + Results[I].Message, ''))
+    begin
+      Write('SKIP');
+      if Results[I].Message <> '' then
+        WriteLn(' - ', Results[I].Message)
+      else
+        WriteLn;
+    end
     else if Results[I].Passed then
-      WriteLn('PASS', IfThen(Results[I].Message <> '', ' - ' + Results[I].Message, ''))
+    begin
+      Write('PASS');
+      if Results[I].Message <> '' then
+        WriteLn(' - ', Results[I].Message)
+      else
+        WriteLn;
+    end
     else
       WriteLn('FAIL - ', Results[I].Message);
   end;

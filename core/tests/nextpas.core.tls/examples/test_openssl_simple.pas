@@ -3,9 +3,8 @@ program test_openssl_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.bio;
+  nextpas.core.tls.openssl.api.bio, nextpas.core.exception, nextpas.core.text.conv;
 
 procedure TestOpenSSLLoading;
 var

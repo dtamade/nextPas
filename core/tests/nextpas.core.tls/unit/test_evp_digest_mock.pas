@@ -16,8 +16,8 @@ unit test_evp_digest_mock;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
-  openssl_evp_digest_interface;
+  nextpas.core.test,
+  openssl_evp_digest_interface, nextpas.core.base, nextpas.core.text.conv;
 
 type
   { TTestEVPDigestMock - Test suite for EVP digest mock }

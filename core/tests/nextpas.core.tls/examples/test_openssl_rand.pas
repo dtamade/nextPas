@@ -3,10 +3,9 @@ program test_openssl_rand;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.rand,
-  nextpas.core.tls.openssl.api.err;
+  nextpas.core.tls.openssl.api.err, nextpas.core.exception, nextpas.core.text.conv;
 
 procedure PrintBytes(const Buf: array of Byte);
 var

@@ -8,14 +8,13 @@ program test_ec_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ec,
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -108,10 +107,10 @@ begin
   if group = nil then Exit;
 
   nid := EC_GROUP_get_curve_name(group);
-  Runner.Check('Get curve NID', nid = NID_X9_62_prime256v1, Format('NID=%d', [nid]));
+  Runner.Check('Get curve NID', nid = NID_X9_62_prime256v1, TextFormat('NID=%d', [nid]));
 
   degree := EC_GROUP_get_degree(group);
-  Runner.Check('Get curve degree', degree > 0, Format('degree=%d bits', [degree]));
+  Runner.Check('Get curve degree', degree > 0, TextFormat('degree=%d bits', [degree]));
 
   // 检查 BN 函数是否可用
   if not Assigned(BN_CTX_new) or not Assigned(BN_new) then
@@ -130,13 +129,13 @@ begin
     // 检查函数是否可用
     if Assigned(EC_GROUP_get_order) then
       Runner.Check('Get curve order', EC_GROUP_get_order(group, order, ctx) = 1,
-              Format('order bits=%d', [BN_num_bits(order)]))
+              TextFormat('order bits=%d', [BN_num_bits(order)]))
     else
       Runner.Check('Get curve order', False, 'EC_GROUP_get_order not available');
 
     if Assigned(EC_GROUP_get_cofactor) then
       Runner.Check('Get curve cofactor', EC_GROUP_get_cofactor(group, cofactor, ctx) = 1,
-              Format('cofactor=%d', [BN_get_word(cofactor)]))
+              TextFormat('cofactor=%d', [BN_get_word(cofactor)]))
     else
       Runner.Check('Get curve cofactor', False, 'EC_GROUP_get_cofactor not available');
 
@@ -207,7 +206,7 @@ begin
   Runner.Check('Access EC group', group <> nil);
 
   priv_key := EC_KEY_get0_private_key(key);
-  Runner.Check('Access private key', priv_key <> nil, Format('%d bits', [BN_num_bits(priv_key)]));
+  Runner.Check('Access private key', priv_key <> nil, TextFormat('%d bits', [BN_num_bits(priv_key)]));
 
   pub_key := EC_KEY_get0_public_key(key);
   Runner.Check('Access public key', pub_key <> nil);
@@ -270,7 +269,7 @@ begin
 
   // Serialize point
   buf_len := EC_POINT_point2oct(group, pub_key, POINT_CONVERSION_UNCOMPRESSED, @buf[0], SizeOf(buf), ctx);
-  Runner.Check('Serialize public key point', buf_len > 0, Format('%d bytes', [buf_len]));
+  Runner.Check('Serialize public key point', buf_len > 0, TextFormat('%d bytes', [buf_len]));
 
   if buf_len > 0 then
   begin

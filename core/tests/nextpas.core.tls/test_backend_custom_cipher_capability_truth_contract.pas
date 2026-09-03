@@ -3,7 +3,6 @@ program test_backend_custom_cipher_capability_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -21,7 +20,7 @@ uses
   , nextpas.core.tls.mbedtls.lib
   , nextpas.core.tls.wolfssl.lib
   {$ENDIF}
-  ;
+  , nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv, nextpas.core.text.format;
 
 const
   CUSTOM_CIPHER_LIST = 'HIGH:!aNULL:!MD5';
@@ -60,11 +59,11 @@ begin
 
   LActual := LLib.GetCapabilities.SupportsCustomCipherSuites;
   Require(LActual = AExpected,
-    Format('%s SupportsCustomCipherSuites mismatch: expected=%s actual=%s',
-      [SSL_LIBRARY_NAMES[ABackend], BoolToStr(AExpected, True), BoolToStr(LActual, True)]));
+    TextFormat('%s SupportsCustomCipherSuites mismatch: expected=%s actual=%s',
+      [SSL_LIBRARY_NAMES[ABackend], BoolToStr(AExpected), BoolToStr(LActual)]));
 
   WriteLn('[PASS] ', SSL_LIBRARY_NAMES[ABackend], ' SupportsCustomCipherSuites = ',
-    BoolToStr(LActual, True));
+    BoolToStr(LActual));
 end;
 
 procedure CheckOpenSSLBackendCapability;
@@ -85,10 +84,10 @@ begin
   LExpected := OpenSSLPublishedCustomCipherSurfaceReady;
   LActual := LLib.GetCapabilities.SupportsCustomCipherSuites;
   Require(LActual = LExpected,
-    Format('OpenSSL SupportsCustomCipherSuites mismatch: expected=%s actual=%s',
-      [BoolToStr(LExpected, True), BoolToStr(LActual, True)]));
+    TextFormat('OpenSSL SupportsCustomCipherSuites mismatch: expected=%s actual=%s',
+      [BoolToStr(LExpected), BoolToStr(LActual)]));
 
-  WriteLn('[PASS] OpenSSL SupportsCustomCipherSuites = ', BoolToStr(LActual, True));
+  WriteLn('[PASS] OpenSSL SupportsCustomCipherSuites = ', BoolToStr(LActual));
 end;
 
 procedure ExpectUnsupportedSetCipherList(ACtx: ISSLContext;
@@ -103,14 +102,14 @@ begin
     on E: ESSLException do
     begin
       Require(IsUnsupportedCustomCipherMessage(E.Message),
-        Format('%s %s rejection must report unsupported custom-cipher semantics: %s',
+        TextFormat('%s %s rejection must report unsupported custom-cipher semantics: %s',
           [SSL_LIBRARY_NAMES[ABackend], ALabel, E.Message]));
       LRejected := True;
     end;
   end;
 
   Require(LRejected,
-    Format('%s must reject %s while SupportsCustomCipherSuites=False',
+    TextFormat('%s must reject %s while SupportsCustomCipherSuites=False',
       [SSL_LIBRARY_NAMES[ABackend], ALabel]));
 end;
 
@@ -126,14 +125,14 @@ begin
     on E: ESSLException do
     begin
       Require(IsUnsupportedCustomCipherMessage(E.Message),
-        Format('%s %s rejection must report unsupported custom-cipher semantics: %s',
+        TextFormat('%s %s rejection must report unsupported custom-cipher semantics: %s',
           [SSL_LIBRARY_NAMES[ABackend], ALabel, E.Message]));
       LRejected := True;
     end;
   end;
 
   Require(LRejected,
-    Format('%s must reject %s while SupportsCustomCipherSuites=False',
+    TextFormat('%s must reject %s while SupportsCustomCipherSuites=False',
       [SSL_LIBRARY_NAMES[ABackend], ALabel]));
 end;
 
@@ -262,7 +261,7 @@ begin
     on E: ESSLException do
     begin
       Require(IsUnsupportedCustomCipherMessage(E.Message),
-        Format('%s factory custom-cipher rejection must report unsupported semantics: %s',
+        TextFormat('%s factory custom-cipher rejection must report unsupported semantics: %s',
           [SSL_LIBRARY_NAMES[ABackend], E.Message]));
       LRejected := True;
     end;
@@ -304,7 +303,7 @@ begin
       on E: ESSLException do
       begin
         Require(IsUnsupportedCustomCipherMessage(E.Message),
-          Format('%s direct-library custom default-config rejection must report unsupported semantics: %s',
+          TextFormat('%s direct-library custom default-config rejection must report unsupported semantics: %s',
             [SSL_LIBRARY_NAMES[ABackend], E.Message]));
         LRejected := True;
       end;

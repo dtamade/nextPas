@@ -13,8 +13,7 @@ program test_mbedtls_alpn;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  TypInfo,
+  nextpas.core.exception,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   tls_test_sockets;
@@ -81,7 +80,7 @@ begin
       Halt(1);
     end;
     WriteLn('   ✅ Handshake success');
-    WriteLn('   Protocol: ', GetEnumName(TypeInfo(TSSLProtocolVersion), Ord(LConn.GetProtocolVersion)));
+    WriteLn('   Protocol: ', ProtocolVersionToString(LConn.GetProtocolVersion));
 
     // 检查 ALPN 协商结果
     WriteLn('7. Check ALPN negotiation result...');

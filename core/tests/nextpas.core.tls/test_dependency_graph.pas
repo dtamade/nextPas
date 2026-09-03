@@ -3,9 +3,8 @@ program test_dependency_graph;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader,
-  nextpas.core.tls.openssl.dependencies;
+  nextpas.core.tls.openssl.dependencies, nextpas.core.text;
 
 var
   LDeps: TOpenSSLModuleSet;

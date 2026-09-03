@@ -3,11 +3,10 @@ program test_ssl_direct_api;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.consts;
+  nextpas.core.tls.openssl.api.consts, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TestsPassed: Integer = 0;

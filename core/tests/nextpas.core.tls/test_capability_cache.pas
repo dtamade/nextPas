@@ -3,13 +3,13 @@ program test_capability_cache;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.wolfssl.lib,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv;
 procedure Require(ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then

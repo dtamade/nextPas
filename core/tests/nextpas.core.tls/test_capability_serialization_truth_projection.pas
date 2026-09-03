@@ -3,9 +3,8 @@ program test_capability_serialization_truth_projection;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.capability.serializer;
+  nextpas.core.tls.capability.serializer, nextpas.core.text;
 
 procedure Fail(const AMessage: string);
 begin

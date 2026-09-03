@@ -3,12 +3,11 @@ program test_quick;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.quick,
   nextpas.core.tls.cert.builder,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.os.env;
 
 procedure TestContextBuilder;
 var

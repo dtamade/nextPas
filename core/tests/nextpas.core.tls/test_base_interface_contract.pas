@@ -24,8 +24,7 @@ program test_base_interface_contract;
 }
 
 uses
-  nextpas.core.system.sysutils, TypInfo,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base, nextpas.core.exception, nextpas.core.math, nextpas.core.text.conv, nextpas.core.time;
 
 var
   GTestsPassed: Integer = 0;
@@ -56,7 +55,7 @@ begin
   for i := 1 to Length(S) do
     if S[i] in ['0'..'9', 'A'..'F', 'a'..'f'] then
       LHex := LHex + S[i];
-  Result.D1 := LongWord(StrToInt64('$' + Copy(LHex, 1, 8)));
+  Result.D1 := LongWord(StrToInt('$' + Copy(LHex, 1, 8)));
   Result.D2 := Word(StrToInt('$' + Copy(LHex, 9, 4)));
   Result.D3 := Word(StrToInt('$' + Copy(LHex, 13, 4)));
   for i := 0 to 7 do
@@ -289,7 +288,7 @@ begin
   LHealth.LastError := sslErrNone;
   Assert(LHealth.LastError = sslErrNone, 'LastError 字段可访问');
 
-  LHealth.LastErrorTime := Now;
+  LHealth.LastErrorTime := DateTimeNow;
   Assert(LHealth.LastErrorTime > 0, 'LastErrorTime 字段可访问');
 
   LHealth.BytesSent := 1024;
@@ -348,7 +347,7 @@ begin
   LError.ErrorMessage := 'Test error';
   Assert(LError.ErrorMessage = 'Test error', 'ErrorMessage 字段可访问');
 
-  LError.Timestamp := Now;
+  LError.Timestamp := DateTimeNow;
   Assert(LError.Timestamp > 0, 'Timestamp 字段可访问');
 
   WriteLn;
@@ -475,7 +474,7 @@ end;
 begin
   WriteLn('=========================================');
   WriteLn('基础接口契约测试');
-  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn('=========================================');
   WriteLn;
 

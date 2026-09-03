@@ -38,7 +38,7 @@ end;
 
 function MakeMissingPath(const APrefix, AExtension: string): string;
 begin
-  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  Result := IncludeTrailingPathDelimiter(GetTempDir()) +
     APrefix + '_' + FormatDateTime('yyyymmddhhnnsszzz', Now) + '_' +
     IntToStr(Random(1000000)) + AExtension;
 end;

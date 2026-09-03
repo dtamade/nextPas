@@ -4,10 +4,8 @@ program test_cert_info_extraction;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.factory;
+  nextpas.core.tls.factory, nextpas.core.exception, nextpas.core.text, nextpas.core.time;
 
 var
   GPassed, GFailed: Integer;

@@ -4,12 +4,11 @@ program test_ct_pure;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base64,
   nextpas.core.tls.ct.logs,
   nextpas.core.tls.ct.pure,
   nextpas.core.tls.crypto.ed25519,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.tls.crypto.hash, nextpas.core.base, nextpas.core.text.conv;
 
 var
   LTotal, LPassed: Integer;

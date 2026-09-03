@@ -3,7 +3,6 @@ program test_priority1_modules;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.text.conv,
   // Core Infrastructure
   nextpas.core.tls.openssl.base,
@@ -31,7 +30,7 @@ uses
   nextpas.core.tls.openssl.api.aead,
   // Advanced
   nextpas.core.tls.openssl.api.provider,
-  nextpas.core.tls.openssl.api.crypto;
+  nextpas.core.tls.openssl.api.crypto, nextpas.core.exception;
 
 type
   TModuleTest = record

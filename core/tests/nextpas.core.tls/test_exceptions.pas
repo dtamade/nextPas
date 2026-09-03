@@ -24,9 +24,8 @@ program test_exceptions;
 }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.exception, nextpas.core.text, nextpas.core.time;
 
 var
   GTestsPassed: Integer = 0;
@@ -530,7 +529,7 @@ end;
 begin
   WriteLn('=========================================');
   WriteLn('异常处理测试');
-  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn('=========================================');
   WriteLn;
 

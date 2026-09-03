@@ -3,7 +3,6 @@ program test_cert_utils_generate_selfsigned_ec_keygen_family_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -18,7 +17,7 @@ uses
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.ec,
   nextpas.core.tls.openssl.api.obj,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.text;
 type
   TInstallFailureWrapper = procedure;
 

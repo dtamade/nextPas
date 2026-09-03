@@ -3,9 +3,8 @@ program test_x509_chain_verify;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.x509,
-  nextpas.core.tls.x509verify;
+  nextpas.core.tls.x509verify, nextpas.core.text, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   GPassCount: Integer = 0;
@@ -205,7 +204,7 @@ begin
   TestSignatureVerification;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPassCount, GFailCount]));
   if GFailCount > 0 then
     Halt(1);
 end.

@@ -16,8 +16,8 @@ unit test_encoding;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
-  test_base, nextpas.core.tls.encoding, nextpas.core.tls.exceptions, nextpas.core.tls.base;
+  nextpas.core.test,
+  test_base, nextpas.core.tls.encoding, nextpas.core.tls.exceptions, nextpas.core.tls.base, nextpas.core.base, nextpas.core.text.conv;
 
 type
   { TTestEncoding - Tests for encoding utilities }
@@ -355,7 +355,7 @@ begin
   end;
 
   // "Hello World" in bytes
-  Data := BytesOf('Hello World');
+  Data := StringToUTF8Bytes('Hello World');
   Result := TEncodingUtils.Base64Encode(Data);
   CheckEqual('SGVsbG8gV29ybGQ=', Result, 'Hello World');
 end;
@@ -419,7 +419,7 @@ begin
   end;
 
   Result := TEncodingUtils.Base64Decode('SGVsbG8gV29ybGQ=');
-  ResultStr := StringOf(Result);
+  ResultStr := UTF8BytesToString(Result);
   CheckEqual('Hello World', ResultStr, 'Hello World');
 end;
 
@@ -436,7 +436,7 @@ begin
 
   // Single = padding (2 bytes input mod 3 = 2)
   Result := TEncodingUtils.Base64Decode('SGk=');
-  ResultStr := StringOf(Result);
+  ResultStr := UTF8BytesToString(Result);
   CheckEqual('Hi', ResultStr, 'Padding 1');
 end;
 
@@ -453,7 +453,7 @@ begin
 
   // Double == padding (1 byte input mod 3 = 1)
   Result := TEncodingUtils.Base64Decode('QQ==');
-  ResultStr := StringOf(Result);
+  ResultStr := UTF8BytesToString(Result);
   CheckEqual('A', ResultStr, 'Padding 2');
 end;
 
@@ -470,7 +470,7 @@ begin
 
   // No padding (3 bytes input mod 3 = 0)
   Result := TEncodingUtils.Base64Decode('QWJj');
-  ResultStr := StringOf(Result);
+  ResultStr := UTF8BytesToString(Result);
   CheckEqual('Abc', ResultStr, 'No padding');
 end;
 
@@ -487,7 +487,7 @@ begin
     Exit;
   end;
 
-  Data := BytesOf('Test');
+  Data := StringToUTF8Bytes('Test');
   CheckTrue(TEncodingUtils.TryBase64Encode(Data, Result), 'TryBase64Encode should succeed');
   CheckEqual('VGVzdA==', Result, 'TryBase64Encode result');
 end;
@@ -504,7 +504,7 @@ begin
   end;
 
   CheckTrue(TEncodingUtils.TryBase64Decode('VGVzdA==', Result), 'TryBase64Decode should succeed');
-  ResultStr := StringOf(Result);
+  ResultStr := UTF8BytesToString(Result);
   CheckEqual('Test', ResultStr, 'TryBase64Decode result');
 end;
 

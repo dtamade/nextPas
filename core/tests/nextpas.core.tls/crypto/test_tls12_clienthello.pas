@@ -3,7 +3,7 @@ program test_tls12_clienthello;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.tls.tls12.wire, nextpas.core.tls.tls12.clienthello;
+  nextpas.core.tls.tls12.wire, nextpas.core.tls.tls12.clienthello, nextpas.core.base, nextpas.core.text.format;
 
 var
   GPassCount: Integer = 0;
@@ -251,7 +251,7 @@ begin
   TestClientHelloEMS;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPassCount, GFailCount]));
   if GFailCount > 0 then
     Halt(1);
 end.

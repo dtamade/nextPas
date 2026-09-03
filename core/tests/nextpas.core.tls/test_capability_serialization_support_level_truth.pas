@@ -3,9 +3,8 @@ program test_capability_serialization_support_level_truth;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  nextpas.core.tls.capability.serializer;
+  nextpas.core.tls.capability.serializer, nextpas.core.text, nextpas.core.text.conv;
 
 procedure Fail(const AMessage: string);
 begin

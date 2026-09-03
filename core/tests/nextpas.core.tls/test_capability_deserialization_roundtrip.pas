@@ -3,10 +3,9 @@ program test_capability_deserialization_roundtrip;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
-  nextpas.core.tls.capability.serializer;
+  nextpas.core.tls.capability.serializer, nextpas.core.exception, nextpas.core.text.format, nextpas.core.text.conv;
 
 procedure Fail(const AMessage: string);
 begin
@@ -17,20 +16,20 @@ end;
 procedure AssertEqualBool(AExpected, AActual: Boolean; const AField: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s mismatch: expected=%s actual=%s',
-      [AField, BoolToStr(AExpected, True), BoolToStr(AActual, True)]));
+    Fail(TextFormat('%s mismatch: expected=%s actual=%s',
+      [AField, BoolToStr(AExpected), BoolToStr(AActual)]));
 end;
 
 procedure AssertEqualInt(AExpected, AActual: Integer; const AField: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s mismatch: expected=%d actual=%d', [AField, AExpected, AActual]));
+    Fail(TextFormat('%s mismatch: expected=%d actual=%d', [AField, AExpected, AActual]));
 end;
 
 procedure AssertEqualStr(const AExpected, AActual, AField: string);
 begin
   if AExpected <> AActual then
-    Fail(Format('%s mismatch: expected="%s" actual="%s"', [AField, AExpected, AActual]));
+    Fail(TextFormat('%s mismatch: expected="%s" actual="%s"', [AField, AExpected, AActual]));
 end;
 
 procedure AssertEqualCipherSet(const AExpected, AActual: TSSLCipherSupport;

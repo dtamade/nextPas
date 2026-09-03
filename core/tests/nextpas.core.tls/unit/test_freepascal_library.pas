@@ -4,9 +4,8 @@ program test_freepascal_library;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.text;
 
 var
   LTotal, LPassed: Integer;

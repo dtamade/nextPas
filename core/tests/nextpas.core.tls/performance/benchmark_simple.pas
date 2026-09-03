@@ -4,11 +4,10 @@ program benchmark_simple;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.time,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
-  nextpas.core.tls.utils;
+  nextpas.core.tls.utils, nextpas.core.text.conv, nextpas.core.text.format;
 
 const
   ITERATIONS = 10000;
@@ -37,7 +36,7 @@ begin
     AvgTimeUS := 0;
   end;
 
-  WriteLn(Format('%-25s %8d ops in %6d ms | %10.2f ops/sec | %8.2f µs/op',
+  WriteLn(TextFormat('%-25s %8d ops in %6d ms | %10.2f ops/sec | %8.2f µs/op',
     [TestName, Iterations, ElapsedMS, OpsPerSec, AvgTimeUS]));
 end;
 
@@ -65,10 +64,10 @@ begin
 
   // SHA-256基准测试
   Write('测试 SHA-256...');
-  StartTime := Now;
+  StartTime := DateTimeNow;
   for I := 1 to ITERATIONS do
-    Hash := TSSLHelper.HashData(BytesOf(TEST_DATA), sslHashSHA256);
-  EndTime := Now;
+    Hash := TSSLHelper.HashData(StringToUTF8Bytes(TEST_DATA), sslHashSHA256);
+  EndTime := DateTimeNow;
   ElapsedMS := DateTimeMillisecondsBetween(EndTime, StartTime);
   WriteLn(' ✓');
   PrintResult('  SHA-256', ITERATIONS, ElapsedMS);
@@ -77,10 +76,10 @@ begin
 
   // SHA-1基准测试
   Write('测试 SHA-1...');
-  StartTime := Now;
+  StartTime := DateTimeNow;
   for I := 1 to ITERATIONS do
-    Hash := TSSLHelper.HashData(BytesOf(TEST_DATA), sslHashSHA1);
-  EndTime := Now;
+    Hash := TSSLHelper.HashData(StringToUTF8Bytes(TEST_DATA), sslHashSHA1);
+  EndTime := DateTimeNow;
   ElapsedMS := DateTimeMillisecondsBetween(EndTime, StartTime);
   WriteLn(' ✓');
   PrintResult('  SHA-1', ITERATIONS, ElapsedMS);
@@ -89,10 +88,10 @@ begin
 
   // MD5基准测试
   Write('测试 MD5...');
-  StartTime := Now;
+  StartTime := DateTimeNow;
   for I := 1 to ITERATIONS do
-    Hash := TSSLHelper.HashData(BytesOf(TEST_DATA), sslHashMD5);
-  EndTime := Now;
+    Hash := TSSLHelper.HashData(StringToUTF8Bytes(TEST_DATA), sslHashMD5);
+  EndTime := DateTimeNow;
   ElapsedMS := DateTimeMillisecondsBetween(EndTime, StartTime);
   WriteLn(' ✓');
   PrintResult('  MD5', ITERATIONS, ElapsedMS);

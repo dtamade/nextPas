@@ -3,14 +3,13 @@ program test_modules_quick_validation;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.text.conv,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.rand,
-  nextpas.core.tls.openssl.api.err;
+  nextpas.core.tls.openssl.api.err, nextpas.core.exception;
 
 type
   TModuleTest = record

@@ -9,12 +9,11 @@ program test_ringbuffer_lockfree;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.ringbuffer.lockfree,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.format;
 
 const
   TEST_BUFFER_SIZE = 16; // 2^16 = 64KB
@@ -107,11 +106,11 @@ begin
         Data[I] := (Round * 10 + I) mod 256;
 
       Written := Buffer.TryWrite(Data, 512);
-      Runner.Check(Format('Round %d: Write 512 bytes', [Round]), Written = 512);
+      Runner.Check(TextFormat('Round %d: Write 512 bytes', [Round]), Written = 512);
 
       FillChar(ReadBuf, 512, 0);
       BytesRead := Buffer.TryRead(ReadBuf, 512);
-      Runner.Check(Format('Round %d: Read 512 bytes', [Round]), BytesRead = 512);
+      Runner.Check(TextFormat('Round %d: Read 512 bytes', [Round]), BytesRead = 512);
 
       // Verify data
       Match := True;
@@ -121,7 +120,7 @@ begin
           Match := False;
           Break;
         end;
-      Runner.Check(Format('Round %d: Data integrity', [Round]), Match);
+      Runner.Check(TextFormat('Round %d: Data integrity', [Round]), Match);
     end;
   finally
     Buffer.Free;

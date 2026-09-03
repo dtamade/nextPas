@@ -8,9 +8,8 @@ program test_cert_utils_enterprise;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.exception, nextpas.core.text;
 
 procedure TestGenerateRSA;
 var

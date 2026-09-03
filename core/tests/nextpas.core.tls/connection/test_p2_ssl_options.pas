@@ -3,12 +3,11 @@ program test_p2_ssl_options;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, ctypes,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ssl,
   nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.api.err;
+  nextpas.core.tls.openssl.api.err, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   TotalTests: Integer = 0;

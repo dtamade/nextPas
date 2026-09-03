@@ -3,12 +3,11 @@ program test_openssl_dh;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.dh,
   nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.err;
+  nextpas.core.tls.openssl.api.err, nextpas.core.exception;
 
 var
   TestsPassed, TestsFailed: Integer;

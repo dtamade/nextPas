@@ -1,7 +1,6 @@
 program test_tls_method;
 {$mode objfpc}{$H+}
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.base;
 var

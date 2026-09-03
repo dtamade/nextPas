@@ -7,9 +7,8 @@ program test_tbytes_issue;
 }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base, nextpas.core.exception;
 
 // 使用TBytes参数
 function TestWithTBytes(const AKey, AIV: TBytes): Boolean;

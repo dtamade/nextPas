@@ -3,12 +3,11 @@ program test_pem_key_save_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.pem;
+  nextpas.core.tls.openssl.api.pem, nextpas.core.exception, nextpas.core.fs;
 
 var
   TotalTests: Integer = 0;
@@ -56,8 +55,8 @@ begin
   WriteLn;
   WriteLn('=== PEM key save symbol guard ===');
 
-  LTempPrivateOut := GetTempDir(False) + 'nextpas_pem_key_save_symbol_contract_private.pem';
-  LTempPublicOut := GetTempDir(False) + 'nextpas_pem_key_save_symbol_contract_public.pem';
+  LTempPrivateOut := GetTempDir() + 'nextpas_pem_key_save_symbol_contract_private.pem';
+  LTempPublicOut := GetTempDir() + 'nextpas_pem_key_save_symbol_contract_public.pem';
 
   LOriginalPEMWriteBioPrivateKey := PEM_write_bio_PrivateKey;
   LOriginalPEMWriteBioPUBKEY := PEM_write_bio_PUBKEY;

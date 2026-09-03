@@ -15,7 +15,7 @@ program test_error_mapping_logic;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils;
+  nextpas.core.exception;
 
 type
   TSSLErrorCode = (

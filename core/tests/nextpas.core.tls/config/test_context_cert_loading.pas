@@ -4,11 +4,9 @@ program test_context_cert_loading;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.classes,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.native_handle;
+  nextpas.core.tls.native_handle, nextpas.core.exception, nextpas.core.text.format;
 
 var
   Factory: ISSLLibrary;
@@ -173,7 +171,7 @@ begin
     WriteLn('Failed: ', Failed);
     WriteLn('Total:  ', Passed + Failed);
     if Passed + Failed > 0 then
-      WriteLn('Success Rate: ', Format('%.1f%%', [(Passed / (Passed + Failed)) * 100]));
+      WriteLn('Success Rate: ', TextFormat('%.1f%%', [(Passed / (Passed + Failed)) * 100]));
     WriteLn('==========================================================');
 
     if Failed = 0 then

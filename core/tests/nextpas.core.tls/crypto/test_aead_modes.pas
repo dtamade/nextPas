@@ -16,10 +16,9 @@
 program test_aead_modes;
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.base;
+  nextpas.core.tls.openssl.base, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 function BytesToHex(const Bytes: TBytes): string;
 var

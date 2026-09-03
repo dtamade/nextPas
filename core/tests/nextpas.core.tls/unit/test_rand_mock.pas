@@ -15,8 +15,8 @@ unit test_rand_mock;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
-  openssl_rand_interface;
+  nextpas.core.test,
+  openssl_rand_interface, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv, nextpas.core.time;
 
 type
   { TTestRandomMock - Test suite for Random mock }
@@ -438,7 +438,7 @@ begin
   LSeed1 := FRandom.GetSeed;
   LResult1 := FRandom.GenerateBytes(16);
 
-  Sleep(10);  // 确保时间戳变化
+  MsSleep(10);  // 确保时间戳变化
 
   FRandom.Reseed;
   LSeed2 := FRandom.GetSeed;

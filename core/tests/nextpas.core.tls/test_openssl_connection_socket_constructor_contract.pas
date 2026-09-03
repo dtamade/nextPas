@@ -3,8 +3,6 @@ program test_openssl_connection_socket_constructor_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -12,7 +10,7 @@ uses
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ssl,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.text;
 var
   GLib: ISSLLibrary = nil;
   TotalTests: Integer = 0;

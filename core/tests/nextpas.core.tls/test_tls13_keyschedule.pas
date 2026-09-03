@@ -3,9 +3,8 @@ program test_tls13_keyschedule;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.wire,
-  nextpas.core.tls.tls13.keyschedule;
+  nextpas.core.tls.tls13.keyschedule, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv;
 
 procedure Fail(const AMessage: string);
 begin

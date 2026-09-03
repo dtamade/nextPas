@@ -29,13 +29,10 @@ program test_winssl_errors_comprehensive;
 }
 
 uses
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
-  nextpas.core.tls.winssl.errors;
+  nextpas.core.tls.winssl.errors, nextpas.core.exception, nextpas.core.text, nextpas.core.time;
 
 var
   GTestsPassed: Integer = 0;

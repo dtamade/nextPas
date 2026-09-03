@@ -3,11 +3,11 @@ program test_phase8_fixes_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.platform.dl,
+  nextpas.core.time, nextpas.core.platform.dl,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.crypto.utils,
-  nextpas.core.tls.encoding;
+  nextpas.core.tls.encoding, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   LTestsPassed, LTestsFailed: Integer;
@@ -114,7 +114,7 @@ begin
   LEncoded := 'SGVsbG8gV29ybGQ=';
   LDecoded := TEncodingUtils.Base64Decode(LEncoded);
   RunTest('Decode "Hello World"',
-    (Length(LDecoded) = 11) and (StringOf(LDecoded) = 'Hello World'));
+    (Length(LDecoded) = 11) and (UTF8BytesToString(LDecoded) = 'Hello World'));
 
   SetLength(LData, 256);
   for I := 0 to 255 do
@@ -134,10 +134,10 @@ begin
 
   LEncoded := TEncodingUtils.Base64Encode(LData);
 
-  LStartTime := Now;
+  LStartTime := DateTimeNow;
   for I := 1 to 5 do
     LDecoded := TEncodingUtils.Base64Decode(LEncoded);
-  LEndTime := Now;
+  LEndTime := DateTimeNow;
 
   LDecodeTime := DateTimeMillisecondsBetween(LEndTime, LStartTime);
   LDecodeMBps := (LDataSize * 5 / 1024 / 1024) / (LDecodeTime / 1000);
@@ -147,9 +147,9 @@ begin
   WriteLn('  Improvement: ', (LDecodeMBps / 17):0:1, 'x');
 
   RunTest('Decode speed > 50 MB/s', LDecodeMBps > 50,
-    Format('%.2f MB/s - Production grade', [LDecodeMBps]));
+    TextFormat('%.2f MB/s - Production grade', [LDecodeMBps]));
   RunTest('Performance gain > 4x', LDecodeMBps > 68,
-    Format('%.1fx improvement', [LDecodeMBps / 17]));
+    TextFormat('%.1fx improvement', [LDecodeMBps / 17]));
 
   WriteLn;
   WriteLn('  ✅ Fix #2 Status: Performance optimized (O(n²) → O(n))');

@@ -6,19 +6,16 @@
 program test_integration_tls_end_to_end;
 
 {$mode ObjFPC}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   nextpas.core.time,
-  Math,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.exception, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -144,7 +141,7 @@ begin
       end;
     end;
 
-    Runner.Check('Create 5 contexts', SuccessCount = 5, Format('Created: %d/5', [SuccessCount]));
+    Runner.Check('Create 5 contexts', SuccessCount = 5, TextFormat('Created: %d/5', [SuccessCount]));
 
     // Cleanup
     for i := 0 to 4 do

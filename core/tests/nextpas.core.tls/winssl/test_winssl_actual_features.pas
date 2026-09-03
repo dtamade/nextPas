@@ -1,13 +1,12 @@
 program test_winssl_actual_features;
 
 {$mode ObjFPC}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 {$IFDEF WINDOWS}
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.winssl.lib;
+  nextpas.core.tls.winssl.lib, nextpas.core.exception;
 
 var
   TestsPassed: Integer = 0;

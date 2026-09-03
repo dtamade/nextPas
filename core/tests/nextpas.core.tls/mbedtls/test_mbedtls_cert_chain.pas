@@ -15,9 +15,9 @@ program test_mbedtls_cert_chain;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
-  TypInfo,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   tls_test_sockets;
@@ -96,8 +96,7 @@ begin
       if LConn.Connect then
       begin
         WriteLn('✅ TLS handshake successful');
-        WriteLn('   Protocol: ', GetEnumName(TypeInfo(TSSLProtocolVersion),
-          Ord(LConn.GetProtocolVersion)));
+        WriteLn('   Protocol: ', ProtocolVersionToString(LConn.GetProtocolVersion));
         WriteLn('   Cipher: ', LConn.GetCipherName);
 
         // 检查验证结果
@@ -308,7 +307,7 @@ begin
           WriteLn('  Serial: ', LCert.GetSerialNumber);
 
           // 检查证书是否在有效期内
-          if (LCert.GetNotBefore < Now) and (LCert.GetNotAfter > Now) then
+          if (LCert.GetNotBefore < DateTimeNow) and (LCert.GetNotAfter > DateTimeNow) then
           begin
             WriteLn('✅ Certificate is currently valid');
             AddResult('Cert Info - Validity', True, 'Certificate valid');

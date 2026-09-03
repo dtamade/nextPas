@@ -3,9 +3,9 @@ program benchmark_openssl;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.openssl.api.core;
+  nextpas.core.tls.openssl.api.core, nextpas.core.exception, nextpas.core.text.format;
 
 var
   StartTime, EndTime: TDateTime;
@@ -14,7 +14,7 @@ var
 
 procedure PrintResult(const TestName: string; ElapsedMS: Int64);
 begin
-  WriteLn(Format('%-30s %6d ms', [TestName, ElapsedMS]));
+  WriteLn(TextFormat('%-30s %6d ms', [TestName, ElapsedMS]));
 end;
 
 begin
@@ -45,13 +45,13 @@ begin
 
   // 测试1: 库加载性能
   Write('测试库加载/卸载...');
-  StartTime := Now;
+  StartTime := DateTimeNow;
   for I := 1 to 100 do
   begin
     UnloadOpenSSLCore;
     LoadOpenSSLCore;
   end;
-  EndTime := Now;
+  EndTime := DateTimeNow;
   ElapsedMS := DateTimeMillisecondsBetween(EndTime, StartTime);
   WriteLn(' ✓');
   PrintResult('  100次加载/卸载', ElapsedMS);

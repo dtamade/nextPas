@@ -3,7 +3,7 @@ program test_winssl_errors;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.tls.winssl.errors, nextpas.core.tls.winssl.base;
+  nextpas.core.tls.winssl.errors, nextpas.core.tls.winssl.base, nextpas.core.text, nextpas.core.text.format;
 
 var
   GTestCount: Integer = 0;
@@ -73,7 +73,7 @@ begin
 
   WriteLn;
   WriteLn('=' + StringOfChar('=', 78));
-  WriteLn(Format('Total: %d, Passed: %d, Failed: %d (%.1f%%)',
+  WriteLn(TextFormat('Total: %d, Passed: %d, Failed: %d (%.1f%%)',
     [GTestCount, GPassCount, GTestCount - GPassCount,
      (GPassCount / GTestCount) * 100.0]));
   WriteLn('=' + StringOfChar('=', 78));

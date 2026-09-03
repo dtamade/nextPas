@@ -3,7 +3,6 @@ program test_load_rand_detailed;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.rand,
   nextpas.core.tls.openssl.api;

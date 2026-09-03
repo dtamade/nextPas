@@ -4,11 +4,10 @@ program test_core_modules;
 {$CODEPAGE UTF8}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.rand,
-  nextpas.core.tls.openssl.api.bn;
+  nextpas.core.tls.openssl.api.bn, nextpas.core.exception, nextpas.core.text.conv;
 
 procedure TestCore;
 begin

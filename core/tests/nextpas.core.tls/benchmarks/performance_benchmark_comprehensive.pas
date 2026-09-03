@@ -17,14 +17,12 @@ program performance_benchmark_comprehensive;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.secure,
   nextpas.core.tls.cert.builder,
-  nextpas.core.time;
+  nextpas.core.time, nextpas.core.base, nextpas.core.exception, nextpas.core.text.format, nextpas.core.text.conv;
 
 type
   TBenchmarkResult = record
@@ -62,7 +60,7 @@ var
   Ctx: ISSLContext;
   MemBefore, MemAfter: Int64;
 begin
-  Result.Name := Format('TLS_Context_Create_x%d', [ACount]);
+  Result.Name := TextFormat('TLS_Context_Create_x%d', [ACount]);
   Result.Success := False;
 
   MemBefore := GetMemoryUsage;
@@ -97,7 +95,7 @@ var
   Hash: TBytes;
   Utils: TCryptoUtils;
 begin
-  Result.Name := Format('SHA256_%dKBx%d', [ASizeKB, AIterations]);
+  Result.Name := TextFormat('SHA256_%dKBx%d', [ASizeKB, AIterations]);
   Result.Success := False;
 
   SetLength(Data, ASizeKB * 1024);
@@ -133,7 +131,7 @@ var
   Data: TBytes;
   Utils: TCryptoUtils;
 begin
-  Result.Name := Format('Random_%dKBx%d', [ASizeKB, AIterations]);
+  Result.Name := TextFormat('Random_%dKBx%d', [ASizeKB, AIterations]);
   Result.Success := False;
 
   Utils := TCryptoUtils.Create;
@@ -167,7 +165,7 @@ var
   HexStr: string;
   Utils: TCryptoUtils;
 begin
-  Result.Name := Format('HashHex_x%d', [AIterations]);
+  Result.Name := TextFormat('HashHex_x%d', [AIterations]);
   Result.Success := False;
 
   SetLength(Data, 1024);
@@ -218,27 +216,27 @@ begin
       if Success then
       begin
         Inc(PassedCount);
-        WriteLn(Format('[%2d] %-35s', [I+1, Name]));
-        WriteLn(Format('     Duration    : %6d ms', [Duration]));
-        WriteLn(Format('     Throughput  : %10.2f ops/s', [Throughput]));
+        WriteLn(TextFormat('[%2d] %-35s', [I+1, Name]));
+        WriteLn(TextFormat('     Duration    : %6d ms', [Duration]));
+        WriteLn(TextFormat('     Throughput  : %10.2f ops/s', [Throughput]));
         if MemoryUsed > 0 then
-          WriteLn(Format('     Memory      : %10d bytes', [MemoryUsed]));
+          WriteLn(TextFormat('     Memory      : %10d bytes', [MemoryUsed]));
         WriteLn;
         Inc(TotalTime, Duration);
         Inc(TotalMem, MemoryUsed);
       end
       else
-        WriteLn(Format('[%2d] %-35s FAILED: %s', [I+1, Name, ErrorMessage]));
+        WriteLn(TextFormat('[%2d] %-35s FAILED: %s', [I+1, Name, ErrorMessage]));
     end;
   end;
 
   WriteLn('================================================================');
-  WriteLn(Format('Total Tests  : %d', [Length(GResults)]));
-  WriteLn(Format('Passed       : %d', [PassedCount]));
-  WriteLn(Format('Failed       : %d', [Length(GResults) - PassedCount]));
-  WriteLn(Format('Total Time   : %d ms', [TotalTime]));
+  WriteLn(TextFormat('Total Tests  : %d', [Length(GResults)]));
+  WriteLn(TextFormat('Passed       : %d', [PassedCount]));
+  WriteLn(TextFormat('Failed       : %d', [Length(GResults) - PassedCount]));
+  WriteLn(TextFormat('Total Time   : %d ms', [TotalTime]));
   if TotalMem > 0 then
-    WriteLn(Format('Total Memory : %.2f KB', [TotalMem / 1024.0]));
+    WriteLn(TextFormat('Total Memory : %.2f KB', [TotalMem / 1024.0]));
   WriteLn('================================================================');
 end;
 
@@ -253,8 +251,8 @@ begin
     WriteLn(F, 'Name,Duration(ms),Throughput(ops/s),Memory(bytes),Success');
     for I := 0 to High(GResults) do
       with GResults[I] do
-        WriteLn(F, Format('%s,%d,%.2f,%d,%s',
-          [Name, Duration, Throughput, MemoryUsed, BoolToStr(Success, True)]));
+        WriteLn(F, TextFormat('%s,%d,%.2f,%d,%s',
+          [Name, Duration, Throughput, MemoryUsed, BoolToStr(Success)]));
   finally
     CloseFile(F);
   end;

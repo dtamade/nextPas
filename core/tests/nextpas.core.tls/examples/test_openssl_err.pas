@@ -3,9 +3,8 @@ program test_openssl_err;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.err;
+  nextpas.core.tls.openssl.api.err, nextpas.core.exception, nextpas.core.text.conv;
 
 procedure TestErrorHandling;
 var

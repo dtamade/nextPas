@@ -3,7 +3,6 @@ program test_backend_callback_setter_fail_closed_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -23,7 +22,7 @@ uses
   , nextpas.core.tls.mbedtls.lib
   , nextpas.core.tls.wolfssl.lib
   {$ENDIF}
-  ;
+  , nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv, nextpas.core.text.format;
 
 type
   TCallbackKind = (ckVerify, ckPassword, ckInfo);
@@ -173,7 +172,7 @@ begin
         LLowerMsg := LowerCase(E.Message);
         Require((E.ErrorCode = sslErrUnsupported) or (Pos('unsupported', LLowerMsg) > 0) or
           (Pos('不支持', E.Message) > 0),
-          Format('%s password callback rejection must report unsupported semantics: %s',
+          TextFormat('%s password callback rejection must report unsupported semantics: %s',
             [SSL_LIBRARY_NAMES[ABackend], E.Message]));
         LRejected := True;
       end;
@@ -226,14 +225,14 @@ begin
           LLowerMsg := LowerCase(E.Message);
           Require((E.ErrorCode = sslErrUnsupported) or (Pos('unsupported', LLowerMsg) > 0) or
             (Pos('不支持', E.Message) > 0),
-            Format('%s non-nil %s rejection must report unsupported semantics: %s',
+            TextFormat('%s non-nil %s rejection must report unsupported semantics: %s',
               [SSL_LIBRARY_NAMES[ABackend], CallbackKindName(LKind), E.Message]));
           LRejected := True;
         end;
       end;
 
       Require(LRejected,
-        Format('%s must reject non-nil %s while SupportsCallbacks=False',
+        TextFormat('%s must reject non-nil %s while SupportsCallbacks=False',
           [SSL_LIBRARY_NAMES[ABackend], CallbackKindName(LKind)]));
 
       try
@@ -302,14 +301,14 @@ begin
           LLowerMsg := LowerCase(E.Message);
           Require((E.ErrorCode = sslErrUnsupported) or (Pos('unsupported', LLowerMsg) > 0) or
             (Pos('不支持', E.Message) > 0),
-            Format('FreePascal non-nil %s rejection must report unsupported semantics: %s',
+            TextFormat('FreePascal non-nil %s rejection must report unsupported semantics: %s',
               [CallbackKindName(LKind), E.Message]));
           LRejected := True;
         end;
       end;
 
       Require(LRejected,
-        Format('FreePascal must reject non-nil %s while the kind remains unpublished', [CallbackKindName(LKind)]));
+        TextFormat('FreePascal must reject non-nil %s while the kind remains unpublished', [CallbackKindName(LKind)]));
 
       try
         ClearCallback(LCtx, LKind);
@@ -375,14 +374,14 @@ begin
             LLowerMsg := LowerCase(E.Message);
             Require((E.ErrorCode = sslErrUnsupported) or (Pos('unsupported', LLowerMsg) > 0) or
               (Pos('不支持', E.Message) > 0),
-              Format('OpenSSL incomplete callback surface must report unsupported for non-nil %s: %s',
+              TextFormat('OpenSSL incomplete callback surface must report unsupported for non-nil %s: %s',
                 [CallbackKindName(LKind), E.Message]));
             LRejected := True;
           end;
         end;
 
         Require(LRejected,
-          Format('OpenSSL must reject non-nil %s when callback helper surface is incomplete',
+          TextFormat('OpenSSL must reject non-nil %s when callback helper surface is incomplete',
             [CallbackKindName(LKind)]));
 
         try

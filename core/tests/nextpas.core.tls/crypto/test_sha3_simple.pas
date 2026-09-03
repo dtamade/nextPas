@@ -3,9 +3,8 @@ program test_sha3_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.text.conv;
 
 function BytesToHex(const Data: array of Byte; Len: Integer): string;
 var

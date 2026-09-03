@@ -3,7 +3,7 @@ program test_bn_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.bn;
+  nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.bn;
 
 var
   TestsPassed, TestsFailed: Integer;

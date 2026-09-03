@@ -3,7 +3,6 @@ program test_openssl_certificate_extension_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib,
   nextpas.core.tls.openssl.backed;

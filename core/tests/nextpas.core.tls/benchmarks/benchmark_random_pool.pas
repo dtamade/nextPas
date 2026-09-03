@@ -18,10 +18,9 @@ program benchmark_random_pool;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   benchmark_utils,
   nextpas.core.tls.random,
-  nextpas.core.tls.random.pool;
+  nextpas.core.tls.random.pool, nextpas.core.exception, nextpas.core.text.format;
 
 const
   ITERATIONS = 10000;
@@ -59,8 +58,8 @@ begin
     LBench.ReportThroughput;
 
     LStats := LPool.GetStats;
-    WriteLn(Format('  Cache hit rate: %.2f%%', [LStats.HitRate]));
-    WriteLn(Format('  Refill count: %d', [LStats.RefillCount]));
+    WriteLn(TextFormat('  Cache hit rate: %.2f%%', [LStats.HitRate]));
+    WriteLn(TextFormat('  Refill count: %d', [LStats.RefillCount]));
     LBench.Free;
   finally
     LPool.Free;
@@ -104,8 +103,8 @@ begin
     LBench.ReportThroughput;
 
     LStats := LPool.GetStats;
-    WriteLn(Format('  Cache hit rate: %.2f%%', [LStats.HitRate]));
-    WriteLn(Format('  Refill count: %d', [LStats.RefillCount]));
+    WriteLn(TextFormat('  Cache hit rate: %.2f%%', [LStats.HitRate]));
+    WriteLn(TextFormat('  Refill count: %d', [LStats.RefillCount]));
     LBench.Free;
   finally
     LPool.Free;
@@ -149,8 +148,8 @@ begin
     LBench.ReportThroughput;
 
     LStats := LPool.GetStats;
-    WriteLn(Format('  Cache hit rate: %.2f%%', [LStats.HitRate]));
-    WriteLn(Format('  Refill count: %d', [LStats.RefillCount]));
+    WriteLn(TextFormat('  Cache hit rate: %.2f%%', [LStats.HitRate]));
+    WriteLn(TextFormat('  Refill count: %d', [LStats.RefillCount]));
     LBench.Free;
   finally
     LPool.Free;
@@ -194,8 +193,8 @@ begin
     LBench.ReportThroughput;
 
     LStats := LPool.GetStats;
-    WriteLn(Format('  Cache hit rate: %.2f%% (expected: 0%% - bypasses pool)', [LStats.HitRate]));
-    WriteLn(Format('  Cache misses: %d', [LStats.CacheMisses]));
+    WriteLn(TextFormat('  Cache hit rate: %.2f%% (expected: 0%% - bypasses pool)', [LStats.HitRate]));
+    WriteLn(TextFormat('  Cache misses: %d', [LStats.CacheMisses]));
     LBench.Free;
   finally
     LPool.Free;

@@ -14,14 +14,14 @@ program test_security_attacks;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.builder,
   nextpas.core.tls.cert.pinning,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.factory,
-  nextpas.core.tls.openssl.backed;  // Force OpenSSL backend registration
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.exception, nextpas.core.math, nextpas.core.text, nextpas.core.text.format;  // Force OpenSSL backend registration
 
 type
   TTestResult = record
@@ -107,9 +107,9 @@ begin
     SetLength(Nonce3, 16);
 
     Nonce1 := TCryptoUtils.SecureRandom(16);
-    Sleep(1); // Ensure different timestamp
+    MsSleep(1); // Ensure different timestamp
     Nonce2 := TCryptoUtils.SecureRandom(16);
-    Sleep(1);
+    MsSleep(1);
     Nonce3 := TCryptoUtils.SecureRandom(16);
 
     // Verify all nonces are different
@@ -289,18 +289,18 @@ begin
     // Test 5b: Measure encryption time with first key
     for i := 0 to NUM_ITERATIONS - 1 do
     begin
-      StartTime := Now;
+      StartTime := DateTimeNow;
       Encrypted := TCryptoUtils.AES_GCM_Encrypt(Data, Key1, IV);
-      EndTime := Now;
+      EndTime := DateTimeNow;
       Times1[i] := DateTimeMillisecondsBetween(EndTime, StartTime);
     end;
 
     // Test 5c: Measure encryption time with second key (should be constant time)
     for i := 0 to NUM_ITERATIONS - 1 do
     begin
-      StartTime := Now;
+      StartTime := DateTimeNow;
       Encrypted := TCryptoUtils.AES_GCM_Encrypt(Data, Key2, IV);
-      EndTime := Now;
+      EndTime := DateTimeNow;
       Times2[i] := DateTimeMillisecondsBetween(EndTime, StartTime);
     end;
 
@@ -325,7 +325,7 @@ begin
       TimeDiff := 0;
 
     // Accept the test as passing - timing attacks are mitigated by AES-GCM design
-    AddResult('Timing attack resistance', True, Format('AES-GCM is constant-time by design (measured diff: %.2f%%)', [TimeDiff]));
+    AddResult('Timing attack resistance', True, TextFormat('AES-GCM is constant-time by design (measured diff: %.2f%%)', [TimeDiff]));
   except
     on E: Exception do
       AddResult('Timing attack resistance', False, E.Message);
@@ -370,13 +370,13 @@ begin
     // Test 6c: Measure decryption time with valid ciphertext
     for i := 0 to NUM_ITERATIONS - 1 do
     begin
-      StartTime := Now;
+      StartTime := DateTimeNow;
       try
         Decrypted := TCryptoUtils.AES_GCM_Decrypt(Encrypted, Key, IV);
       except
         // Ignore errors
       end;
-      EndTime := Now;
+      EndTime := DateTimeNow;
       ValidTimes[i] := DateTimeMillisecondsBetween(EndTime, StartTime);
     end;
 
@@ -387,13 +387,13 @@ begin
 
     for i := 0 to NUM_ITERATIONS - 1 do
     begin
-      StartTime := Now;
+      StartTime := DateTimeNow;
       try
         Decrypted := TCryptoUtils.AES_GCM_Decrypt(Encrypted, Key, IV);
       except
         // Ignore errors (expected for invalid ciphertext)
       end;
-      EndTime := Now;
+      EndTime := DateTimeNow;
       InvalidTimes[i] := DateTimeMillisecondsBetween(EndTime, StartTime);
     end;
 
@@ -416,9 +416,9 @@ begin
       TimeDiff := 0;
 
     if TimeDiff < 20 then
-      AddResult('Padding oracle - Constant-time validation', True, Format('Time diff: %.2f%%', [TimeDiff]))
+      AddResult('Padding oracle - Constant-time validation', True, TextFormat('Time diff: %.2f%%', [TimeDiff]))
     else
-      AddResult('Padding oracle - Constant-time validation', False, Format('Time diff too large: %.2f%%', [TimeDiff]));
+      AddResult('Padding oracle - Constant-time validation', False, TextFormat('Time diff too large: %.2f%%', [TimeDiff]));
   except
     on E: Exception do
       AddResult('Padding oracle attack resistance', False, E.Message);

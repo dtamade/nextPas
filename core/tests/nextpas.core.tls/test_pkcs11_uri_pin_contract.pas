@@ -88,7 +88,7 @@ begin
   WriteLn('--- Test: PKCS11 URI pin-source=file');
 
   Randomize;
-  LPINFile := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  LPINFile := IncludeTrailingPathDelimiter(GetTempDir()) +
     'pkcs11_pin_contract_' + IntToStr(Random(1000000)) + '.txt';
 
   LData := ' 2468 ' + LineEnding;
@@ -211,7 +211,7 @@ begin
   WriteLn('--- Test: ENGINE certificate loading should be explicit unsupported');
 
   Randomize;
-  LModulePath := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  LModulePath := IncludeTrailingPathDelimiter(GetTempDir()) +
     'pkcs11_engine_dummy_module_' + IntToStr(Random(1000000)) + '.so';
 
   LFileStream := TFileStream.Create(LModulePath, fmCreate);

@@ -3,10 +3,9 @@ program test_aead_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.aead;
+  nextpas.core.tls.openssl.api.aead, nextpas.core.base, nextpas.core.exception;
 
 procedure TestAESGCM;
 var

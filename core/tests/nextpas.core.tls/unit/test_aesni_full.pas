@@ -4,7 +4,7 @@ program test_aesni_full;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.crypto.aesni;
+   nextpas.core.tls.crypto.aesni, nextpas.core.text.conv;
 
 var
   LTotal, LPassed: Integer;

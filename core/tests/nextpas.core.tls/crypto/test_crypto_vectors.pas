@@ -3,10 +3,9 @@ program test_crypto_vectors;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.x25519,
   nextpas.core.tls.crypto.aesgcm,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.tls.crypto.hash, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   GPass: Integer = 0;
@@ -92,7 +91,7 @@ procedure TestSHA256;
 var LHash: TBytes;
 begin
   WriteLn('Test: SHA-256 FIPS 180-4');
-  LHash := SHA256(BytesOf('abc'));
+  LHash := SHA256(StringToUTF8Bytes('abc'));
   Check(BytesToHex(LHash) = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad', 'SHA-256(abc)');
 end;
 
@@ -100,7 +99,7 @@ procedure TestSHA384;
 var LHash: TBytes;
 begin
   WriteLn('Test: SHA-384 FIPS 180-4');
-  LHash := SHA384(BytesOf('abc'));
+  LHash := SHA384(StringToUTF8Bytes('abc'));
   Check(BytesToHex(LHash) = 'cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7', 'SHA-384(abc)');
 end;
 
@@ -114,6 +113,6 @@ begin
   TestSHA256;
   TestSHA384;
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPass, GFail]));
   if GFail > 0 then Halt(1);
 end.

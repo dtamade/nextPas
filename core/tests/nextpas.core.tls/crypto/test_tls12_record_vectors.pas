@@ -3,12 +3,11 @@ program test_tls12_record_vectors;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.tls12.recordcrypto,
   nextpas.core.tls.tls12.chacha20record,
   nextpas.core.tls.crypto.tls12record,
   nextpas.core.tls.tls12.handshakecrypto,
-  nextpas.core.tls.crypto.tls12prf;
+  nextpas.core.tls.crypto.tls12prf, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   GPass: Integer = 0;
@@ -202,6 +201,6 @@ begin
   TestKeyBlockOrder;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPass, GFail]));
   if GFail > 0 then Halt(1);
 end.

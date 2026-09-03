@@ -3,7 +3,7 @@ program test_sha3_diagnostic;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.sha3;
+  nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.sha3, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 procedure PrintBytes(const Title: string; const Data: array of Byte);
 var
@@ -11,7 +11,7 @@ var
 begin
   Write(Title, ': ');
   for i := 0 to High(Data) do
-    Write(Format('%.2x', [Data[i]]));
+    Write(TextFormat('%.2x', [Data[i]]));
   WriteLn;
 end;
 

@@ -4,10 +4,7 @@ program test_error_mapping;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  {$IFDEF UNIX}
-  nextpas.core.thread.init,
-  {$ENDIF}
-  nextpas.core.system.sysutils;
+  nextpas.core.thread.init;
 
 begin
   WriteLn('测试错误映射功能');

@@ -4,9 +4,8 @@ program test_freepascal_certstore;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.text.conv;
 
 var
   LTotal, LPassed: Integer;

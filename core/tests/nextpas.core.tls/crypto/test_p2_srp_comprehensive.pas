@@ -23,10 +23,9 @@ program test_p2_srp_comprehensive;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.srp,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader, nextpas.core.exception, nextpas.core.text.format;
 
 var
   TotalTests, PassedTests, FailedTests: Integer;
@@ -349,7 +348,7 @@ begin
   WriteLn('总测试数: ', TotalTests);
   WriteLn('通过: ', PassedTests);
   WriteLn('失败: ', FailedTests);
-  WriteLn('通过率: ', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%');
+  WriteLn('通过率: ', TextFormat('%.1f', [PassedTests * 100.0 / TotalTests]), '%');
   WriteLn;
 
   if IsOpenSSL3 then

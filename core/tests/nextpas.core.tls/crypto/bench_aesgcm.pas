@@ -4,7 +4,7 @@ program bench_aesgcm;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.tls.crypto.aesgcm, nextpas.core.tls.crypto.aesni;
+   nextpas.core.time, nextpas.core.tls.crypto.aesgcm, nextpas.core.tls.crypto.aesni, nextpas.core.base;
 
 const
   ITERATIONS = 10000;

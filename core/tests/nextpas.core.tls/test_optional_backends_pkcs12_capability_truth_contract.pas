@@ -3,7 +3,6 @@ program test_optional_backends_pkcs12_capability_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -17,7 +16,7 @@ uses
   , nextpas.core.tls.mbedtls.lib
   , nextpas.core.tls.wolfssl.lib
   {$ENDIF}
-  ;
+  , nextpas.core.exception, nextpas.core.text.format;
 
 procedure Require(ACondition: Boolean; const AMessage: string);
 begin
@@ -41,11 +40,11 @@ begin
 
   LActual := LLib.GetCapabilities.SupportsPKCS12;
   Require(LActual = AExpected,
-    Format('%s SupportsPKCS12 mismatch: expected=%s actual=%s',
-      [SSL_LIBRARY_NAMES[ABackend], BoolToStr(AExpected, True), BoolToStr(LActual, True)]));
+    TextFormat('%s SupportsPKCS12 mismatch: expected=%s actual=%s',
+      [SSL_LIBRARY_NAMES[ABackend], BoolToStr(AExpected), BoolToStr(LActual)]));
 
   WriteLn('[PASS] ', SSL_LIBRARY_NAMES[ABackend], ' SupportsPKCS12 = ',
-    BoolToStr(LActual, True));
+    BoolToStr(LActual));
 end;
 
 begin

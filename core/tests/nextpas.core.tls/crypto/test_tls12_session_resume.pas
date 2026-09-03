@@ -3,8 +3,7 @@ program test_tls12_session_resume;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
-  nextpas.core.tls.tls12.client;
+  nextpas.core.tls.tls12.client, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   LPort: Word;

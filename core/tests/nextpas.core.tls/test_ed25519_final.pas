@@ -1,6 +1,6 @@
 program test_ed25519_final;
 {$mode objfpc}{$H+}{$J-}
-uses nextpas.core.system.sysutils, nextpas.core.crypto.ed25519;
+uses  nextpas.core.crypto.ed25519, nextpas.core.base, nextpas.core.text.conv;
 
 function HexToBytes(const AHex: string): TBytes;
 var I: Integer;

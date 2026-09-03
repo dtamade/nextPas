@@ -16,10 +16,9 @@ program test_backend_selector_basic;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.backend.selector,
-  nextpas.core.tls.openssl.backed;  // 注册 OpenSSL 后端
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.exception;  // 注册 OpenSSL 后端
 
 procedure TestDefaultRequirements;
 var

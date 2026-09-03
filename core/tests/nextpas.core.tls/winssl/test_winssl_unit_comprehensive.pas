@@ -1,13 +1,9 @@
 program test_winssl_unit_comprehensive;
 
 {$mode objfpc}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 uses
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
   nextpas.core.tls.cert.utils,
@@ -16,7 +12,7 @@ uses
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.utils,
   nextpas.core.tls.winssl.certstore,
-  nextpas.core.tls.winssl.certificate;
+  nextpas.core.tls.winssl.certificate, nextpas.core.exception, nextpas.core.fs, nextpas.core.path, nextpas.core.text, nextpas.core.text.conv, nextpas.core.text.format;
 
 var
   TotalTests: Integer = 0;
@@ -181,7 +177,7 @@ begin
   // Test 4: Get library type
   LLibType := LLib.GetLibraryType;
   Test('Library type is WinSSL', LLibType = sslWinSSL,
-    Format('Expected sslWinSSL, got %d', [Ord(LLibType)]));
+    TextFormat('Expected sslWinSSL, got %d', [Ord(LLibType)]));
 
   // Test 5: Get version string
   LVersionString := LLib.GetVersionString;
@@ -193,7 +189,7 @@ begin
   // Test 6: Get version number
   // Version format: High word = major, Low word = minor (e.g., $00060002 = 6.2)
   Test('Version number >= 6.0', (LLib.GetVersionNumber shr 16) >= 6,
-    Format('Version: %d.%d', [(LLib.GetVersionNumber shr 16), (LLib.GetVersionNumber and $FFFF)]));
+    TextFormat('Version: %d.%d', [(LLib.GetVersionNumber shr 16), (LLib.GetVersionNumber and $FFFF)]));
 
   // Test 7: Check TLS 1.2 support
   Test('TLS 1.2 supported', LLib.IsProtocolSupported(sslProtocolTLS12));
@@ -380,7 +376,7 @@ begin
   try
     LCount := LStore.GetCount;
     Test('Get certificate count', LCount > 0,
-      Format('Found %d certificates', [LCount]));
+      TextFormat('Found %d certificates', [LCount]));
   except
     on E: Exception do
       Test('Get certificate count', False, E.Message);
@@ -679,7 +675,7 @@ begin
       'Actual=' + IntToStr(LActualInfo.PublicKeySize) + ' Expected=' + IntToStr(LExpectedInfo.PublicKeySize));
     Test('ECDSA CA fixture GetInfo exposes IsCA truth',
       LActualInfo.IsCA = LExpectedInfo.IsCA,
-      'Actual=' + BoolToStr(LActualInfo.IsCA, True) + ' Expected=' + BoolToStr(LExpectedInfo.IsCA, True));
+      'Actual=' + BoolToStr(LActualInfo.IsCA) + ' Expected=' + BoolToStr(LExpectedInfo.IsCA));
     Test('ECDSA CA fixture GetInfo path length matches parser truth',
       LActualInfo.PathLength = LExpectedInfo.PathLength,
       'Actual=' + IntToStr(LActualInfo.PathLength) + ' Expected=' + IntToStr(LExpectedInfo.PathLength));
@@ -933,13 +929,13 @@ begin
   LVersions := [sslProtocolTLS12];
   LFlags := ProtocolVersionsToSchannelFlags(LVersions, False);
   Test('Convert TLS 1.2 to flags', LFlags <> 0,
-    Format('Flags: $%x', [LFlags]));
+    TextFormat('Flags: $%x', [LFlags]));
 
   // Test 2: Multiple protocol versions
   LVersions := [sslProtocolTLS12, sslProtocolTLS13];
   LFlags := ProtocolVersionsToSchannelFlags(LVersions, False);
   Test('Convert TLS 1.2+1.3 to flags', LFlags <> 0,
-    Format('Flags: $%x', [LFlags]));
+    TextFormat('Flags: $%x', [LFlags]));
 
   // Test 3: Schannel flags to protocol versions
   LFlags := SP_PROT_TLS1_2_CLIENT;

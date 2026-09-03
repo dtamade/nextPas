@@ -4,7 +4,6 @@ program test_corba_interface_issue;
 {$INTERFACES CORBA}
 
 uses
-  nextpas.core.system.sysutils,
 
   nextpas.core.tls.base;
 

@@ -3,12 +3,11 @@ program test_factory;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.backed,
-  nextpas.core.tls.wolfssl.lib;
+  nextpas.core.tls.wolfssl.lib, nextpas.core.exception, nextpas.core.text;
 var
   TestsPassed: Integer = 0;
   TestsFailed: Integer = 0;

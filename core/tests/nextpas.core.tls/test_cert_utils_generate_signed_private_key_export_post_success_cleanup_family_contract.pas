@@ -3,7 +3,6 @@ program test_cert_utils_generate_signed_private_key_export_post_success_cleanup_
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
@@ -13,7 +12,7 @@ uses
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.text;
 var
   GLib: ISSLLibrary = nil;
   TotalTests: Integer = 0;

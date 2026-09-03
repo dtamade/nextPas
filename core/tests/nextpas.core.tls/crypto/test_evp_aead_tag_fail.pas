@@ -3,9 +3,8 @@ program test_evp_aead_tag_fail;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api;
+  nextpas.core.tls.openssl.api, nextpas.core.exception;
 
 procedure TestAES256GCM_TagFail;
 const

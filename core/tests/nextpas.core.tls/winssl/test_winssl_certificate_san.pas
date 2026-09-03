@@ -18,14 +18,12 @@ program test_winssl_certificate_san;
 
 uses
   {$IFDEF WINDOWS}
-  Windows,
   {$ELSE}
   {$ERROR 'This test requires Windows platform'}
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib,
-  nextpas.core.tls.winssl.certificate;
+  nextpas.core.tls.winssl.certificate, nextpas.core.exception, nextpas.core.fs, nextpas.core.path;
 
 var
   TestsPassed: Integer = 0;

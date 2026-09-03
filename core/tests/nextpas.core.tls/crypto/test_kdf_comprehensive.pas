@@ -3,8 +3,7 @@ program test_kdf_comprehensive;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.openssl.api;
+  nextpas.core.tls.openssl.api, nextpas.core.exception, nextpas.core.platform.dl, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.time;
 
 type
   TTestResult = record
@@ -56,18 +55,18 @@ const
 
 procedure LoadKDFFunctions;
 var
-  LibHandle: THandle;
+  LibHandle: TPlatformLibrary;
 begin
-  LibHandle := LoadLibrary(CRYPTO_LIB);
-  if LibHandle = 0 then
+  if not platform_dl_load(CRYPTO_LIB, [dlfLazy], LibHandle) then LibHandle := PLATFORM_DL_NIL_LIBRARY;
+  if LibHandle.IsInvalid then
     raise Exception.Create('Failed to load ' + CRYPTO_LIB);
 
-  Pointer(PKCS5_PBKDF2_HMAC) := GetProcAddress(LibHandle, 'PKCS5_PBKDF2_HMAC');
-  Pointer(EVP_PKEY_derive_init) := GetProcAddress(LibHandle, 'EVP_PKEY_derive_init');
-  Pointer(EVP_PKEY_derive) := GetProcAddress(LibHandle, 'EVP_PKEY_derive');
-  Pointer(EVP_PKEY_CTX_new_id) := GetProcAddress(LibHandle, 'EVP_PKEY_CTX_new_id');
-  Pointer(EVP_PKEY_CTX_free) := GetProcAddress(LibHandle, 'EVP_PKEY_CTX_free');
-  Pointer(EVP_PKEY_CTX_ctrl) := GetProcAddress(LibHandle, 'EVP_PKEY_CTX_ctrl');
+  Pointer(PKCS5_PBKDF2_HMAC) := platform_dl_symbol(LibHandle, 'PKCS5_PBKDF2_HMAC');
+  Pointer(EVP_PKEY_derive_init) := platform_dl_symbol(LibHandle, 'EVP_PKEY_derive_init');
+  Pointer(EVP_PKEY_derive) := platform_dl_symbol(LibHandle, 'EVP_PKEY_derive');
+  Pointer(EVP_PKEY_CTX_new_id) := platform_dl_symbol(LibHandle, 'EVP_PKEY_CTX_new_id');
+  Pointer(EVP_PKEY_CTX_free) := platform_dl_symbol(LibHandle, 'EVP_PKEY_CTX_free');
+  Pointer(EVP_PKEY_CTX_ctrl) := platform_dl_symbol(LibHandle, 'EVP_PKEY_CTX_ctrl');
 end;
 
 procedure AddResult(const AName: string; ASuccess: Boolean; const AError: string = '');
@@ -119,7 +118,7 @@ begin
 
   WriteLn;
   PrintSeparator;
-  WriteLn(Format('Total: %d tests, %d passed, %d failed (%.1f%%)',
+  WriteLn(TextFormat('Total: %d tests, %d passed, %d failed (%.1f%%)',
     [TotalTests, PassedTests, TotalTests - PassedTests,
      (PassedTests / TotalTests) * 100]));
   PrintSeparator;
@@ -237,7 +236,7 @@ begin
   WriteLn('  Iterations: ', iterations);
   WriteLn('  Computing...');
 
-  start_time := Now;
+  start_time := DateTimeNow;
 
   if PKCS5_PBKDF2_HMAC(PAnsiChar(password), Length(password),
     PByte(PAnsiChar(salt)), Length(salt), iterations, EVP_sha256(),
@@ -247,7 +246,7 @@ begin
     Exit;
   end;
 
-  end_time := Now;
+  end_time := DateTimeNow;
   duration_ms := (end_time - start_time) * 24 * 60 * 60 * 1000;
 
   WriteLn('  Duration:   ', duration_ms:0:2, ' ms');

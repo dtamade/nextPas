@@ -3,11 +3,10 @@ program test_gcm_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.consts,
-  nextpas.core.tls.openssl.base;
+  nextpas.core.tls.openssl.base, nextpas.core.exception;
 
 procedure TestGCMBasic;
 var

@@ -8,7 +8,7 @@ program test_x509_basic;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time, ctypes, DynLibs,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api,
@@ -21,7 +21,7 @@ uses
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -113,14 +113,14 @@ begin
 
     entry_count := X509_NAME_entry_count(name);
     Runner.Check('Verify entry count', entry_count = 3,
-            Format('Expected 3, got %d', [entry_count]));
+            TextFormat('Expected 3, got %d', [entry_count]));
 
     entry := X509_NAME_get_entry(name, 2);
     Runner.Check('Get entry by index', entry <> nil, 'Retrieved CN entry');
 
     text_len := X509_NAME_get_text_by_NID(name, NID_commonName, @text[0], 256);
     Runner.Check('Get CN text by NID', text_len > 0,
-            Format('CN text length: %d', [text_len]));
+            TextFormat('CN text length: %d', [text_len]));
 
     X509_NAME_free(name);
   end;
@@ -159,7 +159,7 @@ begin
     serial := X509_get_serialNumber(cert);
     Runner.Check('Get serial number',
             (serial <> nil) and (ASN1_INTEGER_get(serial) = 12345),
-            Format('Serial: %d', [ASN1_INTEGER_get(serial)]));
+            TextFormat('Serial: %d', [ASN1_INTEGER_get(serial)]));
 
     name := X509_NAME_new();
     if name <> nil then
@@ -228,7 +228,7 @@ begin
 
     version := X509_get_version(cert);
     Runner.Check('Get certificate version', version = 2,
-            Format('Version: %d (X.509 v3)', [version]));
+            TextFormat('Version: %d (X.509 v3)', [version]));
 
   finally
     X509_free(cert);
@@ -299,7 +299,7 @@ begin
 
     verify_result := X509_verify(cert, pkey);
     Runner.Check('Verify self-signed certificate', verify_result = 1,
-            Format('Verification result: %d', [verify_result]));
+            TextFormat('Verification result: %d', [verify_result]));
 
     Runner.Check('Check private key matches certificate',
             X509_check_private_key(cert, pkey) = 1,

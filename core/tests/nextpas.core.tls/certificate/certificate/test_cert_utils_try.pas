@@ -8,8 +8,7 @@ program test_cert_utils_try;
  *}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.cert.utils;
+  nextpas.core.tls.cert.utils, nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.text, nextpas.core.text.format;
 
 var
   GTestsPassed: Integer = 0;
@@ -221,7 +220,7 @@ begin
     TestTryLoadAndSaveFile;
 
     WriteLn('╔════════════════════════════════════════════════════════════╗');
-    WriteLn(Format('║   Tests Passed: %-3d  Failed: %-3d                         ║', [GTestsPassed, GTestsFailed]));
+    WriteLn(TextFormat('║   Tests Passed: %-3d  Failed: %-3d                         ║', [GTestsPassed, GTestsFailed]));
     WriteLn('╚════════════════════════════════════════════════════════════╝');
 
     if GTestsFailed > 0 then

@@ -7,10 +7,9 @@ program test_native_handle_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.native_handle,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv;
 
 type
   {  Mock 对象 - 实现 ISSLNativeHandleAccess }

@@ -3,9 +3,8 @@ program test_modes_simple;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.modes;
+  nextpas.core.tls.openssl.api.modes, nextpas.core.exception;
 
 begin
   WriteLn('========================================');

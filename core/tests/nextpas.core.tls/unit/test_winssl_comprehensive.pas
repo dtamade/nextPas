@@ -1,16 +1,14 @@
 program test_winssl_comprehensive;
 
 {$mode ObjFPC}{$H+}
-{$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
+
 
 {$IFDEF WINDOWS}
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
-  nextpas.core.tls.winssl.lib;
+  nextpas.core.tls.winssl.lib, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv;
 
 var
   GPassCount, GFailCount: Integer;

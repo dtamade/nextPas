@@ -3,11 +3,10 @@ program test_openssl_ec;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, DynLibs,
   nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.ec;
+  nextpas.core.tls.openssl.api.ec, nextpas.core.exception, nextpas.core.platform.dl;
 
 var
   TestsPassed: Integer = 0;
@@ -29,7 +28,7 @@ end;
 
 function TestECLoadFunctions: Boolean;
 var
-  LLib: TLibHandle;
+  LLib: TPlatformLibrary;
 begin
   Result := False;
 
@@ -45,7 +44,7 @@ begin
   end;
 
   LLib := GetCryptoLibHandle;
-  if LLib = NilHandle then
+  if LLib.IsInvalid then
   begin
     WriteLn('Failed to get crypto library handle');
     PrintTestResult('EC - Load functions', False);

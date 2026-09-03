@@ -4,12 +4,11 @@ program test_mbedtls_connection_info_ciphersuite_contract;
 {$DEFINE ENABLE_MBEDTLS}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.api,
-  nextpas.core.tls.mbedtls.lib;
+  nextpas.core.tls.mbedtls.lib, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.format;
 
 var
   GLib: ISSLLibrary = nil;
@@ -147,13 +146,13 @@ begin
 
   AssertTrue(AName + ' should derive CipherSuiteId',
     LInfo.CipherSuiteId = AExpectedCipherSuiteId,
-    Format('expected CipherSuiteId=%d but got %d', [AExpectedCipherSuiteId, LInfo.CipherSuiteId]));
+    TextFormat('expected CipherSuiteId=%d but got %d', [AExpectedCipherSuiteId, LInfo.CipherSuiteId]));
   AssertTrue(AName + ' should derive KeySize',
     LInfo.KeySize = AExpectedKeySize,
-    Format('expected KeySize=%d but got %d', [AExpectedKeySize, LInfo.KeySize]));
+    TextFormat('expected KeySize=%d but got %d', [AExpectedKeySize, LInfo.KeySize]));
   AssertTrue(AName + ' should derive MacSize',
     LInfo.MacSize = AExpectedMacSize,
-    Format('expected MacSize=%d but got %d', [AExpectedMacSize, LInfo.MacSize]));
+    TextFormat('expected MacSize=%d but got %d', [AExpectedMacSize, LInfo.MacSize]));
 end;
 
 procedure TestDigestConstantTruth;
@@ -186,7 +185,7 @@ begin
   SetLength(LDigest, Integer(mbedtls_md_get_size(LInfo)));
   AssertTrue('MBEDTLS_MD_SHA1 should publish a 20-byte digest size',
     Length(LDigest) = 20,
-    Format('expected SHA1 digest size 20 but got %d', [Length(LDigest)]));
+    TextFormat('expected SHA1 digest size 20 but got %d', [Length(LDigest)]));
 
   if mbedtls_md(LInfo, @LInput[1], Length(LInput), @LDigest[0]) <> 0 then
   begin

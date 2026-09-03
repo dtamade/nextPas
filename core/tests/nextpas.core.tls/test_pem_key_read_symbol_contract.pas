@@ -77,7 +77,7 @@ begin
   WriteLn;
   WriteLn('=== PEM key read symbol guard ===');
 
-  LTempFile := GetTempDir(False) + 'nextpas_pem_key_read_symbol_contract.pem';
+  LTempFile := GetTempDir() + 'nextpas_pem_key_read_symbol_contract.pem';
   if not WriteTempTextFile(LTempFile, 'not-a-real-pem') then
   begin
     MarkSkip('pem key read symbol guard', 'failed to create temp file');

@@ -4,7 +4,7 @@ program test_transport;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.transport, nextpas.core.platform.socket;
+   nextpas.core.tls.transport, nextpas.core.platform.socket, nextpas.core.base;
 
 var
   LTotal, LPassed: Integer;

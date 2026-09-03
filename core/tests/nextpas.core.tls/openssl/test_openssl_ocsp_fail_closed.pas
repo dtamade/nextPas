@@ -4,11 +4,10 @@ program test_openssl_ocsp_fail_closed;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.openssl.api.consts;
+  nextpas.core.tls.openssl.api.consts, nextpas.core.exception, nextpas.core.text.format;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin
@@ -112,7 +111,7 @@ begin
   Check(not LOk, 'VerifyEx should fail');
   Check(
     LRes.ErrorCode = X509_V_ERR_OCSP_VERIFY_FAILED,
-    Format('ErrorCode expected X509_V_ERR_OCSP_VERIFY_FAILED, got %d (%s)', [LRes.ErrorCode, LRes.ErrorMessage])
+    TextFormat('ErrorCode expected X509_V_ERR_OCSP_VERIFY_FAILED, got %d (%s)', [LRes.ErrorCode, LRes.ErrorMessage])
   );
 end;
 

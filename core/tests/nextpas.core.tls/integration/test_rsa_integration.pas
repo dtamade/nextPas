@@ -8,7 +8,6 @@ program test_rsa_integration;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.init,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.rsa,
@@ -17,7 +16,7 @@ uses
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.err,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.base.utils, nextpas.core.exception;
 
 type
   size_t = NativeUInt;

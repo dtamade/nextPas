@@ -5,7 +5,7 @@ unit test_base;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test;
+  nextpas.core.test, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format;
 
 type
   { TTestBase - 所有单元测试的基类 }
@@ -54,7 +54,7 @@ var
 begin
   if Length(Expected) <> Length(Actual) then
   begin
-    ErrorMsg := Format('Byte array length mismatch: Expected %d, got %d',
+    ErrorMsg := TextFormat('Byte array length mismatch: Expected %d, got %d',
                       [Length(Expected), Length(Actual)]);
     if Msg <> '' then
       ErrorMsg := Msg + ': ' + ErrorMsg;
@@ -66,7 +66,7 @@ begin
   begin
     if Expected[i] <> Actual[i] then
     begin
-      ErrorMsg := Format('Byte mismatch at position %d: Expected $%s, got $%s',
+      ErrorMsg := TextFormat('Byte mismatch at position %d: Expected $%s, got $%s',
                         [i, IntToHex(Expected[i], 2), IntToHex(Actual[i], 2)]);
       if Msg <> '' then
         ErrorMsg := Msg + ': ' + ErrorMsg;
@@ -92,7 +92,7 @@ begin
   begin
     if ExpPtr^ <> ActPtr^ then
     begin
-      ErrorMsg := Format('Byte mismatch at position %d: Expected $%s, got $%s',
+      ErrorMsg := TextFormat('Byte mismatch at position %d: Expected $%s, got $%s',
                         [i, IntToHex(ExpPtr^, 2), IntToHex(ActPtr^, 2)]);
       if Msg <> '' then
         ErrorMsg := Msg + ': ' + ErrorMsg;
@@ -110,7 +110,7 @@ var
 begin
   try
     AMethod();
-    ErrorMsg := Format('Expected exception %s was not raised', [AExceptionClass.ClassName]);
+    ErrorMsg := TextFormat('Expected exception %s was not raised', [AExceptionClass.ClassName]);
     if Msg <> '' then
       ErrorMsg := Msg + ': ' + ErrorMsg;
     Fail(ErrorMsg);
@@ -119,7 +119,7 @@ begin
     begin
       if not (E is AExceptionClass) then
       begin
-        ErrorMsg := Format('Expected exception %s, but got %s: %s',
+        ErrorMsg := TextFormat('Expected exception %s, but got %s: %s',
                           [AExceptionClass.ClassName, E.ClassName, E.Message]);
         if Msg <> '' then
           ErrorMsg := Msg + ': ' + ErrorMsg;

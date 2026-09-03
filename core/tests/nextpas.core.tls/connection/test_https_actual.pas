@@ -4,12 +4,10 @@ program test_https_actual;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   nextpas.core.tls.utils,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
-  nextpas.core.tls.encoding;
+  nextpas.core.tls.encoding, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
 
 procedure Test1_HashData;
 var
@@ -18,7 +16,7 @@ var
 begin
   WriteLn('=== Test 1: HashData (实际实现测试) ===');
 
-  LData := BytesOf('Hello, World!');
+  LData := StringToUTF8Bytes('Hello, World!');
 
   // 测试 SHA256
   LHash := TSSLHelper.HashData(LData, sslHashSHA256);
@@ -52,7 +50,7 @@ begin
   WriteLn('=== Test 2: Base64 编解码 (实际实现测试) ===');
 
   LOriginal := 'Hello, World!';
-  LData := BytesOf(LOriginal);
+  LData := StringToUTF8Bytes(LOriginal);
 
   // 编码
   LBase64 := TEncodingUtils.Base64Encode(LData);
@@ -60,10 +58,10 @@ begin
 
   // 解码
   LDecoded := TEncodingUtils.Base64Decode(LBase64);
-  WriteLn('Decoded: ', StringOf(LDecoded));
+  WriteLn('Decoded: ', UTF8BytesToString(LDecoded));
 
   // 验证
-  if StringOf(LDecoded) = LOriginal then
+  if UTF8BytesToString(LDecoded) = LOriginal then
     WriteLn('✅ Base64 编解码工作正常')
   else
     WriteLn('❌ Base64 编解码失败');
@@ -79,7 +77,7 @@ var
 begin
   WriteLn('=== Test 3: Hex 编解码 (实际实现测试) ===');
 
-  LData := BytesOf('Test');
+  LData := StringToUTF8Bytes('Test');
 
   // 编码
   LHex := TEncodingUtils.BytesToHex(LData);
@@ -87,10 +85,10 @@ begin
 
   // 解码
   LDecoded := TEncodingUtils.HexToBytes(LHex);
-  WriteLn('Decoded: ', StringOf(LDecoded));
+  WriteLn('Decoded: ', UTF8BytesToString(LDecoded));
 
   // 验证
-  if StringOf(LDecoded) = 'Test' then
+  if UTF8BytesToString(LDecoded) = 'Test' then
     WriteLn('✅ Hex 编解码工作正常')
   else
     WriteLn('❌ Hex 编解码失败');

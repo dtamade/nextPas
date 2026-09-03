@@ -4,7 +4,7 @@ program test_ct_bigint;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.crypto.ct.bigint;
+   nextpas.core.tls.crypto.ct.bigint, nextpas.core.base;
 
 var
   LTotal, LPassed: Integer;

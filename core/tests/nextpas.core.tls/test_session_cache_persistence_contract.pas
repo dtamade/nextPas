@@ -3,9 +3,8 @@ program test_session_cache_persistence_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.session.cache;
+  nextpas.core.tls.session.cache, nextpas.core.base, nextpas.core.fs, nextpas.core.path, nextpas.core.text.conv, nextpas.core.time;
 
 type
   TMockSession = class(TInterfacedObject, ISSLSession)
@@ -37,7 +36,7 @@ begin
   FID := AID;
   FValid := AValid;
   FTimeout := 300;
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
 end;
 
 function TMockSession.GetID: string;
@@ -90,7 +89,7 @@ var
   LUtf8: UTF8String;
 begin
   LUtf8 := UTF8String(FID);
-  Result := BytesOf(LUtf8);
+  Result := StringToUTF8Bytes(LUtf8);
 end;
 
 function TMockSession.Deserialize(const AData: TBytes): Boolean;

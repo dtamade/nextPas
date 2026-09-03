@@ -3,10 +3,9 @@ program test_modes_basic;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.modes;
+  nextpas.core.tls.openssl.api.modes, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv;
 
 function BytesToHex(const data: TBytes): string;
 var

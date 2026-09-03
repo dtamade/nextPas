@@ -3,7 +3,6 @@ program test_tsa_api;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
@@ -12,7 +11,7 @@ uses
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.api.obj,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.base, nextpas.core.exception, nextpas.core.text.format;
 
 var
   TotalTests: Integer = 0;
@@ -21,7 +20,7 @@ var
 procedure AssertTrue(const Msg: string; Condition: Boolean);
 begin
   Inc(TotalTests);
-  Write(Format('[TEST] %s... ', [Msg]));
+  Write(TextFormat('[TEST] %s... ', [Msg]));
   if Condition then
   begin
     WriteLn('✓ PASS');
@@ -212,9 +211,9 @@ begin
     WriteLn('========================================');
     WriteLn('TSA API Test Summary');
     WriteLn('========================================');
-    WriteLn(Format('Total tests: %d', [TotalTests]));
-    WriteLn(Format('Passed: %d', [PassedTests]));
-    WriteLn(Format('Failed: %d', [TotalTests - PassedTests]));
+    WriteLn(TextFormat('Total tests: %d', [TotalTests]));
+    WriteLn(TextFormat('Passed: %d', [PassedTests]));
+    WriteLn(TextFormat('Failed: %d', [TotalTests - PassedTests]));
 
     if PassedTests = TotalTests then
       WriteLn('✅ ALL TSA API TESTS PASSED!')

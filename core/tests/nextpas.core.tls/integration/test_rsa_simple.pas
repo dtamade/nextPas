@@ -8,7 +8,6 @@ program test_rsa_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -17,7 +16,7 @@ uses
   nextpas.core.tls.openssl.api.rsa,
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -46,7 +45,7 @@ begin
         begin
           KeySize := RSA_size(Rsa);
           Runner.Check('Generate 2048-bit RSA key', True,
-                  Format('Generated key with size %d bytes (%d bits)',
+                  TextFormat('Generated key with size %d bytes (%d bits)',
                          [KeySize, KeySize * 8]));
         end
         else
@@ -112,11 +111,11 @@ begin
     SigLen := SizeOf(Signature);
     if RSA_sign(NID_sha256, @Digest[0], 32, @Signature[0], @SigLen, Rsa) = 1 then
     begin
-      Runner.Check('Sign digest', True, Format('Generated %d byte signature', [SigLen]));
+      Runner.Check('Sign digest', True, TextFormat('Generated %d byte signature', [SigLen]));
 
       VerifyResult := RSA_verify(NID_sha256, @Digest[0], 32, @Signature[0], SigLen, Rsa);
       Runner.Check('Verify signature', VerifyResult = 1,
-              Format('Verification result: %d', [VerifyResult]));
+              TextFormat('Verification result: %d', [VerifyResult]));
     end
     else
       Runner.Check('Sign digest', False, 'RSA_sign failed');
@@ -176,24 +175,24 @@ begin
 
     if CiphertextLen >= 0 then
     begin
-      Runner.Check('Encrypt data', True, Format('Encrypted to %d bytes', [CiphertextLen]));
+      Runner.Check('Encrypt data', True, TextFormat('Encrypted to %d bytes', [CiphertextLen]));
 
       DecryptedLen := RSA_private_decrypt(CiphertextLen, @Ciphertext[0],
                                           @Decrypted[0], Rsa, RSA_PKCS1_PADDING);
 
       if DecryptedLen >= 0 then
       begin
-        Runner.Check('Decrypt data', True, Format('Decrypted %d bytes', [DecryptedLen]));
+        Runner.Check('Decrypt data', True, TextFormat('Decrypted %d bytes', [DecryptedLen]));
 
         SetString(DecryptedStr, PAnsiChar(@Decrypted[0]), DecryptedLen);
         Runner.Check('Decrypted data matches', DecryptedStr = Plaintext,
-                Format('Original: "%s", Decrypted: "%s"', [Plaintext, DecryptedStr]));
+                TextFormat('Original: "%s", Decrypted: "%s"', [Plaintext, DecryptedStr]));
       end
       else
-        Runner.Check('Decrypt data', False, Format('RSA_private_decrypt returned %d', [DecryptedLen]));
+        Runner.Check('Decrypt data', False, TextFormat('RSA_private_decrypt returned %d', [DecryptedLen]));
     end
     else
-      Runner.Check('Encrypt data', False, Format('RSA_public_encrypt returned %d', [CiphertextLen]));
+      Runner.Check('Encrypt data', False, TextFormat('RSA_public_encrypt returned %d', [CiphertextLen]));
 
   finally
     BN_free(Exponent);

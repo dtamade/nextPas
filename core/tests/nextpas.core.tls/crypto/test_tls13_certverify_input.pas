@@ -3,8 +3,7 @@ program test_tls13_certverify_input;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.tls.tls13.servercertverify;
+  nextpas.core.tls.tls13.servercertverify, nextpas.core.base, nextpas.core.text.format;
 
 const
   SERVER_CONTEXT = 'TLS 1.3, server CertificateVerify';
@@ -101,7 +100,7 @@ begin
   TestClientCertificateVerifyInputSHA256;
 
   WriteLn('');
-  WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPassCount, GFailCount]));
   if GFailCount > 0 then
     Halt(1);
 end.

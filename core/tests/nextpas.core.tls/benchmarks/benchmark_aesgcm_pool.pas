@@ -3,11 +3,11 @@ program benchmark_aesgcm_pool;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.time,
   benchmark_framework,
   nextpas.core.tls.init,
   nextpas.core.tls.crypto.utils,
-  nextpas.core.tls.aesgcm.pool;
+  nextpas.core.tls.aesgcm.pool, nextpas.core.base, nextpas.core.exception;
 
 const
   WARMUP_ITERATIONS = 100;

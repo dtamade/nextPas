@@ -20,11 +20,11 @@ program test_performance_comparison;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.api.evp;
+  nextpas.core.tls.openssl.api.evp, nextpas.core.exception, nextpas.core.text.format;
 
 const
   TEST_ITERATIONS = 100;
@@ -106,13 +106,13 @@ begin
   begin
     ctx := EVP_MD_CTX_new();
     try
-      startTime := Now;
+      startTime := DateTimeNow;
 
       EVP_DigestInit_ex(ctx, HashFunc, nil);
       EVP_DigestUpdate(ctx, @TestData[0], DATA_SIZE);
       EVP_DigestFinal_ex(ctx, @digest[0], len);
 
-      endTime := Now;
+      endTime := DateTimeNow;
       times[i] := DateTimeMillisecondsBetween(endTime, startTime);
     finally
       EVP_MD_CTX_free(ctx);
@@ -169,13 +169,13 @@ begin
   begin
     ctx := EVP_CIPHER_CTX_new();
     try
-      startTime := Now;
+      startTime := DateTimeNow;
 
       EVP_EncryptInit_ex(ctx, CipherFunc, nil, @key[0], @iv[0]);
       EVP_EncryptUpdate(ctx, @outbuf[0], outlen, @TestData[0], DATA_SIZE);
       EVP_EncryptFinal_ex(ctx, @outbuf[outlen], finallen);
 
-      endTime := Now;
+      endTime := DateTimeNow;
       times[i] := DateTimeMillisecondsBetween(endTime, startTime);
     finally
       EVP_CIPHER_CTX_free(ctx);
@@ -230,14 +230,14 @@ begin
   begin
     ctx := EVP_CIPHER_CTX_new();
     try
-      startTime := Now;
+      startTime := DateTimeNow;
 
       EVP_EncryptInit_ex(ctx, CipherFunc, nil, @key[0], @iv[0]);
       EVP_EncryptUpdate(ctx, @outbuf[0], outlen, @TestData[0], DATA_SIZE);
       EVP_EncryptFinal_ex(ctx, @outbuf[outlen], finallen);
       EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, @tag[0]);
 
-      endTime := Now;
+      endTime := DateTimeNow;
       times[i] := DateTimeMillisecondsBetween(endTime, startTime);
     finally
       EVP_CIPHER_CTX_free(ctx);
@@ -309,10 +309,10 @@ begin
   for i := 0 to High(Results) do
   begin
     WriteLn(PadR(Results[i].TestName, 20),
-            PadL(Format('%8.2f', [Results[i].MinTime]), 10),
-            PadL(Format('%8.2f', [Results[i].MaxTime]), 10),
-            PadL(Format('%8.2f', [Results[i].AvgTime]), 10),
-            PadL(Format('%10.2f', [Results[i].Throughput]), 12));
+            PadL(TextFormat('%8.2f', [Results[i].MinTime]), 10),
+            PadL(TextFormat('%8.2f', [Results[i].MaxTime]), 10),
+            PadL(TextFormat('%8.2f', [Results[i].AvgTime]), 10),
+            PadL(TextFormat('%10.2f', [Results[i].Throughput]), 12));
   end;
 end;
 
@@ -339,9 +339,9 @@ begin
       improvement := 0;
 
     WriteLn(PadR(Results_11x[i].TestName, 20),
-            PadL(Format('%10.2f', [Results_11x[i].AvgTime]), 12),
-            PadL(Format('%10.2f', [Results_3x[i].AvgTime]), 12),
-            PadL(Format('%10.1f%%', [improvement]), 12));
+            PadL(TextFormat('%10.2f', [Results_11x[i].AvgTime]), 12),
+            PadL(TextFormat('%10.2f', [Results_3x[i].AvgTime]), 12),
+            PadL(TextFormat('%10.1f%%', [improvement]), 12));
   end;
 
   WriteLn;

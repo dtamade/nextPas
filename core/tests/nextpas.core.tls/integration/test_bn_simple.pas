@@ -8,12 +8,11 @@ program test_bn_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bn,
   nextpas.core.tls.openssl.loader,
-  test_openssl_base;
+  test_openssl_base, nextpas.core.base, nextpas.core.text.format;
 
 var
   Runner: TSimpleTestRunner;
@@ -37,7 +36,7 @@ begin
     begin
       Runner.Check('Set word value', True);
       Runner.Check('Get word value', BN_get_word(A) = 12345,
-              Format('Value: %d', [BN_get_word(A)]));
+              TextFormat('Value: %d', [BN_get_word(A)]));
     end
     else
       Runner.Check('Set word value', False);
@@ -88,35 +87,35 @@ begin
     BN_set_word(B, 50);
     LResult := BN_add(R, A, B);
     Runner.Check('Addition (100 + 50)', (LResult = 1) and (BN_get_word(R) = 150),
-            Format('Result: %d', [BN_get_word(R)]));
+            TextFormat('Result: %d', [BN_get_word(R)]));
 
     // Test subtraction: 100 - 30 = 70
     BN_set_word(A, 100);
     BN_set_word(B, 30);
     LResult := BN_sub(R, A, B);
     Runner.Check('Subtraction (100 - 30)', (LResult = 1) and (BN_get_word(R) = 70),
-            Format('Result: %d', [BN_get_word(R)]));
+            TextFormat('Result: %d', [BN_get_word(R)]));
 
     // Test multiplication: 25 * 4 = 100
     BN_set_word(A, 25);
     BN_set_word(B, 4);
     LResult := BN_mul(R, A, B, Ctx);
     Runner.Check('Multiplication (25 * 4)', (LResult = 1) and (BN_get_word(R) = 100),
-            Format('Result: %d', [BN_get_word(R)]));
+            TextFormat('Result: %d', [BN_get_word(R)]));
 
     // Test division: 100 / 5 = 20
     BN_set_word(A, 100);
     BN_set_word(B, 5);
     LResult := BN_div(R, nil, A, B, Ctx);
     Runner.Check('Division (100 / 5)', (LResult = 1) and (BN_get_word(R) = 20),
-            Format('Result: %d', [BN_get_word(R)]));
+            TextFormat('Result: %d', [BN_get_word(R)]));
 
     // Test modulo: 100 mod 7 = 2 (using div with remainder)
     BN_set_word(A, 100);
     BN_set_word(B, 7);
     LResult := BN_div(nil, R, A, B, Ctx);
     Runner.Check('Modulo (100 mod 7)', (LResult = 1) and (BN_get_word(R) = 2),
-            Format('Result: %d', [BN_get_word(R)]));
+            TextFormat('Result: %d', [BN_get_word(R)]));
 
   finally
     BN_free(A);
@@ -210,7 +209,7 @@ begin
     LResult := BN_mod_add(R, A, B, M, Ctx);
     Runner.Check('Modular addition ((10 + 7) mod 11)',
             (LResult = 1) and (BN_get_word(R) = 6),
-            Format('Result: %d', [BN_get_word(R)]));
+            TextFormat('Result: %d', [BN_get_word(R)]));
 
     // Modular subtraction: (15 - 8) mod 11 = 7
     BN_set_word(A, 15);
@@ -219,7 +218,7 @@ begin
     LResult := BN_mod_sub(R, A, B, M, Ctx);
     Runner.Check('Modular subtraction ((15 - 8) mod 11)',
             (LResult = 1) and (BN_get_word(R) = 7),
-            Format('Result: %d', [BN_get_word(R)]));
+            TextFormat('Result: %d', [BN_get_word(R)]));
 
     // Modular multiplication: (7 * 8) mod 11 = 1
     BN_set_word(A, 7);
@@ -228,7 +227,7 @@ begin
     LResult := BN_mod_mul(R, A, B, M, Ctx);
     Runner.Check('Modular multiplication ((7 * 8) mod 11)',
             (LResult = 1) and (BN_get_word(R) = 1),
-            Format('Result: %d', [BN_get_word(R)]));
+            TextFormat('Result: %d', [BN_get_word(R)]));
 
     // Modular exponentiation: 2^10 mod 1000 = 24
     BN_set_word(A, 2);
@@ -237,7 +236,7 @@ begin
     LResult := BN_mod_exp(R, A, B, M, Ctx);
     Runner.Check('Modular exponentiation (2^10 mod 1000)',
             (LResult = 1) and (BN_get_word(R) = 24),
-            Format('Result: %d', [BN_get_word(R)]));
+            TextFormat('Result: %d', [BN_get_word(R)]));
 
   finally
     BN_free(A);
@@ -271,13 +270,13 @@ begin
     BN_set_word(A, 255);  // 0xFF = 8 bits
     NumBits := BN_num_bits(A);
     Runner.Check('Number of bits (255)', NumBits = 8,
-            Format('Bits: %d', [NumBits]));
+            TextFormat('Bits: %d', [NumBits]));
 
     // Test left shift: 1 << 10 = 1024
     BN_set_word(A, 1);
     if BN_lshift(R, A, 10) = 1 then
       Runner.Check('Left shift (1 << 10)', BN_get_word(R) = 1024,
-              Format('Result: %d', [BN_get_word(R)]))
+              TextFormat('Result: %d', [BN_get_word(R)]))
     else
       Runner.Check('Left shift (1 << 10)', False);
 
@@ -285,7 +284,7 @@ begin
     BN_set_word(A, 1024);
     if BN_rshift(R, A, 10) = 1 then
       Runner.Check('Right shift (1024 >> 10)', BN_get_word(R) = 1,
-              Format('Result: %d', [BN_get_word(R)]))
+              TextFormat('Result: %d', [BN_get_word(R)]))
     else
       Runner.Check('Right shift (1024 >> 10)', False);
 
@@ -293,7 +292,7 @@ begin
     BN_set_word(A, 0);  // Clear to zero
     if BN_set_bit(A, 5) = 1 then  // Set bit 5 = 32
       Runner.Check('Set bit 5', BN_get_word(A) = 32,
-              Format('Result: %d', [BN_get_word(A)]))
+              TextFormat('Result: %d', [BN_get_word(A)]))
     else
       Runner.Check('Set bit 5', False);
 
@@ -343,7 +342,7 @@ begin
     if DecStr <> nil then
     begin
       Runner.Check('BN to decimal string', string(DecStr) = '67890',
-              Format('String: %s', [DecStr]));
+              TextFormat('String: %s', [DecStr]));
     end
     else
       Runner.Check('BN to decimal string', False);
@@ -364,7 +363,7 @@ begin
     begin
       // OpenSSL 3.x may add leading zero, accept both 'FFF' and '0FFF'
       Runner.Check('BN to hex string', (string(HexStr) = 'FFF') or (string(HexStr) = '0FFF'),
-              Format('String: %s', [HexStr]));
+              TextFormat('String: %s', [HexStr]));
     end
     else
       Runner.Check('BN to hex string', False);
@@ -374,7 +373,7 @@ begin
     FillChar(Bin, SizeOf(Bin), 0);
     BinLen := BN_bn2bin(A, @Bin[0]);
     Runner.Check('BN to binary', BinLen > 0,
-            Format('Binary length: %d bytes', [BinLen]));
+            TextFormat('Binary length: %d bytes', [BinLen]));
 
     if BinLen > 0 then
     begin

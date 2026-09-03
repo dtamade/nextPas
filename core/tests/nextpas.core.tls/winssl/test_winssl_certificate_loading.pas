@@ -21,17 +21,14 @@ program test_winssl_certificate_loading;
 
 uses
   {$IFDEF WINDOWS}
-  Windows,
   {$ELSE}
   {$ERROR 'This test requires Windows platform'}
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.certstore,
-  nextpas.core.tls.winssl.certificate;
+  nextpas.core.tls.winssl.certificate, nextpas.core.exception, nextpas.core.text.format, nextpas.core.time;
 
 function GetStoreCertificate(const aStore: ISSLCertificateStore; aIndex: Integer): ISSLCertificate;
 begin
@@ -517,7 +514,7 @@ begin
   WriteLn('Test Results Summary');
   WriteLn('================================================================================');
   WriteLn('  Total Tests:  ', TotalTests);
-  WriteLn('  Passed:       ', PassedTests, ' (', Format('%.1f', [(PassedTests / TotalTests) * 100]), '%)');
+  WriteLn('  Passed:       ', PassedTests, ' (', TextFormat('%.1f', [(PassedTests / TotalTests) * 100]), '%)');
   WriteLn('  Failed:       ', FailedTests);
   WriteLn('================================================================================');
 

@@ -3,10 +3,9 @@ program test_winssl_library_basic;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
 
   nextpas.core.tls.base,
-  nextpas.core.tls.winssl.lib;
+  nextpas.core.tls.winssl.lib, nextpas.core.exception, nextpas.core.text;
 
 var
   SSLLib: ISSLLibrary;

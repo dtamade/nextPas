@@ -4,7 +4,7 @@ program test_sni_callback;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.tls.sni.callback, nextpas.core.tls.x509;
+   nextpas.core.tls.sni.callback, nextpas.core.tls.x509, nextpas.core.base;
 
 var
   LTotal, LPassed: Integer;

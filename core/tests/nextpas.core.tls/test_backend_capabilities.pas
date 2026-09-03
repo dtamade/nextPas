@@ -15,11 +15,10 @@ program test_backend_capabilities;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.api,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.exception, nextpas.core.text.format, nextpas.core.text.conv;
 
 var
   Total, Passed, Failed: Integer;
@@ -86,9 +85,9 @@ begin
     Check('Min TLS is TLS 1.0', LCaps.MinTLSVersion = sslProtocolTLS10);
 
     // 检查 TLS 1.3 支持（取决于 OpenSSL 版本）
-    WriteLn('    Info: TLS 1.3 support = ', BoolToStr(LCaps.SupportsTLS13, True));
-    WriteLn('    Info: ChaCha20 support = ', BoolToStr(LCaps.SupportsChaChaPoly, True));
-    WriteLn('    Info: CT support = ', BoolToStr(LCaps.SupportsCertificateTransparency, True));
+    WriteLn('    Info: TLS 1.3 support = ', BoolToStr(LCaps.SupportsTLS13));
+    WriteLn('    Info: ChaCha20 support = ', BoolToStr(LCaps.SupportsChaChaPoly));
+    WriteLn('    Info: CT support = ', BoolToStr(LCaps.SupportsCertificateTransparency));
 
     LLibrary.Finalize;
     Check('Library finalized', True);
@@ -209,7 +208,7 @@ begin
 
   WriteLn;
   WriteLn('==========================================');
-  WriteLn(Format('Total: %d  Passed: %d  Failed: %d', [Total, Passed, Failed]));
+  WriteLn(TextFormat('Total: %d  Passed: %d  Failed: %d', [Total, Passed, Failed]));
   WriteLn('==========================================');
 
   if Failed > 0 then
