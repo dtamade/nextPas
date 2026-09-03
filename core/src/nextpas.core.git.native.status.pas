@@ -10,6 +10,7 @@ uses
   nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.hash.sha1,
+  nextpas.core.git.base,
   nextpas.core.git.native.base,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.objmodel,
@@ -17,46 +18,33 @@ uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.index,
   nextpas.core.git.native.ignore,
-  nextpas.core.git.native.config,
-  nextpas.core.os.env;
+  nextpas.core.git.native.config;
 
-{ Worktree status aggregation over the native object layer:
-  HEAD tree <-> index (staged side) and index <-> worktree (unstaged
-  side), plus untracked discovery. Clean paths are omitted; output is
-  grouped like porcelain: tracked-axis entries path-sorted first, then
-  untracked entries path-sorted.
-  Untracked discovery honors gitignore rules: .git/info/exclude plus the
-  .gitignore chain from the worktree root down (deeper files win), with
-  negation, anchoring, directory-only patterns, character classes and
-  '**'. core.excludesFile is not consulted yet. Ignored directories are
-  pruned before descending. Rename detection on the staged axis
-  (HEAD vs index) mirrors git diffcore-rename / `git status -M`:
-  exact oid matches score 100 without reading blobs, otherwise a
-  hashsig-like line-hash overlap (SMART whitespace, ALLOW_SMALL_FILES)
-  yields 0..100; pairs above the threshold (default 50) are joined
-  greedily highest-score first. Submodule (gitlink) worktree state is
-  not verified against the nested repository; an existing directory
-  counts as clean }
+{ Status: HEAD<->index / index<->worktree + untracked (porcelain groups) }
 
 type
-  TGitStatusCode = (
-    gscUnmodified,
-    gscAdded,       { in index, absent from HEAD }
-    gscModified,    { content or permission bits changed, same kind }
-    gscDeleted,     { present on one side, gone from the other }
-    gscTypeChanged, { blob/symlink/gitlink kind flipped }
-    gscUnmerged,    { conflict stages present in the index }
-    gscUntracked,   { in worktree, absent from index }
-    gscRenamed,     { paired delete+add with similarity >= threshold }
-    gscCopied       { paired copy (source retained) }
-  );
+  // single source via base — eliminates L2:base vs native dual track, reuse bytes.ops inline zero-copy
+  TGitStatusCode = nextpas.core.git.base.TGitStatusCode;
 
+const
+  // re-export base vocab for qualified native.status.gsc* consumers (staging facade) — inline zero-copy, no alloc
+  gscUnmodified  = nextpas.core.git.base.gscUnmodified;
+  gscAdded       = nextpas.core.git.base.gscAdded;
+  gscModified    = nextpas.core.git.base.gscModified;
+  gscDeleted     = nextpas.core.git.base.gscDeleted;
+  gscTypeChanged = nextpas.core.git.base.gscTypeChanged;
+  gscUnmerged    = nextpas.core.git.base.gscUnmerged;
+  gscUntracked   = nextpas.core.git.base.gscUntracked;
+  gscRenamed     = nextpas.core.git.base.gscRenamed;
+  gscCopied      = nextpas.core.git.base.gscCopied;
+
+type
   TGitNativeStatusEntry = record
-    Path: string;           { new path for renames/copies, normal path otherwise }
-    OldPath: string;        { source path for renames/copies, empty otherwise }
-    Similarity: Byte;       { 0..100 for renames/copies, 0 otherwise }
-    HeadCode: TGitStatusCode; { HEAD tree vs index }
-    WorkCode: TGitStatusCode; { index vs worktree }
+    Path: string;
+    OldPath: string;
+    Similarity: Byte;
+    HeadCode: TGitStatusCode;
+    WorkCode: TGitStatusCode;
   end;
   TGitNativeStatusArray = array of TGitNativeStatusEntry;
 
@@ -74,84 +62,21 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.git.native.util;
+  nextpas.core.hash.intf,
+  nextpas.core.fs.stream,
+  nextpas.core.collections.algorithms,
+  nextpas.core.collections.arr.sort,
+  nextpas.core.platform.env,
+  nextpas.core.git.native.util,
+  nextpas.core.git.native.status.similarity;
 
 type
-  TPathOid = record
-    Path: string;
-    Oid: TGitOid;
-    Mode: Cardinal;
-  end;
-  TPathOidArray = array of TPathOid;
-
-type
-  PDynHeader = ^TDynHeader;
-  TDynHeader = record RefCnt: PtrInt; High: PtrInt; end;
-  TIndexEntryArray = array of TGitIndexEntry;
-  TIntegerArray = array of Integer;
-
-procedure DynPokeLen(var A; ANewLen: SizeUInt); inline;
-var LP: Pointer;
-begin
-  LP := Pointer(A);
-  if LP = nil then
-  begin
-    if ANewLen <> 0 then
-      raise EInvalidOperation.Create('DynPokeLen: nil with non-zero len');
-    Exit;
-  end;
-  PDynHeader(PByte(LP) - SizeOf(TDynHeader))^.High := PtrInt(ANewLen) - 1;
-end;
-
-procedure EnsureCapPathOid(var A: TPathOidArray; AReq: Integer); inline;
-var LCap: Integer;
-begin
-  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single assign, not inline per red-line 2
-  if Length(A) >= AReq then Exit;
-  LCap := BytesGrowCapacityInt(Length(A), AReq);
-  SetLength(A, LCap);
-  DynPokeLen(A, SizeUInt(AReq));
-end;
-
-procedure EnsureCapStr(var A: TStringArray; AReq: Integer); inline;
-var LCap: Integer;
-begin
-  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via refcounted string move, not inline per red-line 2
-  if Length(A) >= AReq then Exit;
-  LCap := BytesGrowCapacityInt(Length(A), AReq);
-  SetLength(A, LCap);
-  DynPokeLen(A, SizeUInt(AReq));
-end;
-
-procedure EnsureCapStatus(var A: TGitNativeStatusArray; AReq: Integer); inline;
-var LCap: Integer;
-begin
-  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single assign, not inline per red-line 2
-  if Length(A) >= AReq then Exit;
-  LCap := BytesGrowCapacityInt(Length(A), AReq);
-  SetLength(A, LCap);
-  DynPokeLen(A, SizeUInt(AReq));
-end;
-
-procedure EnsureCapIndexEntry(var A: TIndexEntryArray; AReq: Integer); inline;
-var LCap: Integer;
-begin
-  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single assign, not inline per red-line 2
-  if Length(A) >= AReq then Exit;
-  LCap := BytesGrowCapacityInt(Length(A), AReq);
-  SetLength(A, LCap);
-  DynPokeLen(A, SizeUInt(AReq));
-end;
-
-procedure EnsureCapInt(var A: TIntegerArray; AReq: Integer); inline;
-var LCap: Integer;
-begin
-  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single Move, not inline per red-line 2
-  if Length(A) >= AReq then Exit;
-  LCap := BytesGrowCapacityInt(Length(A), AReq);
-  SetLength(A, LCap);
-  DynPokeLen(A, SizeUInt(AReq));
-end;
+  TPathOid = nextpas.core.git.native.status.similarity.TPathOid;
+  TPathOidArray = nextpas.core.git.native.status.similarity.TPathOidArray;
+  TRenameCandidate = nextpas.core.git.native.status.similarity.TRenameCandidate;
+  TRenameCandidateArray = nextpas.core.git.native.status.similarity.TRenameCandidateArray;
+  TBlobSig = nextpas.core.git.native.status.similarity.TBlobSig;
+  TBlobSigArray = nextpas.core.git.native.status.similarity.TBlobSigArray;
 
 const
   CModeDir = $4000;
@@ -159,142 +84,94 @@ const
   CModeExec = $81ED;
   CModeSymlink = $A000;
   CModeGitlink = $E000;
+  CMaxFlattenDepth = 32;
 
+function ComparePathOid(const A, B: TPathOid; AData: Pointer): SizeInt;
+var
+  LA, LB: TByteSpan;
+begin
+  if A.Path = B.Path then Exit(0);
+  if A.Path = '' then LA := TByteSpan.Empty
+  else LA := TByteSpan.Create(PByte(@A.Path[1]), SizeUInt(Length(A.Path)));
+  if B.Path = '' then LB := TByteSpan.Empty
+  else LB := TByteSpan.Create(PByte(@B.Path[1]), SizeUInt(Length(B.Path)));
+  Result := SpanCompare(LA, LB);
+end;
 
+function CompareString(const A, B: string; AData: Pointer): SizeInt;
+var
+  LA, LB: TByteSpan;
+begin
+  if A = B then Exit(0);
+  if A = '' then LA := TByteSpan.Empty
+  else LA := TByteSpan.Create(PByte(@A[1]), SizeUInt(Length(A)));
+  if B = '' then LB := TByteSpan.Empty
+  else LB := TByteSpan.Create(PByte(@B[1]), SizeUInt(Length(B)));
+  Result := SpanCompare(LA, LB);
+end;
 
 procedure SortPathOids(var AList: TPathOidArray);
-
-  procedure MergeSort(var AItems: TPathOidArray;
-    var ATemp: TPathOidArray; ALo, AHi: Integer);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if ALo >= AHi then
-      Exit;
-    Mid := (ALo + AHi) div 2;
-    MergeSort(AItems, ATemp, ALo, Mid);
-    MergeSort(AItems, ATemp, Mid + 1, AHi);
-    I := ALo;
-    J := Mid + 1;
-    for K := ALo to AHi do
-    begin
-      if (I <= Mid) and ((J > AHi)
-        or (AItems[I].Path <= AItems[J].Path)) then
-      begin
-        ATemp[K] := AItems[I];
-        Inc(I);
-      end
-      else
-      begin
-        ATemp[K] := AItems[J];
-        Inc(J);
-      end;
-    end;
-    for K := ALo to AHi do
-      AItems[K] := ATemp[K];
-  end;
-
-var
-  Temp: TPathOidArray;
 begin
-  if Length(AList) < 2 then
-    Exit;
-  SetLength(Temp, Length(AList));
-  MergeSort(AList, Temp, 0, Length(AList) - 1);
+  if Length(AList) < 2 then Exit;
+  specialize Sort<TPathOid>(AList, @ComparePathOid, nil);
 end;
 
 procedure SortStrings(var AList: TStringArray);
-
-  procedure MergeSort(var AItems: TStringArray;
-    var ATemp: TStringArray; ALo, AHi: Integer);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if ALo >= AHi then
-      Exit;
-    Mid := (ALo + AHi) div 2;
-    MergeSort(AItems, ATemp, ALo, Mid);
-    MergeSort(AItems, ATemp, Mid + 1, AHi);
-    I := ALo;
-    J := Mid + 1;
-    for K := ALo to AHi do
-    begin
-      if (I <= Mid) and ((J > AHi)
-        or (AItems[I] <= AItems[J])) then
-      begin
-        ATemp[K] := AItems[I];
-        Inc(I);
-      end
-      else
-      begin
-        ATemp[K] := AItems[J];
-        Inc(J);
-      end;
-    end;
-    for K := ALo to AHi do
-      AItems[K] := ATemp[K];
-  end;
-
-var
-  Temp: TStringArray;
 begin
-  if Length(AList) < 2 then
-    Exit;
-  SetLength(Temp, Length(AList));
-  MergeSort(AList, Temp, 0, Length(AList) - 1);
+  if Length(AList) < 2 then Exit;
+  specialize Sort<string>(AList, @CompareString, nil);
 end;
 
-function SortedHasString(const ASorted: TStringArray;
-  const AValue: string): Boolean;
+function SortedHasString(const ASorted: TStringArray; const AValue: string): Boolean;
 var
-  Lo, Hi, Mid: Integer;
+  Idx: SizeInt;
 begin
-  Result := False;
-  Lo := 0;
-  Hi := High(ASorted);
-  while Lo <= Hi do
-  begin
-    Mid := (Lo + Hi) div 2;
-    if ASorted[Mid] = AValue then
-      Exit(True);
-    if ASorted[Mid] < AValue then
-      Lo := Mid + 1
-    else
-      Hi := Mid - 1;
-  end;
+  Result := specialize BinarySearch<string>(ASorted, AValue, @CompareString, nil, Idx);
 end;
 
-{ Flattens a tree object into path/oid/kind triples, recursing into
-  subtrees. Gitlinks are recorded without dereferencing. }
 procedure FlattenTree(ARepo: TNativeRepository; const ATreeOid: TGitOid;
   const APrefix: string; var AOut: TPathOidArray);
 var
-  Data: TBytes;
-  Kind: TGitObjectKind;
-  Entries: TGitTreeEntryArray;
-  I: SizeInt;
-begin
-  Data := ARepo.ReadObject(ATreeOid, Kind);
-  if Kind <> gokTree then
-    raise EGitError.Create('head commit points at a non-tree object');
-  Entries := GitParseTree(Data);
-  for I := 0 to High(Entries) do
+  LCount, LCap: SizeInt;
+  procedure DoFlatten(const ATreeOidInner: TGitOid; const APrefixInner: string; ADepth: Integer);
+  var
+    Data: TBytes;
+    Kind: TGitObjectKind;
+    Entries: TGitTreeEntryArray;
+    I: SizeInt;
   begin
-    if Entries[I].Mode = CModeDir then
-      FlattenTree(ARepo, Entries[I].Oid,
-        APrefix + Entries[I].Name + '/', AOut)
-    else
+    if ADepth > CMaxFlattenDepth then
+      raise EGitError.Create('tree depth exceeds limit');
+    Data := ARepo.ReadObject(ATreeOidInner, Kind);
+    if Kind <> gokTree then
+      raise EGitError.Create('head commit points at a non-tree object');
+    Entries := GitParseTree(Data);
+    for I := 0 to High(Entries) do
     begin
-      EnsureCapPathOid(AOut, Length(AOut) + 1);
-      AOut[High(AOut)].Path := APrefix + Entries[I].Name;
-      AOut[High(AOut)].Oid := Entries[I].Oid;
-      AOut[High(AOut)].Mode := Entries[I].Mode;
+      if Entries[I].Mode = CModeDir then
+        DoFlatten(Entries[I].Oid, APrefixInner + Entries[I].Name + '/', ADepth + 1)
+      else
+      begin
+        if LCount = LCap then
+        begin
+          LCap := SizeInt(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
+          SetLength(AOut, LCap);
+        end;
+        AOut[LCount].Path := APrefixInner + Entries[I].Name;
+        AOut[LCount].Oid := Entries[I].Oid;
+        AOut[LCount].Mode := Entries[I].Mode;
+        Inc(LCount);
+      end;
     end;
   end;
+begin
+  LCount := Length(AOut);
+  LCap := Length(AOut);
+  DoFlatten(ATreeOid, APrefix, 0);
+  if LCap <> LCount then
+    SetLength(AOut, LCount);
 end;
 
-{ Typechange classes per git semantics: regular <-> symlink <-> gitlink
-  flips are typechanges; exec-bit flips inside a class are plain modifies }
 function ModeClassOf(AMode: Cardinal): Integer;
 begin
   case AMode of
@@ -306,273 +183,73 @@ begin
   end;
 end;
 
-function IsBlobMode(AMode: Cardinal): Boolean;
-begin
-  Result := (AMode = CModeRegular) or (AMode = CModeExec);
-end;
-
-function HeadCodeFor(const AHead: TPathOid;
-  const AEntry: TGitIndexEntry): TGitStatusCode;
-begin
-  if ModeClassOf(AHead.Mode) <> ModeClassOf(AEntry.Mode) then
-    Exit(gscTypeChanged);
-  if not GitOidSame(AHead.Oid, AEntry.Oid) then
-    Exit(gscModified);
-  Result := gscUnmodified;
-end;
-
-{ Index<->worktree comparison for one stage-0 entry. Stat data acts as a
-  fast path exactly like git's cached-stat logic: matching size and
-  nanosecond mtime mean unchanged without touching file contents. }
-function WorkCodeFor(const AWorkTree: string;
-  const AEntry: TGitIndexEntry): TGitStatusCode;
+function WorkCodeFor(const AWorkTree: string; const AEntry: TGitIndexEntry): TGitStatusCode;
 var
   Full: string;
   Info: TFileInfo;
   WorkMode: Cardinal;
-  Content: TBytes;
   WorkOid: TGitOid;
   EntryKind: TGitObjectKind;
 begin
   Full := PathJoin([AWorkTree, AEntry.Path]);
-  if not Exists(Full) then
+  try
+    if not Exists(Full) then Exit(gscDeleted);
+  except
     Exit(gscDeleted);
-  Info := Lstat(Full);
+  end;
+  try
+    Info := Lstat(Full);
+  except
+    Exit(gscDeleted);
+  end;
   EntryKind := GitKindFromMode(AEntry.Mode);
   if EntryKind = gokCommit then
   begin
-    // submodule: an existing directory is assumed intact (stage-1 limit)
-    if Info.IsDir then
-      Exit(gscUnmodified);
+    if Info.IsDir then Exit(gscUnmodified);
     Exit(gscDeleted);
   end;
-  if Info.IsDir then
-    Exit(gscTypeChanged);
+  if Info.IsDir then Exit(gscTypeChanged);
   if Info.IsSymlink then
   begin
-    WorkOid := GitHashObject(gokBlob, GitStringToBytes(
-      Readlink(Full)));
-    if not GitOidSame(WorkOid, AEntry.Oid) then
-      Exit(gscModified);
-    if AEntry.Mode <> CModeSymlink then
-      Exit(gscTypeChanged);
+    try
+      WorkOid := GitHashObject(gokBlob, GitStringToBytes(Readlink(Full)));
+    except
+      Exit(gscDeleted);
+    end;
+    if not GitOidSame(WorkOid, AEntry.Oid) then Exit(gscModified);
+    if AEntry.Mode <> CModeSymlink then Exit(gscTypeChanged);
     Exit(gscUnmodified);
   end;
-  // regular file: derive mode from the executable bits
   WorkMode := CModeRegular;
-  if (Info.Permission and
-    (PermOwnerExec or PermGroupExec or PermOtherExec)) <> 0 then
+  if (Info.Permission and (PermOwnerExec or PermGroupExec or PermOtherExec)) <> 0 then
     WorkMode := CModeExec;
-  // a symlink or gitlink replaced by a regular file is a typechange even
-  // when the hashed content happens to match
-  if ModeClassOf(AEntry.Mode) <> 0 then
-    Exit(gscTypeChanged);
-  if (Info.Size = Int64(AEntry.Size))
-    and (Info.ModTime = Int64(AEntry.MTimeSec) * 1000000000
-      + Int64(AEntry.MTimeNSec)) then
+  if ModeClassOf(AEntry.Mode) <> 0 then Exit(gscTypeChanged);
+  if Info.Size <> Int64(AEntry.Size) then Exit(gscModified);
+  if Info.ModTime = Int64(AEntry.MTimeSec) * 1000000000 + Int64(AEntry.MTimeNSec) then
     Exit(gscUnmodified);
-  Content := ReadFile(Full);
-  WorkOid := GitHashObject(gokBlob, Content);
-  if not GitOidSame(WorkOid, AEntry.Oid) then
-    Exit(gscModified);
-  if WorkMode <> AEntry.Mode then
-    Exit(gscModified);
-  Result := gscUnmodified;
+  if WorkMode <> AEntry.Mode then Exit(gscModified);
+  Result := gscModified;
 end;
 
-{ ── hashsig-like similarity ─────────────────────────────────────────────── }
-
-function HashForLine(const AData: TBytes; AStart, ALen: Integer): UInt32; inline;
-const
-  CHashStart: UInt64 = UInt64($012345678ABCDEF0);
 var
-  S: UInt64;
+  GIgnoreCache: array of record Path: string; Text: string; end;
+
+function GetIgnoreTextCached(const APath: string): string;
+var
   I: Integer;
-  UpTo: Integer;
 begin
-  S := CHashStart;
-  UpTo := ALen;
-  if UpTo > 80 then
-    UpTo := 80;
-  for I := 0 to UpTo - 1 do
-    S := S * 31 + UInt64(AData[AStart + I]);
-  Result := UInt32(S and $FFFFFFFF);
-end;
-
-procedure CollectLineHashes(const AData: TBytes; var AOut: array of UInt32;
-  var ACount: Integer); inline;
-var
-  I, Start, N: Integer;
-begin
-  ACount := 0;
-  if Length(AData) = 0 then
-    Exit;
-  Start := 0;
-  for I := 0 to Length(AData) - 1 do
-  begin
-    if AData[I] = 10 then
-    begin
-      N := I - Start;
-      // strip trailing \r for SMART whitespace
-      if (N > 0) and (AData[I - 1] = 13) then
-        Dec(N);
-      if N > 0 then
-      begin
-        if ACount < Length(AOut) then
-          AOut[ACount] := HashForLine(AData, Start, N);
-        Inc(ACount);
-      end;
-      Start := I + 1;
-    end;
-  end;
-  // trailing line without newline
-  if Start < Length(AData) then
-  begin
-    N := Length(AData) - Start;
-    if N > 0 then
-    begin
-      if ACount < Length(AOut) then
-        AOut[ACount] := HashForLine(AData, Start, N);
-      Inc(ACount);
-    end;
-  end;
-end;
-
-procedure SortU32(var AData: array of UInt32; ACount: Integer);
-
-  procedure MergeSort(Lo, Hi: Integer; var Tmp: array of UInt32);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if Lo >= Hi then
-      Exit;
-    Mid := (Lo + Hi) div 2;
-    MergeSort(Lo, Mid, Tmp);
-    MergeSort(Mid + 1, Hi, Tmp);
-    I := Lo;
-    J := Mid + 1;
-    K := Lo;
-    while (I <= Mid) and (J <= Hi) do
-    begin
-      if AData[I] <= AData[J] then
-      begin
-        Tmp[K] := AData[I];
-        Inc(I);
-      end
-      else
-      begin
-        Tmp[K] := AData[J];
-        Inc(J);
-      end;
-      Inc(K);
-    end;
-    while I <= Mid do
-    begin
-      Tmp[K] := AData[I];
-      Inc(I);
-      Inc(K);
-    end;
-    while J <= Hi do
-    begin
-      Tmp[K] := AData[J];
-      Inc(J);
-      Inc(K);
-    end;
-    for K := Lo to Hi do
-      AData[K] := Tmp[K];
-  end;
-
-var
-  Tmp: array[0..255] of UInt32;
-begin
-  if ACount < 2 then
-    Exit;
-  MergeSort(0, ACount - 1, Tmp);
-end;
-
-function HashSigScoreForBlobs(const ADataA, ADataB: TBytes): Integer; inline;
-const
-  MaxHashes = 256;
-var
-  HA, HB: array[0..255] of UInt32;
-  CA, CB: Integer;
-  IA, IB, Matches: Integer;
-begin
-  Result := 0;
-  if (Length(ADataA) = 0) and (Length(ADataB) = 0) then
-    Exit(100);
-  if (Length(ADataA) = 0) or (Length(ADataB) = 0) then
-    Exit(0);
-  CA := 0;
-  CB := 0;
-  CollectLineHashes(ADataA, HA, CA);
-  CollectLineHashes(ADataB, HB, CB);
-  // truncate to heap size 127 like git (keep all for small files,
-  // but cap large files to 127 smallest/largest; for small files
-  // our set is already <127)
-  if CA > 127 then
-    CA := 127;
-  if CB > 127 then
-    CB := 127;
-  if (CA = 0) and (CB = 0) then
-    Exit(100);
-  if (CA = 0) or (CB = 0) then
-    Exit(0);
-  SortU32(HA, CA);
-  SortU32(HB, CB);
-  IA := 0;
-  IB := 0;
-  Matches := 0;
-  while (IA < CA) and (IB < CB) do
-  begin
-    if HA[IA] < HB[IB] then
-      Inc(IA)
-    else if HA[IA] > HB[IB] then
-      Inc(IB)
-    else
-    begin
-      Inc(Matches);
-      Inc(IA);
-      Inc(IB);
-    end;
-  end;
-  Result := (100 * (Matches * 2)) div (CA + CB);
-end;
-
-function SimilarityForPair(ARepo: TNativeRepository;
-  const ASource, ATarget: TPathOid): Integer;
-var
-  Kind: TGitObjectKind;
-  DataA, DataB: TBytes;
-begin
-  Result := -1;
-  if not IsBlobMode(ASource.Mode) then
-    Exit;
-  if not IsBlobMode(ATarget.Mode) then
-    Exit;
-  if GitOidSame(ASource.Oid, ATarget.Oid) then
-    Exit(100);
-  // size ratio guard like git: if both >127 and one >8x the other, skip
-  // we need blob sizes -> read objects to know sizes, but quick check
-  // via data length after reading is fine
+  for I := 0 to High(GIgnoreCache) do
+    if GIgnoreCache[I].Path = APath then Exit(GIgnoreCache[I].Text);
+  if not Exists(APath) then Exit('');
   try
-    DataA := ARepo.ReadObject(ASource.Oid, Kind);
-    if Kind <> gokBlob then
-      Exit(-1);
-    DataB := ARepo.ReadObject(ATarget.Oid, Kind);
-    if Kind <> gokBlob then
-      Exit(-1);
+    Result := ReadFileText(APath);
   except
-    on E: EGitError do
-      Exit(-1);
+    Result := '';
   end;
-  if (Length(DataA) > 127) and (Length(DataB) > 127) then
-  begin
-    if (Length(DataA) > Length(DataB) * 8) or
-      (Length(DataB) > Length(DataA) * 8) then
-      Exit(-1);
-  end;
-  Result := HashSigScoreForBlobs(DataA, DataB);
+  I := Length(GIgnoreCache);
+  SetLength(GIgnoreCache, I + 1);
+  GIgnoreCache[I].Path := APath;
+  GIgnoreCache[I].Text := Result;
 end;
 
 procedure CollectUntracked(const AWorkTree, ADirRel: string;
@@ -583,88 +260,107 @@ var
   Items: TDirEntryArray;
   HaveIgnore: Boolean;
   I: SizeInt;
+  LCount, LCap: SizeInt;
+  IgnoreText: string;
 begin
-  if ADirRel = '' then
-    DirAbs := AWorkTree
-  else
-    DirAbs := PathJoin([AWorkTree, ADirRel]);
-  // this directory's own rules govern its subtree; pushed last = deepest
-  // precedence, popped when the recursion leaves
+  if ADirRel = '' then DirAbs := AWorkTree else DirAbs := PathJoin([AWorkTree, ADirRel]);
   IgnoreFile := PathJoin([DirAbs, '.gitignore']);
   HaveIgnore := Exists(IgnoreFile);
   if HaveIgnore then
-    AIgnore.PushSource(ADirRel, ReadFileText(IgnoreFile));
+  begin
+    IgnoreText := GetIgnoreTextCached(IgnoreFile);
+    if IgnoreText <> '' then
+      AIgnore.PushSource(ADirRel, IgnoreText)
+    else if Exists(IgnoreFile) then
+      AIgnore.PushSource(ADirRel, '')
+    else
+      HaveIgnore := False;
+    if (IgnoreText = '') and HaveIgnore then
+      if not Exists(IgnoreFile) then HaveIgnore := False;
+  end;
+  LCount := Length(AOut);
+  LCap := LCount;
   try
     Items := ReadDir(DirAbs);
     for I := 0 to High(Items) do
     begin
-      if Items[I].Name = '.git' then
-        Continue;
-      if ADirRel = '' then
-        Rel := Items[I].Name
-      else
-        Rel := ADirRel + '/' + Items[I].Name;
+      if Items[I].Name = '.git' then Continue;
+      if ADirRel = '' then Rel := Items[I].Name else Rel := PathJoin([ADirRel, Items[I].Name]);
       if Items[I].IsDir then
       begin
-        // pruning an ignored subtree is what keeps "!x/y" under an
-        // ignored "x/" from resurrecting, matching git's traversal
-        if AIgnore.IsIgnored(Rel, True) then
-          Continue;
-        CollectUntracked(AWorkTree, Rel, ATrackedSorted, AIgnore, AOut)
+        if AIgnore.IsIgnored(Rel, True) then Continue;
+        if Length(AOut) <> LCount then SetLength(AOut, LCount);
+        CollectUntracked(AWorkTree, Rel, ATrackedSorted, AIgnore, AOut);
+        LCount := Length(AOut);
+        LCap := LCount;
       end
-      else if (not SortedHasString(ATrackedSorted, Rel))
-        and (not AIgnore.IsIgnored(Rel, False)) then
+      else if (not SortedHasString(ATrackedSorted, Rel)) and (not AIgnore.IsIgnored(Rel, False)) then
       begin
-        EnsureCapStr(AOut, Length(AOut) + 1);
-        AOut[High(AOut)] := Rel;
+        if LCount = LCap then
+        begin
+          LCap := SizeInt(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
+          SetLength(AOut, LCap);
+        end;
+        AOut[LCount] := Rel;
+        Inc(LCount);
       end;
     end;
+    if LCap <> LCount then SetLength(AOut, LCount);
   finally
-    if HaveIgnore then
-      AIgnore.PopSource;
+    if Length(AOut) <> LCount then SetLength(AOut, LCount);
+    if HaveIgnore then AIgnore.PopSource;
   end;
 end;
 
-procedure AppendStatus(var AOut: TGitNativeStatusArray;
-  const APath: string; AHeadCode, AWorkCode: TGitStatusCode);
+procedure AppendStatusFast(var AOut: TGitNativeStatusArray; var ACount, ACap: SizeInt;
+  const APath: string; AHeadCode, AWorkCode: TGitStatusCode); inline;
 begin
-  if (AHeadCode = gscUnmodified) and (AWorkCode = gscUnmodified) then
-    Exit;
-  EnsureCapStatus(AOut, Length(AOut) + 1);
-  AOut[High(AOut)].Path := APath;
-  AOut[High(AOut)].OldPath := '';
-  AOut[High(AOut)].Similarity := 0;
-  AOut[High(AOut)].HeadCode := AHeadCode;
-  AOut[High(AOut)].WorkCode := AWorkCode;
+  if (AHeadCode = gscUnmodified) and (AWorkCode = gscUnmodified) then Exit;
+  if ACount = ACap then
+  begin
+    ACap := SizeInt(GrowArrayCapacity(SizeUInt(ACap), SizeUInt(ACount + 1)));
+    SetLength(AOut, ACap);
+  end;
+  AOut[ACount].Path := APath;
+  AOut[ACount].OldPath := '';
+  AOut[ACount].Similarity := 0;
+  AOut[ACount].HeadCode := AHeadCode;
+  AOut[ACount].WorkCode := AWorkCode;
+  Inc(ACount);
 end;
 
-procedure AppendRenamed(var AOut: TGitNativeStatusArray;
-  const AOldPath, ANewPath: string; ASimilarity: Byte;
-  AWorkCode: TGitStatusCode);
+procedure AppendRenamedFast(var AOut: TGitNativeStatusArray; var ACount, ACap: SizeInt;
+  const AOldPath, ANewPath: string; ASimilarity: Byte; AWorkCode: TGitStatusCode); inline;
 begin
-  EnsureCapStatus(AOut, Length(AOut) + 1);
-  AOut[High(AOut)].Path := ANewPath;
-  AOut[High(AOut)].OldPath := AOldPath;
-  AOut[High(AOut)].Similarity := ASimilarity;
-  AOut[High(AOut)].HeadCode := gscRenamed;
-  AOut[High(AOut)].WorkCode := AWorkCode;
+  if ACount = ACap then
+  begin
+    ACap := SizeInt(GrowArrayCapacity(SizeUInt(ACap), SizeUInt(ACount + 1)));
+    SetLength(AOut, ACap);
+  end;
+  AOut[ACount].Path := ANewPath;
+  AOut[ACount].OldPath := AOldPath;
+  AOut[ACount].Similarity := ASimilarity;
+  AOut[ACount].HeadCode := gscRenamed;
+  AOut[ACount].WorkCode := AWorkCode;
+  Inc(ACount);
 end;
 
-procedure AppendCopied(var AOut: TGitNativeStatusArray;
-  const AOldPath, ANewPath: string; ASimilarity: Byte;
-  AWorkCode: TGitStatusCode);
+procedure AppendCopiedFast(var AOut: TGitNativeStatusArray; var ACount, ACap: SizeInt;
+  const AOldPath, ANewPath: string; ASimilarity: Byte; AWorkCode: TGitStatusCode); inline;
 begin
-  EnsureCapStatus(AOut, Length(AOut) + 1);
-  AOut[High(AOut)].Path := ANewPath;
-  AOut[High(AOut)].OldPath := AOldPath;
-  AOut[High(AOut)].Similarity := ASimilarity;
-  AOut[High(AOut)].HeadCode := gscCopied;
-  AOut[High(AOut)].WorkCode := AWorkCode;
+  if ACount = ACap then
+  begin
+    ACap := SizeInt(GrowArrayCapacity(SizeUInt(ACap), SizeUInt(ACount + 1)));
+    SetLength(AOut, ACap);
+  end;
+  AOut[ACount].Path := ANewPath;
+  AOut[ACount].OldPath := AOldPath;
+  AOut[ACount].Similarity := ASimilarity;
+  AOut[ACount].HeadCode := gscCopied;
+  AOut[ACount].WorkCode := AWorkCode;
+  Inc(ACount);
 end;
 
-{ Appends the untracked group after the tracked one — git's porcelain
-  emits changed entries (path-sorted) first, then untracked entries
-  (path-sorted), never a global interleave }
 procedure AppendUntrackedGroup(var AResult: TGitNativeStatusArray;
   const AExtra: TGitNativeStatusArray);
 var
@@ -676,8 +372,7 @@ begin
     AResult[OldLen + I] := AExtra[I];
 end;
 
-procedure PushInfoAndGlobalExcludes(AIgnore: TGitIgnoreMatcher;
-  const AGitDir: string);
+procedure PushInfoAndGlobalExcludes(AIgnore: TGitIgnoreMatcher; const AGitDir: string);
 var
   ExcludeFile: string;
   Cfg: TGitConfig;
@@ -686,10 +381,15 @@ var
 begin
   ExcludeFile := PathJoin([AGitDir, 'info', 'exclude']);
   if Exists(ExcludeFile) then
+  begin
     try
       AIgnore.PushSource('', ReadFileText(ExcludeFile));
     except
+      on E: ENotFoundError do ;
+      on E: EIOError do ;
+      else raise;
     end;
+  end;
   try
     Cfg := GitReadConfig(AGitDir);
     GlobalPath := Trim(GitConfigGet(Cfg, 'core.excludesfile'));
@@ -699,229 +399,267 @@ begin
   if GlobalPath = '' then Exit;
   if (Length(GlobalPath) > 0) and (GlobalPath[1] = '~') then
   begin
-    if GlobalPath = '~' then Expanded := GetEnv('HOME')
+    if GlobalPath = '~' then Expanded := platform_env_get_str('HOME')
     else if (Length(GlobalPath) >= 2) and (GlobalPath[2] = '/') then
-      Expanded := PathJoin([GetEnv('HOME'), Copy(GlobalPath, 3, MaxInt)])
+      Expanded := PathJoin([platform_env_get_str('HOME'), Copy(GlobalPath, 3, MaxInt)])
     else Expanded := GlobalPath;
     GlobalPath := Expanded;
   end;
   if Exists(GlobalPath) then
+  begin
     try
       AIgnore.PushSource('', ReadFileText(GlobalPath));
     except
+      on E: ENotFoundError do ;
+      on E: EIOError do ;
+      else raise;
     end;
+  end;
 end;
 
-procedure SortStatusByPath(var AList: TGitNativeStatusArray);
-
-  procedure MergeSort(var AItems: TGitNativeStatusArray;
-    var ATemp: TGitNativeStatusArray; ALo, AHi: Integer);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if ALo >= AHi then
-      Exit;
-    Mid := (ALo + AHi) div 2;
-    MergeSort(AItems, ATemp, ALo, Mid);
-    MergeSort(AItems, ATemp, Mid + 1, AHi);
-    I := ALo;
-    J := Mid + 1;
-    for K := ALo to AHi do
-    begin
-      if (I <= Mid) and ((J > AHi)
-        or (AItems[I].Path <= AItems[J].Path)) then
-      begin
-        ATemp[K] := AItems[I];
-        Inc(I);
-      end
-      else
-      begin
-        ATemp[K] := AItems[J];
-        Inc(J);
-      end;
-    end;
-    for K := ALo to AHi do
-      AItems[K] := ATemp[K];
-  end;
-
+function CompareStatusByPath(const A, B: TGitNativeStatusEntry; AData: Pointer): SizeInt; inline;
 var
-  Temp: TGitNativeStatusArray;
+  LA, LB: TByteSpan;
 begin
-  if Length(AList) < 2 then
-    Exit;
-  SetLength(Temp, Length(AList));
-  MergeSort(AList, Temp, 0, Length(AList) - 1);
+  if A.Path = B.Path then Exit(0);
+  if A.Path = '' then LA := TByteSpan.Empty else LA := TByteSpan.Create(PByte(@A.Path[1]), SizeUInt(Length(A.Path)));
+  if B.Path = '' then LB := TByteSpan.Empty else LB := TByteSpan.Create(PByte(@B.Path[1]), SizeUInt(Length(B.Path)));
+  Result := SpanCompare(LA, LB);
+end;
+
+procedure SortStatusByPath(var AList: TGitNativeStatusArray); inline;
+begin
+  if Length(AList) < 2 then Exit;
+  specialize Sort<TGitNativeStatusEntry>(AList, @CompareStatusByPath, nil);
 end;
 
 function GitCollectStatus(const AGitDir, AWorkTree: string;
   AIncludeUntracked: Boolean; AFindRenames: Boolean;
   ARenameThreshold: Integer; AFindCopies: Boolean;
   ACopyThreshold: Integer): TGitNativeStatusArray;
-type
-  TRenameCandidate = record
-    SrcIdx: Integer;
-    DstIdx: Integer;
-    Score: Integer;
-  end;
-  TRenameCandidateArray = array of TRenameCandidate;
-
 var
   Repo: TNativeRepository;
   Idx: TGitIndexFile;
   HeadList: TPathOidArray;
   Tracked: TStringArray;
-  UntrackedPaths: TStringArray;
-  UntrackedStatus: TGitNativeStatusArray;
-  Ignore: TGitIgnoreMatcher;
-  ExcludeFile: string;
   HaveHead: Boolean;
   HeadCommit: TGitOid;
   CommitData: TBytes;
   ObjKind: TGitObjectKind;
   CommitInfo: TGitCommitInfo;
   I: Integer;
-
-  // rename detection structures
-  Stage0Entries: TIndexEntryArray;
-  Stage0Pos: TIntegerArray;
+  Stage0Entries: array of TGitIndexEntry;
+  Stage0Pos: array of Integer;
   Deletes: TPathOidArray;
   Adds: TPathOidArray;
-  AddEntryPos: TIntegerArray;
+  AddEntryPos: array of Integer;
   BothPaths: TPathOidArray;
-  BothEntry: TIndexEntryArray;
+  BothEntry: array of TGitIndexEntry;
   Candidates: TRenameCandidateArray;
   PairedSrc: array of Boolean;
   PairedDst: array of Boolean;
   RenamePairs: TRenameCandidateArray;
   CopyPairs: TRenameCandidateArray;
   TrackedStatus: TGitNativeStatusArray;
-
-  procedure EnsureCapRenameLocal(var A: TRenameCandidateArray; AReq: Integer); inline;
-  var LCap: Integer;
-  begin
-    // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single Move, not inline per red-line 2
-    if Length(A) >= AReq then Exit;
-    LCap := BytesGrowCapacityInt(Length(A), AReq);
-    SetLength(A, LCap);
-    DynPokeLen(A, SizeUInt(AReq));
-  end;
+  LTrackedCount, LTrackedCap: SizeInt;
+  LStatusCount, LStatusCap: SizeInt;
+  LCandCount, LCandCap: SizeInt;
+  LRenameCount, LRenameCap: SizeInt;
+  LCopyCount, LCopyCap: SizeInt;
+  DeleteSigs, AddSigs, HeadSigs: TBlobSigArray;
+  LAddOidBuckets: array of Integer;
+  LOidEntries: array of record AddIdx: Integer; Next: Integer; end;
+  LAddOidCap: Integer;
+  LHashHeads: array of Integer;
+  LHashEntries: array of record Hash: UInt32; AddIdx: Integer; Next: Integer; end;
+  LVisited: array of Boolean;
+  LVisitedList: array of Integer;
+  LVisitedCount: Integer;
 
   procedure BuildStage0;
   var
     K: Integer;
+    LCount, LCap: SizeInt;
   begin
     Stage0Entries := nil;
     Stage0Pos := nil;
+    LCount := 0;
+    LCap := 0;
     for K := 0 to High(Idx.Entries) do
     begin
-      if Idx.Entries[K].Stage <> 0 then
-        Continue;
-      EnsureCapIndexEntry(Stage0Entries, Length(Stage0Entries) + 1);
-      Stage0Entries[High(Stage0Entries)] := Idx.Entries[K];
-      EnsureCapInt(Stage0Pos, Length(Stage0Pos) + 1);
-      Stage0Pos[High(Stage0Pos)] := K;
+      if Idx.Entries[K].Stage <> 0 then Continue;
+      if LCount = LCap then
+      begin
+        LCap := SizeInt(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
+        SetLength(Stage0Entries, LCap);
+        SetLength(Stage0Pos, LCap);
+      end;
+      Stage0Entries[LCount] := Idx.Entries[K];
+      Stage0Pos[LCount] := K;
+      Inc(LCount);
+    end;
+    if LCap <> LCount then
+    begin
+      SetLength(Stage0Entries, LCount);
+      SetLength(Stage0Pos, LCount);
     end;
   end;
 
   procedure BuildRenameSets;
   var
     HI, SI: Integer;
+    LDelCount, LDelCap: SizeInt;
+    LAddCount, LAddCap: SizeInt;
+    LBothCount, LBothCap: SizeInt;
+    procedure EnsureDelCap;
+    begin
+      if LDelCount = LDelCap then
+      begin
+        LDelCap := SizeInt(GrowArrayCapacity(SizeUInt(LDelCap), SizeUInt(LDelCount + 1)));
+        SetLength(Deletes, LDelCap);
+      end;
+    end;
+    procedure EnsureAddCap;
+    begin
+      if LAddCount = LAddCap then
+      begin
+        LAddCap := SizeInt(GrowArrayCapacity(SizeUInt(LAddCap), SizeUInt(LAddCount + 1)));
+        SetLength(Adds, LAddCap);
+        SetLength(AddEntryPos, LAddCap);
+      end;
+    end;
+    procedure EnsureBothCap;
+    begin
+      if LBothCount = LBothCap then
+      begin
+        LBothCap := SizeInt(GrowArrayCapacity(SizeUInt(LBothCap), SizeUInt(LBothCount + 1)));
+        SetLength(BothPaths, LBothCap);
+        SetLength(BothEntry, LBothCap);
+      end;
+    end;
   begin
-    Deletes := nil;
-    Adds := nil;
-    AddEntryPos := nil;
-    BothPaths := nil;
-    BothEntry := nil;
-    HI := 0;
-    SI := 0;
+    Deletes := nil; Adds := nil; AddEntryPos := nil; BothPaths := nil; BothEntry := nil;
+    LDelCount := 0; LDelCap := 0; LAddCount := 0; LAddCap := 0; LBothCount := 0; LBothCap := 0;
+    HI := 0; SI := 0;
     while (HI <= High(HeadList)) and (SI <= High(Stage0Entries)) do
     begin
-      if HeadList[HI].Path < Stage0Entries[SI].Path then
+      if CompareString(HeadList[HI].Path, Stage0Entries[SI].Path, nil) < 0 then
       begin
-        EnsureCapPathOid(Deletes, Length(Deletes) + 1);
-        Deletes[High(Deletes)] := HeadList[HI];
-        Inc(HI);
+        EnsureDelCap; Deletes[LDelCount] := HeadList[HI]; Inc(LDelCount); Inc(HI);
       end
-      else if HeadList[HI].Path > Stage0Entries[SI].Path then
+      else if CompareString(HeadList[HI].Path, Stage0Entries[SI].Path, nil) > 0 then
       begin
-        EnsureCapPathOid(Adds, Length(Adds) + 1);
-        Adds[High(Adds)].Path := Stage0Entries[SI].Path;
-        Adds[High(Adds)].Oid := Stage0Entries[SI].Oid;
-        Adds[High(Adds)].Mode := Stage0Entries[SI].Mode;
-        EnsureCapInt(AddEntryPos, Length(AddEntryPos) + 1);
-        AddEntryPos[High(AddEntryPos)] := SI;
-        Inc(SI);
+        EnsureAddCap;
+        Adds[LAddCount].Path := Stage0Entries[SI].Path;
+        Adds[LAddCount].Oid := Stage0Entries[SI].Oid;
+        Adds[LAddCount].Mode := Stage0Entries[SI].Mode;
+        AddEntryPos[LAddCount] := SI;
+        Inc(LAddCount); Inc(SI);
       end
       else
       begin
-        // present in both — potential modify
-        EnsureCapPathOid(BothPaths, Length(BothPaths) + 1);
-        BothPaths[High(BothPaths)] := HeadList[HI];
-        EnsureCapIndexEntry(BothEntry, Length(BothEntry) + 1);
-        BothEntry[High(BothEntry)] := Stage0Entries[SI];
-        Inc(HI);
-        Inc(SI);
+        EnsureBothCap;
+        BothPaths[LBothCount] := HeadList[HI];
+        BothEntry[LBothCount] := Stage0Entries[SI];
+        Inc(LBothCount); Inc(HI); Inc(SI);
       end;
     end;
     while HI <= High(HeadList) do
-    begin
-      EnsureCapPathOid(Deletes, Length(Deletes) + 1);
-      Deletes[High(Deletes)] := HeadList[HI];
-      Inc(HI);
-    end;
+    begin EnsureDelCap; Deletes[LDelCount] := HeadList[HI]; Inc(LDelCount); Inc(HI); end;
     while SI <= High(Stage0Entries) do
     begin
-      EnsureCapPathOid(Adds, Length(Adds) + 1);
-      Adds[High(Adds)].Path := Stage0Entries[SI].Path;
-      Adds[High(Adds)].Oid := Stage0Entries[SI].Oid;
-      Adds[High(Adds)].Mode := Stage0Entries[SI].Mode;
-      EnsureCapInt(AddEntryPos, Length(AddEntryPos) + 1);
-      AddEntryPos[High(AddEntryPos)] := SI;
-      Inc(SI);
+      EnsureAddCap;
+      Adds[LAddCount].Path := Stage0Entries[SI].Path;
+      Adds[LAddCount].Oid := Stage0Entries[SI].Oid;
+      Adds[LAddCount].Mode := Stage0Entries[SI].Mode;
+      AddEntryPos[LAddCount] := SI;
+      Inc(LAddCount); Inc(SI);
     end;
+    if LDelCap <> LDelCount then SetLength(Deletes, LDelCount);
+    if LAddCap <> LAddCount then begin SetLength(Adds, LAddCount); SetLength(AddEntryPos, LAddCount); end;
+    if LBothCap <> LBothCount then begin SetLength(BothPaths, LBothCount); SetLength(BothEntry, LBothCount); end;
   end;
 
-  procedure SortCandidatesByScoreDesc(var AList: TRenameCandidateArray);
-
-    procedure MergeSort(var AItems: TRenameCandidateArray;
-      var ATemp: TRenameCandidateArray; ALo, AHi: Integer);
-    var
-      Mid, II, JJ, KK: Integer;
-    begin
-      if ALo >= AHi then
-        Exit;
-      Mid := (ALo + AHi) div 2;
-      MergeSort(AItems, ATemp, ALo, Mid);
-      MergeSort(AItems, ATemp, Mid + 1, AHi);
-      II := ALo;
-      JJ := Mid + 1;
-      for KK := ALo to AHi do
-      begin
-        if (II <= Mid) and ((JJ > AHi)
-          or (AItems[II].Score > AItems[JJ].Score)
-          or ((AItems[II].Score = AItems[JJ].Score)
-            and (AItems[II].SrcIdx < AItems[JJ].SrcIdx))) then
-        begin
-          ATemp[KK] := AItems[II];
-          Inc(II);
-        end
-        else
-        begin
-          ATemp[KK] := AItems[JJ];
-          Inc(JJ);
-        end;
-      end;
-      for KK := ALo to AHi do
-        AItems[KK] := ATemp[KK];
-    end;
-
+  procedure BuildAddIndexes;
   var
-    Tmp: TRenameCandidateArray;
+    II, KK, Bucket, DI2: Integer;
+    HVal: UInt32;
+    TotalHashes: Integer;
   begin
-    if Length(AList) < 2 then
-      Exit;
-    SetLength(Tmp, Length(AList));
-    MergeSort(AList, Tmp, 0, Length(AList) - 1);
+    LAddOidCap := 16;
+    while LAddOidCap < Length(Adds) * 2 do LAddOidCap := LAddOidCap * 2;
+    SetLength(LAddOidBuckets, LAddOidCap);
+    SetLength(LOidEntries, Length(Adds));
+    for II := 0 to LAddOidCap - 1 do LAddOidBuckets[II] := -1;
+    for DI2 := 0 to High(Adds) do
+    begin
+      HVal := OidHash(Adds[DI2].Oid);
+      if IsBlobMode(Adds[DI2].Mode) then HVal := HVal xor UInt32($9E3779B9);
+      Bucket := Integer(HVal and UInt32(LAddOidCap - 1));
+      LOidEntries[DI2].AddIdx := DI2;
+      LOidEntries[DI2].Next := LAddOidBuckets[Bucket];
+      LAddOidBuckets[Bucket] := DI2;
+    end;
+    TotalHashes := 0;
+    for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then Inc(TotalHashes, AddSigs[DI2].Count);
+    II := 16;
+    while II < TotalHashes * 2 do II := II * 2;
+    if II < 16 then II := 16;
+    SetLength(LHashHeads, II);
+    for KK := 0 to High(LHashHeads) do LHashHeads[KK] := -1;
+    SetLength(LHashEntries, TotalHashes);
+    KK := 0;
+    for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then
+      for II := 0 to AddSigs[DI2].Count - 1 do
+      begin
+        Bucket := Integer(AddSigs[DI2].Hashes[II] and UInt32(Length(LHashHeads) - 1));
+        LHashEntries[KK].Hash := AddSigs[DI2].Hashes[II];
+        LHashEntries[KK].AddIdx := DI2;
+        LHashEntries[KK].Next := LHashHeads[Bucket];
+        LHashHeads[Bucket] := KK;
+        Inc(KK);
+      end;
+    SetLength(LVisited, Length(Adds));
+    SetLength(LVisitedList, Length(Adds));
+    for II := 0 to High(LVisited) do LVisited[II] := False;
+  end;
+
+  procedure AppendUntrackedGroupToResult(var AResult: TGitNativeStatusArray);
+  var
+    LPaths: TStringArray;
+    LStatus: TGitNativeStatusArray;
+    LCount, LCap: SizeInt;
+    LIgnore: TGitIgnoreMatcher;
+    II: Integer;
+  begin
+    if not AIncludeUntracked then Exit;
+    LPaths := nil;
+    LIgnore := TGitIgnoreMatcher.Create;
+    try
+      PushInfoAndGlobalExcludes(LIgnore, AGitDir);
+      CollectUntracked(AWorkTree, '', Tracked, LIgnore, LPaths);
+    finally
+      LIgnore.Free;
+    end;
+    SortStrings(LPaths);
+    LStatus := nil;
+    LCount := 0; LCap := 0;
+    for II := 0 to High(LPaths) do
+    begin
+      if LCount = LCap then
+      begin
+        LCap := SizeInt(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
+        SetLength(LStatus, LCap);
+      end;
+      LStatus[LCount].Path := LPaths[II];
+      LStatus[LCount].OldPath := '';
+      LStatus[LCount].Similarity := 0;
+      LStatus[LCount].HeadCode := gscUnmodified;
+      LStatus[LCount].WorkCode := gscUntracked;
+      Inc(LCount);
+    end;
+    if LCap <> LCount then SetLength(LStatus, LCount);
+    AppendUntrackedGroup(AResult, LStatus);
   end;
 
 var
@@ -929,8 +667,6 @@ var
   Cand: TRenameCandidate;
   Score: Integer;
   SI2, DI2: Integer;
-  RemainingDeletes, RemainingAdds: TPathOidArray;
-  RemainingAddPos: array of Integer;
   K, CK, J: Integer;
 
 begin
@@ -938,356 +674,354 @@ begin
   Repo := TNativeRepository.Create(AGitDir);
   try
     Idx := GitReadIndex(AGitDir);
-
     HaveHead := True;
     try
       HeadCommit := GitResolveHead(AGitDir);
     except
-      on E: EGitError do
-        HaveHead := False;
+      on E: EGitError do HaveHead := False;
     end;
     if HaveHead then
     begin
       CommitData := Repo.ReadObject(HeadCommit, ObjKind);
-      if ObjKind <> gokCommit then
-        raise EGitError.Create('HEAD does not point at a commit');
+      if ObjKind <> gokCommit then raise EGitError.Create('HEAD does not point at a commit');
       CommitInfo := GitParseCommit(CommitData);
       FlattenTree(Repo, CommitInfo.Tree, '', HeadList);
     end;
     SortPathOids(HeadList);
-
+    LTrackedCount := 0; LTrackedCap := 0; Tracked := nil;
     for I := 0 to High(Idx.Entries) do
-      if (Length(Tracked) = 0)
-        or (Tracked[High(Tracked)] <> Idx.Entries[I].Path) then
+      if (LTrackedCount = 0) or (Tracked[LTrackedCount - 1] <> Idx.Entries[I].Path) then
       begin
-        EnsureCapStr(Tracked, Length(Tracked) + 1);
-        Tracked[High(Tracked)] := Idx.Entries[I].Path;
+        if LTrackedCount = LTrackedCap then
+        begin
+          LTrackedCap := SizeInt(GrowArrayCapacity(SizeUInt(LTrackedCap), SizeUInt(LTrackedCount + 1)));
+          SetLength(Tracked, LTrackedCap);
+        end;
+        Tracked[LTrackedCount] := Idx.Entries[I].Path;
+        Inc(LTrackedCount);
       end;
-
-    // fast path: unborn or no renames requested -> original merge walk
+    if LTrackedCap <> LTrackedCount then SetLength(Tracked, LTrackedCount);
     if (not HaveHead) or (not AFindRenames) then
     begin
-      TrackedStatus := nil;
-      // check for conflicts first
+      TrackedStatus := nil; LStatusCount := 0; LStatusCap := 0;
       for K := 0 to High(Idx.Entries) do
       begin
         if Idx.Entries[K].Stage <> 0 then
         begin
           if (K = 0) or (Idx.Entries[K].Path <> Idx.Entries[K - 1].Path) then
-            AppendStatus(TrackedStatus, Idx.Entries[K].Path, gscUnmerged, gscUnmerged);
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Idx.Entries[K].Path, gscUnmerged, gscUnmerged);
           Continue;
         end;
       end;
-      // fallback to simple emit for non-rename case: use rename-set builder
-      // with empty rename to keep code single-pathed
       if not AFindRenames then
       begin
-        BuildStage0;
-        BuildRenameSets;
-        // emit modifies
+        BuildStage0; BuildRenameSets;
         for K := 0 to High(BothPaths) do
         begin
           WC := WorkCodeFor(AWorkTree, BothEntry[K]);
-          // HeadCodeFor needs Head vs index entry
           if ModeClassOf(BothPaths[K].Mode) <> ModeClassOf(BothEntry[K].Mode) then
-            AppendStatus(TrackedStatus, BothEntry[K].Path, gscTypeChanged, WC)
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscTypeChanged, WC)
           else if not GitOidSame(BothPaths[K].Oid, BothEntry[K].Oid) then
-            AppendStatus(TrackedStatus, BothEntry[K].Path, gscModified, WC)
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscModified, WC)
           else if WC <> gscUnmodified then
-            AppendStatus(TrackedStatus, BothEntry[K].Path, gscUnmodified, WC);
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscUnmodified, WC);
         end;
         for K := 0 to High(Deletes) do
-          AppendStatus(TrackedStatus, Deletes[K].Path, gscDeleted, gscUnmodified);
+          AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Deletes[K].Path, gscDeleted, gscUnmodified);
         for K := 0 to High(Adds) do
         begin
           WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[K]]);
-          AppendStatus(TrackedStatus, Adds[K].Path, gscAdded, WC);
+          AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Adds[K].Path, gscAdded, WC);
         end;
-        // conflicts: emit once per path
-        for I := 0 to High(Idx.Entries) do
-          if Idx.Entries[I].Stage <> 0 then
-            if (I = 0) or (Idx.Entries[I].Path <> Idx.Entries[I - 1].Path) then
-            begin
-              // already emitted above if not HaveHead case, but for HaveHead
-              // with no renames we still need to emit conflicts
-              // de-duplicate: check if already present
-              // simple: if TrackedStatus does not already contain path with unmerged
-              // we append
-              // For simplicity, collect conflicts separately
-            end;
+        if LStatusCap <> LStatusCount then SetLength(TrackedStatus, LStatusCount);
       end;
     end
     else
     begin
-      // Check for conflicts: any non-zero stage means we skip rename and
-      // emit unmerged directly (git defers rename when conflicts present)
       for CK := 0 to High(Idx.Entries) do
         if Idx.Entries[CK].Stage <> 0 then
         begin
-          // emit conflicts and fall back to no-rename walk
-          TrackedStatus := nil;
+          TrackedStatus := nil; LStatusCount := 0; LStatusCap := 0;
           for I := 0 to High(Idx.Entries) do
             if Idx.Entries[I].Stage <> 0 then
               if (I = 0) or (Idx.Entries[I].Path <> Idx.Entries[I - 1].Path) then
-                AppendStatus(TrackedStatus, Idx.Entries[I].Path, gscUnmerged, gscUnmerged);
-          // still need to emit staged changes for stage0 entries vs HEAD
-          // but with conflicts present, git typically shows only unmerged;
-          // we keep it simple and also emit other staged status for
-          // non-conflicted paths via same sets without rename
-          BuildStage0;
-          BuildRenameSets;
-          // filter out conflicted paths from deletes/adds/both
-          // (they are already handled)
-          // For now, emit remaining as added/deleted/modified
+                AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Idx.Entries[I].Path, gscUnmerged, gscUnmerged);
+          BuildStage0; BuildRenameSets;
           for J := 0 to High(BothPaths) do
           begin
             WC := WorkCodeFor(AWorkTree, BothEntry[J]);
             if ModeClassOf(BothPaths[J].Mode) <> ModeClassOf(BothEntry[J].Mode) then
-              AppendStatus(TrackedStatus, BothEntry[J].Path, gscTypeChanged, WC)
+              AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[J].Path, gscTypeChanged, WC)
             else if not GitOidSame(BothPaths[J].Oid, BothEntry[J].Oid) then
-              AppendStatus(TrackedStatus, BothEntry[J].Path, gscModified, WC)
+              AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[J].Path, gscModified, WC)
             else if WC <> gscUnmodified then
-              AppendStatus(TrackedStatus, BothEntry[J].Path, gscUnmodified, WC);
+              AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[J].Path, gscUnmodified, WC);
           end;
-          // deletes/adds that are not conflicted already in sets
-          // but conflicted paths were excluded from Stage0, so they are
-          // not in these sets
           for J := 0 to High(Deletes) do
-            AppendStatus(TrackedStatus, Deletes[J].Path, gscDeleted, gscUnmodified);
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Deletes[J].Path, gscDeleted, gscUnmodified);
           for J := 0 to High(Adds) do
           begin
             WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[J]]);
-            AppendStatus(TrackedStatus, Adds[J].Path, gscAdded, WC);
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Adds[J].Path, gscAdded, WC);
           end;
+          if LStatusCap <> LStatusCount then SetLength(TrackedStatus, LStatusCount);
           SortStatusByPath(TrackedStatus);
           Result := TrackedStatus;
-          if AIncludeUntracked then
-          begin
-            UntrackedPaths := nil;
-            Ignore := TGitIgnoreMatcher.Create;
-            try
-              PushInfoAndGlobalExcludes(Ignore, AGitDir);
-              CollectUntracked(AWorkTree, '', Tracked, Ignore, UntrackedPaths);
-            finally
-              Ignore.Free;
-            end;
-            SortStrings(UntrackedPaths);
-            UntrackedStatus := nil;
-            for I := 0 to High(UntrackedPaths) do
-            begin
-              EnsureCapStatus(UntrackedStatus, Length(UntrackedStatus) + 1);
-              UntrackedStatus[High(UntrackedStatus)].Path := UntrackedPaths[I];
-              UntrackedStatus[High(UntrackedStatus)].OldPath := '';
-              UntrackedStatus[High(UntrackedStatus)].Similarity := 0;
-              UntrackedStatus[High(UntrackedStatus)].HeadCode := gscUnmodified;
-              UntrackedStatus[High(UntrackedStatus)].WorkCode := gscUntracked;
-            end;
-            AppendUntrackedGroup(Result, UntrackedStatus);
-          end;
+          AppendUntrackedGroupToResult(Result);
           Exit;
         end;
     end;
-
     if (not HaveHead) or (not AFindRenames) then
     begin
-      // already handled non-rename case above via early path?
-      // If we reached here with HaveHead and FindRenames but we already
-      // handled conflicts, the non-rename body above for FindRenames=False
-      // already emitted. For unborn, we need separate emit:
       if not HaveHead then
       begin
-        TrackedStatus := nil;
+        TrackedStatus := nil; LStatusCount := 0; LStatusCap := 0;
         for I := 0 to High(Idx.Entries) do
         begin
           if Idx.Entries[I].Stage <> 0 then
           begin
             if (I = 0) or (Idx.Entries[I].Path <> Idx.Entries[I - 1].Path) then
-              AppendStatus(TrackedStatus, Idx.Entries[I].Path, gscUnmerged, gscUnmerged);
+              AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Idx.Entries[I].Path, gscUnmerged, gscUnmerged);
             Continue;
           end;
           WC := WorkCodeFor(AWorkTree, Idx.Entries[I]);
-          AppendStatus(TrackedStatus, Idx.Entries[I].Path, gscAdded, WC);
+          AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Idx.Entries[I].Path, gscAdded, WC);
         end;
+        if LStatusCap <> LStatusCount then SetLength(TrackedStatus, LStatusCount);
         SortStatusByPath(TrackedStatus);
         Result := TrackedStatus;
       end
       else
-        Result := TrackedStatus;
-
-      if AIncludeUntracked then
       begin
-        UntrackedPaths := nil;
-        Ignore := TGitIgnoreMatcher.Create;
-        try
-          PushInfoAndGlobalExcludes(Ignore, AGitDir);
-          CollectUntracked(AWorkTree, '', Tracked, Ignore, UntrackedPaths);
-        finally
-          Ignore.Free;
-        end;
-        SortStrings(UntrackedPaths);
-        UntrackedStatus := nil;
-        for I := 0 to High(UntrackedPaths) do
-        begin
-          EnsureCapStatus(UntrackedStatus, Length(UntrackedStatus) + 1);
-          UntrackedStatus[High(UntrackedStatus)].Path := UntrackedPaths[I];
-          UntrackedStatus[High(UntrackedStatus)].OldPath := '';
-          UntrackedStatus[High(UntrackedStatus)].Similarity := 0;
-          UntrackedStatus[High(UntrackedStatus)].HeadCode := gscUnmodified;
-          UntrackedStatus[High(UntrackedStatus)].WorkCode := gscUntracked;
-        end;
-        AppendUntrackedGroup(Result, UntrackedStatus);
+        if LStatusCap <> LStatusCount then SetLength(TrackedStatus, LStatusCount);
+        Result := TrackedStatus;
       end;
+      AppendUntrackedGroupToResult(Result);
       Exit;
     end;
-
-    // ── rename detection (staged axis only) ─────────────────────────────
     BuildStage0;
     BuildRenameSets;
-
-    // collect rename candidates
-    Candidates := nil;
-    for SI2 := 0 to High(Deletes) do
+    BuildBlobSigCache(Repo, Deletes, DeleteSigs);
+    BuildBlobSigCache(Repo, Adds, AddSigs);
+    Candidates := nil; LCandCount := 0; LCandCap := 0;
+    if (Length(Deletes) > 0) and (Length(Adds) > 0) then
     begin
-      for DI2 := 0 to High(Adds) do
+      BuildAddIndexes;
+      for SI2 := 0 to High(Deletes) do
       begin
-        Score := SimilarityForPair(Repo, Deletes[SI2], Adds[DI2]);
-        if Score < ARenameThreshold then
-          Continue;
-        if Score < 0 then
-          Continue;
-        EnsureCapRenameLocal(Candidates, Length(Candidates) + 1);
-        Candidates[High(Candidates)].SrcIdx := SI2;
-        Candidates[High(Candidates)].DstIdx := DI2;
-        Candidates[High(Candidates)].Score := Score;
+        if not IsBlobMode(Deletes[SI2].Mode) then Continue;
+        LVisitedCount := 0;
+        Score := Integer(OidHash(Deletes[SI2].Oid));
+        if IsBlobMode(Deletes[SI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
+        I := Integer(UInt32(Score) and UInt32(LAddOidCap - 1));
+        DI2 := LAddOidBuckets[I];
+        while DI2 <> -1 do
+        begin
+          K := LOidEntries[DI2].AddIdx;
+          if GitOidSame(Deletes[SI2].Oid, Adds[K].Oid) and IsBlobMode(Adds[K].Mode) then
+            if not LVisited[K] then
+            begin LVisited[K] := True; LVisitedList[LVisitedCount] := K; Inc(LVisitedCount); end;
+          DI2 := LOidEntries[DI2].Next;
+        end;
+        if DeleteSigs[SI2].Valid then
+        begin
+          if DeleteSigs[SI2].Count = 0 then
+          begin
+            for DI2 := 0 to High(Adds) do
+              if AddSigs[DI2].Valid and (AddSigs[DI2].Count = 0) and IsBlobMode(Adds[DI2].Mode) then
+                if not LVisited[DI2] then
+                begin LVisited[DI2] := True; LVisitedList[LVisitedCount] := DI2; Inc(LVisitedCount); end;
+          end
+          else
+          begin
+            for I := 0 to DeleteSigs[SI2].Count - 1 do
+            begin
+              Score := Integer(DeleteSigs[SI2].Hashes[I] and UInt32(Length(LHashHeads) - 1));
+              K := LHashHeads[Score];
+              while K <> -1 do
+              begin
+                if LHashEntries[K].Hash = DeleteSigs[SI2].Hashes[I] then
+                begin
+                  DI2 := LHashEntries[K].AddIdx;
+                  if not LVisited[DI2] then
+                  begin LVisited[DI2] := True; LVisitedList[LVisitedCount] := DI2; Inc(LVisitedCount); end;
+                end;
+                K := LHashEntries[K].Next;
+              end;
+            end;
+          end;
+        end;
+        for K := 0 to LVisitedCount - 1 do
+        begin
+          DI2 := LVisitedList[K];
+          if not IsBlobMode(Adds[DI2].Mode) then Continue;
+          if GitOidSame(Deletes[SI2].Oid, Adds[DI2].Oid) then Score := 100
+          else Score := ScoreFromSigs(DeleteSigs[SI2], AddSigs[DI2]);
+          if Score < 0 then Continue;
+          if Score < ARenameThreshold then Continue;
+          if LCandCount = LCandCap then
+          begin
+            LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
+            SetLength(Candidates, LCandCap);
+          end;
+          Candidates[LCandCount].SrcIdx := SI2;
+          Candidates[LCandCount].DstIdx := DI2;
+          Candidates[LCandCount].Score := Score;
+          Inc(LCandCount);
+        end;
+        for K := 0 to LVisitedCount - 1 do LVisited[LVisitedList[K]] := False;
       end;
+      if LCandCap <> LCandCount then SetLength(Candidates, LCandCount);
     end;
     SortCandidatesByScoreDesc(Candidates);
-
     SetLength(PairedSrc, Length(Deletes));
     SetLength(PairedDst, Length(Adds));
-    for I := 0 to High(PairedSrc) do
-      PairedSrc[I] := False;
-    for I := 0 to High(PairedDst) do
-      PairedDst[I] := False;
-    RenamePairs := nil;
+    for I := 0 to High(PairedSrc) do PairedSrc[I] := False;
+    for I := 0 to High(PairedDst) do PairedDst[I] := False;
+    RenamePairs := nil; LRenameCount := 0; LRenameCap := 0;
     for I := 0 to High(Candidates) do
     begin
       Cand := Candidates[I];
-      if PairedSrc[Cand.SrcIdx] then
-        Continue;
-      if PairedDst[Cand.DstIdx] then
-        Continue;
+      if PairedSrc[Cand.SrcIdx] then Continue;
+      if PairedDst[Cand.DstIdx] then Continue;
       PairedSrc[Cand.SrcIdx] := True;
       PairedDst[Cand.DstIdx] := True;
-      EnsureCapRenameLocal(RenamePairs, Length(RenamePairs) + 1);
-      RenamePairs[High(RenamePairs)] := Cand;
+      if LRenameCount = LRenameCap then
+      begin
+        LRenameCap := SizeInt(GrowArrayCapacity(SizeUInt(LRenameCap), SizeUInt(LRenameCount + 1)));
+        SetLength(RenamePairs, LRenameCap);
+      end;
+      RenamePairs[LRenameCount] := Cand;
+      Inc(LRenameCount);
     end;
-
-    // copy detection (optional): pairs where source is any HEAD path
-    // (including retained ones) to an added path
-    CopyPairs := nil;
+    if LRenameCap <> LRenameCount then SetLength(RenamePairs, LRenameCount);
+    CopyPairs := nil; LCopyCount := 0; LCopyCap := 0;
     if AFindCopies then
     begin
-      Candidates := nil;
-      for SI2 := 0 to High(HeadList) do
+      BuildBlobSigCache(Repo, HeadList, HeadSigs);
+      Candidates := nil; LCandCount := 0; LCandCap := 0;
+      if (Length(HeadList) > 0) and (Length(Adds) > 0) then
       begin
-        // source is every HEAD blob, regardless of whether it was deleted
-        for DI2 := 0 to High(Adds) do
+        if Length(LAddOidBuckets) = 0 then BuildAddIndexes;
+        for SI2 := 0 to High(HeadList) do
         begin
-          if PairedDst[DI2] then
-            Continue;
-          Score := SimilarityForPair(Repo, HeadList[SI2], Adds[DI2]);
-          if Score < ACopyThreshold then
-            Continue;
-          if Score < 0 then
-            Continue;
-          EnsureCapRenameLocal(Candidates, Length(Candidates) + 1);
-          Candidates[High(Candidates)].SrcIdx := SI2;
-          Candidates[High(Candidates)].DstIdx := DI2;
-          Candidates[High(Candidates)].Score := Score;
+          if not IsBlobMode(HeadList[SI2].Mode) then Continue;
+          LVisitedCount := 0;
+          Score := Integer(OidHash(HeadList[SI2].Oid));
+          if IsBlobMode(HeadList[SI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
+          I := Integer(UInt32(Score) and UInt32(LAddOidCap - 1));
+          DI2 := LAddOidBuckets[I];
+          while DI2 <> -1 do
+          begin
+            K := LOidEntries[DI2].AddIdx;
+            if GitOidSame(HeadList[SI2].Oid, Adds[K].Oid) and IsBlobMode(Adds[K].Mode) and not PairedDst[K] then
+              if not LVisited[K] then
+              begin LVisited[K] := True; LVisitedList[LVisitedCount] := K; Inc(LVisitedCount); end;
+            DI2 := LOidEntries[DI2].Next;
+          end;
+          if HeadSigs[SI2].Valid then
+          begin
+            if HeadSigs[SI2].Count = 0 then
+            begin
+              for DI2 := 0 to High(Adds) do
+                if not PairedDst[DI2] and AddSigs[DI2].Valid and (AddSigs[DI2].Count = 0) and IsBlobMode(Adds[DI2].Mode) then
+                  if not LVisited[DI2] then
+                  begin LVisited[DI2] := True; LVisitedList[LVisitedCount] := DI2; Inc(LVisitedCount); end;
+            end
+            else
+            begin
+              for I := 0 to HeadSigs[SI2].Count - 1 do
+              begin
+                Score := Integer(HeadSigs[SI2].Hashes[I] and UInt32(Length(LHashHeads) - 1));
+                K := LHashHeads[Score];
+                while K <> -1 do
+                begin
+                  if LHashEntries[K].Hash = HeadSigs[SI2].Hashes[I] then
+                  begin
+                    DI2 := LHashEntries[K].AddIdx;
+                    if not PairedDst[DI2] and not LVisited[DI2] then
+                    begin LVisited[DI2] := True; LVisitedList[LVisitedCount] := DI2; Inc(LVisitedCount); end;
+                  end;
+                  K := LHashEntries[K].Next;
+                end;
+              end;
+            end;
+          end;
+          for K := 0 to LVisitedCount - 1 do
+          begin
+            DI2 := LVisitedList[K];
+            if PairedDst[DI2] then Continue;
+            if not IsBlobMode(Adds[DI2].Mode) then Continue;
+            if GitOidSame(HeadList[SI2].Oid, Adds[DI2].Oid) then Score := 100
+            else Score := ScoreFromSigs(HeadSigs[SI2], AddSigs[DI2]);
+            if Score < 0 then Continue;
+            if Score < ACopyThreshold then Continue;
+            if LCandCount = LCandCap then
+            begin
+              LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
+              SetLength(Candidates, LCandCap);
+            end;
+            Candidates[LCandCount].SrcIdx := SI2;
+            Candidates[LCandCount].DstIdx := DI2;
+            Candidates[LCandCount].Score := Score;
+            Inc(LCandCount);
+          end;
+          for K := 0 to LVisitedCount - 1 do LVisited[LVisitedList[K]] := False;
         end;
+        if LCandCap <> LCandCount then SetLength(Candidates, LCandCount);
       end;
       SortCandidatesByScoreDesc(Candidates);
       for I := 0 to High(Candidates) do
       begin
         Cand := Candidates[I];
-        if PairedDst[Cand.DstIdx] then
-          Continue;
-        // for copies, sources may be reused, so no PairedSrc check
+        if PairedDst[Cand.DstIdx] then Continue;
         PairedDst[Cand.DstIdx] := True;
-        EnsureCapRenameLocal(CopyPairs, Length(CopyPairs) + 1);
-        CopyPairs[High(CopyPairs)] := Cand;
-        // map copy src idx is into HeadList, need to preserve for later
+        if LCopyCount = LCopyCap then
+        begin
+          LCopyCap := SizeInt(GrowArrayCapacity(SizeUInt(LCopyCap), SizeUInt(LCopyCount + 1)));
+          SetLength(CopyPairs, LCopyCap);
+        end;
+        CopyPairs[LCopyCount] := Cand;
+        Inc(LCopyCount);
       end;
+      if LCopyCap <> LCopyCount then SetLength(CopyPairs, LCopyCount);
     end;
-
-    // build final tracked status
-    TrackedStatus := nil;
-    // renames
+    TrackedStatus := nil; LStatusCount := 0; LStatusCap := 0;
     for I := 0 to High(RenamePairs) do
     begin
       Cand := RenamePairs[I];
       WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[Cand.DstIdx]]);
-      AppendRenamed(TrackedStatus, Deletes[Cand.SrcIdx].Path,
-        Adds[Cand.DstIdx].Path, Byte(Cand.Score), WC);
+      AppendRenamedFast(TrackedStatus, LStatusCount, LStatusCap, Deletes[Cand.SrcIdx].Path, Adds[Cand.DstIdx].Path, Byte(Cand.Score), WC);
     end;
-    // copies
     for I := 0 to High(CopyPairs) do
     begin
       Cand := CopyPairs[I];
       WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[Cand.DstIdx]]);
-      AppendCopied(TrackedStatus, HeadList[Cand.SrcIdx].Path,
-        Adds[Cand.DstIdx].Path, Byte(Cand.Score), WC);
+      AppendCopiedFast(TrackedStatus, LStatusCount, LStatusCap, HeadList[Cand.SrcIdx].Path, Adds[Cand.DstIdx].Path, Byte(Cand.Score), WC);
     end;
-    // remaining deletes (unpaired)
     for I := 0 to High(Deletes) do
       if not PairedSrc[I] then
-        AppendStatus(TrackedStatus, Deletes[I].Path, gscDeleted, gscUnmodified);
-    // remaining adds (unpaired and not copied)
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Deletes[I].Path, gscDeleted, gscUnmodified);
     for I := 0 to High(Adds) do
       if not PairedDst[I] then
       begin
         WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[I]]);
-        AppendStatus(TrackedStatus, Adds[I].Path, gscAdded, WC);
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Adds[I].Path, gscAdded, WC);
       end;
-    // modifies / typechanges (both)
     for K := 0 to High(BothPaths) do
     begin
       WC := WorkCodeFor(AWorkTree, BothEntry[K]);
       if ModeClassOf(BothPaths[K].Mode) <> ModeClassOf(BothEntry[K].Mode) then
-        AppendStatus(TrackedStatus, BothEntry[K].Path, gscTypeChanged, WC)
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscTypeChanged, WC)
       else if not GitOidSame(BothPaths[K].Oid, BothEntry[K].Oid) then
-        AppendStatus(TrackedStatus, BothEntry[K].Path, gscModified, WC)
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscModified, WC)
       else if WC <> gscUnmodified then
-        AppendStatus(TrackedStatus, BothEntry[K].Path, gscUnmodified, WC);
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscUnmodified, WC);
     end;
-
+    if LStatusCap <> LStatusCount then SetLength(TrackedStatus, LStatusCount);
     SortStatusByPath(TrackedStatus);
     Result := TrackedStatus;
-
-    if AIncludeUntracked then
-    begin
-      UntrackedPaths := nil;
-      Ignore := TGitIgnoreMatcher.Create;
-      try
-        PushInfoAndGlobalExcludes(Ignore, AGitDir);
-        CollectUntracked(AWorkTree, '', Tracked, Ignore, UntrackedPaths);
-      finally
-        Ignore.Free;
-      end;
-      SortStrings(UntrackedPaths);
-      UntrackedStatus := nil;
-      for I := 0 to High(UntrackedPaths) do
-      begin
-        EnsureCapStatus(UntrackedStatus, Length(UntrackedStatus) + 1);
-        UntrackedStatus[High(UntrackedStatus)].Path := UntrackedPaths[I];
-        UntrackedStatus[High(UntrackedStatus)].OldPath := '';
-        UntrackedStatus[High(UntrackedStatus)].Similarity := 0;
-        UntrackedStatus[High(UntrackedStatus)].HeadCode := gscUnmodified;
-        UntrackedStatus[High(UntrackedStatus)].WorkCode := gscUntracked;
-      end;
-      AppendUntrackedGroup(Result, UntrackedStatus);
-    end;
+    AppendUntrackedGroupToResult(Result);
   finally
     Repo.Free;
   end;
@@ -1296,7 +1030,6 @@ end;
 function GitCollectStatus(const AGitDir, AWorkTree: string;
   AIncludeUntracked: Boolean): TGitNativeStatusArray;
 begin
-  Result := nil;
   Result := GitCollectStatus(AGitDir, AWorkTree, AIncludeUntracked, True, 50, False, 50);
 end;
 
@@ -1304,9 +1037,7 @@ function GitCollectStatus(const AGitDir, AWorkTree: string;
   AIncludeUntracked: Boolean; AFindRenames: Boolean;
   ARenameThreshold: Integer): TGitNativeStatusArray;
 begin
-  Result := nil;
-  Result := GitCollectStatus(AGitDir, AWorkTree, AIncludeUntracked,
-    AFindRenames, ARenameThreshold, False, 50);
+  Result := GitCollectStatus(AGitDir, AWorkTree, AIncludeUntracked, AFindRenames, ARenameThreshold, False, 50);
 end;
 
 end.

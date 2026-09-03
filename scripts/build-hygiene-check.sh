@@ -53,6 +53,7 @@ scan_root() {
         -name '*.dylib' -o \
         -name '*.a' -o \
         -name 'libimp*.a' -o \
+        -name '*.new' -o \
         -name 'ppas.sh' \
       \) -print
 
@@ -98,7 +99,7 @@ collect_source_artifacts() {
 }
 
 collect_tracked_artifacts() {
-  git -C "$REPO_ROOT" ls-files | grep -E '(^|/)([^/]+\.o|[^/]+\.ppu|[^/]+\.compiled|link[^/]*\.res|[^/]+\.test\.res|ppas\.sh|[^/]+\.pyc|[^/]+\.exe|[^/]+\.dll|[^/]+\.so|[^/]+\.dylib|libimp[^/]*\.a|[^/]+\.a)$' >"$TRACKED_FILE" || true
+  git -C "$REPO_ROOT" ls-files | grep -E '(^|/)([^/]+\.o|[^/]+\.ppu|[^/]+\.compiled|link[^/]*\.res|[^/]+\.test\.res|ppas\.sh|[^/]+\.pyc|[^/]+\.exe|[^/]+\.dll|[^/]+\.so|[^/]+\.dylib|libimp[^/]*\.a|[^/]+\.a|[^/]+\.new)$' >"$TRACKED_FILE" || true
 }
 
 collect_source_artifacts

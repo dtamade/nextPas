@@ -12,9 +12,12 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.json,
+  nextpas.core.json.value,
+  nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
+  nextpas.core.webview.metrics,
   nextpas.core.webview.fake;
 
 var
@@ -40,24 +43,24 @@ begin
     LFrame), 'full frame decodes');
   CheckEqual(Int64(42), LFrame.Id);
   CheckEqual('ping', LFrame.Cmd);
-  CheckEqual('{"hello":"world"}', LFrame.PayloadJson);
+  CheckEqual('{"hello":"world"}', LFrame.Payload.ToString);
 
-  { payload 缺省 → 'null' }
+  { payload 缺省 → 'null'（零拷贝视图，无 ToString 分配在解码热路径） }
   Check(TryDecodeFrame('{"v":1,"id":1,"cmd":"a"}', LFrame), 'absent payload');
-  CheckEqual('null', LFrame.PayloadJson);
+  CheckEqual('null', LFrame.Payload.ToString);
 
   { payload 显式 null → 'null' }
   Check(TryDecodeFrame('{"v":1,"id":1,"cmd":"a","payload":null}', LFrame),
     'explicit null payload');
-  CheckEqual('null', LFrame.PayloadJson);
+  CheckEqual('null', LFrame.Payload.ToString);
 
   { 标量/数组 payload 规范化保真 }
   Check(TryDecodeFrame('{"v":1,"id":2,"cmd":"a","payload":"txt"}', LFrame),
     'string payload');
-  CheckEqual('"txt"', LFrame.PayloadJson);
+  CheckEqual('"txt"', LFrame.Payload.ToString);
   Check(TryDecodeFrame('{"v":1,"id":3,"cmd":"a","payload":[1, 2, 3]}', LFrame),
-    'array payload canonicalized');
-  CheckEqual('[1,2,3]', LFrame.PayloadJson);
+    'array payload raw slice preserved');
+  CheckEqual('[1, 2, 3]', LFrame.Payload.ToString);
 
   { u53 上边界内可解 }
   Check(TryDecodeFrame('{"v":1,"id":' + IntToStr(NPW_MAX_FRAME_ID) + ',"cmd":"a"}', LFrame),
@@ -199,8 +202,8 @@ begin
     Check(LFake.LastOutcome.IsError = False, 'frame outcome ok');
     CheckEqual('{"tag":"ok"}', LFake.LastOutcome.ResultJson, 'result json');
 
-    { payload 经 json owner 规范化（空格剥离） }
-    CheckEqual('{"x":1}', GLastPayload, 'payload canonicalized');
+    { payload 经 json owner RawSlice 零拷贝透传（空格保留） }
+    CheckEqual('{"x": 1}', GLastPayload, 'payload raw slice preserved');
 
     { 回执脚本：id 回显 + 结果以字符串字面量嵌入 }
     CheckEqual(1, LFake.CaptureEvalCount, 'one receipt');
@@ -342,18 +345,27 @@ type
     Table: array of TProbeEntry;
     function TryResolve(const APath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
 function TProbeProvider.TryResolve(const APath: string;
   out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  Result := TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType);
+end;
+
+function TProbeProvider.TryResolveView(const AView: TStringView;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
 var
   I: Integer;
 begin
-  LastPath := APath;
+  LastPath := AView.ToString;
   AMimeType := 'text/plain';
   Result := False;
+  ABytes := nil;
   for I := 0 to High(Table) do
-    if Table[I].Key = APath then
+    if TStringView.FromStr(Table[I].Key).Equals(AView) then
     begin
       SetLength(ABytes, 1);
       ABytes[0] := Ord('x');
@@ -474,6 +486,40 @@ begin
   end;
 end;
 
+procedure TestWaterLevelRegressionAnchor;
+var
+  LView, LPayload: TStringView;
+  LRawLen, LPayloadLen, LExpanded: SizeUInt;
+  LFrame: TWebviewFrame;
+  LBigPayload, LFrameJson, LRawBuf, LPayloadBuf: string;
+begin
+  { CONTRACT §6 水位回归锚点：1 MiB Hard Limit 单源于 L2 metrics，expanded = raw + payload + raw shr1 + 1024 }
+  CheckEqual(Int64(1048576), Int64(NPW_MAX_FRAME_BYTES), '1MiB hard limit anchor');
+  CheckEqual(Int64(WEBVIEW_MAX_FRAME_BYTES), Int64(NPW_MAX_FRAME_BYTES), 'alias zero drift');
+  LView := TStringView.FromStr('{"v":1,"id":1,"cmd":"a"}');
+  LPayload := TStringView.Create(nil, 0);
+  Check(not IsWebviewFrameOversizedExpanded(LView, LPayload), 'small not oversized expanded');
+  { 构造接近阈值的 expanded：600k raw + 300k payload + 300k overhead +1k >1MiB 应判超限 }
+  LRawLen := 600 * 1024;
+  LPayloadLen := 300 * 1024;
+  LExpanded := LRawLen + LPayloadLen + (LRawLen shr 1) + 1024;
+  Check(LExpanded > SizeUInt(NPW_MAX_FRAME_BYTES), 'expanded formula exceeds threshold');
+  { TStringView.Create 拒绝 nil+非零长度：用水位无关的空格缓冲构造视图 }
+  SetLength(LRawBuf, LRawLen);
+  FillChar(LRawBuf[1], LRawLen, Ord(' '));
+  SetLength(LPayloadBuf, LPayloadLen);
+  FillChar(LPayloadBuf[1], LPayloadLen, Ord(' '));
+  LView := TStringView.Create(PAnsiChar(LRawBuf), LRawLen);
+  Check(IsWebviewFrameOversizedExpandedLen(LView, LPayloadLen), 'expanded oversized anchor');
+  Check(IsWebviewFrameOversizedExpanded(LView, TStringView.Create(PAnsiChar(LPayloadBuf), LPayloadLen)), 'expanded view anchor');
+  { 二次校验路径：raw 未超限但 expanded 超限的解码应被拒（零拷贝视图水位闭环） }
+  SetLength(LBigPayload, 700 * 1024);
+  FillChar(LBigPayload[1], Length(LBigPayload), Ord('a'));
+  LFrameJson := '{"v":1,"id":1,"cmd":"big","payload":"' + LBigPayload + '"}';
+  { raw 700k+ overhead <1MiB 但 payload 700k 导致 expanded ~ 700k+700k+350k >1MiB，二次校验应拦截 }
+  Check(not TryDecodeFrame(LFrameJson, LFrame), 'expanded oversized frame rejected via secondary check');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -496,5 +542,6 @@ begin
   T.Test('fake frame closed window', @TestFakeFrameClosedWindow);
   T.Test('assets prefix routing', @TestAssetsPrefixRouting);
   T.Test('assets miss and validation', @TestAssetsMissAndValidation);
+  T.Test('water level regression anchor (§6)', @TestWaterLevelRegressionAnchor);
   if not T.Run then Halt(1);
 end.

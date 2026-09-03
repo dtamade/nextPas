@@ -184,6 +184,7 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.mem,
   nextpas.core.exception,
   nextpas.core.text.strings,
@@ -201,7 +202,7 @@ begin
   L := Length(AText);
   Result := GetMem(L + 1);
   if L > 0 then
-    Move(AText[1], Result^, L);
+    BytesCopy(Result, @AText[1], SizeUInt(L)); // perf: single source via bytes.ops.BytesCopy inline zero-copy (INV-5)
   Result[L] := #0;
 end;
 
@@ -507,7 +508,7 @@ begin
     'Certificate stream'
   );
   SetLength(LData, Length(LReadData) + 1);
-  Move(LReadData[0], LData[0], Length(LReadData));
+  BytesCopy(@LData[0], @LReadData[0], SizeUInt(Length(LReadData))); // perf: single source via bytes.ops.BytesCopy inline zero-copy (INV-5)
   LData[High(LData)] := 0;
 
   // 分配证书链
@@ -612,7 +613,7 @@ begin
     'Private key stream'
   );
   SetLength(LData, Length(LReadData) + 1);
-  Move(LReadData[0], LData[0], Length(LReadData));
+  BytesCopy(@LData[0], @LReadData[0], SizeUInt(Length(LReadData))); // perf: single source via bytes.ops.BytesCopy inline zero-copy (INV-5)
   LData[High(LData)] := 0;
 
   // 分配私钥上下文
@@ -1033,7 +1034,7 @@ begin
 
   // 初始化新的 pin
   FillChar(LPin, SizeOf(LPin), 0);
-  Move(AHash[0], LPin.Hash[0], 32);
+  BytesCopy(@LPin.Hash[0], @AHash[0], 32); // perf: single source via bytes.ops.BytesCopy inline zero-copy (INV-5)
   LPin.PinType := APinType;
   LPin.Description := ADescription;
   LPin.IsBackup := AIsBackup;

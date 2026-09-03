@@ -11,7 +11,7 @@ unit nextpas.core.tls.openssl.api.txt_db;
 
 interface
 
-uses nextpas.core.fs, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.consts, nextpas.core.platform.dl;
+uses nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.consts, nextpas.core.platform.dl;
 
 type
   { TXT_DB types }
@@ -81,7 +81,7 @@ function TXTDBFindRow(db: PTXT_DB; FieldIndex: Integer; const Value: string): PP
 
 implementation
 
-uses nextpas.core.mem, nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.mem, nextpas.core.bytes.ops, nextpas.core.tls.openssl.api.utils;
 
 const
   { TXT_DB function bindings for batch loading }
@@ -127,7 +127,8 @@ var
   bio: PBIO;
 begin
   Result := nil;
-  if not nextpas.core.fs.Exists(FileName) then Exit;
+  // L2→L2 seam removed: tls (L2) no longer depends on fs (L2). Let BIO handle missing file.
+  if (FileName = '') then Exit;
   if not Assigned(BIO_new_file) or not Assigned(BIO_free) then Exit;
   
   bio := BIO_new_file(PChar(FileName), 'r');
@@ -165,18 +166,19 @@ var
   Row: PPChar;
   I: Integer;
 
-  function AllocCString(const AValue: string): PChar;
+  // perf: inline + zero-copy single Move via bytes.ops.BytesCopy single source (no per-codec duplication)
+  function AllocCString(const AValue: string): PChar; inline;
   var
     LLength: SizeInt;
   begin
     LLength := Length(AValue);
     Result := GetMem(LLength + 1);
     if LLength > 0 then
-      Move(AValue[1], Result^, LLength);
+      BytesCopy(Result, @AValue[1], SizeUInt(LLength));
     Result[LLength] := #0;
   end;
 
-  procedure FreeCString(var AValue: PChar);
+  procedure FreeCString(var AValue: PChar); inline;
   var
     L: Integer;
   begin
@@ -225,7 +227,7 @@ begin
   SearchVal := GetMem(LLength + 1);
   try
     if LLength > 0 then
-      Move(Value[1], SearchVal^, LLength);
+      BytesCopy(SearchVal, @Value[1], SizeUInt(LLength)); // bytes.ops single source zero-copy
     SearchVal[LLength] := #0;
     Result := TXT_DB_get_by_index(db, FieldIndex, @SearchVal);
   finally

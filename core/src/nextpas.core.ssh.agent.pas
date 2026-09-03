@@ -19,6 +19,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.os.env,
   nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.ssh.buffer,
@@ -74,6 +75,7 @@ function SshAgentConnectFromEnv: TSshAgentClient;
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.ssh.intf,
   nextpas.core.ssh.net.ffi;
 
@@ -95,7 +97,7 @@ begin
   except
     Result := '';
   end;
-  if LR <> nil then LR.Free;
+  LR.Free;
 end;
 
 function SshAgentKeyBlobToSignFlags(const ABlob: TBytes): UInt32;
@@ -248,7 +250,7 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh agent: empty identities answer');
   if LResp[0] = SSH_AGENT_FAILURE then Exit(False);
   if LResp[0] <> SSH_AGENT_IDENTITIES_ANSWER then
-    raise ESSHError.Create(sekProtocol, 'ssh agent: unexpected answer type ' + IntToStr(LResp[0]) + ' len=' + IntToStr(Length(LResp)));
+    raise ESSHError.Create(sekProtocol, 'ssh agent: unexpected answer type ' + nextpas.core.text.conv.IntToStr(Int64(LResp[0])) + ' len=' + nextpas.core.text.conv.IntToStr(Int64(Length(LResp))));
   LR := TsshReader.Create(LResp);
   try
     LR.ReadByte;
@@ -296,7 +298,7 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh agent: empty sign response');
   if LResp[0] = SSH_AGENT_FAILURE then Exit(False);
   if LResp[0] <> SSH_AGENT_SIGN_RESPONSE then
-    raise ESSHError.Create(sekProtocol, 'ssh agent: unexpected sign response ' + IntToStr(LResp[0]) + ' len=' + IntToStr(Length(LResp)));
+    raise ESSHError.Create(sekProtocol, 'ssh agent: unexpected sign response ' + nextpas.core.text.conv.IntToStr(Int64(LResp[0])) + ' len=' + nextpas.core.text.conv.IntToStr(Int64(Length(LResp))));
   LR := TsshReader.Create(LResp);
   try
     LR.ReadByte;
@@ -316,7 +318,7 @@ function SshAgentConnectFromEnv: TSshAgentClient;
 var
   LPath: string;
 begin
-  LPath := GetEnvironmentVariable('SSH_AUTH_SOCK');
+  LPath := GetEnv('SSH_AUTH_SOCK');
   if LPath = '' then
     raise ESSHError.Create(sekIO, 'ssh agent: SSH_AUTH_SOCK not set');
   Result := SshAgentConnect(LPath);

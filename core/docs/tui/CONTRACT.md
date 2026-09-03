@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-09-02
-**版本**：1.33（兑现 §1.4 六域四件套 terminal/canvas 独立子家族：`terminal.base/intf/pas` + `canvas.intf` 四件套补齐，`bytes.ops` 单源 + `inline` 零拷贝 + `Destroy` 配对释放不丢，薄域契约 `terminal.md`/`canvas.md` 拆分落地，对齐 http 六域四件套）
+**版本**：1.34（瘦身 §1.4 六域边界收敛：`nextpas.core.tui` 主包不再聚合 `tui.terminal`/`tui.canvas`/`ext`，按需 `uses` 子facade（`tui.terminal`/`tui.canvas` 独立子家族，六域 `bytes.ops` 单源 + `inline` 零拷贝 `TByteSpan` + `Destroy` 配对释放不丢），消 60+ inline 薄别名堆砌，主包仅类型/常量薄别名，行为归子域，高级感收敛）
 
 ---
 
@@ -111,7 +111,7 @@ end;
 
 > 单一 CONTRACT 已按本节六域兑现四件套拆分；执行时仍守：四件套（base/intf/impl/门面）、L0–L3（L3 tui 只依赖 L0–L2，不依赖 tls/net/http）、`bytes.ops` 单源复用（cell/width/ANSI 单源）、热点 `inline` + 零拷贝视图、资源释放（Buffer/Terminal/Allocator Destroy + heaptrc 0 unfreed）不丢；缺能力先反哺 owner（不绕过边界）。子域契约见 `core/docs/tui/buffer.md`/`layout.md`/`widget.md`/`ext.md`/`terminal.md`/`canvas.md`（本主文档 §2–§6 仅保留语义摘要与锚点，明细以薄域契约为准，消双重维护）。
 >
-> **六域独立子家族已兑现**：`buffer`/`layout`/`widget`/`ext`/`terminal`/`canvas` 均已从主包寄居抽为独立四件套（`terminal.base/intf/pas` + `canvas.intf` 本次补齐，见变更 1.33），不再寄居 `nextpas.core.tui` 主包；行为冻结 + `heaptrc 0`（子家族独立 focused + 主包聚合路径 `HEAPTRC_GATE=1` 统一守门，`terminal.md`/`canvas.md` 门禁）+ `git diff --check`/`make hygiene` 守门；**边界固化**：主包仅 `T* = tui.terminal.T*`/`canvas.T*` 薄别名 `inline` 零拷贝转发，无独立堆分配，所有权归子家族。
+> **六域独立子家族已兑现**：`buffer`/`layout`/`widget`/`ext`/`terminal`/`canvas` 均已从主包寄居抽为独立四件套（`terminal.base/intf/pas` + `canvas.intf` 已补齐），不再寄居 `nextpas.core.tui` 主包；行为冻结 + `heaptrc 0`（子家族独立 focused + 主包聚合路径 `HEAPTRC_GATE=1` 统一守门，`terminal.md`/`canvas.md` 门禁）+ `git diff --check`/`make hygiene` 守门；**边界固化**：主包不再聚合 `tui.terminal`/`tui.canvas`/`ext`（按需 `uses` 子facade），`terminal`/`canvas` 零拷贝 `TByteSpan`（`TerminalAnsiEscSpan`/`CanvasCellSpan` inline via `bytes.ops` 单源）与 `DoLeaveTui`/`Destroy` 幂等释放由子家族独立承载，主包仅类型/常量薄别名，无行为转发堆砌。
 
 | 业务域 | 当前 CONTRACT 锚点 | 抽取后模块（四件套已落地） | Owner / 依赖 | 兑现证据（落地文件 + 约束保持） |
 |--------|-------------------|----------------------------|--------------|---------------------------------|
@@ -119,10 +119,10 @@ end;
 | **布局引擎** | §1.1 layout + §6.1 Scorecard SC18/SC22 | `nextpas.core.tui.layout`（`layout.base`/`layout.intf`/`layout` 门面，已落地；聚合 `layout` + `layout.grid` + `frame_budget`） | L3 tui | 复用 `bytes.ops` 单源（约束计算不复制）；`inline` Flex/Grid 约束求解；布局无资源悬垂；详 `layout.md` |
 | **基础 Widget** | §1.2 IWidget/Stateful + §1.3 core 8 控件 | `nextpas.core.tui.widget`（`widget.base`/`widget.intf`/`widget` 门面，已落地；`block/paragraph/list/table/tabs/...`） | L3 tui | 零拷贝 `TRect` 视图裁剪；`inline` RenderStateful 分发；接口 refcount 自动释放；详 `widget.md` |
 | **扩展 Widget / App 编排** | §1.3 ext/full 分层 + §4 线程安全 | `nextpas.core.tui.ext`（`ext.base`/`ext.intf`/`ext` 门面，已落地；聚合 `panel/scrollview/modal/dialog/split/select` + `app`/`screen`/`task`） | L3 tui（依赖 `sync` + `thread.pool`） | 复用 `bytes.ops` 单源；`inline` focus/keybind 判定；`TApp.Destroy` + `TTaskManager` 同步收尾不留线程；详 `ext.md` |
-| **终端 / 后端 / 输入** | §1.1 Terminal/runtime truth + §5.1–5.6 DECSET + §4 线程安全 | `nextpas.core.tui.terminal`（`terminal.base`/`terminal.intf`/`terminal` 门面，**已落地**；聚合 `terminal` + `backend.ansi` + `input` + `ansi.parse` + `cap.base`） | L3 tui（`platform.console/signal/time` owner 反哺） | 复用 `bytes.ops` 单源（ANSI 转义 `TByteSpan` 零拷贝 `TerminalAnsiEscSpan` inline）；热点 `inline` capability 协商（`TerminalNeedsMouseTracking`/`GetHasTruecolor`）；`EnterTui`/`LeaveTui` 配对 DECSET 释放 + `DoLeaveTui` 幂等 `heaptrc 0`（主包仅 `T* = tui.terminal.T*` 薄别名转发，无额外分配）；详 `terminal.md` |
-| **画布 / 图像协议** | §1.1 canvas + image_cap + clipboard | `nextpas.core.tui.canvas`（`canvas.base`/`canvas.intf`/`canvas` 门面，**已落地**；聚合 `canvas.raster/view/edit/export/docstore` + `image_cap` + `clipboard`） | L3 tui.experimental（opt-in 波动面） | 零拷贝 `TByteSpan` 像素视图（`RowPtr`/`CellPtr`）；`inline` `CanvasIsEmptyCell`/`CanvasCellSpan` + raster 命中判定；`IAllocator` 下传 buffer 不丢（主包聚合零分配，`heaptrc 0` 由 `test_tui_canvas_*` focused 固化）；详 `canvas.md` + `canvas/README.md` |
+| **终端 / 后端 / 输入** | §1.1 Terminal/runtime truth + §5.1–5.6 DECSET + §4 线程安全 | `nextpas.core.tui.terminal`（`terminal.base`/`terminal.intf`/`terminal` 门面，**已落地**；聚合 `terminal` + `backend.ansi` + `input` + `ansi.parse` + `cap.base`） | L3 tui（`platform.console/signal/time` owner 反哺） | 复用 `bytes.ops` 单源（ANSI 转义 `TByteSpan` 零拷贝 `TerminalAnsiEscSpan` inline）；热点 `inline` capability 协商（`TerminalNeedsMouseTracking`/`GetHasTruecolor`）；`EnterTui`/`LeaveTui` 配对 DECSET 释放 + `DoLeaveTui` 幂等 `heaptrc 0`（**主包不再聚合**，按需 `uses tui.terminal` 子facade，零分配由子家族承载）；详 `terminal.md` |
+| **画布 / 图像协议** | §1.1 canvas + image_cap + clipboard | `nextpas.core.tui.canvas`（`canvas.base`/`canvas.intf`/`canvas` 门面，**已落地**；聚合 `canvas.raster/view/edit/export/docstore` + `image_cap` + `clipboard`） | L3 tui.experimental（opt-in 波动面） | 零拷贝 `TByteSpan` 像素视图（`RowPtr`/`CellPtr`）；`inline` `CanvasIsEmptyCell`/`CanvasCellSpan` + raster 命中判定；`IAllocator` 下传 buffer 不丢（**主包不再聚合**，按需 `uses tui.canvas` 子facade，`heaptrc 0` 由 `test_tui_canvas_*` focused 固化）；详 `canvas.md` + `canvas/README.md` |
 
-*抽取纪律*：1) 行为冻结（focused 双绿 + scorecard SC1–SC30 + heaptrc 0 unfreed）；2) 不复制 `bytes.ops`/`text.width`，复用单源（terminal ANSI 视图 + canvas 像素视图）；3) 公开面保持 `IWidget`/`TTerminal`/`TApp` 稳定；4) 四件套内 `base←intf←impl←门面` 方向（`base←intf←impl←门面`）；5) 跨模块先 `Needs Review`；6) 边界固化：主包聚合仅薄别名 `inline` 转发 + 子家族/主包双路径 `heaptrc 0`（`common.mk HEAPTRC_GATE=1 haltonnotreleased,log`，`focused FOCUS=core/tests/nextpas.core.tui/test_tui_terminal` 与 `test_tui_canvas_*` 独立门禁）。缺能力先反哺 `text.width`/`bytes.ops`/`platform.console`/`sync` 等 owner。
+*抽取纪律*：1) 行为冻结（focused 双绿 + scorecard SC1–SC30 + heaptrc 0 unfreed）；2) 不复制 `bytes.ops`/`text.width`，复用单源（terminal ANSI 视图 + canvas 像素视图）；3) 公开面保持 `IWidget`/`TTerminal`/`TApp` 稳定（`TTerminal`/`TFrame` 归 `tui.terminal` 子家族，主包不再 re-export）；4) 四件套内 `base←intf←impl←门面` 方向（`base←intf←impl←门面`）；5) 跨模块先 `Needs Review`；6) 边界固化：主包仅类型/常量薄别名，零行为转发（60+ inline 已收敛至子facade按需 `uses`）+ 子家族/主包双路径 `heaptrc 0`（`common.mk HEAPTRC_GATE=1 haltonnotreleased,log`，`focused FOCUS=core/tests/nextpas.core.tui/test_tui_terminal` 与 `test_tui_canvas_*` 独立门禁）。缺能力先反哺 `text.width`/`bytes.ops`/`platform.console`/`sync` 等 owner。
 
 ---
 
@@ -294,3 +294,4 @@ end;
 | 2026-08-31 | 1.31 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
 | 2026-09-02 | 1.32 | 拆分优雅度：补 §1.4 六域可抽新模块候选表（buffer/layout/widget/ext/terminal/canvas），四件套 base/intf/门面+L3+bytes.ops单源+inline/零拷贝+资源释放不丢，缺能力先反哺 text.width/bytes.ops/platform/sync，对齐 http 六域抽取表 | Grok |
 | 2026-09-02 | 1.33 | 拆分优雅度兑现：§1.4 六域四件套已兑现 — terminal/canvas 从主包寄居抽为独立子家族（新增 `terminal.base`/`terminal.intf` + `canvas.intf` 四件套补齐，`terminal.md`/`canvas.md` + `buffer.md`/`layout.md`/`widget.md`/`ext.md` 薄域契约落地），`bytes.ops` 单源（`TerminalAnsiEscSpan`/`CanvasCellSpan` 零拷贝 `TByteSpan`）+ 热点 `inline`（`TerminalNeedsMouseTracking`/`CanvasIsEmptyCell`）+ `DoLeaveTui`/`Destroy` 配对释放 `heaptrc 0` 不丢；主文档瘦身为索引-锚点，消双重维护 | Grok |
+| 2026-09-02 | 1.34 | 瘦身优雅度收敛：主包 `nextpas.core.tui` 去 terminal/canvas 聚合（按需 `uses tui.terminal`/`tui.canvas` 子facade），消 60+ inline 薄别名堆砌（行为归子域 `base/color/style/borders/layout/event/terminal.base` inline 零拷贝 via `bytes.ops` 单源），主包仅类型/常量薄别名， heaptrc0 双路径门禁不丢，边界固化不混 ext | Grok |

@@ -80,7 +80,7 @@ var
     AHandler: Pointer; AData: Pointer; ADestroyData: TGDestroyNotify;
     AConnectFlags: guint): gulong; cdecl;
   G_memory_input_stream_new_from_data: function(AData: Pointer;
-    ALen: gssize; ADestroy: TGDestroyNotify): Pointer; cdecl;
+    ALen: gssize; ADestroy: TGDestroyNotify; ADestroyData: Pointer): Pointer; cdecl;
   G_memory_input_stream_new_from_bytes: function(ABytes: Pointer): Pointer; cdecl;
   G_bytes_new_with_free_func: function(AData: Pointer; ASize: NativeUInt;
     ADestroy: TGDestroyNotify; AUserData: Pointer): Pointer; cdecl;
@@ -90,6 +90,8 @@ var
   G_quark_from_static_string: function(AString: PAnsiChar): GQuark; cdecl;
   G_cancellable_new: function: Pointer; cdecl;
   G_cancellable_cancel: procedure(ACancellable: Pointer); cdecl;
+  G_cancellable_reset: procedure(ACancellable: Pointer); cdecl;
+  G_cancellable_is_cancelled: function(ACancellable: Pointer): gboolean; cdecl;
   G_error_new_literal: function(ADomain: GQuark; ACode: Int32;
     AMessage: PAnsiChar): PGError; cdecl;
   G_main_loop_new: function(AContext: Pointer; ARunning: gboolean)

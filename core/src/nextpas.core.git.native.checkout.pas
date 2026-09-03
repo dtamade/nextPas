@@ -29,6 +29,7 @@ function GitCheckoutRef(const AGitDir, AWorkTree, ARefName: string): TGitOid;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
@@ -160,7 +161,7 @@ begin
       BlobData := ARepo.ReadObject(TreeEnts[I].Oid, BlobKind);
       if TreeEnts[I].Mode = CModeSymlink then
       begin
-        Target := GitBytesToString(BlobData);
+        Target := BytesToString(BlobData);
         if FileExists(FilePath) or IsSymlink(FilePath) or DirectoryExists(FilePath) then
           RemoveAll(FilePath);
         Symlink(Target, FilePath);

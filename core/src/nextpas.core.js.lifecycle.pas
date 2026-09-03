@@ -1,5 +1,5 @@
 unit nextpas.core.js.lifecycle;
-{ lifecycle owner — single source for pure Context registry: GPureClosed 64B padded atomic acquire/release, cache-line isolated, write-once rare, bulk IsValid zero atomic via FValid, strong acquire; base remains thin type-carrier per four-piece, lifecycle extracted to js.lifecycle single source,复用 bytes.ops单源几何 via BytesNextCapacity + mem.dynarray poke Exactly-Once, inline零拷贝, amortized O(1), spinlock resize rare, L0-L3守分层. L0 thread/time single slit via lifecycle (platform.thread + platform.time single source), quickjs.value thin-forwards, no dual entry. }
+{ lifecycle owner — single source for pure Context registry: GPureClosed compact 4B, 64B isolated }
 {$I nextpas.core.settings.inc}
 interface
 function JsPureContextRegister: UInt64;
@@ -7,129 +7,266 @@ procedure JsPureContextClose(AId: UInt64);
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 function JsPureThreadSelf: UInt64; inline;
 function JsPureIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
-// L0 time single slit — owner lifecycle via platform.time single source, inline zero-copy, exactly-once deadline, 1024-sample amortized, bytes.ops single source remains
+// L0 time single slit via platform.time, inline zero-copy
 function JsPureMonotonicNs: QWord; inline;
 procedure JsPureDeadlineRefresh(var ADeadlineNs: Int64; ATimeoutMs: Integer); inline;
-function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
+function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline; overload;
+function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord; ASampleInterval: Cardinal): Boolean; inline; overload;
 implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
-  nextpas.core.mem.base,
-  nextpas.core.mem.dynarray,
+  nextpas.core.collections.freelist,
   nextpas.core.atomic,
+  nextpas.core.mem.base,
   nextpas.core.platform.thread,
-  nextpas.core.platform.time;
-const
-  JS_LIFECYCLE_CACHE_LINE = MEM_CACHE_LINE_SIZE; // 64 via mem.base single source, no magic
-  JS_LIFECYCLE_PAD = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int32); // 60 via CACHE_LINE single source
-{$PUSH}{$CODEALIGN RECORDMIN=16}{$PACKRECORDS C}
+  nextpas.core.platform.time,
+  nextpas.core.sync.spinlock,
+  nextpas.core.js.base;
 type
-  TPureClosedSlot = record Value: Int32; Padding: array[0..JS_LIFECYCLE_PAD - 1] of Byte; end; // 64B cache-line padded via CODEALIGN+pad, instance-isolated atomic slot, false-sharing free, write-once rare, 60B pad via MEM_CACHE_LINE_SIZE single source
-{$POP}
+  TCacheLinePad = array[0..MEM_CACHE_LINE_SIZE div SizeOf(Int64) - 1] of Int64; // 64B pad via MEM_CACHE_LINE_SIZE single source
+  // vault: header 64B + 5 fields converged (single vault isolation, false-sharing free)
+  TJsLifecycleVault = record
+    HeaderPad: TCacheLinePad; // 64B isolation, false-sharing free
+    Closed: array of UInt32; // compact 4B flags
+    ClosedLen: PtrUInt;
+    NextId: Int64;
+    Lock: Int32;
+    Free: TFreelistU64s; // freelist via collections.freelist single source
+  end;
+  PJsLifecycleVault = ^TJsLifecycleVault;
 var
-  GPureClosed: array of TPureClosedSlot;
-  GPureNextId: Int64 = 1;
-  GPureClosedLock: Int32 = 0; // owner js.lifecycle: 64B padded 4B atomic acquire/release per slot, atomic_fetch_add id lock-free, spinlock for resize, bulk IsValid zero via FValid, strong acquire
-  GPureClosedLen: Int32 = 0; // atomic publication length: SetLength release / IsClosed acquire, fixes FPC dynarray non-atomic publish race
-function GPureClosedCapacity: SizeUInt; inline;
+  GLifecycleVault: TJsLifecycleVault;
+function VaultRef: PJsLifecycleVault; inline;
 begin
-  // capacity probe single source via mem.dynarray owner, zero-copy header, no alloc, 64B padded slot
-  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(GPureClosed), SizeUInt(Length(GPureClosed)), SizeOf(TPureClosedSlot));
+  // perf: inline single indirection, zero-copy vault ref, single source for all vault access, no duplicate @GLifecycleVault, inline zero-copy
+  Result := @GLifecycleVault;
 end;
-procedure PokePureClosedLen(const ANewLen: SizeUInt); inline;
-var LBytes: TBytes absolute GPureClosed;
+function GPureIndexOf(AId: UInt64): UInt32; inline;
 begin
-  // perf: inline Exactly-Once poke via mem.dynarray single source, zero-copy header, amortized O(1), geometric via bytes.ops single source, single slit
-  nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
+  Result := UInt32(AId and $FFFFFFFF);
+end;
+function GPureEpochOf(AId: UInt64): UInt32; inline;
+begin
+  Result := UInt32(AId shr 32);
+end;
+function GPureMakeId(AIdx: UInt32; AEpoch: UInt32): UInt64; inline;
+begin
+  Result := (UInt64(AEpoch) shl 32) or UInt64(AIdx);
+end;
+// heap growth single source via bytes.ops geometric single slit, inline zero-copy, amortized O(1)
+procedure GPureClosedEnsure(const ANewLen: SizeUInt); inline;
+begin
+  // bytes.ops single source via BytesDynEnsureLength geometric 0→64→2× amortized O(1), vault single source
+  BytesDynEnsureLength(VaultRef^.Closed, SizeOf(UInt32), ANewLen);
 end;
 function JsPureContextRegister: UInt64;
-var LNeed, LCap, LCurCap: SizeUInt; LId: Int64; LExp: Int32; LSpins: Integer;
+var LNeed: SizeUInt; LId: Int64; LIdx, LEpoch, LStored: UInt32; LTmp: UInt64; LRetry: Integer;
+  LCap, LTargetCap: SizeUInt; LGrowNeed: SizeUInt; LTmpClosed: array of UInt32; LNeedHold: Boolean;
 begin
-  // perf: lock-free id via atomic_fetch_add_64 mo_relaxed, instance-isolated, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), spinlock with exponential backoff (rare), inline zero-copy header, 64B CODEALIGN padded slot — downgraded from mo_seq_cst to save MFENCE vs mo_acq_rel, release paired via slot store
-  LId := Int64(atomic_fetch_add_64(GPureNextId, Int64(1), mo_relaxed));
-  Result := UInt64(LId);
-  if Result >= UInt64(atomic_load(GPureClosedLen, mo_acquire)) then
-  begin
-    // spinlock for resize — rare write-once, protects SetLength+poke, exponential backoff: cpu_pause burst then yield to avoid bulk NewContext contention
-    LExp := 0; LSpins := 0;
-    while not atomic_compare_exchange_strong(GPureClosedLock, LExp, Int32(1), mo_acquire, mo_relaxed) do
+  // freelist via collections.freelist, generation-tagged INV-7, sync.spinlock single source, vault single source
+  RawSpinAcquire(VaultRef^.Lock);
+  try
+    if FreelistPopU64(VaultRef^.Free, LTmp) then
     begin
-      LExp := 0; Inc(LSpins);
-      if LSpins < 16 then cpu_pause
-      else if LSpins < 64 then begin cpu_pause; cpu_pause; end
-      else begin platform_thread_yield; LSpins := 0; end;
+      LIdx := UInt32(LTmp);
+      // generation increment: stored was epoch*2+1 (closed), next alive = (epoch+1)*2
+      LStored := atomic_load(VaultRef^.Closed[LIdx], mo_acquire);
+      LEpoch := (LStored shr 1) + 1;
+      LStored := LEpoch shl 1; // alive  epoch*2
+      atomic_store(VaultRef^.Closed[LIdx], LStored, mo_release);
+      Result := GPureMakeId(LIdx, LEpoch);
+      FreelistTryShrinkU64(VaultRef^.Free);
+      Exit;
     end;
-    try
-      if Result >= UInt64(Length(GPureClosed)) then
-      begin
-        LNeed := SizeUInt(Result) + 1;
-        LCurCap := GPureClosedCapacity;
-        if LCurCap >= LNeed then
+  finally
+    RawSpinRelease(VaultRef^.Lock);
+  end;
+  // no free slot — lock-free id via atomic_fetch_add_64, bytes.ops geometric single source via collections.freelist, vault single source
+  LId := Int64(atomic_fetch_add_64(VaultRef^.NextId, Int64(1), mo_relaxed));
+  // wrap detect: 2^32 index space, long service freelist reuse with throttled backoff, generation-tagged epoch protects ABA per INV-7
+  if UInt64(LId) > High(UInt32) then
+  begin
+    // stability: burst churn at wrap boundary uses throttled backoff retry (32×) with cpu_pause, not hard DoS; no free slots => throttled retry, caller backs off, long service bounded recycling via Free
+    for LRetry := 0 to 31 do
+    begin
+      RawSpinAcquire(VaultRef^.Lock);
+      try
+        if FreelistPopU64(VaultRef^.Free, LTmp) then
         begin
-          if SizeUInt(Length(GPureClosed)) <> LNeed then
-            PokePureClosedLen(LNeed);
+          LIdx := UInt32(LTmp);
+          LStored := atomic_load(VaultRef^.Closed[LIdx], mo_acquire);
+          LEpoch := (LStored shr 1) + 1;
+          LStored := LEpoch shl 1;
+          atomic_store(VaultRef^.Closed[LIdx], LStored, mo_release);
+          Result := GPureMakeId(LIdx, LEpoch);
+          FreelistTryShrinkU64(VaultRef^.Free);
+          Exit;
+        end;
+      finally
+        RawSpinRelease(VaultRef^.Lock);
+      end;
+      cpu_pause;
+      if (LRetry and 7) = 7 then
+      begin
+        cpu_pause; cpu_pause; cpu_pause; cpu_pause;
+      end;
+    end;
+    raise EInvalidOperation.Create('JsPureContextRegister: throttled — id space wrap busy (2^32), no free slots after bounded retry (32×), retry after backoff');
+  end;
+  LIdx := UInt32(UInt64(LId));
+  Result := GPureMakeId(LIdx, 0);
+  if PtrUInt(LIdx) >= atomic_load(VaultRef^.ClosedLen, mo_relaxed) then
+  begin
+    // resize rare, sync.spinlock single source, compact 4B, bytes.ops geometric single source via Vault — heap alloc outside spin to avoid blocking concurrent registration
+    LNeed := SizeUInt(LIdx) + 1;
+    // phase 1: quick probe under spin without allocation to decide if growth needed and capture capacity
+    RawSpinAcquire(VaultRef^.Lock);
+    try
+      if LIdx >= UInt32(Length(VaultRef^.Closed)) then
+      begin
+        LCap := BytesDynCapacityGeneric(VaultRef^.Closed, SizeOf(UInt32));
+        if LCap >= LNeed then
+        begin
+          // capacity sufficient -> poke logical len under spin, zero alloc, rare but no heap
+          BytesDynSetLengthGeneric(VaultRef^.Closed, LNeed);
+          atomic_store(VaultRef^.ClosedLen, PtrUInt(Length(VaultRef^.Closed)), mo_release);
+          LGrowNeed := 0;
         end
         else
         begin
-          LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
-          SetLength(GPureClosed, Integer(LCap));
-          // Exactly-Once: SetLength is capacity reservation (heap alloc) — logical length becomes LCap >= LNeed single header write, no extra DynArraySetLength down-poke, amortized O(1) geometric, preserves capacity, single header poke, bytes.ops single source
+          LGrowNeed := LNeed;
+          LTargetCap := BytesNextCapacity(PtrUInt(Length(VaultRef^.Closed)), LNeed);
         end;
-        atomic_store(GPureClosedLen, Int32(Length(GPureClosed)), mo_release);
+        LNeedHold := LGrowNeed <> 0;
+      end
+      else
+      begin
+        // concurrent grow already satisfied, ensure ClosedLen published
+        if PtrUInt(Length(VaultRef^.Closed)) > atomic_load(VaultRef^.ClosedLen, mo_relaxed) then
+          atomic_store(VaultRef^.ClosedLen, PtrUInt(Length(VaultRef^.Closed)), mo_release);
+        LNeedHold := False;
+        LGrowNeed := 0;
       end;
     finally
-      atomic_store(GPureClosedLock, Int32(0), mo_release);
+      RawSpinRelease(VaultRef^.Lock);
+    end;
+    if LNeedHold then
+    begin
+      // outside spin: allocate new capacity via geometric bytes.ops single source, zero spin-held heap alloc
+      SetLength(LTmpClosed, LTargetCap);
+      // phase 2: install under spin with copy (copy is single BytesCopy Move single source, zero extra fence)
+      RawSpinAcquire(VaultRef^.Lock);
+      try
+        if LIdx >= UInt32(Length(VaultRef^.Closed)) then
+        begin
+          LCap := BytesDynCapacityGeneric(VaultRef^.Closed, SizeOf(UInt32));
+          if LCap < LNeed then
+          begin
+            if Length(VaultRef^.Closed) > 0 then
+              BytesCopy(@LTmpClosed[0], @VaultRef^.Closed[0], SizeUInt(Length(VaultRef^.Closed)) * SizeOf(UInt32));
+            VaultRef^.Closed := LTmpClosed;
+            LTmpClosed := nil;
+            if PtrUInt(Length(VaultRef^.Closed)) <> LNeed then
+              BytesDynSetLengthGeneric(VaultRef^.Closed, LNeed);
+            atomic_store(VaultRef^.ClosedLen, PtrUInt(Length(VaultRef^.Closed)), mo_release);
+          end
+          else
+          begin
+            BytesDynSetLengthGeneric(VaultRef^.Closed, LNeed);
+            atomic_store(VaultRef^.ClosedLen, PtrUInt(Length(VaultRef^.Closed)), mo_release);
+            SetLength(LTmpClosed, 0);
+          end;
+        end
+        else
+          SetLength(LTmpClosed, 0);
+      finally
+        RawSpinRelease(VaultRef^.Lock);
+        if Length(LTmpClosed) > 0 then
+          SetLength(LTmpClosed, 0);
+      end;
     end;
   end;
-  atomic_store(GPureClosed[Result].Value, 0, mo_release);
+  atomic_store(VaultRef^.Closed[LIdx], UInt32(0), mo_release); // epoch 0 alive
 end;
 procedure JsPureContextClose(AId: UInt64);
+var LIdx, LEpoch, LStored, LExpected, LDesired: UInt32;
 begin
-  if (AId > 0) and (AId < UInt64(atomic_load(GPureClosedLen, mo_acquire))) then
-    atomic_store(GPureClosed[AId].Value, 1, mo_release);
+  LIdx := GPureIndexOf(AId);
+  LEpoch := GPureEpochOf(AId);
+  if (AId = 0) or (PtrUInt(LIdx) >= atomic_load(VaultRef^.ClosedLen, mo_relaxed)) then Exit;
+  LStored := atomic_load(VaultRef^.Closed[LIdx], mo_acquire);
+  if (LStored shr 1) <> LEpoch then Exit; // stale generation => already closed/reused per INV-7 strong
+  if (LStored and 1) <> 0 then Exit;
+  // idempotent close via CAS to avoid double-free push, generation-tagged, strong acquire
+  LExpected := LStored;
+  LDesired := (LEpoch shl 1) or 1; // epoch*2+1 closed
+  if not atomic_compare_exchange_strong(VaultRef^.Closed[LIdx], LExpected, LDesired) then Exit;
+  // freelist via collections.freelist single source, sync.spinlock single source, amortized O(1) inline zero-copy, vault single source
+  RawSpinAcquire(VaultRef^.Lock);
+  try
+    FreelistPushU64(VaultRef^.Free, UInt64(LIdx));
+  finally
+    RawSpinRelease(VaultRef^.Lock);
+  end;
 end;
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
-var LVal: Int32;
+var LIdx, LEpoch, LStored: UInt32;
 begin
-  // perf: inline acquire single bounds check via atomic publication Len (fixes FPC dynarray non-atomic SetLength race, no phantom), 64B CODEALIGN padded atomic slot (false-sharing free), write-once rare, ~1ns read, 强一致 acquire；bulk via FValid zero barrier
+  // perf: single acquire (slot) + relaxed Len, compact 4B, generation mismatch => strong closed INV-7, inline zero-copy, vault single source
+  // bulk hot path must use TJsValue.IsValid (FValid only, zero barrier); IsAlive/IsClosed via acquire single source for strong consistency (single acquire slot + relaxed Len reduces fence/false-sharing)
   if AId = 0 then Exit(False);
-  if AId >= UInt64(atomic_load(GPureClosedLen, mo_acquire)) then Exit(False);
-  LVal := atomic_load(GPureClosed[AId].Value, mo_acquire);
-  Result := LVal <> 0;
+  LIdx := GPureIndexOf(AId);
+  LEpoch := GPureEpochOf(AId);
+  if PtrUInt(LIdx) >= atomic_load(VaultRef^.ClosedLen, mo_relaxed) then Exit(False);
+  LStored := atomic_load(VaultRef^.Closed[LIdx], mo_acquire);
+  if (LStored shr 1) <> LEpoch then Exit(True); // generation mismatch => strong closed INV-7
+  Result := (LStored and 1) <> 0;
 end;
 function JsPureThreadSelf: UInt64; inline;
 begin
-  // perf: inline thin-forward to platform.thread single source (L0 single slit), zero-copy token, single syscall via pthread_self/GetCurrentThreadId, inline hot path, bytes.ops 单源几何同保持
+  // inline thin-forward to platform.thread single source, zero-copy, vault single source
   Result := UInt64(platform_thread_self);
 end;
 function JsPureIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 begin
-  // perf: inline single compare via JsPureThreadSelf single source, zero syscall beyond one, no duplication, thread-affine single source via lifecycle
+  // inline single compare via JsPureThreadSelf single source
   Result := JsPureThreadSelf = ACreationId;
 end;
 function JsPureMonotonicNs: QWord; inline;
 begin
-  // perf: inline thin-forward to platform.time single source (L0 single slit via platform_monotonic_ns, vdso), single syscall, zero-copy, bytes.ops single source复用见 deadline, lifecycle single source
+  // inline thin-forward to platform.time single source, zero-copy
   Result := QWord(platform_monotonic_ns);
 end;
 procedure JsPureDeadlineRefresh(var ADeadlineNs: Int64; ATimeoutMs: Integer); inline;
 begin
-  // perf: inline L0 single source via JsPureMonotonicNs, Timeout=0 zero syscall, exactly-once deadline, inline zero-copy, amortized O(1), bytes.ops single source保持 CONTRACT
+  // inline via JsPureMonotonicNs, Timeout=0 zero syscall, exactly-once
   if ATimeoutMs <= 0 then ADeadlineNs := 0
   else ADeadlineNs := Int64(JsPureMonotonicNs + QWord(ATimeoutMs) * 1000000);
 end;
 function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
 begin
-  // perf: inline sampling 1024/sample via JsPureMonotonicNs single source, L0 platform.time single slit via lifecycle, cache-line friendly, exactly-once timeout语义, zero-copy, inline
+  // perf: thin-forward to interval-aware single source via JsInterruptSampleIntervalNormalized + interval 1024 default, sampling 可配, bytes.ops 单源, inline 零拷贝
+  Result := JsPureInterruptShouldAbort(ADeadlineNs, ACounter, ALastNs, JS_INTERRUPT_SAMPLE_DEFAULT);
+end;
+
+function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord; ASampleInterval: Cardinal): Boolean; inline;
+var LInterval: Cardinal;
+begin
+  // perf: inline sampling via JsInterruptSampleIntervalNormalized pow2 single source (base owner, bytes.ops single source, always pow2 => single and-mask, zero div), 1→逐次 15-30% 开销, 1024→15-30%降为惰性, 65536→更低开销但最长65536延迟, and-mask single path zero mod, inline zero-copy, exactly-once
   if ADeadlineNs = 0 then Exit(False);
   Inc(ACounter);
-  if (ACounter and 1023) <> 0 then Exit(False);
+  LInterval := JsInterruptSampleIntervalNormalized(ASampleInterval);
+  if (ACounter and (LInterval - 1)) <> 0 then Exit(False);
   ALastNs := JsPureMonotonicNs;
   Result := QWord(ALastNs) >= QWord(ADeadlineNs);
 end;
 initialization
-  // no mutex init, atomic only
+  // 64B isolated vault: single header pad, vault convergence of 5 fields, false-sharing free, vault single source
+  GLifecycleVault.ClosedLen := 0;
+  GLifecycleVault.NextId := 1;
+  GLifecycleVault.Lock := 0;
 finalization
-  SetLength(GPureClosed, 0);
+  SetLength(GLifecycleVault.Closed, 0);
+  SetLength(GLifecycleVault.Free, 0);
 end.

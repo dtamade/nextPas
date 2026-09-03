@@ -11,7 +11,8 @@ uses
   nextpas.core.bytes.pathvalid,
   nextpas.core.bytes.ops,
   nextpas.core.base.utils,
-  nextpas.core.compress.base;
+  nextpas.core.compress.base,
+  nextpas.core.text.view;
 
 type
   TEntryInfo = record
@@ -39,6 +40,7 @@ const
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 
 function VfsIsRoot(const APath: string): Boolean; inline;
+function VfsIsRootView(const AView: TStringView): Boolean; inline;
 
 function VfsSpanFromString(const S: string): TByteSpan; inline;
 
@@ -50,6 +52,11 @@ function VfsIsParentPath(const AParent, AChild: string): Boolean; inline;
 
 { 路径字节序比较：三后端共用同一序定义（bytes.ops 单源，见上）。 }
 function VfsNameCompare(const AA, AB: string): Integer; inline;
+{ 零拷贝视图比较：单源 bytes.ops CompareBytesOrdered，inline 零额外调用，TStringView 零堆分配 }
+function VfsNameCompareView(const AView: TStringView; const AB: string): Integer; inline;
+function VfsNameCompareViews(const AA, AB: TStringView): Integer; inline;
+function VfsValidPathView(const AView: TStringView; const AAllowRoot: Boolean): Boolean; inline;
+function VfsPathHasPrefixView(const AView: TStringView; const APrefix: string): Boolean; inline;
 
 { ETag 单源：strong "hexSize-hexModTime" 与 fnv "fnv-hex8"，供 embedded/http 共用
   避免两处字面量漂移；bytes.ops BytesHexUInt64 单源 inline 零拷贝 HEX_UPPER 保证大小写/位宽一致，base 保持 L0 纯度。
@@ -91,9 +98,19 @@ begin
   Result := BytesValidPath(APath, AAllowRoot);
 end;
 
+function VfsValidPathView(const AView: TStringView; const AAllowRoot: Boolean): Boolean; inline;
+begin
+  Result := BytesValidPathView(AView, AAllowRoot);
+end;
+
 function VfsIsRoot(const APath: string): Boolean;
 begin
   Result := APath = '.';
+end;
+
+function VfsIsRootView(const AView: TStringView): Boolean; inline;
+begin
+  Result := (AView.Len = 1) and (AView.Data[0] = '.');
 end;
 
 { 单源 FromString 助手：收口三处手写空串判空+TByteSpan.Create，inline 零拷贝 via TByteSpan.FromStr。 }
@@ -134,7 +151,30 @@ begin
   Result := SpanCompare(SA, SB);
 end;
 
-function VfsHex(const AValue: UInt64; const ADigits: Integer): string;
+function VfsNameCompareView(const AView: TStringView; const AB: string): Integer; inline;
+var
+  PB: Pointer;
+begin
+  if Length(AB) = 0 then PB := nil else PB := @AB[1];
+  Result := CompareBytesOrdered(Pointer(AView.Data), PB, AView.Len, SizeUInt(Length(AB)));
+end;
+
+function VfsNameCompareViews(const AA, AB: TStringView): Integer; inline;
+begin
+  Result := CompareBytesOrdered(Pointer(AA.Data), Pointer(AB.Data), AA.Len, AB.Len);
+end;
+
+function VfsPathHasPrefixView(const AView: TStringView; const APrefix: string): Boolean; inline;
+begin
+  if Length(APrefix) = 0 then Exit(True);
+  if AView.Len < SizeUInt(Length(APrefix)) then Exit(False);
+  Result := CompareMem(AView.Data, @APrefix[1], SizeUInt(Length(APrefix)));
+end;
+
+const
+  HEX_DIGITS: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
+
+function VfsHex(const AValue: UInt64; const ADigits: Integer): string; inline;
 var
   I: Integer;
   V: UInt64;

@@ -16,6 +16,7 @@ uses
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
   nextpas.core.webview.factory,
+  nextpas.core.webview.builder,
   nextpas.core.window.intf;
 
 type

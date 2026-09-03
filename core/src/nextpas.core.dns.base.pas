@@ -71,6 +71,7 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder,
   nextpas.core.mem.dynarray;
 
 { ── 字节序助手 ──────────────────────────────────────────────────── }
@@ -140,13 +141,16 @@ function DecodeNameAt(const AData: TBytes; const ALength: Integer;
 const
   MAX_LABEL = 63;
 var
-  LDepth, LPos, LJump, LLabelLen, LI: Integer;
+  LDepth, LPos, LJump, LLabelLen: Integer;
+  LBuilder: IBytesBuilder;
 begin
   Result := False;
   LDepth := 0;
   LPos := APos;
   LJump := -1;
   AName := '';
+  // perf: IBytesBuilder geometric growth single source via bytes.ops.BytesGrowCapacity (BYTES_BUILDER_MIN_GROW 0→64→2×, amortized O(1)) replaces O(n²) AName+Chr reallocation; zero-copy single BytesCopy per label (inline single Move via bytes.ops), not inline per red-line 1/2 (Grow loop I-Cache); stability: interface refcount auto-free on early Exit/exception, no leak; single SpanToString ownership copy at success path
+  LBuilder := nextpas.core.bytes.builder.CreateBytesBuilder(DNS_MAX_NAME_BYTES);
   while True do
   begin
     if (LPos < 0) or (LPos >= ALength) then
@@ -157,6 +161,7 @@ begin
       Inc(LPos);
       if LJump < 0 then
         APos := LPos;
+      AName := nextpas.core.bytes.ops.SpanToString(LBuilder.WrittenSpan);
       Result := True;
       Exit;
     end;
@@ -180,10 +185,9 @@ begin
     end;
     if (LLabelLen > MAX_LABEL) or (LPos + 1 + LLabelLen > ALength) then
       Exit;
-    if Length(AName) > 0 then
-      AName := AName + '.';
-    for LI := 0 to LLabelLen - 1 do
-      AName := AName + Chr(AData[LPos + 1 + LI]);
+    if LBuilder.Length > 0 then
+      LBuilder.AppendByte(Byte('.'));
+    LBuilder.AppendBytes(@AData[LPos + 1], SizeUInt(LLabelLen));
     Inc(LPos, 1 + LLabelLen);
   end;
 end;
@@ -318,12 +322,13 @@ end;
 
 function DnsParseResponse(const AData: TBytes; out AResp: TDnsResponse): Boolean;
 var
-  LLength, LPos, LQDCount, LANCount, LI, LTI, LRRStart, LRDLength, LRType,
+  LLength, LPos, LQDCount, LANCount, LI, LRRStart, LRDLength, LRType,
   LPtr: Integer;
   LName: string;
   LRec: TDnsRecord;
   LSkip: Boolean;
   LCNAMECount, LCNAMECap, LAnsCount, LAnsCap, LCap: Integer;
+  LTxtBuilder: IBytesBuilder;
 begin
   Result := False;
   LLength := Length(AData);
@@ -404,14 +409,17 @@ begin
         begin
           LRec.RType := drtTXT;
           LPtr := LRRStart;
+          // perf: IBytesBuilder single source via bytes.ops.BytesGrowCapacity (BYTES_BUILDER_MIN_GROW 0→64→2×, amortized O(1)) replaces O(n²) LRec.TXT+Chr per char; zero-copy single BytesCopy per TXT chunk (inline Move via bytes.ops), not inline per red-line 1/2 (Grow loop I-Cache); single SpanToString ownership copy at end, interface refcount auto-free on Exit/no leak
+          LTxtBuilder := nextpas.core.bytes.builder.CreateBytesBuilder(SizeUInt(LRDLength));
           while LPtr < LRRStart + LRDLength do
           begin
             if LPtr + 1 + AData[LPtr] > LRRStart + LRDLength then
               Exit;
-            for LTI := 0 to AData[LPtr] - 1 do
-              LRec.TXT := LRec.TXT + Chr(AData[LPtr + 1 + LTI]);
+            if AData[LPtr] > 0 then
+              LTxtBuilder.AppendBytes(@AData[LPtr + 1], SizeUInt(AData[LPtr]));
             Inc(LPtr, 1 + AData[LPtr]);
           end;
+          LRec.TXT := nextpas.core.bytes.ops.SpanToString(LTxtBuilder.WrittenSpan);
         end;
       DNS_WIRE_T_NS:
         begin

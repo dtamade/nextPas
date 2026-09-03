@@ -8,6 +8,7 @@
 unit nextpas.core.agent.session;
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers}
 
 interface
 

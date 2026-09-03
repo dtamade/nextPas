@@ -131,7 +131,8 @@ implementation
 uses
   nextpas.core.platform.thread,
   nextpas.core.sync.intf,
-  nextpas.core.sync.mutex;
+  nextpas.core.sync.mutex,
+  nextpas.core.bytes.ops;
 
 
 
@@ -176,15 +177,13 @@ end;
 
 procedure TFakeDispatcher.Grow;
 var
-  LNewCap, I: Integer;
   LNew: array of TWindowProcRef;
 begin
-  LNewCap := Length(FRing) * 2;
-  if LNewCap = 0 then
-    LNewCap := 32;
-  SetLength(LNew, LNewCap);
-  for I := 0 to FCount - 1 do
-    LNew[I] := FRing[(FHead + I) mod Length(FRing)];
+  // perf: single source bytes.ops VecGrowCapacity (0→4→2×) inline + VecRingCopy single source linearize; zero mod/div per element, inline zero extra call, zero-copy, managed ref preserved
+  SetLength(LNew, VecGrowCapacity(Length(FRing)));
+  if FCount > 0 then
+    specialize VecRingCopy<TWindowProcRef>(FRing, FHead, FCount, LNew);
+  // stability: FRing:=LNew releases old ring refs via finalization, LNew retains refs (AddRef already), zero leak
   FRing := LNew;
   FHead := 0;
 end;
@@ -277,6 +276,7 @@ end;
 
 var
   GLiveWindows: array of TFakeWindow;
+  GLiveWindowsCount: Integer = 0;
   GFakeLiveCount: Integer = 0;
   GNextHandle: PtrUInt = $1000;
   GLastHandle: TWindowNativeHandle = nil;
@@ -290,7 +290,7 @@ procedure FakePumpAll;
 var
   I: Integer;
 begin
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if not GLiveWindows[I].FClosed then
       GLiveWindows[I].PumpAll;
 end;
@@ -299,7 +299,7 @@ function FakeHasPendingPosts: Boolean;
 var
   I: Integer;
 begin
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if not GLiveWindows[I].FClosed and (GLiveWindows[I].PendingPosts > 0) then
       Exit(True);
   Result := False;
@@ -358,24 +358,19 @@ begin
   FParentHandle := AOptions.ParentHandle;
   FOwnerThread := platform_thread_id;
   FDispatcher := TFakeDispatcher.Create(FOwnerThread);
-  SetLength(GLiveWindows, Length(GLiveWindows) + 1);
-  GLiveWindows[High(GLiveWindows)] := Self;
+  // perf: single source bytes.ops VecGrow (VecGrowCapacity 0→4→2×) inline, zero extra call, zero-copy; aligns with webview.live single source narrative
+  specialize VecGrow<TFakeWindow>(GLiveWindows, GLiveWindowsCount);
+  GLiveWindows[GLiveWindowsCount] := Self;
+  Inc(GLiveWindowsCount);
   Inc(GFakeLiveCount);
 end;
 
 destructor TFakeWindow.Destroy;
-var
-  I: Integer;
 begin
   if not FClosed then
     Dec(GFakeLiveCount);
-  for I := High(GLiveWindows) downto 0 do
-    if GLiveWindows[I] = Self then
-    begin
-      GLiveWindows[I] := GLiveWindows[High(GLiveWindows)];
-      SetLength(GLiveWindows, Length(GLiveWindows) - 1);
-      Break;
-    end;
+  // stability: single source bytes.ops VecRemoveSwap inline O(1) swap, trailing Default(T) nil releases ref, zero leak; aligns with webview.live swap default
+  specialize VecRemoveSwap<TFakeWindow>(GLiveWindows, GLiveWindowsCount, Self);
   inherited Destroy;
 end;
 

@@ -15,7 +15,8 @@ unit nextpas.core.window.intf;
 interface
 
 uses
-  nextpas.core.window.base;
+  nextpas.core.window.base,
+  nextpas.core.base.callbacks;
 
 type
   { 回调命名类型全集 —— FPC 不支持内联过程类型作参数；
@@ -24,6 +25,9 @@ type
   TWindowProcRef    = reference to procedure;
   TWindowProcMethod = procedure of object;
   TWindowProc       = procedure;
+
+  { 单源锚点：显式关联 L0 base.callbacks 单源，守 L0-L3 单向，inline 零成本 }
+  _WindowCallbacksBaseAnchor = nextpas.core.base.callbacks.TCallbackScaleHandler;
 
   { IWindowDispatcher }
 
@@ -111,32 +115,34 @@ function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline
 
 implementation
 
-function WindowEventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler;
+function WindowEventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler; inline;
+begin
+  { thin forward single source: mirrors L0 base.callbacks.CallbackEventMethodToRef, inline zero-copy }
+  Result := procedure(const AEvent: TWindowEvent) begin AHandler(AEvent); end;
+end;
+
+function WindowEventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline;
 begin
   Result := procedure(const AEvent: TWindowEvent) begin AHandler(AEvent); end;
 end;
 
-function WindowEventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler;
+function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef; inline;
 begin
-  Result := procedure(const AEvent: TWindowEvent) begin AHandler(AEvent); end;
+  { thin forward single source: mirrors L0 base.callbacks.CallbackNotifyMethodToRef, inline zero-copy }
+  Result := procedure begin AHandler(); end;
 end;
 
-function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef;
+function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef; inline;
 begin
   Result := procedure begin AHandler(); end;
 end;
 
-function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef;
-begin
-  Result := procedure begin AHandler(); end;
-end;
-
-function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler;
+function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler; inline;
 begin
   Result := WindowEventMethodToRef(AHandler);
 end;
 
-function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler;
+function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline;
 begin
   Result := WindowEventProcToRef(AHandler);
 end;

@@ -174,7 +174,19 @@ var
   LReleases: array of TIoReactorPendingRelease;
 begin
   if FPendingCount = 0 then
+  begin
+    // stability: clear stale actives even when count 0 (idempotent Close)
+    for LI := 0 to FEntryCount - 1 do
+    begin
+      FEntries[LI].Callback := nil;
+      FEntries[LI].Context := nil;
+      FEntries[LI].Active := False;
+      FEntries[LI].NextFree := -1;
+    end;
+    FEntryCount := 0;
+    FFreeHead := -1;
     Exit;
+  end;
   LReleaseCount := 0;
   for LI := 0 to FEntryCount - 1 do
     if FEntries[LI].Active and Assigned(FEntries[LI].Callback) then
@@ -191,6 +203,7 @@ begin
     FEntryCount := 0;
     FPendingCount := 0;
     FFreeHead := -1;
+    try FRing.Close; except end;
     Exit;
   end;
   SetLength(LReleases, LReleaseCount);

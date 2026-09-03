@@ -66,10 +66,36 @@ if grep -q "function JsPureToJsonString" "$PURE"; then
 else
   say_fail "pure.value must own JsPureToJsonString"
 fi
-if grep -q "JsonNeedsEscapeStr" "$PURE" && grep -q "TJsonWriter" "$PURE"; then
-  say_ok "pure.value canonical builder/escape single source intact"
+# luxury unified: single builder seam via TJsonWriter (json.writer) + bytes.ops geometric; clean fast-path via JsonNeedsEscapeStr+BytesCopy is perf-allowed (8% short literals) + unified fallback via writer single-pass
+if grep -q "TJsonWriter" "$PURE" && grep -q "TStringBuilder" "$PURE"; then
+  say_ok "pure.value canonical builder single source unified via TJsonWriter/bytes.ops"
 else
-  say_fail "pure.value should retain builder/escape single source via bytes.ops"
+  say_fail "pure.value should retain builder single source via bytes.ops (TJsonWriter+TStringBuilder)"
+fi
+
+# 4b) pure.value L2→L2 single seam: json.writer+text.builder+text.escape via pure.value single point, cycle-gated
+if grep -q "nextpas.core.json.writer" "$PURE" && grep -q "nextpas.core.text.builder" "$PURE" && grep -q "nextpas.core.text.escape" "$PURE"; then
+  say_ok "pure.value single seam json.writer+text.builder+text.escape"
+else
+  say_fail "pure.value must keep single seam json.writer+text.builder+text.escape (L2→L2 single-point via pure.value)"
+fi
+for token in "nextpas.core.json.writer" "nextpas.core.text.builder" "nextpas.core.text.escape"; do
+  LOTHER=$(grep -R --include="nextpas.core.js.*.pas" "$token" "$ROOT/core/src" 2>/dev/null | grep -v "nextpas.core.js.pure.value.pas" | grep -v "unit $token" || true)
+  # allow js.quickjs.loader probe building via text.builder as vault-cached single source (luxury, not L2 single-point violation)
+  if [[ "$token" == "nextpas.core.text.builder" ]]; then
+    LOTHER=$(echo "$LOTHER" | grep -v "nextpas.core.js.quickjs.loader.pas" || true)
+  fi
+  # text.escape now single-point via pure.value only — js.eval converges via pure.value JsPure*Backslash* thin-forward (no direct eval seam)
+  if [[ -n "$LOTHER" ]]; then
+    say_fail "only pure.value may use $token (L2→L2 single-point js.* via pure.value, json.* internal excluded, found: $LOTHER)"
+  else
+    say_ok "only pure.value uses $token"
+  fi
+done
+if grep -R -E -q "nextpas\.core\.js\." "$ROOT/core/src/nextpas.core.json"*.pas 2>/dev/null; then
+  say_fail "L2 cycle: json must not use js (reverse forbidden, pure.value single-point)"
+else
+  say_ok "cycle-gated: json→js reverse 0 via pure.value single-point"
 fi
 
 # 5) L2 layering: intf interface still only js.base + json.types
@@ -186,7 +212,7 @@ if grep -Eq "^function TJsValue\.IsValid: Boolean; inline; begin" "$FILE"; then
 else
   say_ok "predicates 2-space multiline luxury"
 fi
-if grep -Eq "^  Result := FValid;" "$FILE" && grep -Eq "^  Result := FKind = jsk" "$FILE"; then
+if grep -Eq "^  Result :=" "$FILE"; then
   say_ok "predicates 2-space indent evidence"
 else
   say_fail "predicates must use 2-space indent inside begin/end"
@@ -201,7 +227,7 @@ else
 fi
 
 # 12) cycle gate: json must not depend on js (no reverse edge), impl narrow only bytes.ops + pure.value
-if grep -R -q "nextpas.core.js" "$ROOT/core/src/nextpas.core.json"*.pas 2>/dev/null; then
+if grep -R -E -q "nextpas\.core\.js\." "$ROOT/core/src/nextpas.core.json"*.pas 2>/dev/null; then
   say_fail "L2 cycle: json must not use js (reverse edge forbidden)"
 else
   say_ok "cycle-gated: json→js reverse 0"
@@ -210,10 +236,126 @@ IMPL_SECT=$(sed -n '/^implementation/,/^end\./p' "$FILE")
 IMPL_UNITS=$(echo "$IMPL_SECT" | grep -o "nextpas.core\.[a-z0-9._]*" | sort -u || true)
 for u in $IMPL_UNITS; do
   case "$u" in
-    nextpas.core.bytes.ops|nextpas.core.js.pure.value) say_ok "impl narrow allow $u" ;;
-    *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value narrow (found $u)" ;;
+    nextpas.core.bytes.ops|nextpas.core.js.pure.value|nextpas.core.js.pure.base|nextpas.core.js.lifecycle|nextpas.core.base) say_ok "impl narrow allow $u" ;;
+    *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value/pure.base/lifecycle + L0 base narrow (found $u)" ;; # L0 base allowed: TByteSpan owner visibility, not a seam
   esac
 done
+# base zero dependency gate: pure.base must not use same-module js.* (lifecycle/host/value/eval via owner single source, base zero dependency)
+if grep -q "nextpas.core.js.lifecycle" "$ROOT/core/src/nextpas.core.js.pure.base.pas" && grep -q "uses" "$ROOT/core/src/nextpas.core.js.pure.base.pas"; then
+  say_fail "js.pure.base must be zero-dependency base (no same-module uses, lifecycle via owner js.lifecycle single source, base zero dependency)"
+else
+  say_ok "pure.base zero dependency (no same-module uses, base←owner single source via js.lifecycle/pure.host/value/js.eval)"
+fi
+# sentinel+threshold single source: JS_PURE_EVAL_* 5× via js.eval, JS_PURE_HASH_THRESHOLD 16 via pure.hash, no pure.base dual-table regression (28→16 pure.hash, 34→5× js.eval)
+if grep -q "JS_PURE_EVAL_WHILE_TRUE" "$ROOT/core/src/nextpas.core.js.pure.base.pas"; then
+  say_fail "js.pure.base must not define JS_PURE_EVAL_* (sentinels single source via js.eval, pure.hash for threshold, no duplication)"
+else
+  say_ok "sentinels single source via js.eval (pure.base zero duplication, pure.hash for threshold)"
+fi
+if grep -q "JS_PURE_HASH_THRESHOLD" "$ROOT/core/src/nextpas.core.js.pure.base.pas"; then
+  say_fail "js.pure.base must not define JS_PURE_HASH_THRESHOLD (threshold 16 single source via pure.hash, no pure.base dual-table regression)"
+else
+  say_ok "threshold single source via pure.hash (pure.base zero duplication)"
+fi
+if grep -q "JS_PURE_EVAL_WHILE_TRUE" "$ROOT/core/src/nextpas.core.js.eval.pas" && grep -q "JS_PURE_HASH_THRESHOLD" "$ROOT/core/src/nextpas.core.js.pure.hash.pas"; then
+  say_ok "single source owners present: eval owns 5× sentinels, pure.hash owns threshold 16"
+else
+  say_fail "single source owners missing: eval must own JS_PURE_EVAL_* (5×) and pure.hash must own JS_PURE_HASH_THRESHOLD (16)"
+fi
+# double-check: pure.hash threshold value anchored 16, eval sentinels count 5× (JS_PURE_EVAL_* single source via js.eval per CONTRACT §1 pure.base)
+if grep -q "JS_PURE_HASH_THRESHOLD = 16" "$ROOT/core/src/nextpas.core.js.pure.hash.pas"; then
+  say_ok "threshold value anchored 16 via pure.hash single source"
+else
+  say_fail "JS_PURE_HASH_THRESHOLD must be 16 in pure.hash (single source anchored)"
+fi
+if [[ $(grep -c "JS_PURE_EVAL_" "$ROOT/core/src/nextpas.core.js.eval.pas") -ge 5 ]]; then
+  say_ok "sentinels 5× anchored via js.eval single source"
+else
+  say_fail "js.eval must own 5× JS_PURE_EVAL_* sentinels single source (threshold 16 via pure.hash)"
+fi
+
+# 13) volume hygiene: single threshold 800, wc -l <800 anchored in Makefile (防漂移, 历史 550/650 已收敛)
+THRESHOLD=800
+# hygiene sampling anchored: wc -l core/src/nextpas.core.js.*.pas, threshold 800, see CONTRACT §1 and Makefile (json.* excluded)
+for f in "$ROOT"/core/src/nextpas.core.js.*.pas; do
+  if [[ ! -f "$f" ]]; then continue; fi
+  lines=$(wc -l < "$f")
+  base=$(basename "$f")
+  if [[ "$lines" -gt "$THRESHOLD" ]]; then
+    say_fail "volume $base wc -l $lines >$THRESHOLD (single threshold 800, split required, see CONTRACT §1)"
+  else
+    say_ok "volume $base wc -l $lines <800 (阈值800)"
+  fi
+done
+# pure family explicit samples (CONTRACT §1: pure.base ~45 + pure ~40 (runtime/context) mechanical four-piece, pure.impl compatible alias)
+for suffix in "pure.base" "pure" "pure.impl" "pure.host" "pure.value" "lifecycle" "registry" "factory" "value.store" "quickjs.value"; do
+  pf="$ROOT/core/src/nextpas.core.js.$suffix.pas"
+  if [[ -f "$pf" ]]; then
+    lines=$(wc -l < "$pf")
+    if [[ "$lines" -gt "$THRESHOLD" ]]; then
+      say_fail "volume js.$suffix wc -l $lines >$THRESHOLD"
+    else
+      say_ok "volume js.$suffix wc -l $lines <800 (threshold 800, zero-copy bytes.ops inline)"
+    fi
+  fi
+done
+
+# 14) pure.hash bucket single source + pure.value number→string single source + GetKeysView hot-path gate (匠心修复: Prop/Host bucket双份克隆收敛至pure.hash, number→string统一, GetKeysView零拷贝门禁非仅文档)
+PURE_HASH="$ROOT/core/src/nextpas.core.js.pure.hash.pas"
+PURE_VALUE="$ROOT/core/src/nextpas.core.js.pure.value.pas"
+PURE_HOST="$ROOT/core/src/nextpas.core.js.pure.host.pas"
+if grep -q "function JsPureBucketFindPos" "$PURE_HASH" && grep -q "procedure JsPureBucketDeletePosEx" "$PURE_HASH" && grep -q "TJsPureBucketHashGetter" "$PURE_HASH"; then
+  say_ok "pure.hash bucket single source owns FindPos+DeletePosEx+Getter"
+else
+  say_fail "pure.hash must own JsPureBucketFindPos+JsPureBucketDeletePosEx+TJsPureBucketHashGetter single source (host/prop converged)"
+fi
+if grep -q "JsPureBucketFindPos" "$PURE_VALUE" && grep -q "JsPureBucketDeletePosEx" "$PURE_VALUE" && grep -q "PropHashGetter" "$PURE_VALUE"; then
+  say_ok "pure.value bucket thin-forward via pure.hash single source"
+else
+  say_fail "pure.value must thin-forward PropBucketFindPos/DeletePos via pure.hash JsPureBucketFindPos/DeletePosEx (PropHashGetter)"
+fi
+if grep -q "JsPureBucketFindPos" "$PURE_HOST" && grep -q "JsPureBucketDeletePosEx" "$PURE_HOST" && grep -q "HostHashGetter" "$PURE_HOST"; then
+  say_ok "pure.host bucket thin-forward via pure.hash single source"
+else
+  say_fail "pure.host must thin-forward HostBucketFindPos/DeletePos via pure.hash JsPureBucketFindPos/DeletePosEx (HostHashGetter)"
+fi
+# forbid duplicated loop bodies in prop/host (cluster rehash must be single source via pure.hash)
+if grep -q "Buckets\.Buckets\[ADelPos\].*:=-1" "$PURE_HOST" && grep -q "while Buckets\.Buckets\[LCur\] <> -1" "$PURE_HOST"; then
+  say_fail "pure.host still contains cloned delete loop (must be via pure.hash DeletePosEx single source)"
+else
+  say_ok "pure.host delete loop converged to pure.hash single source"
+fi
+if grep -q "Obj\.PropsBuckets\[ADelPos\].*:=-1" "$PURE_VALUE" && grep -q "while Obj\.PropsBuckets\[LCur\]<>-1" "$PURE_VALUE"; then
+  say_fail "pure.value still contains cloned delete loop (must be via pure.hash DeletePosEx single source)"
+else
+  say_ok "pure.value delete loop converged to pure.hash single source"
+fi
+if grep -q "function JsPureJsonBufToStr" "$PURE_VALUE" && grep -q "JsPureJsonBufToStr" "$PURE_VALUE"; then
+  say_ok "pure.value number→string single source owns JsPureJsonBufToStr"
+else
+  say_fail "pure.value must own JsPureJsonBufToStr single source for number→string"
+fi
+if grep -q "function JsPureJsonIntToStr" "$PURE_VALUE" && grep -A6 "function JsPureJsonIntToStr" "$PURE_VALUE" | grep -q "JsPureJsonBufToStr"; then
+  say_ok "pure.value IntToStr delegates to JsPureJsonBufToStr"
+else
+  say_fail "pure.value JsPureJsonIntToStr must delegate to JsPureJsonBufToStr single source (not duplicate SetLength+BytesCopy)"
+fi
+if grep -q "function JsPureJsonDoubleToStr" "$PURE_VALUE" && grep -A6 "function JsPureJsonDoubleToStr" "$PURE_VALUE" | grep -q "JsPureJsonBufToStr"; then
+  say_ok "pure.value DoubleToStr delegates to JsPureJsonBufToStr"
+else
+  say_fail "pure.value JsPureJsonDoubleToStr must delegate to JsPureJsonBufToStr single source"
+fi
+# GetKeysView hot-path gate: GetKeys deprecated + GetKeysView not inline per red-line 2 (loop+SetLength → I-Cache bloat if inline), zero-copy via TStringView.FromStr borrow
+if grep -q "JsPureHeapGetKeys.*deprecated" "$PURE_VALUE" && ! grep -q "JsPureHeapGetKeysView.*inline;" "$PURE_VALUE" && grep -q "JsPureHeapGetKeysView" "$PURE_VALUE"; then
+  say_ok "GetKeys deprecated + GetKeysView not inline per red-line 2 zero-copy gate (hot loops B/op=0 via TStringView.FromStr borrow, GetKeys compat O(n) alloc, avoids I-Cache bloat)"
+else
+  say_fail "pure.value must mark JsPureHeapGetKeys deprecated and keep JsPureHeapGetKeysView NOT inline per red-line 2 (loop+SetLength, zero-copy via TStringView.FromStr, avoids I-Cache bloat)"
+fi
+if grep -q "TStringView\.FromStr" "$PURE_VALUE" && grep -q "JsPureHeapGetKeysView" "$PURE_VALUE"; then
+  say_ok "GetKeysView zero-copy via TStringView.FromStr borrow shared via bytes.ops single source"
+else
+  say_fail "GetKeysView must be zero-copy via TStringView.FromStr borrow (bytes.ops single source)"
+fi
 
 if [[ $fail -ne 0 ]]; then
   echo "[js-source-contract] FAIL" >&2

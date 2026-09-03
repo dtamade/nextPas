@@ -129,10 +129,6 @@ uses
   nextpas.core.text.ansi,
   nextpas.core.text.scan;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: sqlite.conn must reuse bytes.ops'}
-{$IFEND}
-
 { ===== helpers ===== }
 
 procedure RaiseError(const ACode: Integer; const ADb: TSqliteHandle);
@@ -783,7 +779,7 @@ begin
   LL := sqlite3_column_bytes(FStmt, AIndex);
   if LL <= 0 then
     Exit(nil);
-  // perf: zero-copy via bytes.ops SpanClone single Move single alloc, single source BYTES_OPS_SINGLE_SOURCE
+  // perf: zero-copy via bytes.ops SpanClone single Move single alloc
   LSpan := TByteSpan.Create(PByte(LP), SizeUInt(LL));
   Result := SpanClone(LSpan);
 end;

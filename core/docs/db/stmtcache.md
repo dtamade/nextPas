@@ -1,8 +1,8 @@
 # nextpas.core.db.stmtcache — 语句缓存域契约
 
-**模块**：`nextpas.core.db.stmtcache.{base,intf,pas}` 聚合 sqlite LRU + pg `np_db_stmt_<n>` 注册表  
-**层级**：L3 家族 → L2 后端（`sqlite.conn`/`pg.conn` 透明缓存，依赖 L0–L2）  
-**四件套**：`stmtcache.base` ← `stmtcache.intf` ← `stmtcache` 门面 ← 后端实现聚合  
+**模块**：`nextpas.core.db.stmtcache.{base,intf,pas}` 聚合 sqlite LRU + pg `np_db_stmt_<n>` 注册表
+**层级**：独立 L3 族（已升格；L3 → L2 后端薄域——`sqlite.conn`/`pg.conn` 透明缓存，依赖 L0–L2；寄居债已清，四件套/L0–L3/`bytes.ops` 单源/`inline`+零拷贝/`Clear`/`DEALLOCATE ALL` 全路径已兑现）
+**四件套**：`stmtcache.base` ← `stmtcache.intf` ← `stmtcache` 门面 ← 后端实现聚合
 **对应主契约**：`CONTRACT.md` §1.1 语句缓存行 + §2.8 INC-3 透明缓存
 
 ## 职责

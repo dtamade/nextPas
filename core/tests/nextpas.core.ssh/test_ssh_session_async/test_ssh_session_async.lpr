@@ -12,6 +12,7 @@ uses
   cthreads,
   Classes, SysUtils,
   nextpas.core.system.sysutils,
+  nextpas.core.bytes.ops,
   nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.net.tcp,
@@ -413,10 +414,10 @@ begin
   GRunner.Add(GSuite);
   GRunner.RunAll;
   GRunner.Summary;
-  ClearBigIntCache; // heaptrc0: free global P384/Montgomery heap before dump
+  ClearBigIntCache; // heaptrc 0: BigNat/Montgomery 收敛
   if not GRunner.AllPassed then Halt(1);
   GAsyncState:=Default(TAsyncTestState);
   SetLength(GSeed,0);
   GSuite:=Default(TTestSuite);
-  GRunner:=Default(TSuiteRunner); ClearBigIntCache;
+  GRunner:=Default(TSuiteRunner);
 end.

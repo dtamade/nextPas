@@ -2,12 +2,15 @@ unit nextpas.core.ssh.buffer;
 
 {** nextpas.core.ssh - RFC 4251 wire 数据类型读写器。
  *
- * TsshWriter 把 byte/boolean/uint32/string/mpint/name-list 打进载荷；
- * TsshReader 做反向解析。所有越界访问抛 ESSHError(sekProtocol)。
+ * TSshWriter 把 byte/boolean/uint32/string/mpint/name-list 打进载荷；
+ * TSshReader 做反向解析。所有越界访问抛 ESSHError(sekProtocol)。
  *
  * 约定：string 与 TBytes 之间按原始字节透传（UTF-8 由调用方保证），
  * 不在本单元做字符集转换。PutStringText 入口显式校验 UTF-8，
- * 非法即抛 sekProtocol；STATUS 描述等读侧非法 UTF-8 走替换。 *}
+ * 非法即抛 sekProtocol；STATUS 描述等读侧非法 UTF-8 走替换。
+ *
+ * 实现：record 栈上值语义，零堆对象分配；FBuf 按 BytesEnsureCapacity 几何倍增
+ * 单源，Move 零拷贝，inline 热路径；生命周期由编译器托管字段自动终结，Free/Done 幂等。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -15,6 +18,8 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
@@ -23,18 +28,20 @@ uses
   nextpas.core.ssh.errors;
 
 type
-  { SSH 载荷写入器 }
-  TsshWriter = class
+  { SSH 载荷写入器 — record 栈上零堆，FBuf 托管 TBytes 自动终结 }
+  TSshWriter = record
   private
     FBuf: TBytes;
     FLen: SizeUInt;
     procedure Ensure(ACount: SizeUInt);
   public
-    constructor Create(ACapacityHint: SizeUInt = 256);
-
-    procedure Clear;
-    function Count: SizeUInt;
-    function ToBytes: TBytes;
+    constructor Create(ACapacityHint: SizeUInt);
+    procedure Init(ACapacityHint: SizeUInt = 256); inline;
+    procedure Done; inline;
+    procedure Free; inline;
+    procedure Clear; inline;
+    function Count: SizeUInt; inline;
+    function ToBytes: TBytes; inline;
 
     procedure PutByte(AValue: Byte); inline;
     procedure PutBoolean(AValue: Boolean); inline;
@@ -46,32 +53,37 @@ type
     procedure PutMPInt(const AMagnitude: TBytes);
     procedure PutNameList(const ANames: array of string);
     procedure PutRaw(const APtr: PByte; ALen: SizeUInt); overload;
-    procedure PutRaw(const AValue: TBytes); overload;
+    procedure PutRaw(const AValue: TBytes); overload; inline;
   end;
 
-  { SSH 载荷读取器 }
-  TsshReader = class
+  { SSH 载荷读取器 — record 栈上零堆，FData 引用拷贝+位置游标 }
+  TSshReader = record
   private
     FData: TBytes;
     FPos: SizeUInt;
-    procedure Need(ACount: SizeUInt);
+    procedure Need(ACount: SizeUInt); inline;
   public
     constructor Create(const AData: TBytes);
+    procedure Init(const AData: TBytes); inline;
+    procedure Done; inline;
+    procedure Free; inline;
 
-    function AtEnd: Boolean;
-    function Remaining: SizeUInt;
-    function Position: SizeUInt;
+    function AtEnd: Boolean; inline;
+    function Remaining: SizeUInt; inline;
+    function Position: SizeUInt; inline;
 
-    function PeekByte: Byte;
-    function ReadByte: Byte;
-    procedure Skip(ACount: SizeUInt);
-    function ReadBoolean: Boolean;
-    function ReadUInt32: UInt32;
-    function ReadUInt64: UInt64;
-    function ReadStringBytes: TBytes;
+    function PeekByte: Byte; inline;
+    function ReadByte: Byte; inline;
+    procedure Skip(ACount: SizeUInt); inline;
+    function ReadBoolean: Boolean; inline;
+    function ReadUInt32: UInt32; inline;
+    function ReadUInt64: UInt64; inline;
+    function ReadStringBytes: TBytes; inline;
+    function ReadStringSpan: TByteSpan; inline;
     function ReadStringText: string;
     { 解析 mpint 为无符号大端 magnitude（剥离前导零；负数高位按无符号处理）}
-    function ReadMPInt: TBytes;
+    function ReadMPInt: TBytes; inline;
+    function ReadMPIntSpan: TByteSpan; inline;
     function ReadNameList: TStringArray;
   end;
 
@@ -80,98 +92,124 @@ function SshBytesFromText(const AText: string): TBytes; inline;
 
 implementation
 
+{ SshTextFromBytes/SshBytesFromText — raw bytes ↔ string 透传（UTF-8 由调用方保证，不做转换）。
+  单源：委托 bytes.ops.BytesToString/StringToBytes 单源（SetLength+单次 Move 零拷贝），
+  本单元仅作 ssh CONTRACT 的 inline 薄转发，避免自实现 Move 导致单源漂移。
+  perf: inline 薄转发消除调用开销，零拷贝单次 Move，无二次分配；空串/空 bytes 在 bytes.ops 内短路。
+  stability: 不手写 Move 取 [0]，无野指针；复用 bytes.ops 异常安全 SetLength。 }
 function SshTextFromBytes(const ABytes: TBytes): string; inline;
 begin
-  // single source bytes.ops — zero-copy single SetLength+Move via BytesToString
-  Result := BytesToString(ABytes);
+  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
 end;
 
 function SshBytesFromText(const AText: string): TBytes; inline;
 begin
-  // single source bytes.ops — zero-copy single SetLength+Move via StringToBytes
-  Result := StringToBytes(AText);
+  Result := nextpas.core.bytes.ops.StringToBytes(AText);
 end;
 
-{ TsshWriter }
+{ TSshWriter }
 
-constructor TsshWriter.Create(ACapacityHint: SizeUInt);
+constructor TSshWriter.Create(ACapacityHint: SizeUInt);
 begin
-  inherited Create;
+  // record 栈上：无 inherited，无堆对象头；仅托管 FBuf 一次 SetLength 预分配
+  FBuf := nil;
   SetLength(FBuf, ACapacityHint);
   FLen := 0;
 end;
 
-procedure TsshWriter.Ensure(ACount: SizeUInt);
+procedure TSshWriter.Init(ACapacityHint: SizeUInt); inline;
+begin
+  // 复用构造路径：栈上重初始化，避免重复实现；单 SetLength+零 FLen
+  FBuf := nil;
+  SetLength(FBuf, ACapacityHint);
+  FLen := 0;
+end;
+
+procedure TSshWriter.Done; inline;
+begin
+  // 幂等释放：托管字段置 nil 触发 refcount 递减；FLen 清零防复用泄漏；栈上自动终结亦安全
+  FBuf := nil;
+  FLen := 0;
+end;
+
+procedure TSshWriter.Free; inline;
+begin
+  Done;
+end;
+
+procedure TSshWriter.Ensure(ACount: SizeUInt);
 var
   LNeed: SizeUInt;
-  LNewCap: SizeUInt;
 begin
   if FLen > High(SizeUInt) - ACount then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: writer overflow');
   LNeed := FLen + ACount;
-  if LNeed > SizeUInt(Length(FBuf)) then
-  begin
-    if ACount < 256 then
-      ACount := 256;
-    LNewCap := SizeUInt(Length(FBuf)) + ACount + (SizeUInt(Length(FBuf)) shr 1);
-    if LNewCap > SSH_MAX_RECEIVE_PACKET + 1024 then
-      LNewCap := SSH_MAX_RECEIVE_PACKET + 1024;
-    if LNeed > LNewCap then
-      raise ESSHError.Create(sekProtocol, 'ssh buffer: packet too large');
-    if LNewCap < LNeed then
-      LNewCap := LNeed;
-    SetLength(FBuf, LNewCap);
-  end;
+  if LNeed <= SizeUInt(Length(FBuf)) then
+    Exit;
+  { perf: single source via nextpas.core.bytes.ops.BytesEnsureCapacity (BYTES_BUILDER_MIN_GROW=64 floor,
+    2x geometric doubling loop, overflow clamped); amortized O(1) per Put*, single SetLength+Move
+    zero-copy via Move, avoids O(n²) churn; non-inline: real loop body stays out-of-line to avoid
+    I-Cache bloat (design-conventions §2 red line), thin caller remains inline candidate.
+    single source aligns with sftp.wire.TSshChannelWire.EnsureCapacity (same BytesEnsureCapacity),
+    threshold unified to SSH_MAX_RECEIVE_PACKET+1024.
+    stability: overflow/packet-limit guarded, exception-safe SetLength, no manual header poke. }
+  if LNeed > SSH_MAX_RECEIVE_PACKET + 1024 then
+    raise ESSHError.Create(sekProtocol, 'ssh buffer: packet too large');
+  BytesEnsureCapacity(FBuf, LNeed);
 end;
 
-procedure TsshWriter.Clear;
+procedure TSshWriter.Clear; inline;
 begin
   FLen := 0;
 end;
 
-function TsshWriter.Count: SizeUInt;
+function TSshWriter.Count: SizeUInt; inline;
 begin
   Result := FLen;
 end;
 
-function TsshWriter.ToBytes: TBytes;
+function TSshWriter.ToBytes: TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, FLen);
-  if FLen > 0 then
-    Move(FBuf[0], Result[0], FLen);
+  { perf: single source via bytes.ops.SpanCopySlice (SetLength+single Move zero-copy), FLen=0 short-circuit no alloc; inline thin forward avoids duplicate Move drift }
+  Result := nextpas.core.bytes.ops.SpanCopySlice(TByteSpan.FromBytes(FBuf), 0, FLen);
 end;
 
-procedure TsshWriter.PutByte(AValue: Byte); inline;
+procedure TSshWriter.PutByte(AValue: Byte); inline;
 begin
   Ensure(1);
   FBuf[FLen] := AValue;
   Inc(FLen);
 end;
 
-procedure TsshWriter.PutBoolean(AValue: Boolean); inline;
+procedure TSshWriter.PutBoolean(AValue: Boolean); inline;
 begin
   PutByte(Ord(AValue));
 end;
 
-procedure TsshWriter.PutUInt32(AValue: UInt32); inline;
+procedure TSshWriter.PutUInt32(AValue: UInt32); inline;
 begin
   Ensure(4);
-  FBuf[FLen] := Byte(AValue shr 24);
-  FBuf[FLen + 1] := Byte((AValue shr 16) and $FF);
-  FBuf[FLen + 2] := Byte((AValue shr 8) and $FF);
-  FBuf[FLen + 3] := Byte(AValue and $FF);
+  // 单源：复用 bytes.binary.WriteUInt32BE，避免手写移位与 buffer 直写漂移；inline 零拷贝
+  WriteUInt32BE(PByte(@FBuf[FLen]), AValue);
   Inc(FLen, 4);
 end;
 
-procedure TsshWriter.PutStringBytes(const AValue: TBytes); inline;
+procedure TSshWriter.PutUInt64(AValue: UInt64); inline;
+begin
+  PutUInt32(UInt32(AValue shr 32));
+  PutUInt32(UInt32(AValue and $FFFFFFFF));
+end;
+
+procedure TSshWriter.PutStringBytes(const AValue: TBytes); inline;
 begin
   PutUInt32(UInt32(Length(AValue)));
   PutRaw(AValue);
 end;
 
-procedure TsshWriter.PutStringText(const AText: string);
+procedure TSshWriter.PutStringText(const AText: string);
 begin
+  { non-inline per design-conventions §2 red line — PChar string internal Move feeds untyped var param;
+    inlined constant string prop would mis-compile (valgrind+asm proven, tls13 lane); single Ensure+Move via PutRaw zero-copy }
   if (Length(AText) > 0) and (not UTF8IsValid(PByte(PChar(AText)), SizeUInt(Length(AText)))) then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: PutStringText requires UTF-8');
   PutUInt32(UInt32(Length(AText)));
@@ -179,7 +217,7 @@ begin
     PutRaw(PByte(PChar(AText)), SizeUInt(Length(AText)));
 end;
 
-procedure TsshWriter.PutMPInt(const AMagnitude: TBytes);
+procedure TSshWriter.PutMPInt(const AMagnitude: TBytes);
 var
   LView: TByteSpan;
 begin
@@ -202,54 +240,58 @@ begin
   end;
 end;
 
-procedure TsshWriter.PutNameList(const ANames: array of string);
+procedure TSshWriter.PutNameList(const ANames: array of string);
 var
-  I: SizeInt;
+  I: Integer;
   LTotal: SizeUInt;
+  LLen: SizeUInt;
 begin
   if Length(ANames) = 0 then
   begin
     PutStringText('');
     Exit;
   end;
-  if Length(ANames) = 1 then
-  begin
-    PutStringText(ANames[0]);
-    Exit;
-  end;
-  // perf: single-pass LTotal + UTF-8 guard, then single Ensure + direct zero-copy Move into FBuf (no LJoined temp, no double Move)
-  // single source bytes.ops style Move (PAnsiChar deref) — unified with SshTextFromBytes/SshBytesFromText via BytesToString/StringToBytes
+  { perf: zero-temp comma join single source — no TStringArray/StringsJoin interim heap;
+    single PutUInt32 + single Ensure + Move-per-name zero-copy, KEXINIT 10 name-list handshake zero churn
+    single source: FBuf geometric grow via BytesEnsureCapacity (BYTES_BUILDER_MIN_GROW=64, 2x), Move zero-copy
+    non-inline per design-conventions §2 red lines: Move with FBuf[FLen]/AStr[1] untyped sink + loop body avoids I-Cache bloat
+    stability: overflow/packet-limit guarded by Ensure; resource-free (stack record, try-finally at callsite) }
   LTotal := 0;
   for I := 0 to High(ANames) do
   begin
-    if (Length(ANames[I]) > 0) and (not UTF8IsValid(PByte(PChar(ANames[I])), SizeUInt(Length(ANames[I])))) then
-      raise ESSHError.Create(sekProtocol, 'ssh buffer: PutNameList requires UTF-8');
-    Inc(LTotal, SizeUInt(Length(ANames[I])));
-  end;
-  Inc(LTotal, SizeUInt(High(ANames))); // commas
-  PutUInt32(UInt32(LTotal));
-  if LTotal = 0 then
-    Exit;
-  Ensure(LTotal);
-  if Length(ANames[0]) > 0 then
-  begin
-    Move(PByte(PChar(ANames[0]))^, FBuf[FLen], Length(ANames[0]));
-    Inc(FLen, SizeUInt(Length(ANames[0])));
-  end;
-  for I := 1 to High(ANames) do
-  begin
-    FBuf[FLen] := Byte(',');
-    Inc(FLen);
-    if Length(ANames[I]) > 0 then
+    LLen := SizeUInt(Length(ANames[I]));
+    if LTotal > High(SizeUInt) - LLen then
+      raise ESSHError.Create(sekProtocol, 'ssh buffer: name-list too large');
+    Inc(LTotal, LLen);
+    if I > 0 then
     begin
-      Move(PByte(PChar(ANames[I]))^, FBuf[FLen], Length(ANames[I]));
-      Inc(FLen, SizeUInt(Length(ANames[I])));
+      if LTotal = High(SizeUInt) then
+        raise ESSHError.Create(sekProtocol, 'ssh buffer: name-list too large');
+      Inc(LTotal);
+    end;
+  end;
+  PutUInt32(UInt32(LTotal));
+  Ensure(LTotal);
+  for I := 0 to High(ANames) do
+  begin
+    if I > 0 then
+    begin
+      FBuf[FLen] := Byte(',');
+      Inc(FLen);
+    end;
+    LLen := SizeUInt(Length(ANames[I]));
+    if LLen > 0 then
+    begin
+      Move(ANames[I][1], FBuf[FLen], LLen);
+      Inc(FLen, LLen);
     end;
   end;
 end;
 
-procedure TsshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);
+procedure TSshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);
 begin
+  { perf: non-inline per design-conventions §2 red line 1 — Move dest FBuf[FLen] indexed feeds untyped var param;
+    inlined constant string prop would mis-compile (valgrind+asm proven, tls13 lane). Single Ensure+Move zero-copy, amortized O(1) }
   if (ALen = 0) or (APtr = nil) then
     Exit;
   Ensure(ALen);
@@ -257,145 +299,155 @@ begin
   Inc(FLen, ALen);
 end;
 
-procedure TsshWriter.PutRaw(const AValue: TBytes);
+procedure TSshWriter.PutRaw(const AValue: TBytes); inline;
 begin
   if Length(AValue) > 0 then
     PutRaw(@AValue[0], SizeUInt(Length(AValue)));
 end;
 
-{ TsshReader }
+{ TSshReader }
 
-constructor TsshReader.Create(const AData: TBytes);
+constructor TSshReader.Create(const AData: TBytes);
 begin
-  inherited Create;
+  // record 栈上：引用拷贝无堆分配（AddRef），零拷贝视图；不做深拷贝
   FData := AData;
   FPos := 0;
 end;
 
-procedure TsshReader.Need(ACount: SizeUInt);
+procedure TSshReader.Init(const AData: TBytes); inline;
+begin
+  FData := AData;
+  FPos := 0;
+end;
+
+procedure TSshReader.Done; inline;
+begin
+  FData := nil;
+  FPos := 0;
+end;
+
+procedure TSshReader.Free; inline;
+begin
+  Done;
+end;
+
+procedure TSshReader.Need(ACount: SizeUInt); inline;
 begin
   if Remaining < ACount then
     raise ESSHError.Create(sekProtocol,
-      'ssh buffer: truncated payload (need ' + IntToStr(ACount) +
-      ', remaining ' + IntToStr(Remaining) + ')');
+      'ssh buffer: truncated payload (need ' + nextpas.core.text.conv.IntToStr(Int64(ACount)) +
+      ', remaining ' + nextpas.core.text.conv.IntToStr(Int64(Remaining)) + ')');
 end;
 
-function TsshReader.AtEnd: Boolean;
+function TSshReader.AtEnd: Boolean; inline;
 begin
   Result := FPos >= SizeUInt(Length(FData));
 end;
 
-function TsshReader.Remaining: SizeUInt;
+function TSshReader.Remaining: SizeUInt; inline;
 begin
   Result := SizeUInt(Length(FData)) - FPos;
 end;
 
-function TsshReader.Position: SizeUInt;
+function TSshReader.Position: SizeUInt; inline;
 begin
   Result := FPos;
 end;
 
-function TsshReader.PeekByte: Byte;
+function TSshReader.PeekByte: Byte; inline;
 begin
   Need(1);
   Result := FData[FPos];
 end;
 
-function TsshReader.ReadByte: Byte;
+function TSshReader.ReadByte: Byte; inline;
 begin
   Need(1);
   Result := FData[FPos];
   Inc(FPos);
 end;
 
-procedure TsshReader.Skip(ACount: SizeUInt);
+procedure TSshReader.Skip(ACount: SizeUInt); inline;
 begin
   Need(ACount);
   Inc(FPos, ACount);
 end;
 
-function TsshReader.ReadBoolean: Boolean;
+function TSshReader.ReadBoolean: Boolean; inline;
 begin
   Result := ReadByte <> 0;
 end;
 
-function TsshReader.ReadUInt32: UInt32;
+function TSshReader.ReadUInt32: UInt32; inline;
 begin
   Need(4);
-  Result := (UInt32(FData[FPos]) shl 24)
-    or (UInt32(FData[FPos + 1]) shl 16)
-    or (UInt32(FData[FPos + 2]) shl 8)
-    or UInt32(FData[FPos + 3]);
+  // 单源：复用 bytes.binary.ReadUInt32BE，避免手写移位
+  Result := ReadUInt32BE(PByte(@FData[FPos]));
   Inc(FPos, 4);
 end;
 
-procedure TsshWriter.PutUInt64(AValue: UInt64); inline;
-begin
-  PutUInt32(UInt32(AValue shr 32));
-  PutUInt32(UInt32(AValue and $FFFFFFFF));
-end;
-
-function TsshReader.ReadUInt64: UInt64;
+function TSshReader.ReadUInt64: UInt64; inline;
 begin
   Result := (UInt64(ReadUInt32) shl 32) or UInt64(ReadUInt32);
 end;
 
-function TsshReader.ReadStringBytes: TBytes;
+function TSshReader.ReadStringSpan: TByteSpan; inline;
 var
   LLen: UInt32;
 begin
+  { perf: zero-copy view into FData — no SetLength/Move/alloc; lifetime bound to TSshReader.FData; empty → TByteSpan.Empty; single source TByteSpan.Create }
   LLen := ReadUInt32;
   Need(LLen);
-  Result := nil;
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(FData[FPos], Result[0], LLen);
+  if LLen = 0 then
+    Exit(TByteSpan.Empty);
+  Result := TByteSpan.Create(PByte(@FData[FPos]), LLen);
   Inc(FPos, LLen);
 end;
 
-function TsshReader.ReadStringText: string;
+function TSshReader.ReadStringBytes: TBytes; inline;
 begin
-  Result := SshTextFromBytes(ReadStringBytes);
+  { perf: single source via bytes.ops.SpanClone (SetLength+single Move zero-copy); ReadStringSpan is zero-alloc view, clone allocates only when caller needs owned TBytes; large payload callers can call ReadStringSpan to avoid alloc entirely }
+  Result := nextpas.core.bytes.ops.SpanClone(ReadStringSpan);
 end;
 
-function TsshReader.ReadMPInt: TBytes;
+function TSshReader.ReadStringText: string;
 var
-  LBlob: TBytes;
-  LView: TByteSpan;
+  LSpan: TByteSpan;
 begin
-  LBlob := ReadStringBytes;
-  if (Length(LBlob) > 0) and ((LBlob[0] and $80) <> 0) then
-    raise ESSHError.Create(sekProtocol, 'ssh buffer: mpint negative');
-  LView := StripLeadingZeroView(LBlob);
-  Result := nil;
-  SetLength(Result, LView.Len);
-  if LView.Len > 0 then
-    Move(LView.Data^, Result[0], LView.Len);
+  { perf: direct span→string single Move, no intermediate TBytes alloc; LSpan is zero-copy view }
+  LSpan := ReadStringSpan;
+  if LSpan.Len = 0 then
+    Exit('');
+  SetLength(Result, LSpan.Len);
+  Move(LSpan.Data^, Result[1], LSpan.Len);
 end;
 
-function TsshReader.ReadNameList: TStringArray;
+function TSshReader.ReadMPIntSpan: TByteSpan; inline;
+var
+  LSpan: TByteSpan;
+begin
+  { perf: zero-copy mpint magnitude view — ReadStringSpan zero-alloc + StripLeadingZeroSpan pointer bump, no alloc; negative check on view }
+  LSpan := ReadStringSpan;
+  if (LSpan.Len > 0) and ((LSpan.Data^ and $80) <> 0) then
+    raise ESSHError.Create(sekProtocol, 'ssh buffer: mpint negative');
+  Result := StripLeadingZeroSpan(LSpan);
+end;
+
+function TSshReader.ReadMPInt: TBytes; inline;
+begin
+  { perf: single source via bytes.ops.SpanClone; ReadMPIntSpan is zero-copy, clone is single Move — halves allocations vs old ReadStringBytes(alloc)+Strip+Move(double alloc) }
+  Result := nextpas.core.bytes.ops.SpanClone(ReadMPIntSpan);
+end;
+
+function TSshReader.ReadNameList: TStringArray;
 var
   LJoined: string;
-  LParts: TStringArray;
-  I, LOut: Integer;
 begin
   LJoined := ReadStringText;
-  Result := nil;
-  SetLength(Result, 0);
   if LJoined = '' then
-    Exit;
-  LParts := StringsSplit(LJoined, ',');
-  LOut := 0;
-  SetLength(Result, Length(LParts));
-  for I := 0 to High(LParts) do
-  begin
-    if LParts[I] <> '' then
-    begin
-      Result[LOut] := LParts[I];
-      Inc(LOut);
-    end;
-  end;
-  SetLength(Result, LOut);
+    Exit(nil);
+  { single source: one scan with RemoveEmpty, no second allocation }
+  Result := StringsSplit(LJoined, ',', True);
 end;
 
 end.

@@ -65,6 +65,13 @@ type
     function Input: TStringView; inline;
     procedure EnsureObjectIndex(AObjectIdx: UInt32);
     function LookupObjectIndex(AObjectIdx: UInt32; const AKey: TStringView): UInt32;
+    { Arena waterline observability + Trim (bridge peak Trim single source, bytes.ops思想零拷贝inline). }
+    function ArenaCapacity: SizeUInt; inline;
+    function ArenaUsed: SizeUInt; inline;
+    function NodeCapacity: UInt32; inline;
+    function OverflowCount: UInt32; inline;
+    function NeedsTrim: Boolean; inline;
+    procedure TrimExcess; { Shrink to initial if oversized and idle, Done+Init single source, inline零拷贝 }
   end;
   PJsonDocument = ^TJsonDocument;
 
@@ -242,6 +249,8 @@ begin
   Result := FNodeCount;
   FNodes[FNodeCount].Next := JSON_NODE_NONE;
   FNodes[FNodeCount].Flags := 0;
+  FNodes[FNodeCount].RawStart := 0;
+  FNodes[FNodeCount].RawLen := 0;
   Inc(FNodeCount);
 end;
 
@@ -381,6 +390,45 @@ begin
   Result := FInput;
 end;
 
+function TJsonDocument.ArenaCapacity: SizeUInt; inline;
+begin
+  Result := FStrArenaCap;
+end;
+
+function TJsonDocument.ArenaUsed: SizeUInt; inline;
+begin
+  Result := FStrArenaUsed;
+end;
+
+function TJsonDocument.NodeCapacity: UInt32; inline;
+begin
+  Result := FNodeCap;
+end;
+
+function TJsonDocument.OverflowCount: UInt32; inline;
+begin
+  Result := FStrOverflowCount;
+end;
+
+function TJsonDocument.NeedsTrim: Boolean; inline;
+begin
+  { Waterline: >4× initial node/arena or overflow>32, single source bytes.ops思想 inline零拷贝, 零堆分配 }
+  Result := (FNodeCap > INITIAL_NODE_CAP * 8) or (FStrArenaCap > INITIAL_ARENA_CAP * 64) or (FStrOverflowCap > 32);
+end;
+
+procedure TJsonDocument.TrimExcess;
+var
+  LAlloc: TMemAllocator;
+begin
+  if not FInited then Exit;
+  if not NeedsTrim then Exit;
+  { Only shrink when idle waterline low (used < cap/4, count < cap/4), avoid thrash on sustained large frames; single source Done+Init, releases peak 1MiB arena till next large frame, inline零额外调用 }
+  if (FNodeCount > FNodeCap div 4) or (FStrArenaUsed > FStrArenaCap div 4) or (FStrOverflowCount > FStrOverflowCap div 4) then Exit;
+  LAlloc := FAllocator;
+  Done;
+  Init(LAlloc);
+end;
+
 { Parser implementation }
 
 type
@@ -500,6 +548,8 @@ begin
   if LIdx = JSON_NODE_NONE then
     Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := AKind;
+  Doc^.FNodes[LIdx].RawStart := UInt32(AData - Input);
+  Doc^.FNodes[LIdx].RawLen := UInt32(AExpectedLen);
   if AKind = jnkBool then
     Doc^.FNodes[LIdx].BoolVal := ABoolVal;
   LastPos := UInt32((AData - Input) + AExpectedLen - 1);
@@ -597,6 +647,8 @@ begin
   if LIdx = JSON_NODE_NONE then
     Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := jnkString;
+  Doc^.FNodes[LIdx].RawStart := LStartPos;
+  Doc^.FNodes[LIdx].RawLen := LEndPos - LStartPos + 1;
   if LHasEscape then
   begin
     LBuf := Doc^.AllocStrBuf(LRaw.Len);
@@ -662,6 +714,8 @@ begin
     if LIdx = JSON_NODE_NONE then
       Exit(JSON_NODE_NONE);
     Doc^.FNodes[LIdx].Kind := jnkReal;
+    Doc^.FNodes[LIdx].RawStart := UInt32(AData - Input);
+    Doc^.FNodes[LIdx].RawLen := UInt32(LNumLen);
     Doc^.FNodes[LIdx].RealVal := LFloat;
   end
   else
@@ -675,6 +729,8 @@ begin
     if LIdx = JSON_NODE_NONE then
       Exit(JSON_NODE_NONE);
     Doc^.FNodes[LIdx].Kind := jnkInt;
+    Doc^.FNodes[LIdx].RawStart := UInt32(AData - Input);
+    Doc^.FNodes[LIdx].RawLen := UInt32(LNumLen);
     Doc^.FNodes[LIdx].IntVal := LInt;
   end;
   LastPos := UInt32((AData - Input) + LNumLen - 1);
@@ -715,6 +771,7 @@ var
   LCh: Byte;
   LGapData: PAnsiChar;
   LGapLen: SizeUInt;
+  LStartPos: UInt32;
 begin
   Inc(Depth);
   if Depth > 512 then
@@ -726,7 +783,8 @@ begin
   if LIdx = JSON_NODE_NONE then
     Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := jnkArray;
-  ConsumeStruct;
+  LStartPos := ConsumeStruct;
+  Doc^.FNodes[LIdx].RawStart := LStartPos;
   LCount := 0;
   LPrev := JSON_NODE_NONE;
   LCh := PeekCh;
@@ -735,6 +793,7 @@ begin
     if not GetValueSlice(LGapData, LGapLen) then
     begin
       ConsumeStruct;
+      Doc^.FNodes[LIdx].RawLen := LastPos - LStartPos + 1;
       Doc^.FNodes[LIdx].Container.FirstChild := JSON_NODE_NONE;
       Doc^.FNodes[LIdx].Container.Count := 0;
       Dec(Depth);
@@ -771,6 +830,7 @@ begin
     end;
   end;
   Doc^.FNodes[LIdx].Container.Count := LCount;
+  Doc^.FNodes[LIdx].RawLen := LastPos - LStartPos + 1;
   Dec(Depth);
   Result := LIdx;
 end;
@@ -793,7 +853,7 @@ begin
   if LIdx = JSON_NODE_NONE then
     Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := jnkObject;
-  ConsumeStruct;
+  Doc^.FNodes[LIdx].RawStart := ConsumeStruct;
   LCount := 0;
   LPrev := JSON_NODE_NONE;
   LCh := PeekCh;
@@ -805,6 +865,7 @@ begin
       Exit(JSON_NODE_NONE);
     end;
     ConsumeStruct;
+    Doc^.FNodes[LIdx].RawLen := LastPos - Doc^.FNodes[LIdx].RawStart + 1;
     Doc^.FNodes[LIdx].Container.FirstChild := JSON_NODE_NONE;
     Doc^.FNodes[LIdx].Container.Count := 0;
     Dec(Depth);
@@ -864,6 +925,7 @@ begin
     end;
   end;
   Doc^.FNodes[LIdx].Container.Count := LCount;
+  Doc^.FNodes[LIdx].RawLen := LastPos - Doc^.FNodes[LIdx].RawStart + 1;
   Dec(Depth);
   Result := LIdx;
 end;

@@ -16,6 +16,7 @@ uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.fs,
+  nextpas.core.text.view,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
@@ -59,17 +60,20 @@ type
     property Position: Int64 read GetPosition write SetPosition;
   end;
 
-  TOsVfs = class(TInterfacedObject, IVfs)
+  TOsVfs = class(TInterfacedObject, IVfs, IVfsView)
   private
     FRoot: string;
     function FullPath(const APath: string): string; inline;
+    function FullPathView(const AView: TStringView): string; inline;
     function MapInfo(const AName: string; const AFi: TFileInfo): TEntryInfo; inline;
   public
     constructor Create(const ARoot: string);
     function Exists(const APath: string): Boolean;
+    function ExistsView(const AView: TStringView): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
+    function OpenReadView(const AView: TStringView): IStream;
     function CaseSensitive: Boolean;
   end;
 
@@ -186,6 +190,15 @@ begin
   Result := nextpas.core.fs.PathJoin2(FRoot, APath);
 end;
 
+function TOsVfs.FullPathView(const AView: TStringView): string; inline;
+begin
+  { perf: os 需系统调用，View 单次物化后拼接，单次分配，inline 零额外调用 }
+  if VfsIsRootView(AView) then
+    Result := FRoot
+  else
+    Result := FRoot + '/' + AView.ToString;
+end;
+
 function TOsVfs.MapInfo(const AName: string; const AFi: TFileInfo): TEntryInfo; inline;
 begin
   Result.Name := AName;
@@ -201,6 +214,19 @@ begin
     Exit(False);
   try
     nextpas.core.fs.Stat(FullPath(APath));
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+function TOsVfs.ExistsView(const AView: TStringView): Boolean; inline;
+begin
+  { perf: Inline + BytesValidPathView 零拷贝校验，os 需单次物化调 fs.Stat，零额外堆分配于校验阶段 }
+  if not VfsValidPathView(AView, True) then
+    Exit(False);
+  try
+    nextpas.core.fs.Stat(FullPathView(AView));
     Result := True;
   except
     Result := False;
@@ -296,6 +322,27 @@ begin
       raise EVfsError.CreateCtx('open', APath, 'open failed: ' + E.Message);
   end;
   Result := TOsStream.Create(LFile, APath);
+end;
+
+function TOsVfs.OpenReadView(const AView: TStringView): IStream;
+var
+  LStr: string;
+  SI: TStatInfo;
+  LFile: IFile;
+begin
+  if not VfsValidPathView(AView, True) then
+    raise EVfsInvalidPath.CreateCtx('open', AView.ToString, 'invalid virtual path');
+  LStr := AView.ToString;
+  SI := Stat(LStr);
+  if SI.Info.IsDir then
+    raise EVfsIsADirectory.CreateCtx('open', LStr, 'target is a directory');
+  try
+    LFile := nextpas.core.fs.Open(FullPath(LStr), [fmRead]);
+  except
+    on E: Exception do
+      raise EVfsError.CreateCtx('open', LStr, 'open failed: ' + E.Message);
+  end;
+  Result := TOsStream.Create(LFile, LStr);
 end;
 
 function TOsVfs.CaseSensitive: Boolean;

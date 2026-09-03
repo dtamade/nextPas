@@ -1,7 +1,9 @@
 unit nextpas.core.ssh.transport.async;
 
 {** nextpas.core.ssh - 异步传输层 (TAsyncLoop + IAsyncTcpStream)。
- * 复用 cipher/compress/kex 的同步加解密逻辑, I/O 事件化。 *}
+ * 复用 cipher/compress/kex 的同步加解密逻辑, I/O 事件化。经 ssh.net.ffi
+ * 单缝隙复用 IAsyncTcpStream（L2→L2 net 唯一缝隙，inline 零拷贝，外层
+ * Move 单源复用 bytes.ops），不再直连 net.async.tcp；try-finally 释放不丢。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -14,7 +16,7 @@ uses
   nextpas.core.exception,
   nextpas.core.async.loop,
   nextpas.core.async.base,
-  nextpas.core.net.async.tcp,
+  nextpas.core.ssh.net.ffi,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -214,7 +216,7 @@ end;
 
 function TAsyncSshTransport.DebugState: string;
 begin
-  Result := 'cb=' + BoolToStr(FWriteCb <> nil, 'True', 'False') + ' buf=' + IntToStr(Length(FWriteBuf)) + ' off=' + IntToStr(FWriteOff) + ' state=' + IntToStr(Ord(FState)) + ' ptr=' + IntToStr(PtrUInt(Self));
+  Result := 'cb=' + BoolToStr(FWriteCb <> nil, 'True', 'False') + ' buf=' + nextpas.core.text.conv.IntToStr(Int64(Length(FWriteBuf))) + ' off=' + nextpas.core.text.conv.IntToStr(Int64(FWriteOff)) + ' state=' + nextpas.core.text.conv.IntToStr(Int64(Ord(FState))) + ' ptr=' + nextpas.core.text.conv.IntToStr(Int64(PtrUInt(Self)));
 end;
 
 procedure TAsyncSshTransport.SetStateForTest(AState: TSshTransportState);
@@ -277,7 +279,7 @@ begin
   if AResult < 0 then
   begin
     Lcb := FWriteCb; Ctx := FWriteCtx; FWriteCb := nil; FWriteCtx := nil; FWriteBuf := nil;
-    if Assigned(Lcb) then Lcb(ESSHError.Create(sekIO, 'ssh transport: async write failed (' + IntToStr(AResult) + ')'), Ctx);
+    if Assigned(Lcb) then Lcb(ESSHError.Create(sekIO, 'ssh transport: async write failed (' + nextpas.core.text.conv.IntToStr(Int64(AResult)) + ')'), Ctx);
     Exit;
   end;
   if AResult > 0 then Inc(FWriteOff, SizeUInt(AResult));
@@ -338,7 +340,7 @@ begin
       on E: Exception do begin FailPacketCb(ESSHError.Create(sekProtocol, E.Message)); Exit; end;
     end;
     if (FReadBodyLen < 1) or (FReadBodyLen > SSH_MAX_RECEIVE_PACKET) then
-    begin FailPacketCb(ESSHError.Create(sekProtocol, 'ssh transport: unreasonable packet length ' + IntToStr(FReadBodyLen))); Exit; end;
+    begin FailPacketCb(ESSHError.Create(sekProtocol, 'ssh transport: unreasonable packet length ' + nextpas.core.text.conv.IntToStr(Int64(FReadBodyLen)))); Exit; end;
     SetLength(FReadTrailer, FCore.TrailerSize(FReadBodyLen));
     FReadTrailerOff := 0;
     if Length(FReadTrailer) = 0 then
@@ -359,7 +361,7 @@ begin
   if AResult <= 0 then
   begin
     if AResult = 0 then FailPacketCb(ESSHError.Create(sekIO, 'ssh transport: connection closed by peer'))
-    else FailPacketCb(ESSHError.Create(sekIO, 'ssh transport: async read header failed (' + IntToStr(AResult) + ')'));
+    else FailPacketCb(ESSHError.Create(sekIO, 'ssh transport: async read header failed (' + nextpas.core.text.conv.IntToStr(Int64(AResult)) + ')'));
     Exit;
   end;
   Inc(FReadHeaderOff, SizeUInt(AResult));
@@ -374,7 +376,7 @@ var
   Ctx: Pointer;
 begin
   if AResult < 0 then
-  begin FailPacketCb(ESSHError.Create(sekIO, 'ssh transport: async read trailer failed (' + IntToStr(AResult) + ')')); Exit; end;
+  begin FailPacketCb(ESSHError.Create(sekIO, 'ssh transport: async read trailer failed (' + nextpas.core.text.conv.IntToStr(Int64(AResult)) + ')')); Exit; end;
   if AResult > 0 then Inc(FReadTrailerOff, SizeUInt(AResult));
   if FReadTrailerOff < SizeUInt(Length(FReadTrailer)) then
   begin
@@ -425,7 +427,7 @@ end;
 procedure TAsyncSshTransport.HandleVersionSendDone(AResult: Int32);
 var LRem: SizeUInt;
 begin
-  if AResult < 0 then begin FailVersionCb(ESSHError.Create(sekIO, 'ssh transport: ident send failed (' + IntToStr(AResult) + ')')); Exit; end;
+  if AResult < 0 then begin FailVersionCb(ESSHError.Create(sekIO, 'ssh transport: ident send failed (' + nextpas.core.text.conv.IntToStr(Int64(AResult)) + ')')); Exit; end;
   Inc(FWriteOff, SizeUInt(AResult));
   LRem := SizeUInt(Length(FWriteBuf)) - FWriteOff;
   if LRem > 0 then

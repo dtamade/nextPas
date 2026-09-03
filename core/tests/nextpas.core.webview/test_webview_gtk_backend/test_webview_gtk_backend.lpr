@@ -24,6 +24,7 @@ uses
   Classes,
   nextpas.core.test,
   nextpas.core.errors,
+  nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
@@ -199,6 +200,8 @@ type
   public
     function TryResolve(const APath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
 const
@@ -226,16 +229,22 @@ end;
 function TGateProvider.TryResolve(const APath: string;
   out ABytes: TBytes; out AMimeType: string): Boolean;
 begin
+  Result := TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType);
+end;
+
+function TGateProvider.TryResolveView(const AView: TStringView;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
   { CONTRACT §3：provider 收到前缀剥离后的相对路径（无前导 '/'） }
   ABytes := nil;
   AMimeType := '';
   Result := True;
-  if APath = 'hello.txt' then
+  if TStringView.FromStr('hello.txt').Equals(AView) then
   begin
     ABytes := StrToGateBytes('npw-scheme-ok');
     AMimeType := 'text/plain';
   end
-  else if APath = 'page.html' then
+  else if TStringView.FromStr('page.html').Equals(AView) then
   begin
     ABytes := StrToGateBytes(PAGE_HTML);
     AMimeType := 'text/html';
@@ -418,23 +427,31 @@ type
     Tag: string;
     function TryResolve(const APath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
 function TTagProvider.TryResolve(const APath: string;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  Result := TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType);
+end;
+
+function TTagProvider.TryResolveView(const AView: TStringView;
   out ABytes: TBytes; out AMimeType: string): Boolean;
 begin
   { CONTRACT §3：provider 收到前缀剥离后的相对路径（无前导 '/'） }
   ABytes := nil;
   AMimeType := '';
   Result := False;
-  if APath = 'page.html' then
+  if TStringView.FromStr('page.html').Equals(AView) then
   begin
     ABytes := StrToGateBytes(AnsiString('<html><body>npw-' + Tag +
       '</body></html>'));
     AMimeType := 'text/html';
     Result := True;
   end
-  else if APath = Tag + '.txt' then
+  else if TStringView.FromStr(Tag + '.txt').Equals(AView) then
   begin
     ABytes := StrToGateBytes('content-' + Tag);
     AMimeType := 'text/plain';

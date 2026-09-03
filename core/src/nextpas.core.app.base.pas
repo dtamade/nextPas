@@ -13,7 +13,8 @@ interface
 
 uses
   nextpas.core.errors,
-  nextpas.core.webview.base;
+  nextpas.core.webview.base,
+  nextpas.core.webview.validation;
 
 type
   { 应用选项 = 窗口选项的语义别名（与 webview 同源，零重复校验）。 }
@@ -53,7 +54,7 @@ end;
 
 procedure CheckAppOptions(const AOptions: TAppOptions);
 begin
-  nextpas.core.webview.base.CheckWebviewOptions(AOptions);
+  nextpas.core.webview.validation.CheckWebviewOptions(AOptions);
 end;
 
 class function EAppError.DefaultCategory: TErrorCategory;

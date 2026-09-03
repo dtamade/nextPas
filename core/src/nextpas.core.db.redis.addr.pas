@@ -20,7 +20,7 @@ uses
   nextpas.core.db.redis.base;
 
 function BytesFromText(const AStr: string): TBytes; inline;
-function RedisCategory(const AErrType: string): TDbErrorCategory; inline;
+function RedisCategory(const AErrType: string): TDbErrorCategory;
 procedure ParseRedisAddr(const AAddr: string;
   const AOptions: TDbConnectOptions; out AOpts: TDbRedisConnectOptions);
 function FormatRedisAddr(const AHost: string; const APort: Word): string; inline;
@@ -38,17 +38,13 @@ uses
   nextpas.core.text.conv,
   nextpas.core.text.builder;
 
-{$IF not BYTES_OPS_SINGLE_SOURCE}
-  {$FATAL 'bytes.ops single source drift: redis.addr must reuse bytes.ops'}
-{$IFEND}
-
 function BytesFromText(const AStr: string): TBytes; inline;
 begin
-  { perf: single-source via bytes.ops.StringToBytes — inline single Move, zero-copy evidence: bytes.ops impl is single Move(PAnsiChar(AText)^, Result[0], Length(AText)) with nil early-exit, no extra alloc }
-  Result := StringToBytes(AStr);
+  // perf: inline thin-forward to bytes.ops.StringToBytes single source — zero-copy BytesCopy single Move(PAnsiChar) in owner, no duplicate SetLength+Move, thin-forward exempt per red-line 1 (INV-5)
+  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
-function RedisCategory(const AErrType: string): TDbErrorCategory; inline;
+function RedisCategory(const AErrType: string): TDbErrorCategory;
 var
   LCon: TDbConstraintKind;
 begin

@@ -55,6 +55,9 @@ type
   TWindowEventProc = procedure(const AEvent: TWindowEvent);
 
 function DefaultWindowOptions: TWindowOptions;
+function WindowOptionsCreate(const ATitle: string; AWidth, AHeight,
+  AMinWidth, AMinHeight, AMaxWidth, AMaxHeight: Integer;
+  AResizable, AMaximized: Boolean): TWindowOptions; inline;
 procedure CheckWindowOptions(const AOptions: TWindowOptions);
 
 type
@@ -102,6 +105,24 @@ begin
   Result.Resizable := True;
   Result.Maximized := False;
   Result.ParentHandle := nil;
+end;
+
+function WindowOptionsCreate(const ATitle: string; AWidth, AHeight,
+  AMinWidth, AMinHeight, AMaxWidth, AMaxHeight: Integer;
+  AResizable, AMaximized: Boolean): TWindowOptions; inline;
+begin
+  // perf: single source inline zero-copy field copy, owner L2 window.base, eliminates 8-field duplication across webview backends
+  Result := DefaultWindowOptions;
+  Result.Title := ATitle;
+  Result.Width := AWidth;
+  Result.Height := AHeight;
+  Result.MinWidth := AMinWidth;
+  Result.MinHeight := AMinHeight;
+  Result.MaxWidth := AMaxWidth;
+  Result.MaxHeight := AMaxHeight;
+  Result.Resizable := AResizable;
+  Result.Maximized := AMaximized;
+  // ParentHandle stays nil (Default), webview has-a window without embedding
 end;
 
 procedure CheckWindowOptions(const AOptions: TWindowOptions);

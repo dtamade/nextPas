@@ -15,6 +15,7 @@ uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.js.pure.base,
+  nextpas.core.js.pure.value,
   nextpas.core.text.view;
 
 type

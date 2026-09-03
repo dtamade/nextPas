@@ -41,6 +41,7 @@ function CollectRemoteTrackingRefs(const ALocalGitDir, ARemoteName: string): TSt
 var
   Base: string;
   ResultArr: TStringArray;
+  Count, Cap: SizeInt;
   procedure Walk(const ADir, APrefix: string);
   var
     Ents: TDirEntryArray;
@@ -62,33 +63,58 @@ var
           RefName := 'refs/remotes/' + ARemoteName + '/HEAD'
         else
           RefName := 'refs/remotes/' + ARemoteName + '/' + Rel;
-        SetLength(ResultArr, Length(ResultArr) + 1);
-        ResultArr[High(ResultArr)] := RefName;
+        // perf: amortized doubling O(n) vs O(n²) per-element SetLength+Move; mirror bytes.ops.BytesEnsureCapacity pattern, zero-copy string CoW
+        if Count = Cap then
+        begin
+          if Cap = 0 then Cap := 16
+          else if Cap <= High(SizeInt) div 2 then Cap := Cap * 2
+          else Cap := Count + 1;
+          SetLength(ResultArr, Cap);
+        end;
+        ResultArr[Count] := RefName;
+        Inc(Count);
       end;
     end;
   end;
 begin
   ResultArr := nil;
+  Count := 0;
+  Cap := 0;
   Base := PathJoin([ALocalGitDir, 'refs', 'remotes', ARemoteName]);
   Walk(Base, '');
+  if Length(ResultArr) <> Count then
+    SetLength(ResultArr, Count);
   Result := ResultArr;
 end;
 
-function AdvertiseBranches(const AAdv: TGitAdvertised): TStringArray;
+function AdvertiseBranches(const AAdv: TGitAdvertised): TStringArray; inline;
 var
   I: Integer;
+  Count, Cap: SizeInt;
   Branch: string;
 begin
+  // perf: amortized doubling O(n) avoids O(n²) SetLength churn; single-source bytes.ops doubling pattern, inline + zero-copy string CoW
   Result := nil;
+  Count := 0;
+  Cap := 0;
   for I := 0 to High(AAdv.Refs) do
   begin
     if Copy(AAdv.Refs[I].Name, 1, 11) = 'refs/heads/' then
     begin
+      if Count = Cap then
+      begin
+        if Cap = 0 then Cap := 16
+        else if Cap <= High(SizeInt) div 2 then Cap := Cap * 2
+        else Cap := Count + 1;
+        SetLength(Result, Cap);
+      end;
       Branch := Copy(AAdv.Refs[I].Name, 12, MaxInt);
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Branch;
+      Result[Count] := Branch;
+      Inc(Count);
     end;
   end;
+  if Length(Result) <> Count then
+    SetLength(Result, Count);
 end;
 
 function ContainsBranch(const ABranches: TStringArray; const ABranch: string): Boolean;

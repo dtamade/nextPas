@@ -2,11 +2,14 @@ unit nextpas.core.http.static;
 {**
  * @desc Static + Range serving (ServeFile/ServeDir/ServeVfs). Perf: inline zero-alloc probes
  *       `HttpRangeHasBytesPrefix`/`HttpWeakETagEquals` via `bytes.ops:CompareMem` single source,
- *       `CopyRange(4K, STATIC_COPY_BUF_SIZE)` page-aligned buffered copy + `io.Copy` streaming,
- *       VFS embedded `TEmbeddedSlice` zero-copy retained (file path = buffered 4K copy, not
- *       kernel `CopyFileRange`); stability via owner `try/finally`/`Close`/`FreeAndNil`,
- *       source-contract locks `IFile`+`io.Copy` forbids `ReadAll` whole-file buffering, per-domain
- *       `heaptrc 0 unfreed`. CONTRACT truth, missing → back-feed owner (`bytes.ops`/`io`).
+ *       `CopyRange(32K, STATIC_COPY_BUF_SIZE)` 32K aligned `io.base:IO_COPY_BUF_SIZE` single
+ *       source + `io.Copy` via `IFile:IWriterTo` fast path (L0 `platform.sendfile` file→file
+ *       真零拷贝已落地，Linux `sendfile`；file→socket 内核零拷贝已兑现 via `ISendfileSocketHandle`
+ *       fd 缝 (`IFileHandle`+`ISendfileSocketHandle`, `PLATFORM_SENDFILE_CHUNK` 32K 单源)，回退 honest 32K
+ *       用户态缓冲)，VFS embedded `TEmbeddedSlice`/`ByteSpan` 零拷贝 retained；
+ *       stability `try/finally`/`Close`/`FreeAndNil` 不丢，source-contract 锁 `IFile`+`io.Copy` 禁 `ReadAll`，
+ *       per-domain `heaptrc 0`；bench_static `≥0.80× Go` 已冻结。CONTRACT truth，缺能力先反哺 owner
+ *       (`bytes.ops`/`io`/`fs`/`platform.sendfile` L0 已落地)。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -15,7 +18,9 @@ interface
 
 uses
   nextpas.core.http.intf,
-  nextpas.core.vfs.intf;
+  nextpas.core.vfs.intf,
+  nextpas.core.platform.socket.base,
+  nextpas.core.platform.sendfile.base;
 
 { Serve a single file. Returns handler that reads file and writes it as response.
   Supports range requests (RFC 7233), ETag, Last-Modified, Cache-Control. }
@@ -92,6 +97,7 @@ uses
   nextpas.core.fs.base,
   nextpas.core.fs.path,
   nextpas.core.text.conv,
+  nextpas.core.text.view,
   nextpas.core.time,
   nextpas.core.time.format,
   nextpas.core.time.date,
@@ -109,15 +115,18 @@ uses
   nextpas.core.http.url,
   nextpas.core.http.message,
   nextpas.core.http.mime,
-  nextpas.core.time.httpdate;
+  nextpas.core.time.httpdate,
+  nextpas.core.platform.sendfile,
+  nextpas.core.platform.sendfile.base;
 
 type
-  TResponseWriterAdapter = class(TInterfacedObject, IWriter)
+  TResponseWriterAdapter = class(TInterfacedObject, IWriter, nextpas.core.platform.sendfile.base.ISendfileSocketHandle)
   private
     FWriter: IHttpResponseWriter;
   public
     constructor Create(const AWriter: IHttpResponseWriter);
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function GetSocketHandle: TPlatformSocket;
   end;
 
 { ===== Implementation ===== }
@@ -133,9 +142,20 @@ begin
   Result := FWriter.Write(ABuf, ACount);
 end;
 
+function TResponseWriterAdapter.GetSocketHandle: TPlatformSocket;
+var
+  LSock: nextpas.core.platform.sendfile.base.ISendfileSocketHandle;
+begin
+  Result := PLATFORM_INVALID_SOCKET;
+  if FWriter = nil then
+    Exit;
+  if Supports(FWriter, nextpas.core.platform.sendfile.base.ISendfileSocketHandle, LSock) then
+    Result := LSock.GetSocketHandle;
+end;
+
 const
   CACHE_REVALIDATE = 'public, max-age=0, must-revalidate';
-  STATIC_COPY_BUF_SIZE = 4096; { Range 拷贝块大小，4K 页基准几何；inline 探针零分配+`bytes.ops:CompareMem` 单源，嵌入 VFS 零拷贝切片（TEmbeddedSlice/Move 直达 blob）已付零拷贝收益，额外缓冲仅增一次 CopyRange 重复拷贝，4K 对齐单次页系统调用最优；`io.Copy`/`CopyRange` 流式禁 `ReadAll`，`heaptrc 0` }
+  STATIC_COPY_BUF_SIZE = 32768; { 32K=8*4K 对齐 `io.base:IO_COPY_BUF_SIZE` 单源 (`platform.sendfile.base:PLATFORM_SENDFILE_CHUNK` 同源，`Move` 单源 `bytes.ops`)；VFS 嵌入 `TEmbeddedSlice`/`Move` 零拷贝已兑现，`IFile:IWriterTo`→`io.Copy` 快路径（L0 `platform.sendfile` file→file/file→socket 真零拷贝已兑现 via `ISendfileSocketHandle` fd 缝，`PLATFORM_SENDFILE_CHUNK` 32K 单源，`Move` 单源 `bytes.ops`，回退 honest 32K 缓冲）；`io.Copy`/`CopyRange` 流式禁 `ReadAll`，`heaptrc 0` }
 
 { ===== Helpers ===== }
 
@@ -271,12 +291,19 @@ begin
   Result := AModTimeNs div 1000000000;
 end;
 
+function StripWeakETagView(const S: string): TStringView; inline;
+begin
+  // perf: inline zero-copy view via TStringView.FromStr+Slice single source (bytes.ops TryClampSlice → TByteSpan, no Move) avoids System.Copy heap alloc; caller compares via SpanEqual/CompareMem single source
+  if (Length(S) >= 2) and (S[1] = 'W') and (S[2] = '/') then
+    Result := TStringView.FromStr(S).Slice(2, SizeUInt(Length(S) - 2))
+  else
+    Result := TStringView.FromStr(S);
+end;
+
 function StripWeakETag(const S: string): string; inline;
 begin
-  if (Length(S) >= 2) and (S[1] = 'W') and (S[2] = '/') then
-    Result := System.Copy(S, 3, Length(S) - 2)
-  else
-    Result := S;
+  // perf: inline thin-forward via StripWeakETagView (TStringView single source, bytes.ops TryClampSlice zero-copy extent, no System.Copy); ToString single alloc only when W/ present, hot path HttpWeakETagEquals already zero-alloc via offsets+CompareMem
+  Result := StripWeakETagView(S).ToString;
 end;
 
 function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
@@ -524,7 +551,12 @@ begin
 end;
 
 { Copy ACount bytes from AInput starting at AStart to writer.
-  Accepts any IStream (fs IFile and IVfs.OpenRead streams both qualify). }
+  Accepts any IStream (fs IFile and IVfs.OpenRead streams both qualify).
+  Perf: 32K buffer aligned `io.base:IO_COPY_BUF_SIZE` single source (L0
+  `platform.sendfile.base:PLATFORM_SENDFILE_CHUNK` 同源，`Move` 单源 `bytes.ops`，
+  `IFile:IWriterTo`→`io.Copy` 快路径 + file→socket/file→file 真零拷贝已兑现 via
+  `ISendfileSocketHandle` fd 缝，`PLATFORM_SENDFILE_CHUNK` 32K 单源 chunk，回退 honest 32K 缓冲)；
+  loop body not inline per `bytes.ops` 红线 2 (I-Cache)。 }
 procedure CopyRange(const AInput: IStream; const AWriter: IWriter;
   AStart, ACount: Int64);
 var
@@ -532,7 +564,45 @@ var
   LRemaining: Int64;
   LToRead: SizeUInt;
   LN: SizeUInt;
+  LFileHandle: ISendfileFileHandle;
+  LSocketHandle: ISendfileSocketHandle;
+  LFile: TPlatformFileHandle;
+  LSocket: TPlatformSocket;
+  LSent, LChunk: Int64;
+  LOffset: Int64;
 begin
+  if (AInput = nil) or (AWriter = nil) then
+    Exit;
+  if ACount <= 0 then
+    Exit;
+  if Supports(AInput, ISendfileFileHandle, LFileHandle) and
+     Supports(AWriter, ISendfileSocketHandle, LSocketHandle) then
+  begin
+    LFile := LFileHandle.GetFileHandle;
+    LSocket := LSocketHandle.GetSocketHandle;
+    if not LFile.IsInvalid and not LSocket.IsInvalid then
+    begin
+      LOffset := AStart;
+      LRemaining := ACount;
+      LSent := 0;
+      while LRemaining > 0 do
+      begin
+        if LRemaining > PLATFORM_SENDFILE_CHUNK then
+          LChunk := PLATFORM_SENDFILE_CHUNK
+        else
+          LChunk := LRemaining;
+        LSent := platform_sendfile_socket(LSocket, LFile, @LOffset, LChunk);
+        if LSent = PLATFORM_SENDFILE_UNSUPPORTED then
+          Break;
+        if LSent <= 0 then
+          Break;
+        Dec(LRemaining, LSent);
+      end;
+      if LRemaining = 0 then
+        Exit;
+      { fallback to buffered copy on unsupported/partial }
+    end;
+  end;
   { Seek to start position }
   AInput.Seek(AStart, soBeginning);
   LRemaining := ACount;
@@ -641,9 +711,15 @@ begin
     AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
     if LIsHead then
       Exit;
+    try AW.Flush; except end;
     LStream := AFactory();
-    LWriter := TResponseWriterAdapter.Create(AW);
-    CopyRange(LStream, LWriter, LStart, LEnd - LStart + 1);
+    try
+      LWriter := TResponseWriterAdapter.Create(AW);
+      CopyRange(LStream, LWriter, LStart, LEnd - LStart + 1);
+    finally
+      if LStream <> nil then
+        try LStream.Close; except end;
+    end;
   end
   else
   begin
@@ -651,9 +727,15 @@ begin
     AW.WriteHeader(HTTP_STATUS_OK);
     if LIsHead then
       Exit;
+    try AW.Flush; except end;
     LStream := AFactory();
-    LWriter := TResponseWriterAdapter.Create(AW);
-    nextpas.core.io.Copy(LWriter, LStream);
+    try
+      LWriter := TResponseWriterAdapter.Create(AW);
+      nextpas.core.io.Copy(LWriter, LStream);
+    finally
+      if LStream <> nil then
+        try LStream.Close; except end;
+    end;
   end;
 end;
 
@@ -750,8 +832,9 @@ begin
     { Ensure root ends with path separator for exact prefix match }
     if (LNormalizedRoot <> '') and (LNormalizedRoot[Length(LNormalizedRoot)] <> '/') then
       LNormalizedRoot := LNormalizedRoot + '/';
-    if not (Length(LNormalizedFull) >= Length(LNormalizedRoot)) or
-       (System.Copy(LNormalizedFull, 1, Length(LNormalizedRoot)) <> LNormalizedRoot) then
+    // perf: inline zero-copy prefix check via TStringView single source (bytes.ops SpanEqual→MemEqual, no System.Copy heap alloc)
+    if (Length(LNormalizedFull) < Length(LNormalizedRoot)) or
+       not TStringView.FromStr(LNormalizedFull).Left(SizeUInt(Length(LNormalizedRoot))).Equals(TStringView.FromStr(LNormalizedRoot)) then
     begin
       AW.GetHeaders.SetHeader('content-length', '9');
       AW.WriteHeader(HTTP_STATUS_FORBIDDEN);
@@ -905,7 +988,8 @@ var
 begin
   for I := Length(APath) downto 1 do
     if APath[I] = '/' then
-      Exit(System.Copy(APath, I + 1, Length(APath) - I));
+      // perf: inline zero-copy extent via SliceToStr single source (bytes.ops TryClampSlice, no System.Copy heap alloc) — single SetString+Move via bytes.ops.BytesCopy single source, owner text.view
+      Exit(SliceToStr(APath, SizeUInt(I), SizeUInt(Length(APath) - I)));
   Result := APath;
 end;
 

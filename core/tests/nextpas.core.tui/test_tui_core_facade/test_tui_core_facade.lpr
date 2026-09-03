@@ -4,6 +4,14 @@ program test_tui_core_facade;
 
 uses
   nextpas.core.tui,
+  nextpas.core.tui.base,
+  nextpas.core.tui.color,
+  nextpas.core.tui.style,
+  nextpas.core.tui.layout,
+  nextpas.core.tui.layout.grid,
+  nextpas.core.tui.layout.dsl,
+  nextpas.core.tui.event,
+  nextpas.core.tui.borders,
   nextpas.core.test;
 
 var

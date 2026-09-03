@@ -546,6 +546,19 @@ function utimensat(dirfd: cint; pathname: PAnsiChar; times: PTimeSpec;
 
 { Permission }
 
+{** @desc 创建 FIFO 特殊文件
+    @param path 路径
+    @param mode 权限
+    @return 0 成功 *}
+function mkfifo(path: PAnsiChar; mode: mode_t): cint; cdecl; external 'c' name 'mkfifo';
+
+{** @desc 创建设备节点（owner 反哺：tar device 往返完整，经平台单缝）
+    @param path 路径
+    @param mode 权限+类型（S_IFCHR/S_IFBLK）
+    @param dev 设备号（makedev 编码）
+    @return 0 成功 *}
+function mknod(path: PAnsiChar; mode: mode_t; dev: dev_t): cint; cdecl; external 'c' name 'mknod';
+
 {** @desc 设置文件权限
     @param path 文件路径
     @param mode 权限模式

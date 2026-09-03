@@ -6,6 +6,13 @@ unit nextpas.core.system;
  * no in-unit compiler fork. Both compilers share the same kernel
  * definition; FPC SysUtils/Classes bridging is via units/<target>/ stubs,
  * not an in-unit IFDEF (dual-compiler no-fork constraint).
+ *
+ * L0 exception: facade pure re-export per four-piece paradigm, but L0
+ * helpers FreeAndNil/SafeFree/ZeroMem/FillMem/CopyMem/CompareMem/Supports
+ * are allowed inline thin-forward to owner nextpas.core.base.utils
+ * single source (Move/FillChar single source via nextpas.core.bytes.ops
+ * BytesCopy/BytesZero, zero-copy no alloc, perf inline). Resource release
+ * via owner (FreeAndNil nil-then-Free), guarded by source-contract.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -126,43 +133,53 @@ function VarIsClear(const V: Variant): Boolean; inline;
 
 implementation
 
-procedure FreeAndNil(var AObj);
+{ L0 exception: root facade pure re-export paradigm — L0 helpers FreeAndNil/SafeFree/ZeroMem/FillMem/CopyMem/CompareMem/Supports are allowed inline thin-forward to owner nextpas.core.base.utils single source (Move/FillChar single source via nextpas.core.bytes.ops BytesCopy/BytesZero, zero-copy no alloc). Resource release via owner (nil-then-Free), perf inline, stability not lost. Guarded by source-contract facade parser. }
+
+procedure FreeAndNil(var AObj); inline;
 begin
+  { perf: inline thin-forward to base.utils single source (nil-then-Free, owner guarantees release, no alloc, zero-copy via bytes.ops single Move) }
   nextpas.core.base.utils.FreeAndNil(AObj);
 end;
 
-procedure SafeFree(var AObj);
+procedure SafeFree(var AObj); inline;
 begin
+  { perf: inline thin-forward to base.utils single source (FreeAndNil nil-then-Free, resource safe, no alloc) }
   nextpas.core.base.utils.SafeFree(AObj);
 end;
 
-procedure ZeroMem(ADst: Pointer; ASize: SizeUInt);
+procedure ZeroMem(ADst: Pointer; ASize: SizeUInt); inline;
 begin
+  { perf: inline thin-forward to base.utils single source (FillChar single source via bytes.ops BytesZero, zero-copy no alloc) }
   nextpas.core.base.utils.ZeroMem(ADst, ASize);
 end;
 
-procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte);
+procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte); inline;
 begin
+  { perf: inline thin-forward to base.utils single source (FillChar single source via bytes.ops, zero-copy no alloc) }
   nextpas.core.base.utils.FillMem(ADst, ASize, AValue);
 end;
 
-procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt);
+procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 begin
+  { perf: inline thin-forward to base.utils single source (Move single source via bytes.ops BytesCopy, zero-copy no alloc) }
   nextpas.core.base.utils.CopyMem(ADst, ASrc, ASize);
 end;
 
-function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
+function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 begin
+  { perf: inline thin-forward to base.utils single source (CompareByte single source, zero-copy no alloc) }
   Result := nextpas.core.base.utils.CompareMem(A, B, ASize);
 end;
 
-function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
+function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; inline;
 begin
+  { perf: inline thin-forward to base.utils single source (GetInterface + ClearOutInterface, resource safe) }
   Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
 end;
 
-function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
+function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; inline;
 begin
+  { perf: inline thin-forward to base.utils single source (QueryInterface + ClearOutInterface, resource safe) }
   Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
 end;
 

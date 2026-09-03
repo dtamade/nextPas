@@ -4,7 +4,7 @@
 S4 后端打磨、S5 多窗口隔离与事件驱动门禁、S6 GetTitle 与会话三形态
 live 覆盖、S7 DataDirectory 修复、S8 可运行 demo 与 idle 清理修正、
 S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 respack
-资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口、S14 bench_bridge 与文档闭环、S15 MIME 65 项与骨架屏收口、S16 生产就绪收口、S17 respack 高级感对齐与 bench 刷新、S18 W2 桩+loader via wine 交叉验证、S19 W2 Win32 真窗口壳、S20 满态壳（DPI 分数/最小化/WM_DPICHANGED）、S21 真 controller（Env→Controller/Eval/桥/WMS bounds）均已进主线；S22 导航真事件、S23 调度与稳定、S24 门禁与 bench 收口、S25 W3 WKWebView 桩（13 门全绿）、S26 终极封版（hints 洁净/Closed 守卫）、S27 bench 基线刷新、S28 警告洁净/双跑自检、S29 主循环 4 后端完整、S30 静态审计、S31 类型设计冻结、S32 注册表 focused-runtime、S33 零负载一致性抛光、S34 零开销与复用抛光（Builder 去重 + VFS 零 Delete）、S35 契约与稳定性收口（__npw 早筛）、S36 热点 inline 与早期互斥（13 链路 inline + Fail Fast）、S37 容量与 Fail-Fast（IsValidWebviewSchemeToken 复用 + 倍增预分配 + Scheme/几何早筛）、S38 InitScripts 容量与完整性（倍增预分配 + CONTRACT 1.32）、S39 几何校验复用收口（CheckWebviewSize/Min/Max 抽取 + builder/Options 同源复用 + CONTRACT 1.33）、S40 会话与脚本守卫复用（CheckWebviewSession/CheckWebviewInitScript 抽取 + inline 化 + CONTRACT 1.34）、S41 容量同构收口（GrowCapacity 4→2× 三同构收敛 + CONTRACT 1.35）、S42 静态审计冻结（零 TODO/hint/warning + CONTRACT 1.36）、S43 全校验 inline（IsValidToken/CheckInvokeCmd 补 inline + CONTRACT 1.37）、S44 Builder 全 inline（AddInitScript/Grow* 补 inline + CONTRACT 1.38）、S45 窗口壳薄转发全 inline（WinShell* 10 + MIME 2 全 inline + CONTRACT 1.39）、S46 桥协议薄转发全 inline（NormalizeInvokeCode/Count/MountCount 3 路径 inline + CONTRACT 1.40）、S47 调度与状态薄转发全 inline（IsOnMainThread/IsClosed/GetDispatcher 5 路径 inline + CONTRACT 1.41）、S48 Win32 窗口壳薄转发全 inline（Win32Shell* 15 薄转发 inline + CONTRACT 1.42）、S49 装载探针快照薄转发全 inline（GtkLoadInfo/WebView2LoadInfo/WkLoadInfo 3 路径 inline + CONTRACT 1.43）、S50 终局冻结（全链 159 inline 闭环 + CONTRACT 1.44）、S51 exactly-once 完整性 + S52-S53 资产归一 NormalizeWebviewAssetPath 单源复用与 GTK 快路径 + S54 前缀归一 + S55 单根快路径 + S56 事件名 CheckWebviewEventName 单源 + S57 在途容量同构 WebviewGrowCapacity + S58-S77 全家族 Count 精确语义与 WebviewGrowCapacity(0→4→2×) 单源 inline 闭环（复用 bytes.ops/CheckWebviewOptions/Normalize 单源、性能 163→165 inline/零拷贝 span、稳定性 Assigned/try-except/释放；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0；四件套与 L0-L3 保持）— CONTRACT 1.97，wine 可交互，W3 wk 桩已冻结，Darwin 真实现待编译器 ObjC 探通）
+资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口、S14 bench_bridge 与文档闭环、S15 MIME 65 项与骨架屏收口、S16 生产就绪收口、S17 respack 高级感对齐与 bench 刷新、S18 W2 桩+loader via wine 交叉验证、S19 W2 Win32 真窗口壳、S20 满态壳（DPI 分数/最小化/WM_DPICHANGED）、S21 真 controller（Env→Controller/Eval/桥/WMS bounds）均已进主线；S22 导航真事件、S23 调度与稳定、S24 门禁与 bench 收口、S25 W3 WKWebView 桩（13 门全绿）、S26 终极封版（hints 洁净/Closed 守卫）、S27 bench 基线刷新、S28 警告洁净/双跑自检、S29 主循环 4 后端完整、S30 静态审计、S31 类型设计冻结、S32 注册表 focused-runtime、S33 零负载一致性抛光、S34 零开销与复用抛光（Builder 去重 + VFS 零 Delete）、S35 契约与稳定性收口（__npw 早筛）、S36 热点 inline 与早期互斥（13 链路 inline + Fail Fast）、S37 容量与 Fail-Fast（IsValidWebviewSchemeToken 复用 + 倍增预分配 + Scheme/几何早筛）、S38 InitScripts 容量与完整性（倍增预分配 + CONTRACT 1.32）、S39 几何校验复用收口（CheckWebviewSize/Min/Max 抽取 + builder/Options 同源复用 + CONTRACT 1.33）、S40 会话与脚本守卫复用（CheckWebviewSession/CheckWebviewInitScript 抽取 + inline 化 + CONTRACT 1.34）、S41 容量同构收口（GrowCapacity 4→2× 三同构收敛 + CONTRACT 1.35）、S42 静态审计冻结（零 TODO/hint/warning + CONTRACT 1.36）、S43 全校验 inline（IsValidToken/CheckInvokeCmd 补 inline + CONTRACT 1.37）、S44 Builder 全 inline（AddInitScript/Grow* 补 inline + CONTRACT 1.38）、S45 窗口壳薄转发全 inline（WinShell* 10 + MIME 2 全 inline + CONTRACT 1.39）、S46 桥协议薄转发全 inline（NormalizeInvokeCode/Count/MountCount 3 路径 inline + CONTRACT 1.40）、S47 调度与状态薄转发全 inline（IsOnMainThread/IsClosed/GetDispatcher 5 路径 inline + CONTRACT 1.41）、S48 Win32 窗口壳薄转发全 inline（Win32Shell* 15 薄转发 inline + CONTRACT 1.42）、S49 装载探针快照薄转发全 inline（GtkLoadInfo/WebView2LoadInfo/WkLoadInfo 3 路径 inline + CONTRACT 1.43）、S50 终局冻结（全链 159 inline 闭环 + CONTRACT 1.44）、S51 exactly-once 完整性 + S52-S53 资产归一 NormalizeWebviewAssetPath 单源复用与 GTK 快路径 + S54 前缀归一 + S55 单根快路径 + S56 事件名 CheckWebviewEventName 单源 + S57 在途容量同构 WebviewGrowCapacity + S58-S77 全家族 Count 精确语义与 WebviewGrowCapacity(0→4→2×) 单源 inline 闭环（复用 bytes.ops/CheckWebviewOptions/Normalize 单源、性能 163→165 inline/零拷贝 span、稳定性 Assigned/try-except/释放；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0；四件套与 L0-L3 保持）— CONTRACT 2.00，wine 可交互，W3 S25桩→S106探针闭环（wk.loader经platform.dl真探，window.cocoa L2闭环，待stage0 ObjC探通））
 **层级**: L3 家族（依赖 L0-L2）
 **目标形态**: Tauri / Wails 式桌面应用外壳——系统自带浏览器引擎 + 原生窗口壳 + 统一 IPC 桥，
 接口抽象在前、后端实现在后。
@@ -14,8 +14,7 @@ S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 res
 
 `nextpas.core.webview` 为桌面 GUI 应用提供"宿主窗口内嵌浏览器引擎"的最小完整抽象：
 
-- **窗口壳**：标题、尺寸、min/max、最大化/最小化/还原、focus 等原生窗口操作
-  （模块自己拥有窗口）。
+- **窗口壳（M6 has-a）**：`IWebviewWindow.Window: IWindow` 组合 `nextpas.core.window`（L2）——标题、尺寸、min/max、最大化/最小化/还原、focus 等原生窗口操作统一经 `Window` 属性（`View.Window.Show` / `View.Window.SetTitle` 等），`webview` 不再自持窗口壳。
 - **内容承载**：导航到 URL / HTML 字符串；zoom 与 UA 控制；通过自定义 URL scheme
   提供内嵌资源；开发模式可直连 dev server。
 - **双向 IPC**：前端 `invoke(cmd, payload) → Promise`，Pascal 侧注册命名 handler；
@@ -123,8 +122,8 @@ begin
       .OnReady(@LDemo.OnReady)
       .Build;
     LWin.Assets.MountEmbedded('', TMyRespackProvider.Create);
-    LWin.Show;
-    WebviewRunLoop;
+    LWin.Window.Show;
+    WindowRunLoop; // WebviewRunLoop 为 deprecated shim（M6 单泵统一）
     LWin := nil;
   finally
     LDemo.Free;
@@ -142,7 +141,8 @@ end.
 | `InitialUrl/InitialHtml` | 构造期导航（Url 优先） |
 | `DevServerUrl` | 开发模式：资产惰性、scheme 惰注册 |
 | `RegisterInvoke/RegisterAsyncInvoke/OnReady/Kind` | IPC 与后端选型 |
-| `Build` | 创建窗口（多窗共享同一主循环） |
+| `Parent(IWindow)` | 嵌入已有 `IWindow`（has-a 组合；`CreateWebviewOn(AParent, ...)` 同源） |
+| `Build` | 创建窗口（多窗共享同一主循环，`Window` 属性暴露 `IWindow`） |
 | `Run(url)/RunHtml(html)` | 单窗便捷封装（Build+Navigate+RunLoop） |
 
 respack 集成形态见 `demo_webview_respack` 与 `nextpas.core.webview.vfs`

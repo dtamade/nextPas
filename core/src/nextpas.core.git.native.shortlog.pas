@@ -29,15 +29,17 @@ function GitShortlogText(const AGitDir: string; AMaxCount: Integer): string; ove
 implementation
 
 uses
-  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.fs,
-  nextpas.core.text.builder,
+  nextpas.core.bytes.ops,
+  nextpas.core.collections.algorithms,
+  nextpas.core.collections.hashmap,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revwalk,
-  nextpas.core.git.native.revparse;
+  nextpas.core.git.native.revparse,
+  nextpas.core.text.builder;
 
 function LocalTrim(const S: string): string;
 var I, J: Integer;
@@ -74,9 +76,10 @@ begin
     except Result := GitResolveRef(AGitDir, R); end;
 end;
 
-function LocalCompareStr(const A, B: string): Integer;
+function LocalCompareStr(const A, B: string): Integer; inline;
 var I, L: Integer;
 begin
+  // perf: inline + zero-copy char scan, single source for CompareShortlogEntry, avoids SysUtils overhead
   L := Length(A);
   if Length(B) < L then L := Length(B);
   for I := 1 to L do
@@ -84,9 +87,20 @@ begin
   Result := Length(A) - Length(B);
 end;
 
-function ShortKey(const AName, AEmail: string): string;
+function ShortKey(const AName, AEmail: string): string; inline;
 begin
+  // perf: inline key build, single alloc; delimiter #0 avoids overlap, single source for hash grouping
   Result := AName + #0 + AEmail;
+end;
+
+function CompareShortlogEntry(const A, B: TGitShortlogEntry; AData: Pointer): SizeInt; inline;
+begin
+  // perf: inline comparator for collections.algorithms.Sort (IntroSort O(n log n), no per-call Temp), single source ordering
+  if A.Count > B.Count then Exit(-1);
+  if A.Count < B.Count then Exit(1);
+  Result := LocalCompareStr(A.AuthorName, B.AuthorName);
+  if Result <> 0 then Exit;
+  Result := LocalCompareStr(A.AuthorEmail, B.AuthorEmail);
 end;
 
 function GitShortlogInternal(const AGitDir, ARef: string; AMaxCount: Integer): TGitShortlogArray;
@@ -94,94 +108,89 @@ var
   Repo: TNativeRepository;
   StartOid, Peeled: TGitOid;
   Oids: TGitOidArray;
-  I, J, K: Integer;
+  I: Integer;
   Kind: TGitObjectKind;
   Data: TBytes;
   Info: TGitCommitInfo;
-  Found: Integer;
+  Found: SizeInt;
   Entry: TGitShortlogEntry;
-  LResLen, LResCap: Integer;
-  LCapArr: array of Integer;
+  ResultCount: SizeUInt;
+  LCap, LNeed, LNewCap: SizeUInt;
+  AuthorMap: specialize THashMap<string, SizeInt>;
+  Key: string;
 begin
   Result := nil;
-  LResLen := 0;
-  LResCap := 0;
-  SetLength(LCapArr, 0);
   if AGitDir = '' then raise EGitError.Create('shortlog: gitdir empty');
   Repo := TNativeRepository.Create(AGitDir);
+  AuthorMap := specialize THashMap<string, SizeInt>.Create;
   try
-    StartOid := ResolveStartOid(AGitDir, ARef);
-    Peeled := PeelToCommit(Repo, StartOid);
-    if AMaxCount < 0 then Oids := GitCollectCommits(Repo, [Peeled], -1)
-    else Oids := GitCollectCommits(Repo, [Peeled], AMaxCount);
-    // group: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
-    for I := 0 to High(Oids) do
-    begin
-      Data := Repo.ReadObject(Oids[I], Kind);
-      if Kind <> gokCommit then Continue;
-      Info := GitParseCommit(Data);
-      Found := -1;
-      for J := 0 to LResLen - 1 do
-        if (Result[J].AuthorName = Info.Author.Name) and (Result[J].AuthorEmail = Info.Author.Email) then
-        begin Found := J; Break; end;
-      if Found >= 0 then
+    try
+      StartOid := ResolveStartOid(AGitDir, ARef);
+      Peeled := PeelToCommit(Repo, StartOid);
+      if AMaxCount < 0 then Oids := GitCollectCommits(Repo, [Peeled], -1)
+      else Oids := GitCollectCommits(Repo, [Peeled], AMaxCount);
+      // group: hash table O(1) expected per commit via collections.hashmap single source (WyHash+open-addressing, 0.75 load), replaces O(n*m) linear scan; outer/inner growth via bytes.ops GrowArrayCapacity single source
+      ResultCount := 0;
+      // perf: reserve map buckets once via hashmap single source, avoids rehash churn on large author set
+      if Length(Oids) > 0 then AuthorMap.Reserve(SizeUInt(Length(Oids)));
+      for I := 0 to High(Oids) do
       begin
-        Inc(Result[Found].Count);
-        if Result[Found].Count > Length(Result[Found].Commits) then
+        Data := Repo.ReadObject(Oids[I], Kind);
+        if Kind <> gokCommit then Continue;
+        Info := GitParseCommit(Data);
+        Key := ShortKey(Info.Author.Name, Info.Author.Email);
+        if AuthorMap.TryGetValue(Key, Found) then
         begin
-          LCapArr[Found] := BytesGrowCapacityInt(LCapArr[Found], Result[Found].Count);
-          SetLength(Result[Found].Commits, LCapArr[Found]);
-        end;
-        Result[Found].Commits[Result[Found].Count - 1] := Oids[I];
-      end
-      else
-      begin
-        Entry.AuthorName := Info.Author.Name;
-        Entry.AuthorEmail := Info.Author.Email;
-        Entry.Count := 1;
-        if LResLen + 1 > LResCap then
+          // perf: amortized doubling via bytes.ops GrowArrayCapacity (single source, BYTES_BUILDER_MIN_GROW + *2), O(1) amortized per append, zero-copy TGitOid Move (20B) via direct assignment
+          Inc(Result[Found].Count);
+          LNeed := SizeUInt(Result[Found].Count);
+          LCap := SizeUInt(Length(Result[Found].Commits));
+          if LCap < LNeed then
+          begin
+            LNewCap := GrowArrayCapacity(LCap, LNeed);
+            SetLength(Result[Found].Commits, LNewCap);
+          end;
+          Result[Found].Commits[LNeed - 1] := Oids[I];
+        end
+        else
         begin
-          LResCap := BytesGrowCapacityInt(LResCap, LResLen + 1);
-          SetLength(Result, LResCap);
-          SetLength(LCapArr, LResCap);
+          Entry.AuthorName := Info.Author.Name;
+          Entry.AuthorEmail := Info.Author.Email;
+          Entry.Count := 1;
+          Entry.Commits := nil;
+          // perf: amortized geometric growth single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), avoids per-entry Length+1 churn
+          LNewCap := GrowArrayCapacity(0, 1);
+          SetLength(Entry.Commits, LNewCap);
+          Entry.Commits[0] := Oids[I];
+          // perf: outer array geometric growth single source via bytes.ops GrowArrayCapacity, amortized O(1), zero-copy record Move via assignment
+          LNeed := ResultCount + 1;
+          LCap := SizeUInt(Length(Result));
+          if LCap < LNeed then
+          begin
+            LNewCap := GrowArrayCapacity(LCap, LNeed);
+            SetLength(Result, LNewCap);
+          end;
+          Result[ResultCount] := Entry;
+          // perf: hash insert O(1) expected via WyHash single source, maps key -> index, replaces linear scan
+          AuthorMap.Add(Key, SizeInt(ResultCount));
+          Inc(ResultCount);
+          Entry.Commits := nil; // break CoW share, avoids next new-alloc copy-on-write churn, zero-copy nil assign
         end;
-        LCapArr[LResLen] := BytesGrowCapacityInt(0, 1);
-        SetLength(Entry.Commits, LCapArr[LResLen]);
-        Entry.Commits[0] := Oids[I];
-        Result[LResLen] := Entry;
-        Inc(LResLen);
       end;
+    finally
+      AuthorMap.Free;
     end;
-    // trim capacity slack to exact logical length
-    if LResLen <> Length(Result) then
-      SetLength(Result, LResLen);
-    if LResLen <> Length(LCapArr) then
-      SetLength(LCapArr, LResLen);
-    for I := 0 to High(Result) do
-      if Length(Result[I].Commits) <> Result[I].Count then
-        SetLength(Result[I].Commits, Result[I].Count);
   finally
     Repo.Free;
   end;
-  // sort: count descending, then name ascending, then email ascending
-  for I := 1 to High(Result) do
-  begin
-    J := I;
-    while J > 0 do
-    begin
-      K := 0;
-      if Result[J-1].Count < Result[J].Count then K := 1
-      else if Result[J-1].Count = Result[J].Count then
-      begin
-        K := LocalCompareStr(Result[J-1].AuthorName, Result[J].AuthorName);
-        if K = 0 then K := LocalCompareStr(Result[J-1].AuthorEmail, Result[J].AuthorEmail);
-        if K > 0 then K := 1 else K := 0;
-      end;
-      if K = 0 then Break;
-      Entry := Result[J-1]; Result[J-1] := Result[J]; Result[J] := Entry;
-      Dec(J);
-    end;
-  end;
+  // single shrink after grouping: bytes.ops single source geometric growth -> one SetLength to exact, avoids O(n²) jitter
+  SetLength(Result, ResultCount);
+  for I := 0 to High(Result) do
+    if SizeUInt(Length(Result[I].Commits)) <> SizeUInt(Result[I].Count) then
+      SetLength(Result[I].Commits, Result[I].Count);
+  // sort: count descending, then name ascending, then email ascending — single source via collections.algorithms.Sort (IntroSort O(n log n) + Heap fallback, no per-call Temp)
+  if Length(Result) > 1 then
+    specialize Sort<TGitShortlogEntry>(Result, @CompareShortlogEntry, nil);
 end;
 
 function GitShortlog(const AGitDir, ARef: string; AMaxCount: Integer): TGitShortlogArray;
@@ -198,10 +207,14 @@ function FormatShortlog(const AEntries: TGitShortlogArray): string;
 var
   I: Integer;
   B: TBufStringBuilder;
+  Est: SizeUInt;
 begin
-  // perf: single allocation via text.builder zero-copy (single SetString from view), amortized O(n) vs S:=S+ O(n²)
+  // perf: builder single source text.builder (geometric Grow + *2 via bytes.ops style), O(n) single alloc vs O(n²) S:=S+ concat; inline Append* + zero-copy Move, single ToString alloc, no per-line temp strings
   if Length(AEntries) = 0 then Exit('');
-  B.Init(256);
+  Est := SizeUInt(Length(AEntries)) * 64;
+  for I := 0 to High(AEntries) do
+    Inc(Est, SizeUInt(Length(AEntries[I].AuthorName) + Length(AEntries[I].AuthorEmail) + 8));
+  B.Init(Est);
   try
     for I := 0 to High(AEntries) do
     begin

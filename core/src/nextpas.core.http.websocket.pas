@@ -184,7 +184,7 @@ type
     FFragmentOpen: Boolean;
     FFragmentOpcode: TWebSocketOpcode;
     FFragmentPayloadSize: UInt64;
-    FFragmentBinaryPayload: TBytes;
+    FFragmentParts: array of TBytes;
     FFragmentCompressed: Boolean;
     FOptions: TWebSocketOptions;
     FIsClient: Boolean;
@@ -754,7 +754,7 @@ begin
   FFragmentOpen := False;
   FFragmentOpcode := wsOpContinuation;
   FFragmentPayloadSize := 0;
-  FFragmentBinaryPayload := nil;
+  FFragmentParts := nil;
   FFragmentCompressed := False;
   if FStream <> nil then
     ApplyWebSocketCancelToken(FStream, AOptions.EffectiveCancelToken);
@@ -762,6 +762,7 @@ end;
 
 destructor TWebSocketImpl.Destroy;
 begin
+  FFragmentParts := nil;
   ClearStreamCancel;
   inherited Destroy;
 end;
@@ -913,38 +914,21 @@ begin
 
   if Result.Opcode = wsOpContinuation then
   begin
-    if not FFragmentCompressed then
-    begin
-      if FFragmentOpcode = wsOpText then
-      begin
-        FFragmentBinaryPayload := BytesConcat(FFragmentBinaryPayload, Result.Payload);
-        if Result.Fin then
-          ValidateTextPayload(BytesToString(FFragmentBinaryPayload));
-      end
-      else
-        FFragmentBinaryPayload := BytesConcat(FFragmentBinaryPayload, Result.Payload);
-    end
-    else
-      FFragmentBinaryPayload := BytesConcat(FFragmentBinaryPayload, Result.Payload);
+    { perf: collect parts + BytesConcatMany single alloc (bytes.ops single source, zero-copy BytesCopy) vs per-fragment BytesConcat O(n²) SetLength+Move churn; inline BytesToString/Copy single source, stability: nil reset frees refs }
+    SetLength(FFragmentParts, Length(FFragmentParts) + 1);
+    FFragmentParts[High(FFragmentParts)] := Result.Payload;
     if Result.Fin then
     begin
       { Final continuation always returns the fully assembled message. }
+      Result.Payload := BytesConcatMany(FFragmentParts);
       if FFragmentCompressed then
-      begin
-        Result.Payload := MaybeDecompressPayload(True, FFragmentBinaryPayload);
-        if FFragmentOpcode = wsOpText then
-          ValidateTextPayload(BytesToString(Result.Payload));
-      end
-      else
-      begin
-        Result.Payload := FFragmentBinaryPayload;
-        if FFragmentOpcode = wsOpText then
-          ValidateTextPayload(BytesToString(Result.Payload));
-      end;
+        Result.Payload := MaybeDecompressPayload(True, Result.Payload);
+      if FFragmentOpcode = wsOpText then
+        ValidateTextPayload(BytesToString(Result.Payload));
       FFragmentOpen := False;
       FFragmentOpcode := wsOpContinuation;
       FFragmentPayloadSize := 0;
-      FFragmentBinaryPayload := nil;
+      FFragmentParts := nil;
       FFragmentCompressed := False;
     end
     else
@@ -963,7 +947,8 @@ begin
       FFragmentOpen := True;
       FFragmentOpcode := Result.Opcode;
       FFragmentPayloadSize := LPayloadLen;
-      FFragmentBinaryPayload := Result.Payload;
+      SetLength(FFragmentParts, 1);
+      FFragmentParts[0] := Result.Payload;
       FFragmentCompressed := LRsv1;
     end;
   end;

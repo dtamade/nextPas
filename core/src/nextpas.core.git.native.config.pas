@@ -43,6 +43,7 @@ function GitConfigGetBool(const AConfig: TGitConfig; const AKey: string; out AVa
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.util;
 
 function GitConfigPath(const AGitDir: string): string;
@@ -228,7 +229,7 @@ begin
   Result.Entries := nil;
   if Length(AData) = 0 then
     Exit;
-  Text := GitBytesToString(AData);
+  Text := BytesToString(AData);
   Count := 0;
   for I := 1 to Length(Text) do
     if Text[I] = #10 then Inc(Count);

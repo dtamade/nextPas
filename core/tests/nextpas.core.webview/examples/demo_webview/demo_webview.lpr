@@ -27,7 +27,10 @@ uses
   SysUtils,
   DateUtils,
   nextpas.core.base,
+  nextpas.core.text.view,
+  nextpas.core.webview.utils,
   nextpas.core.json,
+  nextpas.core.json.value,
   { 显式选后端时引 base（门面只 re-export 类型别名，不带枚举值） }
   nextpas.core.webview.base,
   nextpas.core.window.base,
@@ -201,21 +204,30 @@ type
   public
     function TryResolve(const APath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
 function TDemoPageProvider.TryResolve(const APath: string;
   out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  Result := TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType);
+end;
+
+function TDemoPageProvider.TryResolveView(const AView: TStringView;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
 var
-  LPath: string;
+  LView: TStringView;
+  LNorm: TStringView;
 begin
   ABytes := nil;
   AMimeType := '';
-  LPath := APath;
-  while (Length(LPath) > 0) and (LPath[1] = '/') do
-    Delete(LPath, 1, 1);
-  if Copy(LPath, 1, 4) = 'app/' then
-    Delete(LPath, 1, 4);
-  if LPath <> 'index.html' then
+  LView := AView;
+  LNorm := NormalizeWebviewAssetView(LView);
+  // strip optional app/ prefix zero-copy
+  if (LNorm.Len >= 4) and (TStringView.FromStr('app/').Equals(LNorm.Left(4))) then
+    LNorm := LNorm.Slice(4, LNorm.Len - 4);
+  if not TStringView.FromStr('index.html').Equals(LNorm) then
     Exit(False);
   ABytes := StrToBytes(PAGE_HTML);
   AMimeType := 'text/html; charset=utf-8';

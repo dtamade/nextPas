@@ -1,28 +1,28 @@
 program test_webview_grow;
-{ WebviewGrowCapacity 单源容量门禁：0→4→2× 同构语义
+{ VecGrowCapacity 单源容量门禁（base 纯类型已下沉至 bytes.ops 单源）：0→4→2× 同构语义
   + Count 精确追加/移除/Close 仿真（驱动 wk FPendingEvals 家族逻辑）。
-  heaptrc 0 unfreed 硬门。 }
+  heaptrc 0 unfreed 硬门。perf: bytes.ops VecGrowCapacity inline 单源零额外调用 }
 
 {$I nextpas.core.settings.inc}
 
 uses
   SysUtils,
   nextpas.core.test,
-  nextpas.core.webview.base;
+  nextpas.core.bytes.ops;
 
 procedure TestGrowCapacityTable;
 begin
-  CheckEqual(4, WebviewGrowCapacity(0));
-  CheckEqual(2, WebviewGrowCapacity(1));
-  CheckEqual(4, WebviewGrowCapacity(2));
-  CheckEqual(6, WebviewGrowCapacity(3));
-  CheckEqual(8, WebviewGrowCapacity(4));
-  CheckEqual(10, WebviewGrowCapacity(5));
-  CheckEqual(14, WebviewGrowCapacity(7));
-  CheckEqual(16, WebviewGrowCapacity(8));
-  CheckEqual(32, WebviewGrowCapacity(16));
-  CheckEqual(200, WebviewGrowCapacity(100));
-  CheckEqual(0, WebviewGrowCapacity(0) - 4);
+  CheckEqual(4, VecGrowCapacity(0));
+  CheckEqual(2, VecGrowCapacity(1));
+  CheckEqual(4, VecGrowCapacity(2));
+  CheckEqual(6, VecGrowCapacity(3));
+  CheckEqual(8, VecGrowCapacity(4));
+  CheckEqual(10, VecGrowCapacity(5));
+  CheckEqual(14, VecGrowCapacity(7));
+  CheckEqual(16, VecGrowCapacity(8));
+  CheckEqual(32, VecGrowCapacity(16));
+  CheckEqual(200, VecGrowCapacity(100));
+  CheckEqual(0, VecGrowCapacity(0) - 4);
 end;
 
 procedure TestGrowSequenceCountPrecise;
@@ -35,7 +35,7 @@ begin
   for I := 1 to 9 do
   begin
     if Count = Length(Arr) then
-      SetLength(Arr, WebviewGrowCapacity(Length(Arr)));
+      SetLength(Arr, VecGrowCapacity(Length(Arr)));
     Arr[Count] := I * 10;
     Inc(Count);
   end;
@@ -58,7 +58,7 @@ begin
   for I := 1 to 6 do
   begin
     if Count = Length(Arr) then
-      SetLength(Arr, WebviewGrowCapacity(Length(Arr)));
+      SetLength(Arr, VecGrowCapacity(Length(Arr)));
     Arr[Count] := I;
     Inc(Count);
   end;
@@ -92,15 +92,15 @@ var
   Empty: array of Integer;
 begin
   Empty := nil;
-  CheckEqual(4, WebviewGrowCapacity(0));
-  CheckEqual(4, WebviewGrowCapacity(Length(Empty)));
+  CheckEqual(4, VecGrowCapacity(0));
+  CheckEqual(4, VecGrowCapacity(Length(Empty)));
 end;
 
 var
   T: TTestSuite;
 begin
   T := TTestSuite.Create('nextpas.core.webview.grow');
-  T.Test('WebviewGrowCapacity table 0->4->2x', @TestGrowCapacityTable);
+  T.Test('VecGrowCapacity table 0->4->2x', @TestGrowCapacityTable);
   T.Test('grow sequence Count precise', @TestGrowSequenceCountPrecise);
   T.Test('grow remove shift Count semantics', @TestGrowRemoveShiftSemantics);
   T.Test('zero to four boundary', @TestGrowZeroToFourBoundary);

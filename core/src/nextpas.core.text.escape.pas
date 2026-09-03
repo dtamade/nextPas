@@ -14,6 +14,7 @@ type
 function JsonEscapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
   const ADst: PAnsiChar): SizeUInt;
 procedure JsonEscapeToBuilder(const ASrc: TStringView; var ADst: TStringBuilder);
+procedure JsonDoubleEscapeToBuilder(const ASrc: TStringView; var ADst: TStringBuilder);
 function JsonUnescapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
   const ADst: PAnsiChar; out AError: TUnescapeError): SizeUInt;
 function JsonFindStringEnd(const ASrc: PAnsiChar; const ALen: SizeUInt): PtrInt;
@@ -21,12 +22,21 @@ function JsonFindStringEnd(const ASrc: PAnsiChar; const ALen: SizeUInt): PtrInt;
 function JsonNeedsEscape(const ASrc: PAnsiChar; const ALen: SizeUInt): Boolean; inline;
 function JsonNeedsEscapeView(const ASrc: TStringView): Boolean; inline;
 function JsonNeedsEscapeStr(const S: string): Boolean; inline;
+// simple backslash unescape owner — bytes.ops single source, SIMD VecWidth inline, zero-copy, eliminates hand roll in js.eval
+function TextNeedsBackslashUnescape(const ASrc: PAnsiChar; const ALen: SizeUInt): Boolean; inline;
+function TextNeedsBackslashUnescapeView(const ASrc: TStringView): Boolean; inline;
+function TextUnescapeBackslashToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt; const ADst: PAnsiChar): SizeUInt;
+function TextUnescapeBackslashView(const ASrc: TStringView): string; inline;
+// outer quote strip owner — single source for js.eval arg view (text.escape → pure.value → js.eval), O(1) first/last byte, zero-copy view, feed-back from js.eval
+function TextIsQuotedView(const ASrc: TStringView): Boolean; inline;
+function TextStripOuterQuotesView(const ASrc: TStringView): TStringView; inline;
 
 implementation
 
 uses
   nextpas.core.simd.base,
   nextpas.core.simd.vec,
+  nextpas.core.bytes.ops,
   nextpas.core.text.char,
   nextpas.core.text.utf8;
 
@@ -182,6 +192,80 @@ begin
     end
     else
       ADst.AppendChar(ASrc.Data[LPos]);
+    Inc(LPos);
+  end;
+end;
+
+procedure JsonDoubleEscapeToBuilder(const ASrc: TStringView; var ADst: TStringBuilder);
+var
+  LBuf: array[0..7] of AnsiChar;
+  LPos: SizeUInt;
+  LCombined: TVecMask;
+  LFirst: Int32;
+  LEscLen: SizeUInt;
+  LCh: Byte;
+begin
+  if ASrc.Len = 0 then Exit;
+  ADst.Reserve(ASrc.Len * 4 + 8);
+  LPos := 0;
+  while LPos + VecWidth <= ASrc.Len do
+  begin
+    LCombined := VecCmpEq(@ASrc.Data[LPos], Ord('"')) or
+                 VecCmpEq(@ASrc.Data[LPos], Ord('\')) or
+                 VecCmpLtU(@ASrc.Data[LPos], $20);
+    if LCombined = TVecMask(0) then
+    begin
+      ADst.AppendBytes(@ASrc.Data[LPos], VecWidth);
+      Inc(LPos, VecWidth);
+    end
+    else
+    begin
+      LFirst := VecCtz(LCombined);
+      if LFirst > 0 then
+      begin
+        ADst.AppendBytes(@ASrc.Data[LPos], SizeUInt(LFirst));
+        Inc(LPos, SizeUInt(LFirst));
+      end;
+      LCh := Byte(ASrc.Data[LPos]);
+      LEscLen := 0;
+      case LCh of
+        34: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := '\'; LBuf[3] := '"'; LEscLen := 4; end;
+        92: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := '\'; LBuf[3] := '\'; LEscLen := 4; end;
+        8: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'b'; LEscLen := 3; end;
+        9: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 't'; LEscLen := 3; end;
+        10: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'n'; LEscLen := 3; end;
+        12: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'f'; LEscLen := 3; end;
+        13: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'r'; LEscLen := 3; end;
+      else
+        begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'u'; LBuf[3] := '0'; LBuf[4] := '0';
+              LBuf[5] := HexChar((LCh shr 4) and $F); LBuf[6] := HexChar(LCh and $F); LEscLen := 7; end;
+      end;
+      ADst.AppendBytes(@LBuf[0], LEscLen);
+      Inc(LPos);
+    end;
+  end;
+  while LPos < ASrc.Len do
+  begin
+    LCh := Byte(ASrc.Data[LPos]);
+    if (LCh = 34) or (LCh = 92) or (LCh < 32) then
+    begin
+      LEscLen := 0;
+      case LCh of
+        34: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := '\'; LBuf[3] := '"'; LEscLen := 4; end;
+        92: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := '\'; LBuf[3] := '\'; LEscLen := 4; end;
+        8: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'b'; LEscLen := 3; end;
+        9: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 't'; LEscLen := 3; end;
+        10: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'n'; LEscLen := 3; end;
+        12: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'f'; LEscLen := 3; end;
+        13: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'r'; LEscLen := 3; end;
+      else
+        begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'u'; LBuf[3] := '0'; LBuf[4] := '0';
+              LBuf[5] := HexChar((LCh shr 4) and $F); LBuf[6] := HexChar(LCh and $F); LEscLen := 7; end;
+      end;
+      ADst.AppendBytes(@LBuf[0], LEscLen);
+    end
+    else
+      ADst.AppendChar(AnsiChar(LCh));
     Inc(LPos);
   end;
 end;
@@ -438,6 +522,88 @@ begin
     end;
   end;
   Result := LOut;
+end;
+
+function TextNeedsBackslashUnescape(const ASrc: PAnsiChar; const ALen: SizeUInt): Boolean; inline;
+var LPos: SizeUInt;
+begin
+  LPos := 0;
+  while LPos + VecWidth <= ALen do
+  begin
+    if VecCmpEq(@ASrc[LPos], Ord('\')) <> TVecMask(0) then Exit(True);
+    Inc(LPos, VecWidth);
+  end;
+  while LPos < ALen do
+  begin
+    if ASrc[LPos] = '\' then Exit(True);
+    Inc(LPos);
+  end;
+  Result := False;
+end;
+
+function TextNeedsBackslashUnescapeView(const ASrc: TStringView): Boolean; inline;
+begin
+  if ASrc.Len = 0 then Exit(False);
+  Result := TextNeedsBackslashUnescape(ASrc.Data, ASrc.Len);
+end;
+
+function TextUnescapeBackslashToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt; const ADst: PAnsiChar): SizeUInt;
+var LPos, LOut: SizeUInt; LMask: TVecMask; LFirst: Int32;
+begin
+  LPos := 0; LOut := 0;
+  while LPos + VecWidth <= ALen do
+  begin
+    LMask := VecCmpEq(@ASrc[LPos], Ord('\'));
+    if LMask = TVecMask(0) then
+    begin
+      BytesCopy(@ADst[LOut], @ASrc[LPos], VecWidth);
+      Inc(LPos, VecWidth); Inc(LOut, VecWidth);
+    end else
+    begin
+      LFirst := VecCtz(LMask);
+      if LFirst > 0 then
+      begin
+        BytesCopy(@ADst[LOut], @ASrc[LPos], SizeUInt(LFirst));
+        Inc(LPos, SizeUInt(LFirst)); Inc(LOut, SizeUInt(LFirst));
+      end;
+      Inc(LPos);
+      if LPos < ALen then
+      begin
+        ADst[LOut] := ASrc[LPos];
+        Inc(LOut); Inc(LPos);
+      end;
+    end;
+  end;
+  while LPos < ALen do
+  begin
+    if ASrc[LPos] <> '\' then
+    begin ADst[LOut] := ASrc[LPos]; Inc(LOut); Inc(LPos); end
+    else
+    begin
+      Inc(LPos);
+      if LPos < ALen then begin ADst[LOut] := ASrc[LPos]; Inc(LOut); Inc(LPos); end;
+    end;
+  end;
+  Result := LOut;
+end;
+
+function TextUnescapeBackslashView(const ASrc: TStringView): string; inline;
+var LOut: SizeUInt;
+begin
+  if ASrc.Len = 0 then Exit('');
+  SetLength(Result, ASrc.Len);
+  LOut := TextUnescapeBackslashToBuffer(ASrc.Data, ASrc.Len, PAnsiChar(Result));
+  SetLength(Result, LOut);
+end;
+
+function TextIsQuotedView(const ASrc: TStringView): Boolean; inline;
+begin
+  Result := (ASrc.Len >= 2) and ((ASrc.Data[0] = '"') or (ASrc.Data[0] = '''')) and (ASrc.Data[ASrc.Len - 1] = ASrc.Data[0]);
+end;
+
+function TextStripOuterQuotesView(const ASrc: TStringView): TStringView; inline;
+begin
+  if TextIsQuotedView(ASrc) then Result := ASrc.Slice(1, ASrc.Len - 2) else Result := ASrc;
 end;
 
 end.

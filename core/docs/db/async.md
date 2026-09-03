@@ -1,8 +1,8 @@
 # nextpas.core.db.async — 异步/订阅域契约
 
-**模块**：`nextpas.core.db.async.{base,intf,pas}` + `nextpas.core.db.pg.listen` + `nextpas.core.db.redis.subscribe` 各三件套（`base/intf/门面` + 单工泵线程/有界队列）  
-**层级**：L3 家族（依赖 `thread.pool` + `sync` + `async.cancellation`，仅 L0–L2）  
-**四件套**：`async.base` ← `async.intf` ← `async` 门面 ← `thread.pool` 单工实现；`pg.listen`/`redis.subscribe` 同型三件套  
+**模块**：`nextpas.core.db.async.{base,intf,pas}` + `nextpas.core.db.pg.listen` + `nextpas.core.db.redis.subscribe` 各三件套（`base/intf/门面` + 单工泵线程/有界队列）
+**层级**：独立 L3 族（已升格；依赖 `thread.pool` + `sync` + `async.cancellation`，仅 L0–L2；寄居债已清，四件套/L0–L3/`bytes.ops` 单源/`inline`+零拷贝/`Cancel`→`RemoveOnCancel`/`Destroy` 全路径已兑现）
+**四件套**：`async.base` ← `async.intf` ← `async` 门面 ← `thread.pool` 单工实现；`pg.listen`/`redis.subscribe` 同型三件套
 **对应主契约**：`CONTRACT.md` §1.1 异步/订阅行 + §2.17 `TDbAsyncExecutor` + §2.18 `TPgListener` + §2.19 `RedisOpenSubscriber`
 
 ## 职责

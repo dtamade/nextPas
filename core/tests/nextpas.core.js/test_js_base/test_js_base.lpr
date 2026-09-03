@@ -70,10 +70,10 @@ var
 begin
   O := TJsRuntimeOptions.Default;
   O.TimeoutMs := 0;
-  CheckJsRuntimeOptions(O);
+  CheckJsRuntimeOptions(O, jsbkFake);
   Check(True, 'valid 0');
   O.TimeoutMs := 100;
-  CheckJsRuntimeOptions(O);
+  CheckJsRuntimeOptions(O, jsbkFake);
   Check(True, 'valid 100');
 end;
 
@@ -81,16 +81,34 @@ procedure TestCheckOptionsInvalid;
 var
   O: TJsRuntimeOptions;
   Raised: Boolean;
+  E: EJsError;
 begin
   O := TJsRuntimeOptions.Default;
   O.TimeoutMs := -1;
   Raised := False;
   try
-    CheckJsRuntimeOptions(O);
+    CheckJsRuntimeOptions(O, jsbkQuickJs);
   except
-    on E: EJsError do Raised := True;
+    on E: EJsError do
+    begin
+      Raised := E.Backend = jsbkQuickJs;
+      Check(E.Backend = jsbkQuickJs, 'backend attribution jsbkQuickJs');
+    end;
   end;
   Check(Raised, 'negative timeout raises');
+  // attribution for fake explicitly passed should also preserve
+  O.TimeoutMs := -1;
+  Raised := False;
+  try
+    CheckJsRuntimeOptions(O, jsbkFake);
+  except
+    on E: EJsError do
+    begin
+      Raised := E.Backend = jsbkFake;
+      Check(E.Backend = jsbkFake, 'backend attribution jsbkFake');
+    end;
+  end;
+  Check(Raised, 'negative timeout raises fake');
 end;
 
 procedure TestEJsErrorHierarchy;

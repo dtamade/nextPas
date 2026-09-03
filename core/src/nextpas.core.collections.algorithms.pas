@@ -161,6 +161,10 @@ generic function Merge<T>(const aFirst, aSecond: array of T;
  * @param aArr  要排序的 Int32 数组
  *}
 procedure SortInt32(var aArr: array of Int32);
+{ SortInt32Desc — 降序 IntroSort 单源（复用 SortInt32 + 零拷贝原地逆序，Heap 回退，Tukey ninther），webview distinctLens 专用 }
+procedure SortInt32Desc(var aArr: array of Int32); inline;
+{ SortInt32DescRange — 对前 aCount 个元素降序 IntroSort（保留容量 slack 零重分配），按需委托单源 }
+procedure SortInt32DescRange(var aArr: array of Int32; aCount: SizeInt); inline;
 
 const
   { Visible to interface generics; keep private by naming convention. }
@@ -873,6 +877,50 @@ begin
   while (1 shl DepthLimit) < N do
     Inc(DepthLimit);
   _IntroSortInt32(aArr, 0, High(aArr), DepthLimit * 2);
+end;
+
+procedure SortInt32Desc(var aArr: array of Int32); inline;
+var
+  I, J: SizeInt;
+  Tmp: Int32;
+begin
+  SortInt32(aArr);
+  // 单源 IntroSort 升序后原地逆序得降序，零额外分配，O(n) 单遍 swap，复用堆回退/Tukey 单源
+  J := High(aArr);
+  for I := 0 to (Length(aArr) div 2) - 1 do
+  begin
+    Tmp := aArr[I];
+    aArr[I] := aArr[J - I];
+    aArr[J - I] := Tmp;
+  end;
+end;
+
+procedure SortInt32DescRange(var aArr: array of Int32; aCount: SizeInt); inline;
+var
+  N, DepthLimit: SizeInt;
+  I, J: SizeInt;
+  Tmp: Int32;
+begin
+  if aCount <= 1 then Exit;
+  if aCount > Length(aArr) then aCount := Length(aArr);
+  if aCount = Length(aArr) then
+  begin
+    SortInt32Desc(aArr);
+    Exit;
+  end;
+  // 仅前 aCount 升序 IntroSort 后逆序，保留尾部 slack 零 SetLength 抖动，容量不变
+  N := aCount;
+  DepthLimit := 1;
+  while (1 shl DepthLimit) < N do
+    Inc(DepthLimit);
+  _IntroSortInt32(aArr, 0, aCount - 1, DepthLimit * 2);
+  J := aCount - 1;
+  for I := 0 to (aCount div 2) - 1 do
+  begin
+    Tmp := aArr[I];
+    aArr[I] := aArr[J - I];
+    aArr[J - I] := Tmp;
+  end;
 end;
 
 end.

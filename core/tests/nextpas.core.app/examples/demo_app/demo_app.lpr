@@ -5,6 +5,8 @@ program demo_app;
 uses
   SysUtils, DateUtils,
   nextpas.core.base,
+  nextpas.core.text.view,
+  nextpas.core.webview.utils,
   nextpas.core.json,
   nextpas.core.webview.base,
   nextpas.core.webview,
@@ -28,10 +30,13 @@ end;
 type
   TDemoPage = class(TInterfacedObject, IWebviewAssetProvider)
     function TryResolve(const APath: string; out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView; out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
 function TDemoPage.TryResolve(const APath: string; out ABytes: TBytes; out AMimeType: string): Boolean;
-var L:string; begin L:=APath; while (Length(L)>0) and (L[1]='/') do Delete(L,1,1); if Copy(L,1,4)='app/' then Delete(L,1,4); if L<>'index.html' then Exit(False); ABytes:=StrToBytes(PAGE_HTML); AMimeType:='text/html; charset=utf-8'; Result:=True; end;
+begin Result:=TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType); end;
+function TDemoPage.TryResolveView(const AView: TStringView; out ABytes: TBytes; out AMimeType: string): Boolean;
+var Lv:TStringView; Ln:TStringView; begin ABytes:=nil; AMimeType:=''; Lv:=AView; Ln:=NormalizeWebviewAssetView(Lv); if (Ln.Len>=4) and TStringView.FromStr('app/').Equals(Ln.Left(4)) then Ln:=Ln.Slice(4, Ln.Len-4); if not TStringView.FromStr('index.html').Equals(Ln) then Exit(False); ABytes:=StrToBytes(PAGE_HTML); AMimeType:='text/html; charset=utf-8'; Result:=True; end;
 
 type
   TDemoApp = class

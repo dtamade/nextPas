@@ -9,7 +9,8 @@ uses
   nextpas.core.io.intf,
   nextpas.core.platform.files.base,
   nextpas.core.fs.base,
-  nextpas.core.fs.intf;
+  nextpas.core.fs.intf,
+  nextpas.core.platform.sendfile.base;
 
 function FsOpen(const APath: string; const AMode: TFileMode): IFile;
 function FsCreate(const APath: string; const APerm: TFilePermission = PermDefault): IFile;
@@ -27,12 +28,21 @@ function FsOpenLocked(const APath: string;
 implementation
 
 uses
+  SysUtils,
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.fs.errors,
-  nextpas.core.platform.files;
+  nextpas.core.platform.files,
+  nextpas.core.platform.socket.base,
+  nextpas.core.platform.sendfile;
 
 type
-  TFile = class(TInterfacedObject, IReader, IWriter, IStream, IFile, IReaderAt, IWriterAt)
+  IFilePlatformHandle = interface
+    ['{7A8E9F3C-5B4A-4E2D-9C1F-3D2E1F0A9B8C}']
+    function GetPlatformHandle: TPlatformFileHandle;
+  end;
+
+  TFile = class(TInterfacedObject, IReader, IWriter, IStream, IFile, IReaderAt, IWriterAt, IWriterTo, IFilePlatformHandle, nextpas.core.platform.sendfile.base.ISendfileFileHandle)
   private
     FHandle: TPlatformFileHandle;
     FName: string;
@@ -57,6 +67,9 @@ type
     procedure Unlock;
     function ReadAt(var ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
     function WriteAt(const ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
+    function WriteTo(const ADst: IWriter): Int64;
+    function GetPlatformHandle: TPlatformFileHandle;
+    function GetFileHandle: TPlatformFileHandle;
   end;
 
 procedure ModeToOpenCreate(const AMode: TFileMode;
@@ -383,6 +396,108 @@ begin
   if LResult <> 0 then
     RaiseFsError(LResult, 'pwrite', FName);
   Result := LBytesWritten;
+end;
+
+function TFile.GetPlatformHandle: TPlatformFileHandle;
+begin
+  Result := FHandle;
+end;
+
+function TFile.GetFileHandle: TPlatformFileHandle;
+begin
+  Result := FHandle;
+end;
+
+function TFile.WriteTo(const ADst: IWriter): Int64;
+var
+  LBuf: array[0..32767] of Byte; { IO_COPY_BUF_SIZE single source, 32K = 8*4K }
+  LRead, LWritten, LTotal: SizeUInt;
+  LFileDst: IFilePlatformHandle;
+  LDstHandle: TPlatformFileHandle;
+  LSocketDst: nextpas.core.platform.sendfile.base.ISendfileSocketHandle;
+  LSocketHandle: TPlatformSocket;
+  LOffset: Int64;
+  LRemaining: Int64;
+  LSent: Int64;
+  LChunk: Int64;
+begin
+  if ADst = nil then
+    raise EArgumentNil.Create('TFile.WriteTo: destination writer is nil');
+  CheckOpen;
+  { L0 `platform.sendfile` 已兑现：file→file 真零拷贝（Linux `sendfile` file→file 2.6.33+）；
+    file→socket 内核零拷贝已兑现（Linux `sendfile` file→socket）via IWriter fd 缝
+    `ISendfileSocketHandle`，通用 `IWriter` 回退 honest 32K 缓冲（`bytes.ops` `Move` 单源，
+    `IWriterTo` 快路径已打通，`PLATFORM_SENDFILE_CHUNK`/`IO_COPY_BUF_SIZE` 单源，`try/finally`/`Close` 不丢）。 }
+  if Supports(ADst, IFilePlatformHandle, LFileDst) then
+  begin
+    LDstHandle := LFileDst.GetPlatformHandle;
+    if not LDstHandle.IsInvalid and not FHandle.IsInvalid then
+    begin
+      LOffset := GetPosition;
+      LRemaining := GetSize - LOffset;
+      if LRemaining > 0 then
+      begin
+        LSent := platform_sendfile_file(LDstHandle, FHandle, @LOffset, LRemaining);
+        if LSent > 0 then
+        begin
+          Seek(LOffset, soBeginning);
+          Exit(LSent);
+        end;
+      end else if LRemaining = 0 then
+        Exit(0);
+    end;
+  end;
+  if Supports(ADst, nextpas.core.platform.sendfile.base.ISendfileSocketHandle, LSocketDst) then
+  begin
+    LSocketHandle := LSocketDst.GetSocketHandle;
+    if not LSocketHandle.IsInvalid and not FHandle.IsInvalid then
+    begin
+      LOffset := GetPosition;
+      LRemaining := GetSize - LOffset;
+      if LRemaining = 0 then
+        Exit(0);
+      if LRemaining > 0 then
+      begin
+        Result := 0;
+        while LRemaining > 0 do
+        begin
+          if LRemaining > PLATFORM_SENDFILE_CHUNK then
+            LChunk := PLATFORM_SENDFILE_CHUNK
+          else
+            LChunk := LRemaining;
+          LSent := platform_sendfile_socket(LSocketHandle, FHandle, @LOffset, LChunk);
+          if LSent = PLATFORM_SENDFILE_UNSUPPORTED then
+            Break;
+          if LSent <= 0 then
+            Break;
+          Inc(Result, LSent);
+          Dec(LRemaining, LSent);
+        end;
+        if Result > 0 then
+        begin
+          Seek(LOffset, soBeginning);
+          Exit(Result);
+        end;
+      end;
+    end;
+  end;
+  Result := 0;
+  repeat
+    LRead := Read(LBuf[0], SizeOf(LBuf));
+    if LRead = 0 then
+      Break;
+    LTotal := 0;
+    while LTotal < LRead do
+    begin
+      LWritten := ADst.Write(LBuf[LTotal], LRead - LTotal);
+      if LWritten = 0 then
+        raise EIOError.Create('TFile.WriteTo: write returned 0');
+      if LWritten > LRead - LTotal then
+        raise EIOError.Create('TFile.WriteTo: writer over-reported bytes');
+      Inc(LTotal, LWritten);
+    end;
+    Inc(Result, Int64(LRead));
+  until False;
 end;
 
 end.

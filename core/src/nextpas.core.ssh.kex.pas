@@ -83,8 +83,7 @@ function SshKdfSha256(const AKMpint, AH: TBytes; AX: Byte;
 implementation
 
 uses
-  nextpas.core.bytes.ops,
-  nextpas.core.crypto.hash,
+  nextpas.core.hash,
   nextpas.core.ssh.cipher;
 
 function SshPickFirstMatch(const AClientOffer: array of string;
@@ -210,16 +209,11 @@ end;
 function SshKdfSha256(const AKMpint, AH: TBytes; AX: Byte;
   const ASessionId: TBytes; ALen: Integer): TBytes;
 var
-  LInput, LBlock, LPrev: TBytes;
-
-  function Min64(A, B: Int64): Int64; inline;
-  begin
-    if A < B then
-      Result := A
-    else
-      Result := B;
-  end;
-
+  LHasher: IHasher;
+  LPos, LChunk: Integer;
+  LX: Byte;
+const
+  CSHA256 = 32;
 begin
   Result := nil;
   if ALen <= 0 then
@@ -227,18 +221,40 @@ begin
     SetLength(Result, 0);
     Exit;
   end;
-  SetLength(LInput, 1);
-  LInput[0] := AX;
-  LPrev := SHA256(BytesConcatMany([AKMpint, AH, LInput, ASessionId]));
-  Result := Copy(LPrev, 0, Min64(ALen, Length(LPrev)));
-  while Length(Result) < ALen do
+  // perf: single SetLength(ALen) + streaming IHasher.Write (zero-copy) + direct
+  // IHasher.Sum into Result[LPos] (zero-copy, no SumBytes alloc, no Move); Result
+  // itself reused as prev source (single buffer, zero extra TBytes per block);
+  // Reset reuses hasher instance, ref-counted release;超长派生零额外分配.
+  SetLength(Result, ALen);
+  LHasher := NewSHA256;
+  if Length(AKMpint) > 0 then
+    LHasher.Write(AKMpint[0], Length(AKMpint));
+  if Length(AH) > 0 then
+    LHasher.Write(AH[0], Length(AH));
+  LX := AX;
+  LHasher.Write(LX, 1);
+  if Length(ASessionId) > 0 then
+    LHasher.Write(ASessionId[0], Length(ASessionId));
+  if ALen <= CSHA256 then
+    LChunk := ALen
+  else
+    LChunk := CSHA256;
+  LHasher.Sum(Result[0], SizeUInt(LChunk));
+  LPos := LChunk;
+  while LPos < ALen do
   begin
-    LBlock := SHA256(BytesConcatMany([AKMpint, AH, LPrev]));
-    BytesAppend(Result, LBlock);
-    LPrev := LBlock;
+    LHasher.Reset;
+    if Length(AKMpint) > 0 then
+      LHasher.Write(AKMpint[0], Length(AKMpint));
+    if Length(AH) > 0 then
+      LHasher.Write(AH[0], Length(AH));
+    LHasher.Write(Result[LPos - CSHA256], CSHA256);
+    LChunk := ALen - LPos;
+    if LChunk > CSHA256 then
+      LChunk := CSHA256;
+    LHasher.Sum(Result[LPos], SizeUInt(LChunk));
+    Inc(LPos, LChunk);
   end;
-  if Length(Result) > ALen then
-    SetLength(Result, ALen);
 end;
 
 end.
