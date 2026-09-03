@@ -3,7 +3,8 @@ program test_uring_audit;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, BaseUnix,
+  nextpas.core.text.conv,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.modern,
@@ -116,7 +117,7 @@ begin
   LRing.PeekCqe(LCqe);
   Check(LCqe^.res >= 0, 'read 0 bytes ok');
   LRing.CqeSeen(LCqe);
-  FpClose(LFd);
+  close(LFd);
   LRing.Close;
 end;
 
@@ -149,7 +150,7 @@ begin
   CheckEqual(Int64(65536), Int64(LCqe^.res), 'read 64KB');
   LRing.CqeSeen(LCqe);
   Check((LBuf[0] = 0) and (LBuf[65535] = Byte(65535 mod 251)), '64KB content');
-  FpClose(LFd);
+  close(LFd);
   LRing.Close;
 end;
 

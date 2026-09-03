@@ -8,7 +8,7 @@ program test_reactor_iocp_wine;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test
   {$IFDEF NEXTPAS_WINDOWS}
   , nextpas.core.platform.socket

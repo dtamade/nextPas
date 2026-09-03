@@ -3,8 +3,10 @@ program test_epoll_reactor;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,

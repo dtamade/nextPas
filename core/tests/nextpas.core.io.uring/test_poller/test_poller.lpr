@@ -3,7 +3,9 @@ program test_poller;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes, SysUtils, BaseUnix,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
@@ -246,7 +248,7 @@ begin
       'readiness backend rejects positioned file write');
     Check(not LP.AsyncRead(LFd, @LReadBuf[0], 4, 0, @OnComplete, nil),
       'readiness backend rejects positioned file read');
-    FpClose(LFd);
+    close(LFd);
     LP.Close;
     Exit;
   end;
@@ -271,7 +273,7 @@ begin
   Check((LReadBuf[0] = $DE) and (LReadBuf[1] = $AD) and
         (LReadBuf[2] = $BE) and (LReadBuf[3] = $EF), 'data matches');
 
-  FpClose(LFd);
+  close(LFd);
   LP.Close;
 end;
 
@@ -291,7 +293,7 @@ begin
   begin
     Check(not LP.AsyncWrite(LFd, @LBufs[0][0], 2, 0, @OnComplete, nil),
       'readiness backend rejects positioned batch file write');
-    FpClose(LFd);
+    close(LFd);
     LP.Close;
     Exit;
   end;
@@ -327,7 +329,7 @@ begin
     Check(LBufs[LI][1] = Byte((LI + 1) * 10), 'buf[' + IntToStr(LI) + '][1]');
   end;
 
-  FpClose(LFd);
+  close(LFd);
   LP.Close;
 end;
 
@@ -347,7 +349,7 @@ begin
   begin
     Check(not LP.AsyncWrite(LFd, @LBuf[0], 4, 0, @OnComplete, nil),
       'readiness backend rejects positioned poll batch file write');
-    FpClose(LFd);
+    close(LFd);
     LP.Close;
     Exit;
   end;
@@ -373,7 +375,7 @@ begin
 
   CheckEqual(Int64(3), Int64(GCallbackCount), '3 via poll batch');
 
-  FpClose(LFd);
+  close(LFd);
   LP.Close;
 end;
 
@@ -397,7 +399,7 @@ begin
       begin
         PInt32(AContext)^ := 99;
       end, @LCtx), 'readiness backend rejects positioned context file write');
-    FpClose(LFd);
+    close(LFd);
     LP.Close;
     Exit;
   end;
@@ -413,7 +415,7 @@ begin
 
   CheckEqual(Int64(99), Int64(LCtx), 'context passed correctly');
 
-  FpClose(LFd);
+  close(LFd);
   LP.Close;
 end;
 
@@ -449,8 +451,8 @@ begin
   Check((LReadBuf[0] = $CA) and (LReadBuf[1] = $FE) and
         (LReadBuf[2] = $BA) and (LReadBuf[3] = $BE), 'pipe data matches');
 
-  FpClose(LPipeFd[0]);
-  FpClose(LPipeFd[1]);
+  close(LPipeFd[0]);
+  close(LPipeFd[1]);
   LP.Close;
 end;
 
@@ -478,7 +480,7 @@ begin
     LWriteBuf[1] := $22;
     LWriteBuf[2] := $33;
     LWriteBuf[3] := $44;
-    Check(FpWrite(LPipeFd[1], @LWriteBuf[0], SizeOf(LWriteBuf)) = SizeOf(LWriteBuf),
+    Check(write(LPipeFd[1], @LWriteBuf[0], SizeOf(LWriteBuf)) = SizeOf(LWriteBuf),
       'pipe write makes read ready');
     while GCallbackCount = 0 do
       LP.PollOne;
@@ -486,8 +488,8 @@ begin
     CheckEqual(Int64(4), Int64(GLastResult), 'pending read completed');
     Check(not LP.HasPending, 'completed read clears pending state');
   finally
-    FpClose(LPipeFd[0]);
-    FpClose(LPipeFd[1]);
+    close(LPipeFd[0]);
+    close(LPipeFd[1]);
     LP.Close;
   end;
 end;

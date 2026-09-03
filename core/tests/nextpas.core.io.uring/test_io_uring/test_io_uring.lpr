@@ -3,7 +3,8 @@ program test_io_uring;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, BaseUnix,
+  nextpas.core.text.conv,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.modern,
@@ -88,7 +89,7 @@ begin
   Check((LReadBuf[0] = $DE) and (LReadBuf[1] = $AD) and
         (LReadBuf[2] = $BE) and (LReadBuf[3] = $EF), 'data matches');
 
-  FpClose(LFd);
+  close(LFd);
   LRing.Close;
 end;
 

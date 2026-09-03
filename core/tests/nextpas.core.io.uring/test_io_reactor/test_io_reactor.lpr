@@ -3,7 +3,9 @@ program test_io_reactor;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, BaseUnix,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
@@ -135,7 +137,7 @@ begin
   Check(GLastResult = 2, 'read 2 bytes');
   Check((LReadBuf[0] = $CA) and (LReadBuf[1] = $FE), 'data matches');
 
-  FpClose(LFd);
+  close(LFd);
   LR.Close;
 end;
 

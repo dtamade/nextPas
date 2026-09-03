@@ -5,7 +5,7 @@ program test_poller_windows_runtime_smoke;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test
   {$IFDEF NEXTPAS_WINDOWS}
   , nextpas.core.io.poller
