@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.1.0 (2026-09-03) — nextpas.core.tar 1.0.0 独立 L2 晋升
+
+`nextpas.core.compress.tar` 寄生抽离为独立 `nextpas.core.tar`  परिवार，6 维打磨对齐 `zip` 标杆：四件套 `base/intf/reader/writer/fs` + 薄门面 `tar.pas` + 兼容转发 `compress.tar`，`L2` 归一 `IWriter/IReader/IStream`。
+
+### Highlights
+
+- **模块化**：`tar.base → tar.intf → tar.common/reader/writer/fs/builder → tar` 门面，三层 `base←intf←实现←门面` 单向，`common` 单点 `PadToBlock/Guard*` 消除两端重复，`archive.fs` 几何扩容/排序/防劫持复用
+- **性能**：`HeaderIsZeroOrValid` 单遍 512 融合校验，`ParsePaxRecordsSlice` 零拷贝无 `Copy`，`EntryDataSlice/OpenEntryStream` 外部视图 + `ArchiveWriteFileSlice` 零拷贝落盘，`bench_tar` 7 项（`tar/pack/200x512B`、`builder-pack`、`open/parse`、`extract-*`、`write/read 1MB`）
+- **高级感**：`C_TAR_OFF_*` 命名常量统一头布局，`IsSafeArchiveEntryName(AMaxBytes)` 抽参消除 `zip/tar` 35 行重复，`PutOctal` base-256 阈值 `((ALen-1)*8+7)>=63` 防 `shl 63`，`NumericField` 负数 `$FF` 符号扩展
+- **复用度**：`TarBuilder` 链式薄门面 `ITarBuilder`（`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/Finish`），与 `TTarWriter` bytes 级一致，`TarPackDir/TarExtractToDir` 确定性排序 + `deferred dir` 逆序定稿
+- **稳定性**：`MaxEntrySize(0→1GiB)`/`MaxTotalSize` 双守卫计入 `L/K/x/g` 载荷，`IsSafeTarEntryName` 写端 `EArgumentError`/读端 `EParseError`，双校验和 `unsigned/signed` 任一过，`EIOError` 携带 `offset/size` 上下文
+- **完整性**：`docs/tar/{README,CONTRACT}` 8 不变量 + 源契约 `test_tar_contract`，4 门 `reader/writer/fs/contract` + 回归 `compress_tar` 全绿，`tar_roundtrip` 全链路示例，`compress.tar` 保留 thin forward
+
+### Testing
+
+- `test_tar_reader` / `writer` / `fs` / `contract` 聚焦门全绿 `[HEAPTRC] 0 leak`，`test_compress_tar` 回归仍绿，`make hygiene` / `git diff --check` 通过
+## 1.0.2 (2026-09-02) — nextpas.core.audio 1.5.3 (PR评审闭环)
+
+`78→85` 文件收敛（`29+56`, unique `83+2` bus facade），`11→23` GUID（B前缀 bus异形 `B1A2B3C4-D5E6-7890-ABCD-C00000000001/02`），`14→24` 门 `195→268` tests，`wav` 四件套 L2化 + `opus` 占位 + `bus` 本地 pin/实时零分配/8MB 守卫 + `bench` 扩 `Graph/1K/4K Timeline/1K Loop Device.Drive/1K`，`24` 门 + `85` 文件 + `23` GUID + `test_bus/test_wav` + `Probe≤4KB` + `hygiene` 全绿，`VERSION 1.0.1→1.0.2`。
+
+### Highlights (audio 1.5—1.5.3)
+
+- **audio 1.5 (69→78)**：`codec.flac/mp3/vorbis` 各 `base/intf/impl` 9文件补齐，四件套 `base(L0 only)←intf(仅 IAudioDecoder别名,复用0001)←impl(Probe≤4KB/DecodeWhole/STUB)←facade(type别名+inline转发)` 完整，`registry` 薄封装不硬 `uses` 各 `impl`，实盘 78=`26+52` (unique 76+2)，23 GUID不变
+- **audio 1.5.1 (78→81)**：`wav` 四件套 L2化 — 新增 `codec.wav.base(L0 only CWavProbeLimit=4096)/wav.intf(IWavDecoder别名)/wav.impl(Probe≤4KB DecodeWhole/Encode)`，`wav.pas` 精简为 `type`别名+`inline`转发零逻辑，`graph/mix/sinc` 切 `SimdAddF32/SimdMulF32` 与 `bytes.ops` 单源零拷贝，实盘 81=`29+52` (unique 79+2)
+- **audio 1.5.2 (81→84)**：`codec.opus` 四件套占位 — `opus.base(L0 only COpusProbeLimit=4096)/opus.intf(IOpusDecoder别名)/opus.impl(OpusProbe≤4KB prOggOpus + DecodeWhole 1024帧静音桩 + STUB: OpenStreaming白名单)/opus.pas(inline+AudioRegisterDecoder自注册)`，守 `bytes.ops` 单源+Probe≤4KB零分配，`bus.impl MixRealtime` 本地 pin `LBus:=FSnapshotBuses[I]` 单次 fetch+Assigned/IsValid守卫，实盘 84=`29+55` (unique 82+2)
+- **audio 1.5.3 (84→85)**：PR评审闭环 — `P0` 84→85实盘对齐（`ls 85, for-loop 85, unique 83+2`），`bus MixRealtime` INV-6实时零分配收敛（`FScratch/FSnapshotBuses` 实时不分配，违例 `InterlockedExchangeAdd64(FViolations)` 计数，异构 `Format` 按 per-bus `BlockAlign` 单独计字节，snapshot几何扩容仅控制面），`opus DecodeWhole` 补 `COpusMaxDecodeBytes=8MB(8*1024*1024)` + `COpusOggMinHeader=27` 显式守卫与 `wav MAX_WAV_PAYLOAD` 对称，`bench_pcm_wav` 8项 `Graph/1K/4K Timeline/1K Loop Device.Drive/1K` 已扩，实盘 85=`29+56` (unique 83+2)
+
+### Testing (audio)
+
+- 24门 268 tests `[HEAPTRC] OK`：`test_base 21/test_pcm_wav 12/test_wav 16/test_aiff 11/test_meta 11/test_registry 9/test_resample 14/test_mix 14/test_dsp 14/test_device 15/test_graph 16/test_sfx 15/test_game 15/test_timeline 16/test_flac 8/test_mp3 6/test_vorbis 6/test_spatial 6/test_bus 8/test_bank 15/test_resource 13/test_playlist 8/test_event 10/test_studio 16/test_automation 8`，`85` 文件无 `ffi/vendor` + `23` GUID + `Probe≤4KB` + `实时纪律` + `test_automation` gate 存活，`make hygiene && git diff --check` 绿
+- `bench_pcm_wav` 8项 `ns/op + MB/s -O2, HEAPTRC 关`：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs`（`GWrite*` 预分配，`Graph/Timeline` 零分配快照）
+
 ## 0.2.0 (2026-09-02) — nextpas.core.graphics S2 落地 (source-contract)
 
 **家族** `graphics(L1) + image/vector/canvas/effect(L2) + gpu.canvas(L3)`，`0.1.0-draft → 0.2.0-source-contract` 冻结：
@@ -7,7 +39,6 @@
 - L2 `TBitmap Stride AlignUp64 + COW EnsureUnique + ConstRowPtr`、`image.png` 三式 + `TryImageDecode`、`vector.tess` 梯形化、`canvas.raster` Tile16 + `ClipR` + `simd.raster` 内联、`effect.graph` Tile64 Arena + simd I32x4
 - L3 `gpu.canvas` `TAtlas` 自适应、`Scale 1..4`
 - 契约：枚举 `bfRGBA/ifPng` 对齐、`ifGif` 保留位、`platform.dl` 回写、 bench `bench_raster/bench_image` 单次、`demo_vector_poster` 4086 bytes、26 tests green、`build-hygiene` pass
-
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检
 

@@ -23,7 +23,6 @@ function FlacDecodeWholeViaCursor(const ACursor: IByteCursor; const AStream: ISt
 implementation
 
 uses
-  nextpas.core.base.utils,
   nextpas.core.audio.errors,
   nextpas.core.audio.codec.flac.sse;
 

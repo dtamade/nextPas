@@ -50,6 +50,7 @@ function GitPackIndexPath(const APackPath: string): string; inline;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.hash.sha1,
   nextpas.core.hash.intf,
   nextpas.core.checksum.crc32,
@@ -237,7 +238,9 @@ begin
     begin
       if Pos + GitOidRawLen > Length(APackData) then
         raise EGitError.Create('truncated ref_delta base');
-      Move(APackData[Pos], BaseOid.Bytes[0], GitOidRawLen);
+      // perf: OID 20B zero-copy via bytes.ops SpanCopy single source, inline single Move, no duplicate logic
+      SpanCopy(TByteSpan.Create(@BaseOid.Bytes[0], GitOidRawLen),
+        TByteSpan.Create(PByte(@APackData[Pos]), GitOidRawLen));
       Inc(Pos, GitOidRawLen);
       BaseOidValid := True;
     end
@@ -301,7 +304,9 @@ begin
     raise EGitError.CreateFmt('pack has %d trailing bytes before trailer', [Length(APackData) - GitOidRawLen - Pos]);
   // verify pack trailer
   SetLength(PackHash, GitOidRawLen);
-  Move(APackData[Length(APackData)-GitOidRawLen], PackHash[0], GitOidRawLen);
+  // perf: pack trailer 20B zero-copy via bytes.ops SpanCopy single source
+  SpanCopy(TByteSpan.Create(PByte(@PackHash[0]), GitOidRawLen),
+    TByteSpan.Create(PByte(@APackData[Length(APackData)-GitOidRawLen]), GitOidRawLen));
   H := NewSHA1;
   H.Write(APackData[0], SizeUInt(Length(APackData)-GitOidRawLen));
   Sum := H.SumBytes;
@@ -335,7 +340,9 @@ begin
   for I := 0 to 255 do WriteBE32(Result, OutPos, Fanout[I]);
   for I := 0 to High(Raw) do
   begin
-    Move(Raw[I].Oid.Bytes[0], Result[OutPos], GitOidRawLen);
+    // perf: oid table 20B zero-copy via bytes.ops SpanCopy single source
+    SpanCopy(TByteSpan.Create(PByte(@Result[OutPos]), GitOidRawLen),
+      TByteSpan.Create(@Raw[I].Oid.Bytes[0], GitOidRawLen));
     Inc(OutPos, GitOidRawLen);
   end;
   for I := 0 to High(Raw) do WriteBE32(Result, OutPos, Raw[I].Crc);
@@ -355,13 +362,17 @@ begin
   for I := 0 to High(Raw) do
     if Raw[I].Offset >= $80000000 then WriteBE64(Result, OutPos, Raw[I].Offset);
   // pack checksum
-  Move(PackHash[0], Result[OutPos], GitOidRawLen);
+  // perf: 20B zero-copy via bytes.ops SpanCopy single source
+  SpanCopy(TByteSpan.Create(PByte(@Result[OutPos]), GitOidRawLen),
+    TByteSpan.Create(PByte(@PackHash[0]), GitOidRawLen));
   Inc(OutPos, GitOidRawLen);
   // idx checksum
   H := NewSHA1;
   H.Write(Result[0], SizeUInt(TotalSize - GitOidRawLen));
   Sum := H.SumBytes;
-  Move(Sum[0], Result[OutPos], GitOidRawLen);
+  // perf: 20B zero-copy via bytes.ops SpanCopy single source
+  SpanCopy(TByteSpan.Create(PByte(@Result[OutPos]), GitOidRawLen),
+    TByteSpan.Create(PByte(@Sum[0]), GitOidRawLen));
   // OutPos should be TotalSize
 end;
 

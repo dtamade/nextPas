@@ -380,7 +380,8 @@ begin
       SetLength(LStr, LCap);
     end;
     if LRead > 0 then
-      Move(LBuf[0], (PAnsiChar(LStr) + LLen)^, LRead);
+      // perf: inline zero-copy via bytes.ops.BytesCopy single source (L1+ single-source Move gate)
+      BytesCopy((PAnsiChar(LStr) + LLen), @LBuf[0], SizeUInt(LRead));
     Inc(LLen, LRead);
     if LLen > FORMAT_BULK_PARSE_MAX_BYTES then
       RequireFormatBulkByteCount(LLen, 'JsonParse');

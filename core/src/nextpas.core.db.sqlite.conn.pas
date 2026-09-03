@@ -94,6 +94,9 @@ function SqliteOpen(const APath: string): TSqliteDb;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 { ===== helpers ===== }
 
 procedure RaiseError(const ACode: Integer; const ADb: TSqliteHandle);
@@ -396,7 +399,8 @@ begin
   Result := nil;
   SetLength(Result, LL);
   if LL > 0 then
-    Move(LP^, Result[0], LL);
+    // perf: inline zero-copy via bytes.ops.BytesCopy single source (L1+ single-source Move gate)
+    BytesCopy(@Result[0], LP, SizeUInt(LL));
 end;
 
 end.

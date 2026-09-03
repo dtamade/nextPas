@@ -2,7 +2,8 @@ unit nextpas.core.system.classes.impl;
 {**
  * @desc Internal implementation for system.classes shim.
  *   Single source via bytes.ops (inline/零拷贝)，析构释放不丢，
- *   不直接 uses FPC Classes/SysUtils — 仅依赖 L0/L1 owners。
+ *   TFileStream via fs/platform owner delegation (no BlockRead/BlockWrite),
+ *   不直接 uses FPC Classes/SysUtils/File — 仅依赖 owners。
  *}
 {$I nextpas.core.settings.inc}
 interface
@@ -10,7 +11,9 @@ uses
   nextpas.core.base,
   nextpas.core.io.base,
   nextpas.core.bytes.ops,
-  nextpas.core.mem.dynarray;
+  nextpas.core.mem.dynarray,
+  nextpas.core.fs.base,
+  nextpas.core.fs.intf;
 type
   TDuplicates = (dupIgnore, dupAccept, dupError);
   TStream = class(TObject)
@@ -69,7 +72,7 @@ type
   end;
   TFileStream = class(TStream)
   private
-    FHandle: File;
+    FFile: IFile;
     FFileName: string;
   protected
     function GetSize: Int64; override;
@@ -195,7 +198,8 @@ type
   end;
 implementation
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.fs;
 const
   STREAM_COPY_BUF = 32768;
   fmCreate = $FF00;
@@ -416,44 +420,85 @@ begin
   FPos := 0; FSize := 0;
   SetLength(FData, 0); FCap := 0;
 end;
-{ TFileStream }
+{ TFileStream — owner delegation via nextpas.core.fs IFile (platform.files zero-copy) }
+function FsModeFromWord(AMode: Word): TFileMode; inline;
+begin
+  // perf: inline mask/branch, zero-copy thin forward to fs single source (no BlockRead/BlockWrite self-impl)
+  // NOTE: set members are fs.base enum (qualified: local fmCreate/fmOpen* Word consts below would collide)
+  if (AMode and fmCreate) = fmCreate then
+    Result := [nextpas.core.fs.base.fmRead, nextpas.core.fs.base.fmWrite, nextpas.core.fs.base.fmCreate, nextpas.core.fs.base.fmTruncate]
+  else
+    case AMode and $0003 of
+      fmOpenWrite: Result := [nextpas.core.fs.base.fmWrite];
+      fmOpenReadWrite: Result := [nextpas.core.fs.base.fmRead, nextpas.core.fs.base.fmWrite];
+      else Result := [nextpas.core.fs.base.fmRead];
+    end;
+  // share modes ($0010..$0040) ignored — advisory via IFile.Lock owner
+end;
 constructor TFileStream.Create(const AFileName: string; Mode: Word);
+var LMode: TFileMode;
 begin
   inherited Create;
   FFileName := AFileName;
-  Assign(FHandle, AFileName);
-  {$I-}
-  if (Mode and fmOpenWrite) <> 0 then Rewrite(FHandle, 1) else Reset(FHandle, 1);
-  {$I+}
-  if IOResult <> 0 then raise EIOError.Create('Cannot open file: ' + AFileName);
+  LMode := FsModeFromWord(Mode);
+  // perf: inline thin forward to fs owner Open single source (platform open zero-copy), no extra buffer
+  try
+    FFile := nextpas.core.fs.Open(AFileName, LMode);
+  except
+    FFile := nil;
+    raise EIOError.Create('Cannot open file: ' + AFileName);
+  end;
 end;
 destructor TFileStream.Destroy;
 begin
-  {$I-} Close(FHandle); {$I+} IOResult;
+  // stability: owner IFile.Close releases platform handle; interface nil ensures no leak; swallow secondary close error
+  if FFile <> nil then
+  try
+    FFile.Close;
+  except
+  end;
+  FFile := nil;
   inherited Destroy;
 end;
 function TFileStream.GetSize: Int64;
 begin
-  {$I-} Result := FileSize(FHandle); {$I+} if IOResult <> 0 then Result := 0;
+  if FFile = nil then Exit(0);
+  // perf: thin forward to IFile.GetSize single source (platform_file_fstat zero-copy)
+  try
+    Result := FFile.GetSize;
+  except
+    Result := 0;
+  end;
 end;
 function TFileStream.Read(var Buffer; Count: LongInt): LongInt;
 begin
-  {$I-} BlockRead(FHandle, Buffer, Count, Result); {$I+} if IOResult <> 0 then Result := 0;
+  if (Count <= 0) or (FFile = nil) then Exit(0);
+  // perf: thin forward to fs IFile.Read single source platform_file_read zero-copy (no Move)
+  try
+    Result := LongInt(FFile.Read(Buffer, SizeUInt(Count)));
+  except
+    Result := 0;
+  end;
 end;
 function TFileStream.Write(const Buffer; Count: LongInt): LongInt;
 begin
-  {$I-} BlockWrite(FHandle, Buffer, Count, Result); {$I+} if IOResult <> 0 then Result := 0;
+  if (Count <= 0) or (FFile = nil) then Exit(0);
+  // perf: thin forward to fs IFile.Write single source platform_file_write zero-copy (no Move)
+  try
+    Result := LongInt(FFile.Write(Buffer, SizeUInt(Count)));
+  except
+    Result := 0;
+  end;
 end;
 function TFileStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
 begin
-  {$I-}
-  case Origin of
-    soBeginning: System.Seek(FHandle, Offset);
-    soEnd: System.Seek(FHandle, FileSize(FHandle) + Offset);
-    soCurrent: System.Seek(FHandle, FilePos(FHandle) + Offset);
+  if FFile = nil then Exit(-1);
+  // perf: thin forward to IFile.Seek single source platform_file_seek zero-copy
+  try
+    Result := FFile.Seek(Offset, Origin);
+  except
+    Result := -1;
   end;
-  Result := FilePos(FHandle);
-  {$I+} if IOResult <> 0 then Result := -1;
 end;
 { TList }
 constructor TList.Create;
@@ -484,9 +529,9 @@ begin
   if (Index < 0) or (Index >= FCount) then Exit;
   if Index < FCount - 1 then
   begin
-    // perf: single Move via bytes.ops zero-copy
+    // perf: bytes.ops.BytesCopy single source inline zero-copy
     LMove := (FCount - Index - 1) * SizeOf(Pointer);
-    System.Move(FItems[Index + 1], FItems[Index], LMove);
+    nextpas.core.bytes.ops.BytesCopy(@FItems[Index], @FItems[Index + 1], SizeUInt(LMove));
   end;
   Dec(FCount);
   FItems[FCount] := nil;
@@ -540,9 +585,9 @@ begin
   FItems[Index] := nil;
   if Index < FCount - 1 then
   begin
-    // perf: single Move zero-copy for interface pointers (no refcount churn for middle)
+    // perf: bytes.ops.BytesCopy single source inline zero-copy for interface pointers (no refcount churn for middle)
     LMove := (FCount - Index - 1) * SizeOf(IInterface);
-    System.Move(FItems[Index + 1], FItems[Index], LMove);
+    nextpas.core.bytes.ops.BytesCopy(@FItems[Index], @FItems[Index + 1], SizeUInt(LMove));
     Pointer(FItems[FCount - 1]) := nil;
   end
   else
@@ -651,13 +696,13 @@ begin
   if (Index < 0) or (Index >= FCount) then raise EIndexOutOfRangeError.Create('Index out of bounds');
   // stability: clear object slot if owned? caller owns objects unless OwnsObjects; just nil
   FObjects[Index] := nil;
-  // perf: single Move zero-copy for string pointers, no refcount churn
+  // perf: bytes.ops.BytesCopy single source inline zero-copy for string pointers, no refcount churn
   FItems[Index] := '';
   if Index < FCount - 1 then
   begin
     LMove := SizeUInt(FCount - Index - 1);
-    System.Move(FItems[Index + 1], FItems[Index], LMove * SizeOf(string));
-    System.Move(FObjects[Index + 1], FObjects[Index], LMove * SizeOf(TObject));
+    nextpas.core.bytes.ops.BytesCopy(@FItems[Index], @FItems[Index + 1], LMove * SizeUInt(SizeOf(string)));
+    nextpas.core.bytes.ops.BytesCopy(@FObjects[Index], @FObjects[Index + 1], LMove * SizeUInt(SizeOf(TObject)));
     Pointer(FItems[FCount - 1]) := nil;
     Pointer(FObjects[FCount - 1]) := nil;
   end;
@@ -695,12 +740,12 @@ begin
     Add(S);
     Exit;
   end;
-  // perf: exponential via bytes.ops single source amortized O(1), zero-copy Move
+  // perf: exponential via bytes.ops.BytesCopy single source inline amortized O(1), zero-copy
   EnsureCap(FCount + 1);
   // shift right by one (pointers) — after EnsureCap Length == FCount+1, last slot empty
   LMove := SizeUInt(FCount - Index);
-  System.Move(FItems[Index], FItems[Index + 1], LMove * SizeOf(string));
-  System.Move(FObjects[Index], FObjects[Index + 1], LMove * SizeOf(TObject));
+  nextpas.core.bytes.ops.BytesCopy(@FItems[Index + 1], @FItems[Index], LMove * SizeUInt(SizeOf(string)));
+  nextpas.core.bytes.ops.BytesCopy(@FObjects[Index + 1], @FObjects[Index], LMove * SizeUInt(SizeOf(TObject)));
   Pointer(FItems[Index]) := nil;
   Pointer(FObjects[Index]) := nil;
   FItems[Index] := S;
@@ -731,7 +776,7 @@ function TStringList.GetText: string;
 var I, LTotal, LSepLen, LPos: Integer; LSep: string;
 begin
   if FCount = 0 then Exit('');
-  // perf: single SetLength+Move zero-copy via bytes.ops single source discipline, not inline per red-line 1/2
+  // perf: single SetLength+BytesCopy via bytes.ops.BytesCopy single source inline zero-copy, not inline per red-line 1/2
   LSep := #10; LSepLen := Length(LSep);
   LTotal := 0;
   for I := 0 to FCount - 1 do Inc(LTotal, Length(FItems[I]));
@@ -740,19 +785,19 @@ begin
   LPos := 1;
   if Length(FItems[0]) > 0 then
   begin
-    Move(FItems[0][1], Result[LPos], Length(FItems[0]));
+    nextpas.core.bytes.ops.BytesCopy(@Result[LPos], @FItems[0][1], SizeUInt(Length(FItems[0])));
     Inc(LPos, Length(FItems[0]));
   end;
   for I := 1 to FCount - 1 do
   begin
     if LSepLen > 0 then
     begin
-      Move(LSep[1], Result[LPos], LSepLen);
+      nextpas.core.bytes.ops.BytesCopy(@Result[LPos], @LSep[1], SizeUInt(LSepLen));
       Inc(LPos, LSepLen);
     end;
     if Length(FItems[I]) > 0 then
     begin
-      Move(FItems[I][1], Result[LPos], Length(FItems[I]));
+      nextpas.core.bytes.ops.BytesCopy(@Result[LPos], @FItems[I][1], SizeUInt(Length(FItems[I])));
       Inc(LPos, Length(FItems[I]));
     end;
   end;
@@ -777,7 +822,7 @@ function TStringList.GetDelimitedText: string;
 var I, LTotal, LPos, SLen: Integer; S: string; NeedQuote: Boolean;
 begin
   if FCount = 0 then Exit('');
-  // perf: single SetLength+Move zero-copy via bytes.ops single source, not inline per red-line 1/2
+  // perf: single SetLength+BytesCopy via bytes.ops.BytesCopy single source inline zero-copy, not inline per red-line 1/2
   LTotal := 0;
   for I := 0 to FCount - 1 do
   begin
@@ -803,7 +848,7 @@ begin
       Result[LPos] := FQuoteChar; Inc(LPos);
       if Length(S) > 0 then
       begin
-        Move(S[1], Result[LPos], Length(S));
+        nextpas.core.bytes.ops.BytesCopy(@Result[LPos], @S[1], SizeUInt(Length(S)));
         Inc(LPos, Length(S));
       end;
       Result[LPos] := FQuoteChar; Inc(LPos);
@@ -812,7 +857,7 @@ begin
     begin
       if Length(S) > 0 then
       begin
-        Move(S[1], Result[LPos], Length(S));
+        nextpas.core.bytes.ops.BytesCopy(@Result[LPos], @S[1], SizeUInt(Length(S)));
         Inc(LPos, Length(S));
       end;
     end;

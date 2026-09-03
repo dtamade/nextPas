@@ -15,21 +15,21 @@ interface
 
 uses
   nextpas.core.base, nextpas.core.text.conv, nextpas.core.time,
-  nextpas.core.exception, nextpas.core.fs, nextpas.core.system.classes,
-  nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
+  nextpas.core.exception, nextpas.core.fs, nextpas.core.path,
+  nextpas.core.system.classes,
+  nextpas.core.git.libgit2.base,
+  nextpas.core.git.libgit2.types,
+  nextpas.core.git.libgit2.ffi.structs,
+  nextpas.core.git.libgit2.ffi.callbacks,
+  nextpas.core.git.libgit2.ffi.options,
+  nextpas.core.git.libgit2.ffi.consts,
+  nextpas.core.git.libgit2.binding,
   nextpas.core.git.base,
   nextpas.core.text.format;
 
 type
-  EGitError = class(Exception)
-  private
-    FErrorCode: Integer;
-    FErrorClass: Integer;
-  public
-    constructor Create(AErrorCode: Integer; const AOperation: string = '');
-    property ErrorCode: Integer read FErrorCode;
-    property ErrorClass: Integer read FErrorClass;
-  end;
+  { Single-source re-export: git family error is owned by nextpas.core.git.base (L2) }
+  EGitError = nextpas.core.git.base.EGitError;
 
   TGitOID = record
     Data: git_oid;
@@ -254,68 +254,11 @@ uses
   nextpas.core.base.utils, nextpas.core.text.strings,
   nextpas.core.process, nextpas.core.os.env;
 
-{ Local helpers replacing SysUtils functions to avoid TBytes/TStringArray conflicts }
-
-function LocalLastDelimiter(const ADelimiter: Char; const S: string): Integer;
-var
-  i: Integer;
-begin
-  Result := 0;
-  for i := Length(S) downto 1 do
-    if S[i] = ADelimiter then
-      Exit(i);
-end;
-
-function LocalExcludeTrailingPathDelimiter(const S: string): string;
-begin
-  Result := S;
-  if (Length(Result) > 0) and (Result[Length(Result)] in ['/', '\']) then
-    SetLength(Result, Length(Result) - 1);
-end;
-
-function LocalExpandFileName(const APath: string): string;
-var
-  Cwd: string;
-begin
-  if (Length(APath) > 0) and (APath[1] = '/') then
-    Result := APath
-  else
-  begin
-    {$I-}
-    GetDir(0, Cwd);
-    {$I+}
-    if (Length(Cwd) > 0) and (Cwd[Length(Cwd)] <> '/') then
-      Cwd := Cwd + '/';
-    Result := Cwd + APath;
-  end;
-end;
-
-function LocalExtractFileName(const APath: string): string;
-var
-  i: Integer;
-begin
-  for i := Length(APath) downto 1 do
-    if APath[i] = '/' then
-      Exit(Copy(APath, i + 1, MaxInt));
-  Result := APath;
-end;
-
-function LocalExtractFileDir(const APath: string): string;
-var
-  i: Integer;
-begin
-  for i := Length(APath) downto 1 do
-    if APath[i] = '/' then
-      Exit(Copy(APath, 1, i - 1));
-  Result := '';
-end;
-
-function LocalIncludeTrailingPathDelimiter(const S: string): string;
-begin
-  Result := S;
-  if (Length(Result) = 0) or (Result[Length(Result)] <> '/') then
-    Result := Result + '/';
-end;
+{ Path helpers — single source is nextpas.core.path / nextpas.core.fs.path (Owner).
+  LocalExpandFileName etc removed; reuse ExpandFileName/ExtractFileName/
+  ExtractFileDir/ExcludeTrailingPathDelimiter/IncludeTrailingPathDelimiter/
+  LastDelimiter from L1/L2 Owner to keep zero-copy inline path and avoid
+  duplicate delimiter scans (bytes.ops single source for byte scans). }
 
 
 const
@@ -412,9 +355,21 @@ begin
 end;
 
 procedure CheckGitResult(AResult: Integer; const AOperation: string);
+var
+  LDetail, LMsg: string;
 begin
   if AResult <> GIT_OK then
-    raise EGitError.Create(AResult, AOperation);
+  begin
+    LDetail := GetGitErrorMessage;
+    if AOperation <> '' then
+      if LDetail <> '' then
+        LMsg := AOperation + ': ' + LDetail
+      else
+        LMsg := AOperation
+    else
+      LMsg := LDetail;
+    raise EGitError.Create(AResult, LMsg);
+  end;
 end;
 
 function GetGitErrorMessage: string;
@@ -428,16 +383,15 @@ begin
     Result := 'Unknown error';
 end;
 
-constructor EGitError.Create(AErrorCode: Integer; const AOperation: string);
+function ComposeGitError(const AOp: string): string; inline;
 var
-  ErrorMsg: string;
+  LDetail: string;
 begin
-  FErrorCode := AErrorCode;
-  FErrorClass := 0;
-  ErrorMsg := GetGitErrorMessage;
-  if AOperation <> '' then
-    ErrorMsg := AOperation + ': ' + ErrorMsg;
-  inherited Create(ErrorMsg);
+  LDetail := GetGitErrorMessage;
+  if LDetail <> '' then
+    Result := AOp + ': ' + LDetail
+  else
+    Result := AOp;
 end;
 
 constructor TGitSignature.Create(const AName, AEmail: string; const AWhen: TGitTime);
@@ -623,9 +577,21 @@ begin
 end;
 
 procedure TGitRepository.CheckResult(AResult: Integer; const AOperation: string);
+var
+  LDetail, LMsg: string;
 begin
   if AResult <> GIT_OK then
-    raise EGitError.Create(AResult, AOperation);
+  begin
+    LDetail := GetGitErrorMessage;
+    if AOperation <> '' then
+      if LDetail <> '' then
+        LMsg := AOperation + ': ' + LDetail
+      else
+        LMsg := AOperation
+    else
+      LMsg := LDetail;
+    raise EGitError.Create(AResult, LMsg);
+  end;
 end;
 
 function TGitRepository.GetPath: string;
@@ -654,7 +620,7 @@ var
 begin
   rc := git_repository_head(RefHandle, FHandle);
   if rc <> GIT_OK then
-    raise EGitError.Create(rc, 'Get HEAD reference');
+    raise EGitError.Create(rc, ComposeGitError('Get HEAD reference'));
   Result := TGitReference.Create(Self, RefHandle);
 end;
 
@@ -691,7 +657,7 @@ begin
 
   // For other errors, raise exception
   if rc <> GIT_OK then
-    raise EGitError.Create(rc, 'Get HEAD reference');
+    raise EGitError.Create(rc, ComposeGitError('Get HEAD reference'));
 
   // Get branch name from reference
   HeadRef := TGitReference.Create(Self, RefHandle);
@@ -720,7 +686,7 @@ begin
         rc := git_branch_next(RefHandle, BranchType, Iterator);
         if rc = GIT_ITEROVER then Break;
         if rc <> GIT_OK then
-          raise EGitError.Create(rc, 'Iterate branches');
+          raise EGitError.Create(rc, ComposeGitError('Iterate branches'));
         BranchName := string(git_reference_name(RefHandle));
         List.Add(BranchName);
         git_reference_free(RefHandle);
@@ -1131,7 +1097,7 @@ begin
   begin
     FOID.Data := git_reference_target(AHandle)^;
     FShortName := Copy(
-      FName, LocalLastDelimiter(GIT_REF_NAME_DELIMITER, FName) + 1, MaxInt
+      FName, LastDelimiter(GIT_REF_NAME_DELIMITER, FName) + 1, MaxInt
     );
   end
   else
@@ -1139,7 +1105,7 @@ begin
     FSymbolicTarget := string(git_reference_symbolic_target(AHandle));
     FShortName := Copy(
       FSymbolicTarget,
-      LocalLastDelimiter(GIT_REF_NAME_DELIMITER, FSymbolicTarget) + 1,
+      LastDelimiter(GIT_REF_NAME_DELIMITER, FSymbolicTarget) + 1,
       MaxInt
     );
   end;
@@ -1267,20 +1233,20 @@ begin
     if (git_repository_discover(LBuf, PChar(AStartPath), 0, nil) = GIT_OK) and
        (LBuf.ptr <> nil) then
     begin
-      LRawPath := LocalExcludeTrailingPathDelimiter(LocalExpandFileName(string(LBuf.ptr)));
+      LRawPath := ExcludeTrailingPathDelimiter(ExpandFileName(string(LBuf.ptr)));
       LRepoHandle := nil;
       if git_repository_open(LRepoHandle, PChar(LRawPath)) = GIT_OK then
       begin
         try
           LWorkDir := git_repository_workdir(LRepoHandle);
           if LWorkDir <> nil then
-            Exit(LocalExcludeTrailingPathDelimiter(LocalExpandFileName(string(LWorkDir))));
+            Exit(ExcludeTrailingPathDelimiter(ExpandFileName(string(LWorkDir))));
         finally
           git_repository_free(LRepoHandle);
         end;
       end;
-      if SameText(LocalExtractFileName(LRawPath), '.git') then
-        Exit(LocalExtractFileDir(LRawPath));
+      if SameText(ExtractFileName(LRawPath), '.git') then
+        Exit(ExtractFileDir(LRawPath));
       Exit(LRawPath);
     end;
   finally
@@ -1288,14 +1254,14 @@ begin
   end;
 
   Result := '';
-  LPath := LocalExpandFileName(AStartPath);
+  LPath := ExpandFileName(AStartPath);
   LPrev := '';
   while (LPath <> '') and (LPath <> LPrev) do
   begin
-    if DirectoryExists(LocalIncludeTrailingPathDelimiter(LPath) + '.git') then
+    if DirectoryExists(IncludeTrailingPathDelimiter(LPath) + '.git') then
       Exit(LPath);
     LPrev := LPath;
-    LPath := LocalExtractFileDir(LPath);
+    LPath := ExtractFileDir(LPath);
   end;
 end;
 
@@ -1681,7 +1647,7 @@ begin
         if rc = GIT_ITEROVER then
           Break;
         if rc <> GIT_OK then
-          raise EGitError.Create(rc, 'Iterate config entries');
+          raise EGitError.Create(rc, ComposeGitError('Iterate config entries'));
         if LEntry <> nil then
         begin
           SetLength(Result, N + 1);
@@ -1710,7 +1676,7 @@ begin
   LWorkDir := GetWorkDir;
   if LWorkDir = '' then
     raise EGitError.Create(GIT_EINVALID, 'ApplyPatch: bare repository has no workdir');
-  LTmpPatch := PathJoin([GetTempDir, 'nextpas_patch_apply.patch']);
+  LTmpPatch := nextpas.core.fs.PathJoin([GetTempDir, 'nextpas_patch_apply.patch']);
   WriteFileText(LTmpPatch, APatchText);
   try
     LOut := RunIn('/usr/bin/git', ['apply', '--whitespace=nowarn', LTmpPatch], LWorkDir);
@@ -1824,7 +1790,7 @@ begin
       rc := git_revwalk_next(LOID, LWalk);
       if rc = GIT_ITEROVER then Break;
       if rc <> GIT_OK then
-        raise EGitError.Create(rc, 'Iterate revwalk');
+        raise EGitError.Create(rc, ComposeGitError('Iterate revwalk'));
       LCommitOID.Data := LOID;
       SetLength(LCommits, Length(LCommits) + 1);
       LCommits[High(LCommits)] := GetCommit(LCommitOID);

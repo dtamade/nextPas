@@ -15,7 +15,7 @@ UTF-8 字符串处理、Unicode 支持、数值/格式化转换、只读视图�
 | --------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Foundation      | 公开基础类型、ASCII 分类、共享 Unicode 载体 | `text.base`, `text.char`, `text.unicode.base`, `text.unicode.utils`                                                                    |
 | Core Primitives | 面向字节和 UTF-8 的原语能力                 | `text.view`, `text.scan`, `text.utf8`, `text.number`, `text.unicode.props`, `text.unicode.case`, `text.unicode.normalize`              |
-| Composites      | 在原语之上组合更完整的文本行为              | `text.builder`, `text.compare`, `text.escape`, `text.strings`, `text.utils`, `text.width`, `text.grapheme`, `text.conv`, `text.format` |
+| Composites      | 在原语之上组合更完整的文本行为              | `text.builder`, `text.compare`, `text.escape`, `text.strings`, `text.utils`, `text.width`, `text.grapheme`, `text.wildmatch`, `text.conv`, `text.format` |
 | Facades         | 聚合高频 surface，减少消费者 `uses` 列表    | `text`, `text.unicode`                                                                                                                 |
 
 依赖方向保持单向：Foundation -> Core Primitives -> Composites -> Facades。
@@ -55,6 +55,7 @@ UTF-8 字符串处理、Unicode 支持、数值/格式化转换、只读视图�
 | `nextpas.core.text.utils`    | 通用字符串 helper                   | `Trim`, `PadLeft`, `RepeatString`, `StringReplace`                   | 应用代码中的日常文本处理              |
 | `nextpas.core.text.width`    | 终端显示宽度                        | `CodepointWidth`, `StringDisplayWidth`                               | TUI、表格布局、列宽计算               |
 | `nextpas.core.text.grapheme` | 边界委托 `GraphemeClusterByteLen`；本地算宽度 | `GraphemeNext`, `TGraphemeResult`                                    | cursor 移动、emoji/ZWJ cluster 宽度   |
+| `nextpas.core.text.wildmatch`| 通配引擎 owner（`* ? ** []` 含转义，零 SysUtils，bytes.ops 单源） | `WildSegment`, `WildSegmentRange`, `WildSegmentsMatch`, `HasUnescapedSlash` | gitignore/fs.glob/http 路由/tui 过滤共用；git 直连本 owner 无 thin shim |
 | `nextpas.core.text.conv`     | 数值/字符串转换与 ASCII SameText 的实现 owner | `IntToStr`, `TryStrToInt`, `FloatToStr`, `Format`, `SameText`, `Trim`, `TextOfChar` | 业务层格式化、解析；`system.sysutils` 仅 re-export 这些符号 |
 | `nextpas.core.text.format`   | 轻量格式化器                        | `TextFormat`                                                         | 不想引 `SysUtils.Format` 的格式化输出 |
 

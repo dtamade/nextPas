@@ -3,7 +3,7 @@ unit nextpas.core.bytes.ops;
 {$I nextpas.core.settings.inc}
 { bytes.ops — single source for SetLength+Move (单源 INV-5); TByteSpan zero-copy views; hot paths inline, alloc paths not inline per red-line 1 (indexed Move/alloc inline), red-line 2 (loop+Move).
   Facades inline thin-forward, no duplicate Move — single source stays here (BytesCopy/BytesZero/BytesReplicateCopy).
-  GATE: raw Move/FillChar only in this unit (BytesCopy/BytesZero/BytesReplicateCopy); L1+ must reuse BytesCopy/BytesZero/Span* single source, L0 exception documented — enforced by test_bytes_ops_source_contracts; inline red-line enforced by same gate (hot inline, alloc/loop not inline).
+  GATE: raw Move/FillChar only in this unit (BytesCopy/BytesZero/BytesReplicateCopy); L1+ must reuse BytesCopy/BytesZero/Span* single source, L0 exception documented — enforced by test_bytes_ops_source_contracts (check_bytes_ops_source_contract.py full patrol: red-line 1/2, BytesCopy inline single Move, BytesAppend* not inline + O(n²) loop-append patrol, capacity single source); inline red-line enforced by same gate (hot inline, alloc/loop not inline).
   CAPACITY: BytesGrowCapacity single source via bytes.ops.capacity (BYTES_BUILDER_MIN_GROW 0→64→2×) amortized O(1); Webview 0→4→2× via BytesGrowCapacityWithMin reuse same loop — single source, inline thin-forward zero extra call.
   SPLIT: four-piece elegance — capacity/text helpers extracted to bytes.ops.capacity / bytes.ops.text leaves (≤800 guideline, this unit ~750 lines); leaves are pure arithmetic/string without raw Move, reuse this unit's BytesCopy single source when needed. }
 
@@ -14,13 +14,21 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.base;
 
+type
+  TFieldRange = record Off, Len: SizeUInt; end;
+
 { Span ops }
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
 function SpanEqualIgnoreCase(const A, B: TByteSpan): Boolean; inline;
 function SpanCompare(const A, B: TByteSpan): Integer; inline;
 
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
+function SpanLastIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
+function BytesLastIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
+function StringLastIndexOf(const S: string; const ANeedle: Char): SizeInt; inline;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
+{ single-source multi-field NUL scan: one 512B pass truncates N fields, reuses SpanIndexOf single source, decl. reusable for tar 7-field cache, zero-alloc PSizeUInt out }
+procedure ScanNulFieldTruncations(const ABlock: TByteSpan; const AFields: array of TFieldRange; ATruncs: PSizeUInt);
 function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
@@ -35,9 +43,9 @@ procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
 { replicate — doubling Moves }
 procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt);
-{ single Move/Fill }
-procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt);
-procedure BytesZero(ADst: Pointer; const ALen: SizeUInt);
+{ single Move/Fill — inline single Move(ASrc^,ADst^,ALen)/FillChar zero-copy per red-line 1, gate patrol }
+procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline;
+procedure BytesZero(ADst: Pointer; const ALen: SizeUInt); inline;
 procedure SpanZero(const ASpan: TByteSpan);
 
 { zero page (.bss, 4K) }
@@ -66,12 +74,14 @@ function AsciiUpperString(const S: string): string; inline;
 function SpanConcat(const A, B: TByteSpan): TBytes;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 function SpanClone(const ASpan: TByteSpan): TBytes;
+{ restored from git lane: SpanCopy single source for fixed-size zero-copy copy (OID 20/32 etc.), inline + single Move, no heap }
+procedure SpanCopy(const ADst, ASrc: TByteSpan); inline;
 
 function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
-{ not inline: SetLength+Move }
+{ not inline: SetLength+Move — perf: BytesAppend does SetLength+Move per call (O(n) → O(n²) if looped); MUST prefer IBytesBuilder (geometric grow) or BytesConcatMany/SpanConcatMany single alloc; gate: check_bytes_ops_source_contract.py cross-module loop-append patrol }
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); overload;
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); overload;
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte);
@@ -99,6 +109,9 @@ procedure BytesDynSetLengthGeneric(var A; const ANewLen: SizeUInt); inline;
 // generic ensure with geometric single source via BytesNextCapacity + probe/poke single slit, trivial types only (zero finalization), inline zero-copy, amortized O(1)
 procedure BytesDynEnsureLength(var A; AElemSize: SizeUInt; ANewLen: SizeUInt);
 procedure BytesDynReserve(var A; AElemSize: SizeUInt; AAdditional: SizeUInt); inline;
+{ compat alias for git lane (same growth policy via BytesGrowCapacity single source) }
+function GrowArrayCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt; inline;
+function SpanHashFNV1a(const ASpan: TByteSpan): UInt32; inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -117,11 +130,12 @@ function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
+function SpanSumBytes(const ASpan: TByteSpan): UInt64; inline;
+function BytesSum(const AData: PByte; ALen: SizeUInt): UInt64; inline;
 function BytesIsGzip(const AData: TBytes): Boolean; inline;
 function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
 function BytesIsGzipBuffer(AData: PByte; const ALength: SizeUInt): Boolean; inline;
 function BytesIsGzipSpan(const ASpan: TByteSpan): Boolean; inline;
-function SpanToString(const ASpan: TByteSpan): string; inline;
 function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
@@ -131,9 +145,33 @@ function BytesSliceToString(const ABytes: TBytes; const AOffset,
 { String join single source — L1 canonical comma-join via BytesCopy single source, zero-copy Move, single alloc O(n); owner bytes.ops, js probe 8-name single source via this, no TBufStringBuilder duplicate loop, not inline per red-line 2 (loop), resource no leak }
 function StringJoin(const AParts: array of string; const ASep: string): string;
 function BytesJoinStrings(const AParts: array of string; const ASep: string): string; inline;
+function SpanToString(const ASpan: TByteSpan): string; inline;
+function StringAsSpan(const AValue: string): TByteSpan; inline; { string->TByteSpan 零拷贝视图单源，PAnsiChar 单点，inline }
+procedure BytesRelease(var ABuffer: TBytes); inline; { 单源显式归还：SetLength 0 高水位释放，inline }
+procedure BytesShrinkTo(var ABuffer: TBytes; ANewSize: SizeUInt); inline; { 单源显式缩容：仅缩不扩，inline }
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
+{ 单源 Move：string/PByte 零拷贝单次 Move，tar/header 等复用此单源避免分散 Move；外联避免 Move[AValue[1]] inline 膨胀与 FPC 3.3.1 inline+Move 单字节缺陷（PAnsiChar 解引用） }
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt);
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
+{ 单源路径拼接：prefix/name 单次 SetLength + 两 Move（bytes.ops 单源 CopyMemory），tar/zip 联邦 ArchiveJoinPath 与 tar.reader CombinePrefixName 同构收敛至此，切片零拷贝视图单源，热路径 inline 薄转发 }
+function SpanJoinWithSeparator(const ALeft, ARight: TByteSpan; const ASeparator: Char): string; inline;
+{ 单源对齐：power-of-two 位掩码零除法，无截断，32/64 位 SizeUInt 安全，溢出守卫，inline 零拷贝单点，tar.builder 4K/ZIP 容量等复用此单源，常量 4096 位掩码零除法 }
+function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
+function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
+{ 单源零垫：4K 零源 GZeroBuf4K inline 零拷贝访问，tar 512B 零垫/两零块与 IsZeroMem 单源复用，L1 owner bytes.ops 单源，零分配 }
+function ZeroBufPtr: PByte; inline;
+function ZeroBufSize: SizeUInt; inline;
+{ 高位计数：统计 >=128 字节数（bit7=1），SWAR 64-bit + 尾部无分支，零拷贝 PByte 切片，外联 }
+function BytesCountHighBit(const AData: PByte; ALen: SizeUInt): SizeUInt;
+function SpanCountHighBit(const ASpan: TByteSpan): SizeUInt; inline;
+{ 融合：字节和经 simd.SumBytes 单源，highbit 经 SWAR 单源，零拷贝 PByte 切片，外联；tar dual 复用 SIMD 批量 512B 提速 }
+procedure BytesSumAndCountHighBit(const AData: PByte; ALen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
+function SpanSumAndCountHighBit(const ASpan: TByteSpan; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
+{ 融合空洞排除：tar chksum 8 字节空洞排除，和经 simd.SumBytes 分段累加，high 经 SWAR 分段，外联；nil/越界守卫 }
+procedure BytesSumAndCountHighBitExclude(const AData: PByte; ALen: SizeUInt; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
+function SpanSumAndCountHighBitExclude(const ASpan: TByteSpan; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
 { Hex single source (uppercase fixed-width UInt64→hex, L1 canonical for vfs ETag etc., inline zero-copy via Move, Span-less, reuses single HEX_UPPER table) }
-function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
+function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string;
 function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
 { not inline: loop — C string length single source, zero-copy view length, owner bytes.ops }
 function AnsiPtrLen(const P: PAnsiChar): SizeUInt;
@@ -179,12 +217,34 @@ uses
   BYTES_BUILDER_MIN_GROW 0→64→2× amortized O(1) zero O(n²); thin-forward to BytesGrowCapacity, no duplicate loop.
   perf: BytesAppend geometric via BytesEnsureCapacity single source single SetLength + single Move zero-copy (owner bytes.ops), looped/high-frequency still prefer IBytesBuilder/ConcatMany; inline hot views zero-copy, batch not inline per red-line.
   Stability: SetLength exception-safe; BytesAppend via BytesEnsureCapacity + DynArraySetLength poke keeps heap capacity while logical len exact, no leak, sized free via allocator. }
+var
+  GZeroBuf4K: array[0..4095] of Byte; // zero-initialized SIMD zero source, single source for IsZero via chunked MemEqual
+
+function IsZeroMem(const AData: PByte; ALen: SizeUInt): Boolean;
+var
+  LOff, LChunk: SizeUInt;
+begin
+  // perf: chunked MemEqual vs zero buffer single source, SIMD dispatch, zero-copy PByte+Len, out-of-line loop per design-conventions
+  if (AData = nil) or (ALen = 0) then Exit(True);
+  LOff := 0;
+  while LOff < ALen do
+  begin
+    LChunk := ALen - LOff;
+    if LChunk > SizeUInt(Length(GZeroBuf4K)) then
+      LChunk := SizeUInt(Length(GZeroBuf4K));
+    if not MemEqual(AData + LOff, @GZeroBuf4K[0], LChunk) then
+      Exit(False);
+    Inc(LOff, LChunk);
+  end;
+  Result := True;
+end;
 
 { capacity growth — single source delegates to bytes.ops.capacity leaf }
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 var
   LOld, LNewCap: SizeUInt;
 begin
+  // perf: inline hot path, single BytesNextCapacity geometric 2×, single SetLength, zero-copy, no header poke
   LOld := SizeUInt(Length(ADest));
   if ARequired <= LOld then
     Exit;
@@ -193,10 +253,11 @@ begin
   SetLength(ADest, LNewCap);
 end;
 
-procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
 var
   LNeed: SizeUInt;
 begin
+  // perf: inline thin-forward to BytesEnsureCapacity single source, overflow guard, zero-copy
   if AAdditional = 0 then
     Exit;
   LNeed := SizeUInt(Length(ADest)) + AAdditional;
@@ -231,6 +292,18 @@ end;
 function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
 begin
   Result := nextpas.core.bytes.ops.capacity.WebviewGrowCapacityForReuse(ACurrent);
+end;
+
+{ compat alias for git lane: same 0→64→2× policy, forwards to BytesGrowCapacity single source }
+function GrowArrayCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt; inline;
+begin
+  Result := BytesGrowCapacity(ACurrent, ARequired);
+end;
+
+{ compat alias for git lane: FNV-1a 32 over span, same digest as FNV1a32 single source }
+function SpanHashFNV1a(const ASpan: TByteSpan): UInt32; inline;
+begin
+  Result := nextpas.core.bytes.ops.text.FNV1a32(ASpan.Data, ASpan.Len);
 end;
 
 { L0 mem }
@@ -371,6 +444,32 @@ begin
   Result := SizeInt(LResult);
 end;
 
+function SpanLastIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
+var I: SizeUInt;
+begin
+  // perf: inline + zero-copy reverse scan PByte+Len (bytes.ops single source for LastDelimiter/parent-dir split), single pass, no alloc/Copy, O(n)
+  if (AHaystack.Len = 0) or (AHaystack.Data = nil) then Exit(-1);
+  for I := AHaystack.Len downto 1 do
+    if AHaystack.Data[I-1] = ANeedle then Exit(SizeInt(I-1));
+  Result := -1;
+end;
+
+function BytesLastIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
+begin
+  // perf: inline thin-forward to SpanLastIndexOf, zero-copy TByteSpan view single source
+  Result := SpanLastIndexOf(TByteSpan.FromBytes(AData), ANeedle);
+end;
+
+function StringLastIndexOf(const S: string; const ANeedle: Char): SizeInt; inline;
+var L: SizeUInt;
+begin
+  // perf: inline + zero-copy PByte view (no Copy), single source SpanLastIndexOf, 1-based (0 if not found) for LastDelimiter/PathDir parity, platform.path single-source thought
+  L := SizeUInt(Length(S));
+  if L = 0 then Exit(0);
+  Result := SpanLastIndexOf(TByteSpan.Create(PByte(@S[1]), L), Byte(ANeedle));
+  if Result >= 0 then Inc(Result) else Result := 0;
+end;
+
 function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 var
   LPos, LFound, LLast: SizeInt;
@@ -476,6 +575,60 @@ procedure SpanReverse(const ASpan: TByteSpan);
 begin
   if ASpan.Len > 1 then
     MemReverse(ASpan.Data, ASpan.Len);
+end;
+
+procedure ScanNulFieldTruncations(const ABlock: TByteSpan; const AFields: array of TFieldRange; ATruncs: PSizeUInt);
+var
+  N, I, LCap: SizeUInt;
+  Found: SizeUInt;
+  LOff, LLen: SizeUInt;
+  LIdx: SmallInt;
+  LMap: array[0..511] of SmallInt; // stack LUT: off -> field index, -1 = none, FillChar $FF = -1; eliminates inner J loop
+  K: SizeUInt;
+  LFnd: SizeInt;
+begin
+  // perf: single 512B pass truncates N fields at first NUL via offset->field LUT (stack, zero-alloc, zero-copy PByte view, out-of-line per design-conventions loop ban). Branch 3584->512/Next (~7x, 2000条目 7M->1M), single source Span/bytes.ops for tar 7-field cache; early exit when Found=N.
+  N := SizeUInt(Length(AFields));
+  for I := 0 to N - 1 do
+    ATruncs[I] := AFields[I].Len;
+  if (ABlock.Len = 0) or (ABlock.Data = nil) or (N = 0) then Exit;
+  // fast path: tar header 512B fits stack LUT 512; longer blocks fallback to per-field SpanIndexOf SIMD single source (still O(N*fieldLen) zero-copy, no 512*N double loop)
+  if ABlock.Len > 512 then
+  begin
+    for I := 0 to N - 1 do
+    begin
+      LOff := AFields[I].Off;
+      LLen := AFields[I].Len;
+      if (LOff >= ABlock.Len) or (LLen = 0) then Continue;
+      if LOff + LLen > ABlock.Len then LLen := ABlock.Len - LOff;
+      LFnd := SpanIndexOf(TByteSpan.Create(ABlock.Data + LOff, LLen), 0);
+      if LFnd >= 0 then
+        ATruncs[I] := SizeUInt(LFnd);
+    end;
+    Exit;
+  end;
+  LCap := ABlock.Len;
+  FillChar(LMap, SizeOf(LMap), $FF); // -1
+  for I := 0 to N - 1 do
+  begin
+    LOff := AFields[I].Off;
+    LLen := AFields[I].Len;
+    if LOff >= LCap then Continue;
+    if LOff + LLen > LCap then LLen := LCap - LOff;
+    for K := 0 to LLen - 1 do
+      LMap[LOff + K] := SmallInt(I);
+  end;
+  Found := 0;
+  for I := 0 to LCap - 1 do
+  begin
+    if ABlock.Data[I] <> 0 then Continue;
+    LIdx := LMap[I];
+    if LIdx < 0 then Continue;
+    if ATruncs[SizeUInt(LIdx)] <> AFields[SizeUInt(LIdx)].Len then Continue;
+    ATruncs[SizeUInt(LIdx)] := I - AFields[SizeUInt(LIdx)].Off;
+    Inc(Found);
+    if Found = N then Exit;
+  end;
 end;
 
 procedure XorInplace(ADst, AKey: PByte; ALen: SizeUInt);
@@ -599,6 +752,18 @@ begin
   SetLength(Result, ASpan.Len);
   if ASpan.Len > 0 then
     Move(ASpan.Data^, Pointer(Result)^, ASpan.Len);
+end;
+
+{ restored from git lane: fixed-size zero-copy span copy, inline + single Move }
+procedure SpanCopy(const ADst, ASrc: TByteSpan); inline;
+begin
+  if ASrc.Len = 0 then
+    Exit;
+  if (ASrc.Data = nil) or (ADst.Data = nil) then
+    raise EArgumentNil.Create('SpanCopy: nil span');
+  if ASrc.Len > ADst.Len then
+    raise EOutOfRange.Create('SpanCopy: src len > dst len');
+  Move(ASrc.Data^, ADst.Data^, ASrc.Len);
 end;
 
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
@@ -941,12 +1106,133 @@ end;
 
 function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 begin
-  Result := StripLeadingZeroView(AData).Len = 0;
+  // perf: SIMD MemEqual chunked via IsZeroMem/GZeroBuf4K single source, zero-copy TByteSpan view, inline thin forward; <32 serial early exit retains thin path; bulk 512B zero via single dispatch eliminates StripLeadingZero serial scan
+  if Length(AData) = 0 then Exit(True);
+  if SizeUInt(Length(AData)) < 32 then
+    Result := StripLeadingZeroView(AData).Len = 0
+  else
+    Result := IsZeroMem(@AData[0], SizeUInt(Length(AData)));
 end;
 
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 begin
-  Result := StripLeadingZeroSpan(ASpan).Len = 0;
+  // perf: same SIMD dispatch as TBytes overload via IsZeroMem chunked MemEqual, zero-copy PByte+Len view single source, inline thin forward; small <32 via StripLeadingZeroSpan preserves early exit without dispatch
+  if (ASpan.Len = 0) or (ASpan.Data = nil) then Exit(True);
+  if ASpan.Len < 32 then
+    Result := StripLeadingZeroSpan(ASpan).Len = 0
+  else
+    Result := IsZeroMem(ASpan.Data, ASpan.Len);
+end;
+
+function SpanSumBytes(const ASpan: TByteSpan): UInt64; inline;
+begin
+  // perf: SIMD SumBytes dispatch (SSE2/AVX2/NEON via nextpas.core.simd single source), zero-copy TByteSpan view, inline thin forward; single dispatch eliminates scalar per-byte loop for checksum bulk
+  if (ASpan.Len = 0) or (ASpan.Data = nil) then Exit(0);
+  Result := SumBytes(ASpan.Data, ASpan.Len);
+end;
+
+function BytesSum(const AData: PByte; ALen: SizeUInt): UInt64; inline;
+begin
+  // perf: same SIMD SumBytes single source, zero-copy PByte+Len, inline thin forward; tar checksum dual path reuses this single source
+  if (AData = nil) or (ALen = 0) then Exit(0);
+  Result := SumBytes(AData, ALen);
+end;
+
+function BytesCountHighBit(const AData: PByte; ALen: SizeUInt): SizeUInt;
+var
+  QC: SizeUInt;
+  PQ: PQWord;
+  V, M: QWord;
+  I: SizeUInt;
+const
+  C_HighMask = QWord($8080808080808080);
+  C_SumMask = QWord($0101010101010101);
+begin
+  Result := 0;
+  if (AData = nil) or (ALen = 0) then Exit;
+  QC := ALen div 8;
+  if QC > 0 then
+  begin
+    PQ := PQWord(AData);
+    for I := 0 to QC - 1 do
+    begin
+      V := PQ[I];
+      M := V and C_HighMask;
+      M := M shr 7;
+      // M now 0x01 per high byte at 0,8,16...; sum via multiply
+      Result := Result + SizeUInt((M * C_SumMask) shr 56);
+    end;
+  end;
+  for I := QC * 8 to ALen - 1 do
+    Result := Result + SizeUInt((AData[I] shr 7) and 1);
+end;
+
+function SpanCountHighBit(const ASpan: TByteSpan): SizeUInt; inline;
+begin
+  Result := BytesCountHighBit(ASpan.Data, ASpan.Len);
+end;
+
+procedure BytesSumAndCountHighBit(const AData: PByte; ALen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
+begin
+  ASum := 0;
+  AHigh := 0;
+  if (AData = nil) or (ALen = 0) then Exit;
+  // 和经 simd.SumBytes 单源（SSE2/AVX2/NEON），high 经 SWAR 单源；拆分两遍但和部分 SIMD 批量 512B 显著提速，零拷贝
+  ASum := SumBytes(AData, ALen);
+  AHigh := BytesCountHighBit(AData, ALen);
+end;
+
+function SpanSumAndCountHighBit(const ASpan: TByteSpan; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
+begin
+  if (ASpan.Len = 0) or (ASpan.Data = nil) then
+  begin
+    ASum := 0;
+    AHigh := 0;
+    Exit(False);
+  end;
+  BytesSumAndCountHighBit(ASpan.Data, ASpan.Len, ASum, AHigh);
+  Result := True;
+end;
+
+procedure BytesSumAndCountHighBitExclude(const AData: PByte; ALen: SizeUInt; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
+var
+  LSecondOff, LSecondLen: SizeUInt;
+begin
+  // 和经 simd.SumBytes 分段单源，high 经 SWAR 分段；hole 前/后各一次分发，512B 批量 SIMD 提速，零拷贝，外联
+  ASum := 0;
+  AHigh := 0;
+  if (AData = nil) or (ALen = 0) then Exit;
+  if (AExcludeLen = 0) or (AExcludeOff >= ALen) then
+  begin
+    BytesSumAndCountHighBit(AData, ALen, ASum, AHigh);
+    Exit;
+  end;
+  if AExcludeOff + AExcludeLen > ALen then
+    AExcludeLen := ALen - AExcludeOff;
+  if AExcludeOff > 0 then
+  begin
+    ASum := SumBytes(AData, AExcludeOff);
+    AHigh := BytesCountHighBit(AData, AExcludeOff);
+  end;
+  LSecondOff := AExcludeOff + AExcludeLen;
+  LSecondLen := ALen - LSecondOff;
+  if LSecondLen > 0 then
+  begin
+    ASum := ASum + SumBytes(AData + LSecondOff, LSecondLen);
+    AHigh := AHigh + BytesCountHighBit(AData + LSecondOff, LSecondLen);
+  end;
+end;
+
+function SpanSumAndCountHighBitExclude(const ASpan: TByteSpan; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
+begin
+  if (ASpan.Len = 0) or (ASpan.Data = nil) then
+  begin
+    ASum := 0;
+    AHigh := 0;
+    Exit(False);
+  end;
+  BytesSumAndCountHighBitExclude(ASpan.Data, ASpan.Len, AExcludeOff, AExcludeLen, ASum, AHigh);
+  Result := True;
 end;
 
 function BytesIsZero(const AData: TBytes): Boolean; inline;
@@ -1059,6 +1345,28 @@ begin
   Result := StringJoin(AParts, ASep);
 end;
 
+function StringAsSpan(const AValue: string): TByteSpan; inline;
+begin
+  // 单源：string->TByteSpan 零拷贝视图，PAnsiChar 单点 inline，避免 PByte(PAnsiChar) 重复样板
+  if Length(AValue) = 0 then
+    Exit(TByteSpan.Empty);
+  Result := TByteSpan.Create(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
+end;
+
+procedure BytesRelease(var ABuffer: TBytes); inline;
+begin
+  // 单源显式归还：SetLength 0 释放高水位，需显式调用，inline
+  if Length(ABuffer) > 0 then
+    SetLength(ABuffer, 0);
+end;
+
+procedure BytesShrinkTo(var ABuffer: TBytes; ANewSize: SizeUInt); inline;
+begin
+  // 单源显式缩容：仅当当前>目标时 SetLength 缩容，inline 零拷贝
+  if SizeUInt(Length(ABuffer)) > ANewSize then
+    SetLength(ABuffer, ANewSize);
+end;
+
 function StringLowerAsciiAware(const S: string): string; inline;
 begin
   Result := ToLowerAsciiAware(S);
@@ -1151,7 +1459,7 @@ end;
 const
   HEX_UPPER_BYTESOPS: array[0..15] of AnsiChar = '0123456789ABCDEF';
 
-function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
+function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string;
 var I: Integer; V: UInt64;
 begin
   SetLength(Result, ADigits);
@@ -1161,6 +1469,81 @@ begin
     Result[I + 1] := HEX_UPPER_BYTESOPS[V and $F];
     V := V shr 4;
   end;
+end;
+
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt);
+begin
+  // 单源：string -> PByte 唯一 Move 入口，零拷贝单次 Move，PAnsiChar 解引用规避 FPC 3.3.1 inline+Move(AText[1]) 单字节缺陷；空串/零长/nil 守卫，无分配
+  if (ACount = 0) or (ADest = nil) or (Length(AText) = 0) then
+    Exit;
+  if ACount > SizeUInt(Length(AText)) then
+    ACount := SizeUInt(Length(AText));
+  Move(PAnsiChar(AText)^, ADest^, ACount);
+end;
+
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
+begin
+  // 单源：PByte -> PByte 唯一 Move 入口，零拷贝单次 Move；与 CopyStringToBuffer 同源，避免 tar 等分散 Move
+  if (ACount = 0) or (ASrc = nil) or (ADest = nil) then
+    Exit;
+  Move(ASrc^, ADest^, ACount);
+end;
+
+function SpanJoinWithSeparator(const ALeft, ARight: TByteSpan; const ASeparator: Char): string; inline;
+var
+  LTotal: SizeUInt;
+begin
+  // 单源：单次 SetLength + 两 CopyMemory（bytes.ops 单源 Move），archive.fs ArchiveJoinPath 与 tar.reader CombinePrefixName 同构收敛至此，零拷贝 PByte 视图单源，热路径按需物化
+  if ALeft.Len = 0 then
+  begin
+    if ARight.Len = 0 then Exit('');
+    Exit(SpanToString(ARight));
+  end;
+  if ARight.Len = 0 then
+    Exit(SpanToString(ALeft));
+  LTotal := ALeft.Len + 1 + ARight.Len;
+  SetLength(Result, LTotal);
+  CopyMemory(ALeft.Data, PByte(@Result[1]), ALeft.Len);
+  Result[ALeft.Len + 1] := ASeparator;
+  CopyMemory(ARight.Data, PByte(@Result[ALeft.Len + 2]), ARight.Len);
+end;
+
+function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
+var
+  LMask: SizeUInt;
+begin
+  // perf: inline 单点 power-of-two 位掩码零除法，无 SizeUInt 截断，溢出安全；调用方保证 2 的幂
+  if AAlignment = 0 then
+    Exit(AValue);
+  if AValue = 0 then
+    Exit(0);
+  LMask := AAlignment - 1;
+  if AValue > High(SizeUInt) - LMask then
+    Exit(High(SizeUInt) and not LMask);
+  Result := (AValue + LMask) and not LMask;
+end;
+
+function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
+const
+  C4KMask = SizeUInt(4096 - 1);
+begin
+  // perf: 4K 常量 4096 位掩码单源，inline 零拷贝，复用 AlignUp 位掩码思想常量折叠零除法，避免 Builder 每次 div/mod 开销；无 and not SizeUInt 截断，32/64 位安全
+  if AValue = 0 then
+    Exit(0);
+  if AValue > High(SizeUInt) - C4KMask then
+    Exit(High(SizeUInt) and not C4KMask);
+  Result := (AValue + C4KMask) and not C4KMask;
+end;
+
+function ZeroBufPtr: PByte; inline;
+begin
+  // perf: inline 零拷贝单源访问 GZeroBuf4K，tar 512B 垫零/两零块与 IsZeroMem 同源，零分配，L1 owner 复用
+  Result := @GZeroBuf4K[0];
+end;
+
+function ZeroBufSize: SizeUInt; inline;
+begin
+  Result := SizeUInt(Length(GZeroBuf4K));
 end;
 
 end.

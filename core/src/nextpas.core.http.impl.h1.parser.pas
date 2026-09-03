@@ -472,7 +472,7 @@ begin
     Result := ACount
   else
     Result := LAvailable;
-  Move(FData[FPosition], ABuf, Result);
+  BytesCopy(@ABuf, @FData[FPosition], Result); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   Inc(FPosition, Result);
 end;
 
@@ -501,7 +501,7 @@ begin
     Exit;
   end;
   SetLength(AText, LOldLen + SizeInt(ALen));
-  Move(AData^, AText[LOldLen + 1], ALen);
+  BytesCopy(@AText[LOldLen + 1], AData, ALen); // perf: inline single Move via bytes.ops single source (zero-copy, AppendSpan thin-forward)
 end;
 
 procedure MaterializeCapturedSpan(var AText: string; var AData: PAnsiChar;
@@ -680,7 +680,7 @@ begin
       if LRequired > PARSER_BODY_MAX_CAPACITY then
         Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
       LSelf.EnsureBodyCapacity(LRequired);
-      Move(p1^, LSelf.FBody[LSelf.FBodySize], p2);
+      BytesCopy(@LSelf.FBody[LSelf.FBodySize], p1, p2); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, CbOnBody hot path)
       LSelf.FBodySize := LRequired;
     end;
     { Streaming dispatch: synchronous per llhttp body chunk. Sink must not
@@ -1208,7 +1208,7 @@ begin
   Result := nil;
   SetLength(Result, SizeInt(FBodySize));
   if FBodySize > 0 then
-    Move(FBody[0], Result[0], FBodySize);
+    BytesCopy(@Result[0], @FBody[0], FBodySize); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
 end;
 
 procedure TH1Parser.MaterializeCurrentHeaderSpans;

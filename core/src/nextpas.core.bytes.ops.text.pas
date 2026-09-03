@@ -17,7 +17,7 @@ function SpanToString(const ASpan: TByteSpan): string; inline;
 function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
-function BytesSliceToString(const ABytes: TBytes; const AOffset, ALength: SizeUInt): string;
+function BytesSliceToString(const ABytes: TBytes; const AOffset, ALength: SizeUInt): string; inline;
 function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 function AsciiLowerString(const S: string): string;
@@ -47,6 +47,7 @@ type
   PVarDataView = ^TVarDataView;
   PVarData = ^TVarData;
 
+{ Leaf owns the SetString impls; bytes.ops forwards here. Reversing this direction recurses. }
 function SpanToString(const ASpan: TByteSpan): string; inline;
 begin
   if ASpan.Len = 0 then
@@ -64,12 +65,12 @@ begin
   Result := SpanToString(TByteSpan.FromBytes(ABytes));
 end;
 
-function BytesToUTF8(const ABytes: TBytes): string;
+function BytesToUTF8(const ABytes: TBytes): string; inline;
 begin
   Result := BytesToString(ABytes);
 end;
 
-function BytesSliceToString(const ABytes: TBytes; const AOffset, ALength: SizeUInt): string;
+function BytesSliceToString(const ABytes: TBytes; const AOffset, ALength: SizeUInt): string; inline;
 var
   LSpan: TByteSpan;
 begin

@@ -270,6 +270,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops.capacity,
   nextpas.core.config.builder,
   nextpas.core.config.env,
   nextpas.core.config.export,

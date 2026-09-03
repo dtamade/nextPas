@@ -104,6 +104,7 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.width;
 
 { TSpan }
@@ -353,6 +354,6 @@ begin
   Result := TLine.Empty;
   SetLength(Result.Spans, FCount);
   if FCount > 0 then
-    Move(FSpans[0], Result.Spans[0], FCount * SizeOf(TSpan));
+    BytesCopy(@Result.Spans[0], @FSpans[0], FCount * SizeOf(TSpan)); // perf: inline single Move via bytes.ops single source (zero-copy, INV-5)
 end;
 end.

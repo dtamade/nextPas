@@ -1,6 +1,6 @@
 unit nextpas.core.bytes;
 {**
- * @desc 字节容器门面：Buffer、Builder、字节序操作。
+ * @desc 字节容器门面：Buffer、Builder、字节序操作。 — pure re-export inline thin-forward 30+ exempt (INV-5 single source stays in bytes.ops), red-line 2 guarded: no loop/SIMD body in inline, hot BytesCopy/BytesZero inline single Move/Fill zero-copy only, gate: check_bytes_ops_source_contract.py facade Move/SetLength single source patrol.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -65,6 +65,9 @@ function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
+{ Single-source Move (zero-copy PByte, bytes.ops owner) }
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt); inline;
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
 
 { Unsigned helpers — single source via bytes.ops, inline }
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
@@ -272,6 +275,16 @@ function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 begin
   Result := nextpas.core.bytes.ops.BytesSliceToString(ABytes, AOffset, ALength);
+end;
+
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt);
+begin
+  nextpas.core.bytes.ops.CopyStringToBuffer(AText, ADest, ACount);
+end;
+
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt);
+begin
+  nextpas.core.bytes.ops.CopyMemory(ASrc, ADest, ACount);
 end;
 
 { Unsigned helpers }

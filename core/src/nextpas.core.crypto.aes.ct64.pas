@@ -19,6 +19,9 @@ function CTSBox(AX: Byte): Byte;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 // Constant-time S-box: scans all 256 entries with masking.
 // No cache-timing side channel — every lookup touches all entries.
 
@@ -117,7 +120,8 @@ var
 begin
   if AExpKey.Nr = 0 then
   begin
-    FillChar(AOut^, 16, 0);
+    // perf: inline single source via bytes.ops.BytesZero (FillChar single source, zero-copy, one FillChar)
+    BytesZero(AOut, SizeUInt(16));
     Exit;
   end;
   for I := 0 to 15 do

@@ -28,6 +28,9 @@ function EventDataPtr(AValue: Pointer): TEventData; inline;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 type
   TSubscriptionEntry = record
     ID: TSubscriptionID;
@@ -156,7 +159,7 @@ begin
       Inc(LTotal);
   if LTotal = 0 then Exit;
 
-  FillChar(LVisited, SizeOf(LVisited), 0);
+  BytesZero(@LVisited, SizeOf(LVisited)); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
   for LCount := 0 to LTotal - 1 do
   begin
     LBestIdx := -1;
@@ -257,27 +260,27 @@ end;
 
 function EventDataNone: TEventData;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  BytesZero(@Result, SizeOf(Result)); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
   Result.Kind := edNone;
 end;
 
 function EventDataInt(AValue: Int64): TEventData;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  BytesZero(@Result, SizeOf(Result)); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
   Result.Kind := edInt;
   Result.IntVal := AValue;
 end;
 
 function EventDataFloat(AValue: Double): TEventData;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  BytesZero(@Result, SizeOf(Result)); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
   Result.Kind := edFloat;
   Result.FloatVal := AValue;
 end;
 
 function EventDataPtr(AValue: Pointer): TEventData;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  BytesZero(@Result, SizeOf(Result)); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
   Result.Kind := edPointer;
   Result.PtrVal := AValue;
 end;

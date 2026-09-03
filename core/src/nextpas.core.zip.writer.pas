@@ -118,7 +118,8 @@ uses
   nextpas.core.compress,
   nextpas.core.zip.aes,
   nextpas.core.zip.common,
-  nextpas.core.zip.extra;
+  nextpas.core.zip.extra,
+  nextpas.core.archive.fs;
 
 const
   C_ZIP64_EOCD_BODY_LEN   = 44;  { zip64 EOCD 记录体（不含签名+尺寸前缀 12 字节） }
@@ -411,28 +412,7 @@ begin
     AExtAttrs := LongWord(AMode) shl 16;
 end;
 
-{ IBytesBuilder 的最小 IWriter 适配：供增量压缩器写入压缩载荷缓冲 }
-type
-  TBuilderSink = class(TInterfacedObject, IWriter)
-  private
-    FBuilder: IBytesBuilder;
-  public
-    constructor Create(const ABuilder: IBytesBuilder);
-    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-  end;
-
-constructor TBuilderSink.Create(const ABuilder: IBytesBuilder);
-begin
-  inherited Create;
-  FBuilder := ABuilder;
-end;
-
-function TBuilderSink.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-begin
-  if ACount > 0 then
-    FBuilder.AppendBytes(PByte(@ABuf), ACount);
-  Result := ACount;
-end;
+{ IBytesBuilder→IWriter 适配已下沉至 archive.fs：复用 CreateArchiveBuilderSink 单源，消除与 tar.builder/tar.fs 跨模块重复 }
 
 { 流式条目写入端：外部写未压缩字节进来，内部增量 CRC + raw deflate；
   Close（或放弃时析构）定稿条目。暂存模式把压缩输出累积在 FBuffer、
@@ -514,7 +494,7 @@ begin
   begin
     FBuffer := CreateBytesBuilder(4096);
     if AMeta.FMethod = C_ZIP_METHOD_DEFLATE then
-      FDeflate := RawDeflateWriter(TBuilderSink.Create(FBuffer));
+      FDeflate := RawDeflateWriter(CreateArchiveBuilderSink(FBuffer));
   end;
 end;
 
@@ -591,11 +571,18 @@ begin
     { 认证+加密是原地变换：先拷入重用缓冲，绝不回写调用方缓冲 }
     if Length(FScratch) < SizeInt(ACount) then
     begin
-      // 几何预留，避免 deflate 抖动切片导致逐次 ReAlloc
+      // 几何预留，避免 deflate 抖动切片导致逐次 ReAlloc；与 reader.EnsureScratch 对称
       if Length(FScratch) = 0 then
         SetLength(FScratch, 4096);
       while Length(FScratch) < SizeInt(ACount) do
+      begin
+        if Length(FScratch) > High(SizeInt) div 2 then
+        begin
+          SetLength(FScratch, SizeInt(ACount));
+          Break;
+        end;
         SetLength(FScratch, Length(FScratch) * 2);
+      end;
     end;
     Move(ABuf, FScratch[0], ACount);
     FSealer.Transform(FScratch[0], ACount);

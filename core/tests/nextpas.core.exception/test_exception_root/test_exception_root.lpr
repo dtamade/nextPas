@@ -12,7 +12,7 @@ uses
 type
   TNextPasErrorClass = class of nextpas.core.exception.ENextPasError;
 
-  TTrackedInnerException = class(SysUtils.Exception)
+  TTrackedInnerException = class(nextpas.core.exception.Exception)
   public
     destructor Destroy; override;
   end;
@@ -29,7 +29,7 @@ end;
 procedure Check(const ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then
-    raise SysUtils.Exception.Create(AMessage);
+    raise nextpas.core.exception.Exception.Create(AMessage);
 end;
 
 procedure TestBaseExceptionsCatchAsUnifiedRoot;
@@ -40,27 +40,31 @@ begin
   try
     raise nextpas.core.base.EArgumentNil.Create('argument is nil');
   except
-    on E: nextpas.core.exception.ENextPasError do
+    on E: nextpas.core.base.ECore do
       LCaught := True;
   end;
-  Check(LCaught, 'ECore-derived exceptions must catch as ENextPasError');
+  Check(LCaught, 'ECore-derived exceptions must catch as base ECore');
 end;
 
 procedure TestTimeoutHasOnePublicRuntimeType;
 var
-  LBaseTimeout: SysUtils.Exception;
-  LErrorsTimeout: SysUtils.Exception;
+  LBaseTimeout: nextpas.core.base.ETimeoutError;
+  LErrorsTimeout: nextpas.core.errors.ETimeoutError;
 begin
   LBaseTimeout := nextpas.core.base.ETimeoutError.Create('base timeout');
   try
     LErrorsTimeout := nextpas.core.errors.ETimeoutError.Create('errors timeout');
     try
-      Check(LBaseTimeout.ClassType = LErrorsTimeout.ClassType,
-        'base/errors ETimeoutError must have the same runtime class');
-      Check(LBaseTimeout is nextpas.core.exception.ETimeoutError,
-        'base ETimeoutError must use the canonical timeout type');
+      Check(LBaseTimeout.ClassType <> LErrorsTimeout.ClassType,
+        'base/errors ETimeoutError are distinct hierarchies after base←intf decoupling');
+      Check(LBaseTimeout is nextpas.core.base.ECore,
+        'base ETimeoutError must be catchable as base ECore');
+      Check(LBaseTimeout.Category = nextpas.core.base.ecTimeout,
+        'base ETimeoutError must keep timeout category');
       Check(LErrorsTimeout is nextpas.core.exception.ETimeoutError,
         'errors ETimeoutError must use the canonical timeout type');
+      Check(LErrorsTimeout.Category = nextpas.core.exception.ecTimeout,
+        'errors ETimeoutError must keep timeout category');
     finally
       LErrorsTimeout.Free;
     end;
@@ -78,36 +82,36 @@ begin
     raise nextpas.core.base.ETimeoutError.Create('base timeout');
   except
     on E: nextpas.core.base.ECore do
-      LCaught := E is nextpas.core.exception.ENextPasError;
+      LCaught := E.Category = nextpas.core.base.ecTimeout;
   end;
-  Check(LCaught, 'legacy ECore catch must catch base ETimeoutError alias');
+  Check(LCaught, 'legacy ECore catch must catch base ETimeoutError with timeout category');
 
   LCaught := False;
   try
     raise nextpas.core.errors.ETimeoutError.Create('errors timeout');
   except
-    on E: nextpas.core.base.ECore do
-      LCaught := E is nextpas.core.exception.ENextPasError;
+    on E: nextpas.core.exception.ENextPasError do
+      LCaught := E.Category = nextpas.core.exception.ecTimeout;
   end;
-  Check(LCaught, 'legacy ECore catch must catch errors ETimeoutError alias');
+  Check(LCaught, 'exception ENextPasError catch must catch errors ETimeoutError');
 
   LCaught := False;
   try
     raise nextpas.core.base.EOutOfMemory.Create('base oom');
   except
     on E: nextpas.core.base.ECore do
-      LCaught := E is nextpas.core.errors.EOutOfMemoryError;
+      LCaught := E.Category = nextpas.core.base.ecResourceExhausted;
   end;
-  Check(LCaught, 'legacy ECore catch must catch base EOutOfMemory alias');
+  Check(LCaught, 'legacy ECore catch must catch base EOutOfMemory with resource-exhausted');
 
   LCaught := False;
   try
     raise nextpas.core.errors.EOutOfMemoryError.Create('errors oom');
   except
-    on E: nextpas.core.base.ECore do
-      LCaught := E is nextpas.core.exception.ENextPasError;
+    on E: nextpas.core.exception.ENextPasError do
+      LCaught := E.Category = nextpas.core.exception.ecResourceExhausted;
   end;
-  Check(LCaught, 'legacy ECore catch must catch errors EOutOfMemoryError');
+  Check(LCaught, 'exception ENextPasError catch must catch errors EOutOfMemoryError');
 end;
 
 procedure TestOutOfMemoryCompatibilityCatchesAsPublicRoot;
@@ -298,7 +302,7 @@ begin
     nextpas.core.exception.ENextPasError.CreateFmt(
       'bad format %d %d', nextpas.core.exception.ecInternal, [1], LInner, True);
   except
-    on E: SysUtils.EConvertError do
+    on E: nextpas.core.exception.EConvertError do
       LCaught := True;
   end;
   Check(LCaught,
@@ -313,7 +317,7 @@ begin
     nextpas.core.exception.ENextPasError.CreateFmt(
       'bad format %d %d', nextpas.core.exception.ecInternal, [1], LInner, False);
   except
-    on E: SysUtils.EConvertError do
+    on E: nextpas.core.exception.EConvertError do
       LCaught := True;
   end;
   Check(LCaught,

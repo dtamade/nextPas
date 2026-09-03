@@ -162,10 +162,10 @@ begin
   if TrimLocal(RevInput) = '' then
     raise EGitError.Create('bundle: empty rev list');
   Out_ := RunWithInput('git', ['--git-dir=' + AGitDir, 'pack-objects', '--stdout', '--revs', '--delta-base-offset'],
-    GitStringToBytes(RevInput));
+    StringToBytes(RevInput));
   if not ProcessSucceeded(Out_) then
     raise EGitError.CreateFmt('bundle pack-objects failed (%d): %s', [Out_.ExitCode, TrimLocal(Out_.StdErr + Out_.StdOut)]);
-  Result := GitStringToBytes(Out_.StdOut);
+  Result := StringToBytes(Out_.StdOut);
   if Length(Result) = 0 then
     raise EGitError.Create('bundle: pack-objects produced empty pack');
   if (Length(Result) < 12) or (Result[0] <> Ord('P')) then
@@ -202,11 +202,14 @@ var P, I: SizeInt;
     Oid: TGitOid;
     Prereq: TGitBundlePrereq;
     Ref: TGitBundleRef;
+    PrereqCnt, PrereqCap, RefsCnt, RefsCap: SizeUInt;
+    LNewCap: SizeUInt;
 begin
   Result.Prerequisites := nil;
   Result.Refs := nil;
   Result.PackOffset := -1;
   APackOff := -1;
+  PrereqCnt := 0; PrereqCap := 0; RefsCnt := 0; RefsCap := 0;
   if Length(AData) < 10 then
     raise EGitError.Create('bundle: file too short');
   // find first "\n\n" (10,10)
@@ -217,8 +220,8 @@ begin
   if P < 0 then
     raise EGitError.Create('bundle: missing header terminator');
   // header bytes [0, P] inclusive first \n, but pack starts at P+2
-  SetLength(HeaderStr, P+1);
-  if P+1 > 0 then Move(AData[0], HeaderStr[1], P+1);
+  // perf: bytes.ops BytesSliceToString single source (inline + single Move via Slice view, zero-copy, replaces hand-written SetLength+Move)
+  HeaderStr := BytesSliceToString(AData, 0, SizeUInt(P+1));
   Lines := LocalSplitLines(HeaderStr);
   Cnt := Length(Lines);
   // SplitString includes last empty after trailing \n? Our header ends with \n before blank, so split yields last '' for the blank? Actually header ends with "ref\n" then we consumed up to P which is first \n of "\n\n", so headerStr ends with "\n", split yields last ''.
@@ -251,8 +254,15 @@ begin
       end;
       Prereq.Oid := Oid;
       Prereq.Comment := Rest;
-      SetLength(Result.Prerequisites, Length(Result.Prerequisites)+1);
-      Result.Prerequisites[High(Result.Prerequisites)] := Prereq;
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized, zero-copy record Move
+      if PrereqCnt >= PrereqCap then
+      begin
+        LNewCap := GrowArrayCapacity(PrereqCap, PrereqCnt + 1);
+        SetLength(Result.Prerequisites, LNewCap);
+        PrereqCap := LNewCap;
+      end;
+      Result.Prerequisites[PrereqCnt] := Prereq;
+      Inc(PrereqCnt);
     end
     else
     begin
@@ -270,10 +280,22 @@ begin
       Oid := GitOidFromHex(LowerHex(OidHex));
       Ref.Oid := Oid;
       Ref.Name := Rest;
-      SetLength(Result.Refs, Length(Result.Refs)+1);
-      Result.Refs[High(Result.Refs)] := Ref;
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source, O(1) amortized, zero-copy record Move
+      if RefsCnt >= RefsCap then
+      begin
+        LNewCap := GrowArrayCapacity(RefsCap, RefsCnt + 1);
+        SetLength(Result.Refs, LNewCap);
+        RefsCap := LNewCap;
+      end;
+      Result.Refs[RefsCnt] := Ref;
+      Inc(RefsCnt);
     end;
   end;
+  // single shrink after loop: bytes.ops geometric growth -> one SetLength to exact, avoids O(n²) jitter, stability: managed strings trimmed, no leak
+  if SizeUInt(Length(Result.Prerequisites)) <> PrereqCnt then
+    SetLength(Result.Prerequisites, PrereqCnt);
+  if SizeUInt(Length(Result.Refs)) <> RefsCnt then
+    SetLength(Result.Refs, RefsCnt);
   Result.PackOffset := P + 2;
   APackOff := P + 2;
 end;
@@ -309,7 +331,8 @@ begin
     raise EGitError.Create('bundle: invalid pack signature');
   // trailer check
   SetLength(Trail, GitOidRawLen);
-  Move(Pack[Length(Pack)-GitOidRawLen], Trail[0], GitOidRawLen);
+  // perf: single source OID trailer via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move), replaces scattered Move 20B, CONTRACT.objects inline zero-copy invariant
+  SpanCopy(TByteSpan.Create(@Trail[0], GitOidRawLen), TByteSpan.Create(@Pack[Length(Pack)-GitOidRawLen], GitOidRawLen));
   Hasher := NewSHA1;
   Hasher.Write(Pack[0], SizeUInt(Length(Pack)-GitOidRawLen));
   Computed := Hasher.SumBytes;
@@ -350,6 +373,7 @@ var Wants: array of TGitOid;
     Comment: string;
     LHeader: TBufStringBuilder;
     LHeaderBytes: TBytes;
+    WantsCnt, WantsCap, ExcludesCnt, ExcludesCap, WantNamesCnt, WantNamesCap, PrereqCommentsCnt, PrereqCommentsCap, LNewCap: SizeUInt;
 begin
   if ABundlePath = '' then
     raise EGitError.Create('bundle: empty bundle path');
@@ -360,6 +384,8 @@ begin
   SetLength(Excludes, 0);
   SetLength(WantNames, 0);
   SetLength(PrereqComments, 0);
+  WantsCnt := 0; WantsCap := 0; ExcludesCnt := 0; ExcludesCap := 0;
+  WantNamesCnt := 0; WantNamesCap := 0; PrereqCommentsCnt := 0; PrereqCommentsCap := 0;
   for I := 0 to High(ARevs) do
   begin
     Raw := TrimLocal(ARevs[I]);
@@ -371,13 +397,26 @@ begin
       if RevName = '' then
         raise EGitError.CreateFmt('bundle: empty exclude "%s"', [Raw]);
       Oid := GitRevParse(AGitDir, RevName);
-      SetLength(Excludes, Length(Excludes)+1);
-      Excludes[High(Excludes)] := Oid;
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source, O(1) amortized, zero-copy Move
+      if ExcludesCnt >= ExcludesCap then
+      begin
+        LNewCap := GrowArrayCapacity(ExcludesCap, ExcludesCnt + 1);
+        SetLength(Excludes, LNewCap);
+        ExcludesCap := LNewCap;
+      end;
+      Excludes[ExcludesCnt] := Oid;
+      Inc(ExcludesCnt);
       // comment for header prereq: commit subject
       Comment := CommitFirstLine(AGitDir, Oid);
       if Comment = '' then Comment := GitOidToHex(Oid);
-      SetLength(PrereqComments, Length(PrereqComments)+1);
-      PrereqComments[High(PrereqComments)] := Comment;
+      if PrereqCommentsCnt >= PrereqCommentsCap then
+      begin
+        LNewCap := GrowArrayCapacity(PrereqCommentsCap, PrereqCommentsCnt + 1);
+        SetLength(PrereqComments, LNewCap);
+        PrereqCommentsCap := LNewCap;
+      end;
+      PrereqComments[PrereqCommentsCnt] := Comment;
+      Inc(PrereqCommentsCnt);
     end
     else
     begin
@@ -395,31 +434,72 @@ begin
         if RevName <> '' then
         begin
           Oid := GitRevParse(AGitDir, RevName);
-          SetLength(Excludes, Length(Excludes)+1);
-          Excludes[High(Excludes)] := Oid;
+          if ExcludesCnt >= ExcludesCap then
+          begin
+            LNewCap := GrowArrayCapacity(ExcludesCap, ExcludesCnt + 1);
+            SetLength(Excludes, LNewCap);
+            ExcludesCap := LNewCap;
+          end;
+          Excludes[ExcludesCnt] := Oid;
+          Inc(ExcludesCnt);
           Comment := CommitFirstLine(AGitDir, Oid);
           if Comment = '' then Comment := GitOidToHex(Oid);
-          SetLength(PrereqComments, Length(PrereqComments)+1);
-          PrereqComments[High(PrereqComments)] := Comment;
+          if PrereqCommentsCnt >= PrereqCommentsCap then
+          begin
+            LNewCap := GrowArrayCapacity(PrereqCommentsCap, PrereqCommentsCnt + 1);
+            SetLength(PrereqComments, LNewCap);
+            PrereqCommentsCap := LNewCap;
+          end;
+          PrereqComments[PrereqCommentsCnt] := Comment;
+          Inc(PrereqCommentsCnt);
         end;
         RevName := Copy(Raw, Pos('..', Raw)+2, MaxInt);
         if RevName = '' then RevName := 'HEAD';
         Oid := GitRevParse(AGitDir, RevName);
-        SetLength(Wants, Length(Wants)+1);
-        Wants[High(Wants)] := Oid;
-        SetLength(WantNames, Length(WantNames)+1);
-        WantNames[High(WantNames)] := RevName;
+        if WantsCnt >= WantsCap then
+        begin
+          LNewCap := GrowArrayCapacity(WantsCap, WantsCnt + 1);
+          SetLength(Wants, LNewCap);
+          WantsCap := LNewCap;
+        end;
+        Wants[WantsCnt] := Oid;
+        Inc(WantsCnt);
+        if WantNamesCnt >= WantNamesCap then
+        begin
+          LNewCap := GrowArrayCapacity(WantNamesCap, WantNamesCnt + 1);
+          SetLength(WantNames, LNewCap);
+          WantNamesCap := LNewCap;
+        end;
+        WantNames[WantNamesCnt] := RevName;
+        Inc(WantNamesCnt);
       end
       else
       begin
         Oid := GitRevParse(AGitDir, Raw);
-        SetLength(Wants, Length(Wants)+1);
-        Wants[High(Wants)] := Oid;
-        SetLength(WantNames, Length(WantNames)+1);
-        WantNames[High(WantNames)] := Raw;
+        if WantsCnt >= WantsCap then
+        begin
+          LNewCap := GrowArrayCapacity(WantsCap, WantsCnt + 1);
+          SetLength(Wants, LNewCap);
+          WantsCap := LNewCap;
+        end;
+        Wants[WantsCnt] := Oid;
+        Inc(WantsCnt);
+        if WantNamesCnt >= WantNamesCap then
+        begin
+          LNewCap := GrowArrayCapacity(WantNamesCap, WantNamesCnt + 1);
+          SetLength(WantNames, LNewCap);
+          WantNamesCap := LNewCap;
+        end;
+        WantNames[WantNamesCnt] := Raw;
+        Inc(WantNamesCnt);
       end;
     end;
   end;
+  // single shrink after loop: geometric growth -> one SetLength to exact, avoids O(n²) jitter
+  if SizeUInt(Length(Wants)) <> WantsCnt then SetLength(Wants, WantsCnt);
+  if SizeUInt(Length(Excludes)) <> ExcludesCnt then SetLength(Excludes, ExcludesCnt);
+  if SizeUInt(Length(WantNames)) <> WantNamesCnt then SetLength(WantNames, WantNamesCnt);
+  if SizeUInt(Length(PrereqComments)) <> PrereqCommentsCnt then SetLength(PrereqComments, PrereqCommentsCnt);
   if Length(Wants) = 0 then
     raise EGitError.Create('bundle: no want refs resolved');
   Pack := BuildPackFromRevs(AGitDir, Wants, Excludes);
@@ -446,7 +526,7 @@ begin
   finally
     LHeader.Done;
   end;
-  LHeaderBytes := GitStringToBytes(HeaderText);
+  LHeaderBytes := StringToBytes(HeaderText);
   // bytes.ops 单源流式一次分配，替代临拼 BytesConcat(OutBytes, PackBytes)
   OutBytes := BytesConcatMany([LHeaderBytes, Pack]);
   // ensure parent dir
@@ -484,6 +564,7 @@ var Data, Pack: TBytes;
     Off: SizeInt;
     I: Integer;
     PackHash, PackPath, IdxPath, RefPath, NeedMkdir: string;
+    LHeadText, LHeadTarget: string;
     Idx: TBytes;
     Trail: TBytes;
 begin
@@ -495,7 +576,8 @@ begin
   Move(Data[Off], Pack[0], Length(Pack));
   // validate pack trailer quickly
   SetLength(Trail, GitOidRawLen);
-  Move(Pack[Length(Pack)-GitOidRawLen], Trail[0], GitOidRawLen);
+  // perf: single source OID trailer via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move), replaces scattered Move 20B, CONTRACT.objects inline zero-copy invariant
+  SpanCopy(TByteSpan.Create(@Trail[0], GitOidRawLen), TByteSpan.Create(@Pack[Length(Pack)-GitOidRawLen], GitOidRawLen));
   PackHash := BytesToHexLower(Trail);
   EnsureGitDirShape(ATargetGitDir);
   MkdirAll(PathJoin([ATargetGitDir, 'objects', 'pack']), PermDirDefault);
@@ -509,12 +591,31 @@ begin
   begin
     if Hdr.Refs[I].Name = 'HEAD' then
     begin
-      // store HEAD as detached? But writing HEAD file with oid may overwrite symref.
-      // Check if HEAD is symref in target: preserve? For unbundle we write detached HEAD only if target has no HEAD.
-      // Simpler: write refs/heads from bundle's HEAD is not a branch; store as HEAD oid if target HEAD missing.
-      // We'll write refs/bundle/HEAD for inspection, and also update HEAD if it doesn't exist.
+      // bundle created from HEAD carries a literal 'HEAD' ref. A fresh bare
+      // target already has a HEAD symref, so resolve it and land the oid on
+      // the symref target branch (fetch-into-bare semantics); only write a
+      // detached HEAD when the target has no HEAD at all.
       if not FileExists(PathJoin([ATargetGitDir, 'HEAD'])) then
-        WriteFileText(PathJoin([ATargetGitDir, 'HEAD']), GitOidToHex(Hdr.Refs[I].Oid) + #10);
+        WriteFileText(PathJoin([ATargetGitDir, 'HEAD']), GitOidToHex(Hdr.Refs[I].Oid) + #10)
+      else
+      begin
+        LHeadText := '';
+        try
+          LHeadText := Trim(ReadFileText(PathJoin([ATargetGitDir, 'HEAD'])));
+        except
+        end;
+        if Copy(LHeadText, 1, 5) = 'ref: ' then
+        begin
+          LHeadTarget := Trim(Copy(LHeadText, 6, MaxInt));
+          if (LHeadTarget <> '') and not FileExists(PathJoin([ATargetGitDir, LHeadTarget])) then
+          begin
+            RefPath := PathJoin([ATargetGitDir, LHeadTarget]);
+            NeedMkdir := PathDir(RefPath);
+            if NeedMkdir <> '' then MkdirAll(NeedMkdir, PermDirDefault);
+            WriteFileText(RefPath, GitOidToHex(Hdr.Refs[I].Oid) + #10);
+          end;
+        end;
+      end;
       // also write a loose file for inspection
       RefPath := PathJoin([ATargetGitDir, 'refs', 'bundle', 'HEAD']);
       NeedMkdir := PathDir(RefPath);

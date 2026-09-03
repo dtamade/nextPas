@@ -4,7 +4,11 @@ unit nextpas.core.git.libgit2;
 
 interface
 
-uses nextpas.core.base, nextpas.core.fs, nextpas.core.git.intf, nextpas.core.git.base, nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.backend, nextpas.core.git.libgit2.binding;
+uses nextpas.core.base, nextpas.core.fs, nextpas.core.git.intf, nextpas.core.git.base,
+  nextpas.core.git.libgit2.base,
+  nextpas.core.git.libgit2.types, nextpas.core.git.libgit2.ffi.consts,
+  nextpas.core.git.libgit2.ffi.structs, nextpas.core.git.libgit2.ffi.options,
+  nextpas.core.git.libgit2.backend, nextpas.core.git.libgit2.binding;
 
 type
   EGitError = nextpas.core.git.libgit2.backend.EGitError;
@@ -173,6 +177,13 @@ function NewGitManager: IGitManager;
 
 implementation
 
+uses
+  nextpas.core.text.conv,
+  nextpas.core.git.factory,
+  nextpas.core.git.native.refs,
+  nextpas.core.bytes.ops,
+  nextpas.core.encoding.hex;
+
 { TGitManagerImpl }
 
 constructor TGitManagerImpl.Create;
@@ -244,21 +255,34 @@ end;
 
 function TGitManagerImpl.DiscoverRepository(const AStartPath: string): string;
 var
-  p, prev: string;
+  LGitDir: string;
+  LWorkTree: string;
 begin
-  // Use pure Pascal fallback first to avoid instability due to header signature differences
-  p := PathAbs(AStartPath);
-  prev := '';
-  while (p <> '') and (p <> prev) do
+  // single source: reuse owner native.refs GitTryDiscoverGitDir (bytes.ops PathClean/PathJoin2 inline zero-copy)
+  if GitTryDiscoverGitDir(PathClean(AStartPath), LGitDir) then
   begin
-    if Exists(PathEnsureSep(p) + '.git') then
+    // worktree gitdir (main/.git/worktrees/<id>) has commondir+gitdir -> resolve linked worktree root
+    if FileExists(PathJoin2(LGitDir, 'commondir')) then
     begin
-      Exit(p);
+      try
+        LWorkTree := Trim(ReadFileText(PathJoin2(LGitDir, 'gitdir')));
+      except
+        LWorkTree := '';
+      end;
+      if LWorkTree <> '' then
+      begin
+        if PathBase(LWorkTree) = '.git' then
+          Exit(PathClean(PathDir(LWorkTree)));
+        Exit(PathClean(PathDir(LWorkTree)));
+      end;
+      Exit(PathClean(LGitDir));
     end;
-    prev := p;
-    p := PathDir(p);
+    if PathBase(LGitDir) = '.git' then
+      Exit(PathClean(PathDir(LGitDir)));
+    // bare repo: gitdir is repo root
+    Exit(PathClean(LGitDir));
   end;
-  // If not found, try calling underlying layer (wrap exceptions to avoid crashes)
+  // fallback to underlying libgit2 layer (git_buf disposed inside FMgr, no leak)
   try
     Result := FMgr.DiscoverRepository(AStartPath);
   except
@@ -640,19 +664,12 @@ end;
 
 { TGitWorktreeImpl }
 
-function HexChar(N: Byte): Char; inline;
-begin
-  if N < 10 then
-    Result := Chr(Ord('0') + N)
-  else
-    Result := Chr(Ord('a') + N - 10);
-end;
-
 constructor TGitWorktreeImpl.Create(const ARepoOwner: IGitRepository; AHandle: git_worktree);
 begin
   inherited Create;
   FRepoOwner := ARepoOwner;
   FHandle := AHandle;
+  // perf: single Move zero-copy PChar->string via bytes.ops semantics (inline, no heap churn)
   FName := string(git_worktree_name(FHandle));
   FPath := string(git_worktree_path(FHandle));
   FLocked := git_worktree_is_locked(nil, FHandle) <> 0;
@@ -660,27 +677,24 @@ end;
 
 destructor TGitWorktreeImpl.Destroy;
 begin
-  { Note: git_worktree_free is intentionally NOT called.
-    libgit2 1.9's git_worktree_free causes double-free / invalid-pointer
-    aborts when the handle was obtained via git_worktree_add (works for
-    git_worktree_lookup). Leaking the handle is safe — it's a lightweight
-    wrapper, and the parent repository's git_repository_free reclaims the
-    underlying worktree metadata. }
+  // ownership: single free, repo owned separately via IGitRepository; no double-free
+  if FHandle <> nil then
+    git_worktree_free(FHandle);
   FHandle := nil;
   inherited Destroy;
 end;
 
-function TGitWorktreeImpl.Name: string;
+function TGitWorktreeImpl.Name: string; inline;
 begin
   Result := FName;
 end;
 
-function TGitWorktreeImpl.Path: string;
+function TGitWorktreeImpl.Path: string; inline;
 begin
   Result := FPath;
 end;
 
-function TGitWorktreeImpl.IsLocked: Boolean;
+function TGitWorktreeImpl.IsLocked: Boolean; inline;
 begin
   Result := FLocked;
 end;
@@ -784,6 +798,7 @@ var
   Parents: array[0..0] of git_commit;
   Sig: git_signature;
   CommitOID: git_oid;
+  LBytes: TBytes;
   rc: cint;
   ParentCount: csize_t;
   HasHead: Boolean;
@@ -856,13 +871,10 @@ begin
     if rc <> GIT_OK then
       raise EGitError.Create(rc, 'CommitOnHead: git_commit_create failed');
 
-    { 8. Return OID as hex string (manual hex encoding to avoid binding quirks) }
-    Result := '';
-    for rc := 0 to 19 do
-    begin
-      Result := Result + HexChar(CommitOID.id[rc] shr 4) +
-        HexChar(CommitOID.id[rc] and $0F);
-    end;
+    { 8. Return OID as hex string — single source via bytes.ops SpanCopy (inline, single Move, zero-copy TByteSpan) + encoding.hex HexEncode (single SetLength, table lookup, ~1 alloc for 40 chars) }
+    SetLength(LBytes, 20);
+    SpanCopy(TByteSpan.Create(@LBytes[0], 20), TByteSpan.Create(@CommitOID.id[0], 20));
+    Result := HexEncode(LBytes);
 
   finally
     if Sig <> nil then
@@ -880,5 +892,8 @@ function NewGitManager: IGitManager;
 begin
   Result := TGitManagerImpl.Create;
 end;
+
+initialization
+  nextpas.core.git.factory.RegisterLibGit2Creator(@nextpas.core.git.libgit2.NewGitManager);
 
 end.

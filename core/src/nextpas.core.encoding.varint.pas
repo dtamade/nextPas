@@ -6,12 +6,17 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors;
 
 function VarintEncode(const AValue: UInt64): TBytes;
 function VarintDecode(const AData: TBytes; out ABytesRead: Integer): UInt64;
 function SignedVarintEncode(const AValue: Int64): TBytes;
 function SignedVarintDecode(const AData: TBytes; out ABytesRead: Integer): Int64;
+{ single source varint peek for pack/delta chains — inline zero-copy TByteSpan/TBytes, no alloc, no exception on truncated/overflow }
+function TryVarintDecode(const AData: TBytes; var APos: SizeInt; out AValue: UInt64): Boolean; inline; overload;
+function TryVarintDecode(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline; overload;
 
 implementation
 
@@ -33,7 +38,7 @@ begin
   until LVal = 0;
 
   SetLength(Result, LCount);
-  Move(LBuf[0], Result[0], LCount);
+  BytesCopy(@Result[0], @LBuf[0], SizeUInt(LCount)); // perf: inline single Move via bytes.ops BytesCopy single source (zero-copy, INV-5)
 end;
 
 function VarintMinValueForLength(const ALength: Integer): UInt64; inline;
@@ -93,6 +98,61 @@ end;
 function SignedVarintDecode(const AData: TBytes; out ABytesRead: Integer): Int64;
 begin
   Result := ZigZagDecode(VarintDecode(AData, ABytesRead));
+end;
+
+function TryVarintDecode(const AData: TBytes; var APos: SizeInt; out AValue: UInt64): Boolean; inline;
+var
+  LShift: Integer;
+  LByte: Byte;
+begin
+  AValue := 0;
+  LShift := 0;
+  Result := False;
+  if (APos < 0) or (APos >= Length(AData)) then
+    Exit;
+  repeat
+    if APos >= Length(AData) then
+      Exit;
+    if LShift >= 64 then
+      Exit;
+    LByte := AData[APos];
+    Inc(APos);
+    if (LShift = 63) and ((LByte and $7E) <> 0) then
+      Exit;
+    AValue := AValue or (UInt64(LByte and $7F) shl LShift);
+    Inc(LShift, 7);
+  until (LByte and $80) = 0;
+  Result := True;
+end;
+
+function TryVarintDecode(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline;
+var
+  LShift: Integer;
+  LByte: Byte;
+  LPos: SizeUInt;
+begin
+  AValue := 0;
+  LShift := 0;
+  LPos := 0;
+  Result := False;
+  if ASpan.Len = 0 then
+    Exit;
+  repeat
+    if LPos >= ASpan.Len then
+      Exit;
+    if LShift >= 64 then
+      Exit;
+    LByte := ASpan.Data[LPos];
+    Inc(LPos);
+    if (LShift = 63) and ((LByte and $7E) <> 0) then
+      Exit;
+    AValue := AValue or (UInt64(LByte and $7F) shl LShift);
+    Inc(LShift, 7);
+  until (LByte and $80) = 0;
+  { zero-copy advance: single pointer bump, no Move, inline }
+  Inc(ASpan.Data, LPos);
+  Dec(ASpan.Len, LPos);
+  Result := True;
 end;
 
 end.

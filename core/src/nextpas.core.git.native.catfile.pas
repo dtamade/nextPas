@@ -33,6 +33,7 @@ function GitCatFilePretty(const AGitDir, ARev: string): string; overload;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
@@ -89,7 +90,7 @@ begin
     Result.Kind := Kind;
     Result.Size := Length(Data);
     Result.Data := Copy(Data, 0, Length(Data));
-    Result.Text := GitBytesToString(Data);
+    Result.Text := BytesToString(Data);
   finally
     Repo.Free;
   end;
@@ -198,17 +199,17 @@ end;
 function PrettyCommit(const AData: TBytes): string;
 begin
   // commit raw is already pretty; just return text
-  Result := GitBytesToString(AData);
+  Result := BytesToString(AData);
 end;
 
 function PrettyTag(const AData: TBytes): string;
 begin
-  Result := GitBytesToString(AData);
+  Result := BytesToString(AData);
 end;
 
 function PrettyBlob(const AData: TBytes): string;
 begin
-  Result := GitBytesToString(AData);
+  Result := BytesToString(AData);
 end;
 
 function GitCatFilePrettyInternal(const AGitDir: string; const AOid: TGitOid): string;

@@ -7,6 +7,7 @@ unit nextpas.core.jwt;
  *}
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers}
 
 interface
 
@@ -110,7 +111,6 @@ uses
   nextpas.core.encoding,
   nextpas.core.json.builder,
   nextpas.core.json,
-  nextpas.core.json.value,
   nextpas.core.time;
 
 constructor EJwtError.Create(const ACode: TJwtErrorCode; const AMessage: string);

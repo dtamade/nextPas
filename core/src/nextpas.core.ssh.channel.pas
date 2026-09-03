@@ -887,7 +887,7 @@ begin
     LAvail := SizeUInt(Length(FBuf)) - FBufPos;
     LCopy := LAvail;
     if LCopy > ACount then LCopy := ACount;
-    Move(FBuf[FBufPos], ABuffer, LCopy);
+    BytesCopy(@ABuffer, @FBuf[FBufPos], LCopy); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
     Inc(FBufPos, LCopy);
     if FBufPos >= SizeUInt(Length(FBuf)) then
     begin
@@ -904,11 +904,11 @@ begin
   if Length(LData) = 0 then Exit(0);
   if SizeUInt(Length(LData)) <= ACount then
   begin
-    Move(LData[0], ABuffer, SizeUInt(Length(LData)));
+    BytesCopy(@ABuffer, @LData[0], SizeUInt(Length(LData))); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
     Result := SizeUInt(Length(LData));
     Exit;
   end;
-  Move(LData[0], ABuffer, ACount);
+  BytesCopy(@ABuffer, @LData[0], ACount); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   FBuf := Copy(LData, ACount, Length(LData) - Integer(ACount));
   FBufPos := 0;
   Result := ACount;
@@ -922,7 +922,7 @@ begin
     raise ESSHError.Create(sekIO, 'ChannelStream: closed');
   if ACount = 0 then Exit(0);
   SetLength(LBytes, ACount);
-  Move(ABuffer, LBytes[0], ACount);
+  BytesCopy(@LBytes[0], @ABuffer, ACount); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   FChannel.SendData(LBytes);
   Result := ACount;
 end;

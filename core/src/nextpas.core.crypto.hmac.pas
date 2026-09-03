@@ -36,7 +36,8 @@ function HMAC_SHA1(const AKey, AData: TBytes): TBytes;
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.bytes.ops;
 
 type
   THMACHasher = class(TInterfacedObject, IHasher)
@@ -90,11 +91,11 @@ begin
     LTmpHash := MakeInner;
     LTmpHash.Write(AKey, AKeyLen);
     LTmpHash.Sum(LDigest[0], FDigestSize);
-    Move(LDigest[0], LKeyBlock[0], FDigestSize);
+    BytesCopy(@LKeyBlock[0], @LDigest[0], FDigestSize); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, SIMD single-source convergence)
     FillChar(LDigest[0], SizeOf(LDigest), 0);
   end
   else if AKeyLen > 0 then
-    Move(AKey, LKeyBlock[0], AKeyLen); // AKeyLen=0 分支不触碰 AKey
+    BytesCopy(@LKeyBlock[0], @AKey, AKeyLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy); AKeyLen=0 分支不触碰 AKey
   for I := 0 to FBlockSize - 1 do
   begin
     LIPad[I] := LKeyBlock[I] xor $36;
@@ -142,7 +143,7 @@ begin
     LClone := THMACHasher.Create(FFactory, FOPad[0], 0)
   else
     LClone := THMACHasher.Create(FAlgo, FOPad[0], 0);
-  Move(FOPad[0], LClone.FOPad[0], SizeOf(FOPad));
+  BytesCopy(@LClone.FOPad[0], @FOPad[0], SizeUInt(SizeOf(FOPad))); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   LClone.FBlockSize := FBlockSize;
   LClone.FDigestSize := FDigestSize;
   LClone.FFactory := FFactory;
@@ -255,7 +256,7 @@ begin
   LD := HmacSHA256(AKey, AData);
   Result := nil;
   SetLength(Result, SHA256_DIGEST_SIZE);
-  Move(LD[0], Result[0], SHA256_DIGEST_SIZE);
+  BytesCopy(@Result[0], @LD[0], SHA256_DIGEST_SIZE); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
 end;
 
 function HMAC_SHA384(const AKey, AData: TBytes): TBytes;
@@ -264,7 +265,7 @@ begin
   LD := HmacSHA384(AKey, AData);
   Result := nil;
   SetLength(Result, SHA384_DIGEST_SIZE);
-  Move(LD[0], Result[0], SHA384_DIGEST_SIZE);
+  BytesCopy(@Result[0], @LD[0], SHA384_DIGEST_SIZE); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
 end;
 
 function HMAC_SHA1(const AKey, AData: TBytes): TBytes;
