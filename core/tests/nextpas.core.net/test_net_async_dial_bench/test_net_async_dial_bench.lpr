@@ -8,9 +8,7 @@ program test_net_async_dial_bench;
   Accept queue is drained with nonblocking TryAccept so backlog does not fill.
   truth=localhost-*; not public DNS HE matrix. }
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+uses nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.cpu,
@@ -18,7 +16,7 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.async.tcp,
   nextpas.core.net.async.dial,
-  nextpas.core.async.loop;
+  nextpas.core.async.loop, nextpas.core.base.utils, nextpas.core.text.conv;
 
 const
   DIAL_SEQ_COUNT = 200;

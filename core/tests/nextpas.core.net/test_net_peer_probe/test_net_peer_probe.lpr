@@ -8,7 +8,6 @@ program test_net_peer_probe;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.time.base,
@@ -17,7 +16,7 @@ uses
   nextpas.core.platform.thread,
   nextpas.core.http.base,
   nextpas.core.http.intf,
-  nextpas.core.http.impl.h1.writer;
+  nextpas.core.http.impl.h1.writer, nextpas.core.base.utils;
 
 var
   T: TTestSuite;

@@ -9,9 +9,7 @@ program test_net_async_dial_public_he;
   Default: skip (exit 0) — flaky / network dependent; not CI-gating.
   truth=public-dns-he-multihost-opt-in; sample-not-sla. }
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+uses nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.cpu,
@@ -19,7 +17,7 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.async.tcp,
   nextpas.core.net.async.dial,
-  nextpas.core.async.loop;
+  nextpas.core.async.loop, nextpas.core.os.env, nextpas.core.text.conv;
 
 const
   PUBLIC_HE_HOST_COUNT = 3;

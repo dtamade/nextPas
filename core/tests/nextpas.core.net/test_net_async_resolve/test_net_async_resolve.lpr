@@ -2,10 +2,7 @@ program test_net_async_resolve;
 
 {$I nextpas.core.settings.inc}
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  Classes,
-  SysUtils,
+uses nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,

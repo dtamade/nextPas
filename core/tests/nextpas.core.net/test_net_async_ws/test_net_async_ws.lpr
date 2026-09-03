@@ -22,9 +22,7 @@ program test_net_async_ws;
 
 {$I nextpas.core.settings.inc}
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+uses nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.bytes.ops,
   nextpas.core.test,
@@ -41,7 +39,7 @@ uses
   nextpas.core.net.tcp,
   nextpas.core.net.async.tcp,
   nextpas.core.net.server.ws.frame,
-  nextpas.core.net.async.ws;
+  nextpas.core.net.async.ws, nextpas.core.base.utils, nextpas.core.text.format;
 
 const
   cBufSize = 16384;
@@ -268,7 +266,7 @@ begin
     else
       LAccept[1] := 'Z';
   end;
-  LResp := AnsiString(Format(CRespFmt, [string(LAccept)]));
+  LResp := AnsiString(TextFormat(CRespFmt, [string(LAccept)]));
   SetLength(GSrvReq, 0);
   GSrvPhase := spRespDrain;
   SrvAppendOut(StrToBytes(string(LResp)));

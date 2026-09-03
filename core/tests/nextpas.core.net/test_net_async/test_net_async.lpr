@@ -3,8 +3,6 @@ program test_net_async;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,

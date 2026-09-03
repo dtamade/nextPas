@@ -2,9 +2,7 @@ program test_net_cancel_bridge;
 
 {$I nextpas.core.settings.inc}
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+uses nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.async.cancellation,
   nextpas.core.net.intf,

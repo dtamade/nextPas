@@ -17,9 +17,7 @@ program test_net_async_tls;
 
 {$I nextpas.core.settings.inc}
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+uses nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.time.base,
@@ -38,7 +36,7 @@ uses
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.ssl,
   nextpas.core.tls.openssl.loader,
-  nextpas.core.net.async.tls;
+  nextpas.core.net.async.tls, nextpas.core.fs, nextpas.core.path, nextpas.core.text.format;
 
 const
   cBufSize = 16384;
@@ -163,9 +161,9 @@ var
 begin
   if GCertReady then
     Exit;
-  GCertFile := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  GCertFile := IncludeTrailingPathDelimiter(GetTempDir()) +
     'pp_core_tls_test_cert.pem';
-  GKeyFile := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  GKeyFile := IncludeTrailingPathDelimiter(GetTempDir()) +
     'pp_core_tls_test_key.pem';
   LPair := TCertificateBuilder.Create
     .WithCommonName('localhost')
@@ -719,7 +717,7 @@ begin
     GLoop.Run;
 
     Check(not GCliReady, 'handshake did not complete');
-    Check(GCliErr < 0, Format('deadline error delivered (err=%d)',
+    Check(GCliErr < 0, TextFormat('deadline error delivered (err=%d)',
       [GCliErr]));
   finally
     ResetGlobals;

@@ -4,7 +4,6 @@ program test_net_deep;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.intf,
@@ -17,7 +16,7 @@ uses
   nextpas.core.net.resolve,
   nextpas.core.net,
   nextpas.core.platform.socket,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

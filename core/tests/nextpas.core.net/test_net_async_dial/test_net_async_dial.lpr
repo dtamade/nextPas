@@ -2,9 +2,7 @@ program test_net_async_dial;
 
 {$I nextpas.core.settings.inc}
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+uses nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.cpu,

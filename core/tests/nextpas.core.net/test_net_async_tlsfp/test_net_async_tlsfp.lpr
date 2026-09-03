@@ -31,9 +31,7 @@ program test_net_async_tlsfp;
 
 {$I nextpas.core.settings.inc}
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+uses nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.time.base,
@@ -47,7 +45,7 @@ uses
   nextpas.core.errors,
   nextpas.core.net.async.tcp,
   nextpas.core.net.async.tls,
-  nextpas.core.net.async.tlsfp;
+  nextpas.core.net.async.tlsfp, nextpas.core.base.utils, nextpas.core.os.env;
 
 const
   cServerPort = 15556;

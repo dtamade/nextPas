@@ -4,8 +4,6 @@ program test_net_socks5;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.time.base,
@@ -17,7 +15,7 @@ uses
   nextpas.core.net.socks5,
   nextpas.core.platform.thread,
   nextpas.core.text.conv,
-  nextpas.core.text.utf8;
+  nextpas.core.text.utf8, nextpas.core.base, nextpas.core.base.utils, nextpas.core.text;
 
 var
   T: TTestSuite;
