@@ -44,8 +44,11 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.time.base,
+  nextpas.core.window.impl,
   nextpas.core.window.live,
   nextpas.core.window.queue,
+  nextpas.core.window.dispatcher.base,
+  nextpas.core.window.registry,
   nextpas.core.window.wasm.ffi,
   nextpas.core.window.wasm.loader;
 
@@ -70,8 +73,7 @@ end;
 
 procedure RegisterLive(AWin: Pointer);
 begin
-  if GLiveRegistry = nil then
-    GLiveRegistry := TWindowLiveRegistry.Create;
+  RegistryEnsureLiveRegistry(GLiveRegistry);
   GLiveRegistry.Register(AWin);
 end;
 
@@ -83,10 +85,8 @@ end;
 
 procedure DispatcherPush(AProc: TWindowProcRef);
 begin
-  if GQueue = nil then
-    GQueue := TWindowQueue.Create;
-  if GWaitEvent = nil then
-    GWaitEvent := CreateEvent(False);
+  if GQueue = nil then GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then GWaitEvent := RegistryEnsureDispatcherWait;
   GQueue.Push(AProc);
   GWaitEvent.SetEvent;
 end;
@@ -108,31 +108,17 @@ begin
 end;
 
 type
-  TWindowWasmDispatcher = class(TInterfacedObject, IWindowDispatcher)
-  private
-    FOwnerThread: UInt64;
+  TWindowWasmDispatcher = class(TWindowDispatcherBase)
   public
-    constructor Create(AOwnerThread: UInt64);
-    function IsOnMainThread: Boolean; inline;
-    procedure Post(AProc: TWindowProcRef); overload;
-    procedure Post(AProc: TWindowProcMethod); overload;
-    procedure Post(AProc: TWindowProc); overload;
+    constructor Create(AOwnerThread: UInt64); reintroduce;
   end;
 
 constructor TWindowWasmDispatcher.Create(AOwnerThread: UInt64);
-begin inherited Create; FOwnerThread := AOwnerThread; end;
-
-function TWindowWasmDispatcher.IsOnMainThread: Boolean; inline;
-begin Result := platform_thread_id = FOwnerThread; end;
-
-procedure TWindowWasmDispatcher.Post(AProc: TWindowProcRef);
-begin if not Assigned(AProc) then Exit; DispatcherPush(AProc); end;
-
-procedure TWindowWasmDispatcher.Post(AProc: TWindowProcMethod);
-begin Post(WindowMethodToRef(AProc)); end;
-
-procedure TWindowWasmDispatcher.Post(AProc: TWindowProc);
-begin Post(WindowProcToRef(AProc)); end;
+begin
+  if GQueue = nil then GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then GWaitEvent := RegistryEnsureDispatcherWait;
+  inherited Create(WindowFamilyToken, AOwnerThread, GQueue, GWaitEvent, nil, nil, False);
+end;
 
 type
   TWindowWasm = class(TInterfacedObject, IWindow, IWindowHost)
@@ -148,7 +134,7 @@ type
     FScale: Double;
     FOwnerThread: UInt64;
     FDispatcher: IWindowDispatcher;
-    FOnEvent: TWindowEventHandler;
+    FOnEvent: TWindowEventVariant;
     procedure RequireOpen; inline;
     procedure DoDispatch(const AEvent: TWindowEvent); inline;
     procedure RealClose;
@@ -197,8 +183,8 @@ begin
   end
   else
   begin
-    FCanvasTargetAnsi := StrToAnsi(FCanvasTarget);
-    Result := PAnsiChar(FCanvasTargetAnsi);
+    // perf: inline zero-copy StrToPAnsiView 无 StrToAnsi 分配，复用 bytes.ops 视图单源；FCanvasTarget 生命周期绑对象，emscripten 同步拷贝安全
+    Result := StrToPAnsiView(FCanvasTarget);
   end;
 end;
 
@@ -238,8 +224,8 @@ begin
   FClosed := False;
   FVisible := False;
   FTitle := AOptions.Title;
-  if AOptions.Width <= 0 then FCssW := DefaultWindowOptions.Width else FCssW := AOptions.Width;
-  if AOptions.Height <= 0 then FCssH := DefaultWindowOptions.Height else FCssH := AOptions.Height;
+  if AOptions.Size.Width <= 0 then FCssW := DefaultWindowOptions.Size.Width else FCssW := AOptions.Size.Width;
+  if AOptions.Size.Height <= 0 then FCssH := DefaultWindowOptions.Size.Height else FCssH := AOptions.Size.Height;
   FScale := QueryScale;
   FPhysW := Round(FCssW * FScale);
   FPhysH := Round(FCssH * FScale);
@@ -261,6 +247,7 @@ end;
 
 destructor TWindowWasm.Destroy;
 begin
+  WindowEventVariantClear(FOnEvent);
   UnregisterLive(Pointer(Self));
   inherited;
 end;
@@ -268,19 +255,18 @@ end;
 procedure TWindowWasm.RequireOpen;
 begin if FClosed then raise EWindowClosed.Create('window is closed'); end;
 
-procedure TWindowWasm.DoDispatch(const AEvent: TWindowEvent);
-var
-  H: TWindowEventHandler;
+procedure TWindowWasm.DoDispatch(const AEvent: TWindowEvent); inline;
 begin
+  // 零堆分配分发：Method/Proc 直存 variant，inline 零拷贝
   if FClosed then Exit;
-  H := FOnEvent;
-  if Assigned(H) then H(AEvent);
+  WindowEventVariantDispatch(FOnEvent, AEvent);
 end;
 
 procedure TWindowWasm.RealClose;
 begin
   if FClosed then Exit;
   FClosed := True;
+  WindowEventVariantClear(FOnEvent);
   FVisible := False;
   FCanvasHandle := nil;
   UnregisterLive(Pointer(Self));
@@ -337,7 +323,7 @@ begin
     emscripten_set_element_css_size(ResolveTarget, FCssW, FCssH);
   if Assigned(emscripten_set_canvas_element_size) then
     emscripten_set_canvas_element_size(ResolveTarget, FPhysW, FPhysH);
-  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FPhysW; E.Height := FPhysH; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := TWindowPixel(FPhysW); E.Height := TWindowPixel(FPhysH); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
   DoDispatch(E);
 end;
 
@@ -380,14 +366,17 @@ end;
 function TWindowWasm.GetDispatcher: IWindowDispatcher; inline;
 begin Result := FDispatcher; end;
 
-procedure TWindowWasm.OnEvent(AHandler: TWindowEventHandler);
-begin RequireOpen; FOnEvent := AHandler; end;
+procedure TWindowWasm.OnEvent(AHandler: TWindowEventHandler); inline;
+begin RequireOpen; FOnEvent := WindowEventVariantFromRef(AHandler); end;
 
-procedure TWindowWasm.OnEvent(AHandler: TWindowEventMethod);
-begin OnEvent(EventMethodToRef(AHandler)); end;
+procedure TWindowWasm.OnEvent(AHandler: TWindowEventMethod); inline;
+begin
+  // 零堆分配直存 wedkMethod，inline 零拷贝
+  RequireOpen; FOnEvent := WindowEventVariantFromMethod(AHandler);
+end;
 
-procedure TWindowWasm.OnEvent(AHandler: TWindowEventProc);
-begin OnEvent(EventProcToRef(AHandler)); end;
+procedure TWindowWasm.OnEvent(AHandler: TWindowEventProc); inline;
+begin RequireOpen; FOnEvent := WindowEventVariantFromProc(AHandler); end;
 
 procedure TWindowWasm.HostResized(AWidth, AHeight: Integer);
 var E: TWindowEvent;
@@ -399,7 +388,7 @@ begin
   FPhysW:=Round(FCssW*FScale); FPhysH:=Round(FCssH*FScale);
   if Assigned(emscripten_set_element_css_size) then emscripten_set_element_css_size(ResolveTarget, FCssW, FCssH);
   if Assigned(emscripten_set_canvas_element_size) then emscripten_set_canvas_element_size(ResolveTarget, FPhysW, FPhysH);
-  E := Default(TWindowEvent); E.Kind :=weResized; E.Width:=FPhysW; E.Height:=FPhysH; E.X:=0; E.Y:=0; E.NewScale:=0;
+  E := Default(TWindowEvent); E.Kind :=weResized; E.Width:=TWindowPixel(FPhysW); E.Height:=TWindowPixel(FPhysH); E.X:=TWindowPixel(0); E.Y:=TWindowPixel(0); E.NewScale:=TWindowScale.Invalid;
   DoDispatch(E);
 end;
 
@@ -412,13 +401,13 @@ begin
   FScale:=ANewScale;
   FPhysW:=Round(FCssW*FScale); FPhysH:=Round(FCssH*FScale);
   if Assigned(emscripten_set_canvas_element_size) then emscripten_set_canvas_element_size(ResolveTarget, FPhysW, FPhysH);
-  E := Default(TWindowEvent); E.Kind :=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=FScale;
+  E := Default(TWindowEvent); E.Kind :=weScaleChanged; E.Width:=TWindowPixel(0); E.Height:=TWindowPixel(0); E.X:=TWindowPixel(0); E.Y:=TWindowPixel(0); E.NewScale:=TWindowScale.FromFactor(FScale);
   DoDispatch(E);
 end;
 
 procedure TWindowWasm.HostCloseRequested;
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weCloseRequested; E.Width:=TWindowPixel(0); E.Height:=TWindowPixel(0); E.X:=TWindowPixel(0); E.Y:=TWindowPixel(0); E.NewScale:=TWindowScale.Invalid; DoDispatch(E); end;
 
 function CreateWindowWasm(const AOptions: TWindowOptions): IWindow;
 begin Result := TWindowWasm.Create(AOptions); end;
@@ -426,7 +415,7 @@ begin Result := TWindowWasm.Create(AOptions); end;
 procedure WindowWasmRunLoop;
 begin
   GLoopQuit := False;
-  if GWaitEvent=nil then GWaitEvent := CreateEvent(False);
+  if GWaitEvent=nil then GWaitEvent := RegistryEnsureDispatcherWait;
   while not GLoopQuit do
   begin
     DispatcherDrain;
@@ -437,8 +426,21 @@ begin
 end;
 
 function WasmPumpOnce: Boolean;
-var LProc: TWindowProcRef;
-begin Result := DispatcherPop(LProc); if Result then try if Assigned(LProc) then LProc(); except raise; end; end;
+var LItem: TWindowWorkItem;
+begin
+  Result := False;
+  if GQueue = nil then Exit(False);
+  Result := GQueue.TryPopItem(LItem);
+  if Result then
+    try
+      case LItem.Kind of
+        wwkRef: if Assigned(LItem.Ref) then LItem.Ref();
+        wwkMethod: if Assigned(LItem.Method) then LItem.Method();
+        wwkProc: if Assigned(LItem.Proc) then LItem.Proc();
+      end;
+    except raise; end;
+  LItem.Ref := nil;
+end;
 
 procedure WindowWasmQuitLoop;
 begin
@@ -447,9 +449,27 @@ begin
   DispatcherDrain;
 end;
 
+procedure RegisterWasmBackend;
+var LDesc: TBackendDesc;
+begin
+  LDesc.Kind := wkWasm;
+  LDesc.Probe := @WindowWasmIsAvailable;
+  LDesc.Create := @CreateWindowWasm;
+  LDesc.Live := @WasmLiveWindowCount;
+  LDesc.Run := @WindowWasmRunLoop;
+  LDesc.Quit := @WindowWasmQuitLoop;
+  LDesc.Pump := @WasmPumpOnce;
+  LDesc.Sonames := WINDOW_WASM_SONAMES;
+  RegistryRegister(LDesc);
+end;
+
+initialization
+  RegisterWasmBackend;
+
 finalization
   GLiveRegistry.Free;
-  GQueue.Free;
+  // 单源托管：GQueue/GWaitEvent 由 registry 统一释放，backend 仅置 nil 不双重 Free，heaptrc 0
+  GQueue := nil;
   GWaitEvent := nil;
 
 end.

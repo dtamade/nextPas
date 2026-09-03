@@ -80,7 +80,7 @@ begin
     W.SetTitle('uikit-smoke');
     CheckEqual('uikit-smoke', W.GetTitle);
     W.SetBounds(999, 999);
-    Check(W.GetWidth = DefaultWindowOptions.Width, 'width read-only after SetBounds');
+    Check(W.GetWidth = DefaultWindowOptions.Size.Width, 'width read-only after SetBounds');
     W.Show; Check(W.IsVisible, 'visible after Show');
     W.Hide; Check(not W.IsVisible, 'hidden after Hide');
     W.GetDispatcher.Post(procedure begin end);

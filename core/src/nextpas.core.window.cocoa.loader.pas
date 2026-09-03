@@ -25,6 +25,9 @@ function TryLoadWindowCocoa(out AInfo: TWindowCocoaLoadInfo): Boolean;
 procedure UnloadWindowCocoa;
 function WindowCocoaLoadInfo: TWindowCocoaLoadInfo;
 function WindowCocoaIsLoaded: Boolean;
+const
+  WINDOW_COCOA_SONAMES = 'libobjc.so.4|libobjc.so|libdispatch.so.0|libdispatch.so|AppKit';
+function WindowCocoaSonames: string; inline;
 
 implementation
 
@@ -146,6 +149,11 @@ end;
 function WindowCocoaIsLoaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function WindowCocoaSonames: string; inline;
+begin
+  Result := WINDOW_COCOA_SONAMES;
 end;
 
 end.

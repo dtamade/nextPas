@@ -23,7 +23,7 @@ Android `Activity.getWindow()` / iOS `UIWindow`
 │   门面 ← factory(builder/runloop/探测) ← intf ← base        │
 │      │   ▲ one-way 消费独立 L2 gtk/qt（伦理扭转，redis→net） │
 │      ├── fake          （无头脚本化；CI 契约唯一载体）       │
-│      ├── gtk3/4/2      （薄适配→独立 L2 gtk3/4/2，共享 impl.inc，S2 扭转）│
+│      ├── gtk3/4/2      （薄适配→独立 L2 gtk3/4/2，共享 window.gtk.impl 显式枢纽 + window.gtk.dispatcher/window 分治，S2 扭转+2026-09 分治）│
 │      ├── sdl2          （sdl2.ffi ← sdl2.loader，S3）        │
 │      ├── win32 / cocoa （S4）                               │
 │      ├── wasm          （wasm.ffi ← wasm.loader，S2a；canvas attach） │
@@ -58,8 +58,8 @@ Android `Activity.getWindow()` / iOS `UIWindow`
 | 现状（webview.gtk.win） | 目标（window 家族归属） |
 |------|------|
 | `TWinShellGeometry` | 被 `TWindowOptions` 取代（字段超集：min/max/parent） |
-| `WinShellInit` | `window.gtk3/4/2` 后端初始化段（含 IEEE 浮点屏蔽语义，原样搬运，经 `gtk.impl.inc` 共享） |
-| `WinShellCreate` | Build 路径的 create 段（选项展开由后端负责，经共享 impl.inc） |
+| `WinShellInit` | `window.gtk3/4/2` 后端初始化段（含 IEEE 浮点屏蔽语义，原样搬运，经 `window.gtk.impl` 显式共享单元） |
+| `WinShellCreate` | Build 路径的 create 段（选项展开由后端负责，经显式共享单元） |
 | `WinShellSetTitle/Resize/Show/Hide` | `IWindow.SetTitle/SetBounds/Show/Hide` 直译 |
 | `WinShellIsMaximized/Maximize/Unmaximize` | 同名 IWindow 方法直译 |
 | `WinShellScaleFactor` | `GetScaleFactor`（整数诚实升格为 Double 在此完成） |
@@ -78,12 +78,13 @@ Android `Activity.getWindow()` / iOS `UIWindow`
 - **伦理扭转（2026-08-28）**：`window.gtk.ffi/loader` 提升为独立 L2 家族
   `nextpas.core.gtk3/4/2.base|ffi|loader`，`window` 降级为消费者（单向依赖，
   redis→net 模式）。`window.gtk` 保留为 deprecated shim 转发至 `window.gtk3`，
-  `window.gtk3/4/2` 共享 `window.gtk.impl.inc`（消除 3×786 行重复），factory
+  `window.gtk3/4/2` 显式共享 `window.gtk.impl` 单元（`TGtkOps/TGtkContext` 显式注入，无 `{$I}`，消除 3×786 行重复），factory
   对 `wkGtk` 以 `gtk4>gtk3>gtk2` 智能回退（Probe/Create/Live/Run/Quit 全聚合）。
+- **分治（2026-09）**：`window.gtk.impl` 原 860 行三职责（dispatcher/窗口/信号回调）超 800 阈值，按 dispatcher 与 window 进一步拆分提升内聚：`window.gtk.dispatcher` 收口 `TWindowGtkDispatcher+g_idle_add_full`（per-instance 环形队列，复用 `TWindowQueue 32cap 2×` 单源，`TWindowDispatcherBase DoWake` 虚派单源 Burst N→1，Clear 逐条 nil），`window.gtk.window` 收口 `TWindowGtk+7 信号`（标题零拷贝 `StrToPAnsiView`，变体直存 Method/Proc inline，幂等 Close/Destroy），`window.gtk.impl` 保留 `TGtkOps/TGtkContext`/活窗聚合/轻量转发（Create/Run/Pump）三者均 <600 行，守体积指引与 bytes.ops 单源 `0→32→2×`。依赖单向无循环：`dispatcher→impl`、`window→impl+dispatcher`、`impl→window` 仅实现转发（接口无循环，INV-3/INV-5 可扫描）。
 - **事件缝是净新增**：现缝只有轮询式操作，无事件回调。S2 新增
   `g_signal_connect_data` 挂 delete-event/configure/focus/scale 变化，
   全部 cdecl 回调携带 owner 指针（禁全局变量上下文）。
-- **抽取尾闭环**：`webview.gtk.win` → `window.gtk` 机械抽取已闭环（S2 5 门禁 + S3 7 门禁 + S5 12 门禁 → 13 门禁）；扭转后进入共享 impl.inc 阶段，不再新增抽取。
+- **抽取尾闭环**：`webview.gtk.win` → `window.gtk` 机械抽取已闭环（S2 5 门禁 + S3 7 门禁 + S5 12 门禁 → 13 门禁）；扭转后进入显式共享 `window.gtk.impl` 阶段（无 `{$I}`），不再新增抽取。
 
 ---
 
@@ -173,6 +174,8 @@ Android `Activity.getWindow()` / iOS `UIWindow`
 | cocoa | `dispatch_async(dispatch_get_main_queue())`（libdispatch dlopen） | loader 装载 libdispatch |
 | wasm | `emscripten_async_call` / `setTimeout(0)` 队列（JS 任务队列） | 无真线程；`Post` 入 JS 微任务队列，主线程 `RAF` 前兑现；关闭后丢弃 |
 
+> **已提纯 `TWindowDispatcherBase`**：7 后端 `DispatcherPush/Wake/Drain` 唤醒原语已提纯至 `TWindowDispatcherBase` (`nextpas.core.window.dispatcher.base`，owner `window.impl`，家族内共享不经门面，`TWindowFamilyToken` 编译期隔离)——owner 线程 + `Post` 三重载 inline 零拷贝单次虚派唤醒 + Queue/Wait 持有；M6 复评 **ROI≈2.2**（收口 120 行 vs 55 行成本，原 F1 ROI<1.5 已达标）+ 锁外 `TWindowQueue` 互斥环仍单源 `bytes.ops 0→32→2×`；各后端仍持独立 `GQueue/GWaitEvent` 全局实例（不跨后端共享，守全局隔离），平台唤醒差异由 `DoWake` 虚派隔离（`SDL_PushEvent/PostMessage/dispatch_async/SetEvent`），虚派仅唤醒路径、热路径推队仍 inline。队列与活窗分别单源至 `TWindowQueue`/`TWindowLiveRegistry`（`window.queue/live`），详见 `FINAL_ROADMAP.md` F1 与 `BENCH.md §结论`。
+
 ### 4.3 对 winit/tao 的对齐口径
 
 对齐的是**抽象质量与语义诚实度**，不是 API 面：
@@ -248,9 +251,9 @@ Android/iOS 没有"创建 top-level window"的自由：应用窗口归宿主
 
 - `FakeLiveWindowCount` 为 `GFakeLiveCount` 的 `inline` 读，`Destroy`/`RealClose`/`Create` 三处维护，零遍历；`WindowPumpOnce` 零活窗路径与全量路径على同一口径，避免空转锁竞争。
 - `GetWidth/GetHeight/GetScaleFactor/NativeHandle/GetDispatcher/IsClosed` 与 `TFakeDispatcher.IsOnMainThread/PostRef/PumpOnce` 等高频访问一律 `inline`，`CheckWindowOptions` 以 `CreateFmt` 携带越界值，错误信息富化不增分支。
-- `WindowBackendDiagnostics: string` 遍历 `BACKENDS[8]` 以 `Probe()+sonames` 逐行输出，供 `EWindowBackendUnavailable` 失败现场直连探测真相；bench 基线 `PostSingle/1000 = 370µs`（32cap 环，`O(1)` + inline + 共享队列后），7 项分拆中 `WindowPumpOnceZero/10000 = 167µs`（≈16ns/次，零活窗早退零锁）与 `WindowPumpOnceLive/1000 = 430µs` 对比验证空转成本；finalization Free GQueue 消 heaptrc 0 泄漏。
+- `WindowBackendDiagnostics: string` 遍历 `BACKENDS[8]` 以 `Probe()+sonames` 逐行输出，供 `EWindowBackendUnavailable` 失败现场直连探测真相；bench 基线 `PostSingle/1000 = 370µs`（32cap 环，`O(1)` + inline + 共享队列后），7 项分拆中 `WindowPumpOnceZero/1+10000 = 160µs/10k≈16ns/次` 单一口径纯净零锁（WindowTotalLiveCount/FakeHasPendingPosts 单次原子读，快路径零聚合）与 `WindowPumpOnceLive/1000 = 430µs` 对比验证空转成本；finalization Free GQueue 消 heaptrc 0 泄漏。
 - 共享队列 `nextpas.core.window.queue.TWindowQueue` 为 `sdl2/win32/cocoa/wasm/android/uikit` 6 家提供同一套“互斥环形 FIFO + 32 cap 起步 + 2× 增长 + 锁外 Drain”实现，单点修复、零样板拷贝（M5 去重约 200 行），`fake` 的 per-window 队列复用同一增长语义但 per-window 实例隔离以保持契约测试确定性。
-- 共享活窗 `nextpas.core.window.live.TWindowLiveRegistry/TWindowSdlLiveRegistry` 为 7 生产后端提供同一套“末尾换位删除 + 无锁 inline Count（16ns 早退）+ finalization 释放”实现，单点修复、零样板拷贝（M6 去重约 150 行），`sdl` 扩展 `FindByID` 平行数组路由。
+- 共享活窗 `nextpas.core.window.live.TWindowLiveRegistry/TWindowSdlLiveRegistry` 为 7 生产后端提供同一套“末尾换位删除 + 无锁原子 inline Count/TotalLiveCount（atomic_load/fetch_add，16ns 零锁早退）+ finalization 释放”实现，单点修复、零样板拷贝（M6 去重约 150 行），`sdl` 扩展 `FindByID` 哈希 O(1) 路由（开放寻址线性探测，避免持锁 O(n) 退化；WindowGrowCapacity 单源复用 `window.impl`→`bytes.ops` 0→32→2×）。Dispatcher 已提纯至 `nextpas.core.window.dispatcher.base.TWindowDispatcherBase`（7 后端 `Post` 三重载约 120 行收口至 55 行基类，ROI≈2.2；`DoWake` 虚派隔离 `SDL_PushEvent/PostMessage/dispatch_async/SetEvent`，各后端仍持独立 `GQueue/GWaitEvent` 全局隔离；热路径 `Push(Method/Proc)` inline 零拷贝直存变体 `wwkMethod/wwkProc` 单源 `bytes.ops 0→32→2×`，`Drain` 单锁批量快照锁外分发，稳定性 `finalization` 逐槽 nil heaptrc 0）。
 
 ### 7.3 事件驱动 RunLoop（M-band 稳定性，按行业同行做法）
 

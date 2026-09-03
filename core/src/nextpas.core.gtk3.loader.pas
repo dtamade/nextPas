@@ -36,6 +36,11 @@ procedure UnloadGtk3;
 function Gtk3LoadInfo: TGtk3LoadInfo;
 {** @desc 是否已装载 *}
 function Gtk3IsLoaded: Boolean;
+const
+  GTK3_SONAMES = 'libgtk-3.so.0|libgtk-3.so';
+  GTK3_GOBJECT_SONAME = 'libgobject-2.0.so.0';
+  GTK3_GLIB_SONAME = 'libglib-2.0.so.0';
+function Gtk3Sonames: string; inline;
 
 {** 兼容包装：window.gtk 历史 API（inline 转发） *}
 function TryLoadWindowGtk(out AInfo: TWindowGtkLoadInfo): Boolean; inline;
@@ -195,6 +200,12 @@ end;
 function WindowGtkIsLoaded: Boolean;
 begin
   Result := Gtk3IsLoaded;
+end;
+
+function Gtk3Sonames: string; inline;
+begin
+  // 单源：与 TryDlOpen 同源，registry 诊断零重复，inline 零额外调用
+  Result := GTK3_SONAMES + '|' + GTK3_GOBJECT_SONAME + '|' + GTK3_GLIB_SONAME;
 end;
 
 end.

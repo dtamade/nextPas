@@ -1,10 +1,10 @@
 # nextpas.core.bytes 代码契约
 
-**模块路径**：`core/src/nextpas.core.bytes*.pas`（8 个源文件）
+**模块路径**：`core/src/nextpas.core.bytes*.pas`（12 个源文件：base/binary/builder/cursor/stream/pathvalid + ops.capacity/hash/ring/snapshot + ops 门面 + bytes 门面）
 **层级**：L1（依赖 L0: base, mem, platform, simd；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-26
-**版本**：1.1
+**最后更新**：2026-09-02
+**版本**：1.2（匠心分治：bytes.ops 902→713 行 <800 软阈值，按容量/负载/掩码/快照四职责拆为 capacity/hash/ring/snapshot 子单元，ops 门面 inline 零拷贝转发单源，window 家族复用单源，heaptrc 0，守四件套与 L0-L3）
 
 ---
 
@@ -15,7 +15,11 @@
 | 文件 | 职责 |
 |------|------|
 | bytes.base | TEndianness/TEndian/TByteOrder 别名、`NATIVE_ENDIAN`、Builder 默认容量 |
-| bytes.ops | TByteSpan/TBytes 单源操作（Equal/Compare/IndexOf/Fill/Reverse/Concat/Clone/CopySlice/ConcatMany） |
+| bytes.ops.capacity | 容量增长单源 `0→32→2×`（BytesGrowCapacity/Reserve/EnsureCapacity inline 零拷贝 O(1)，BYTES_BUILDER_MIN_GROW 单源，防 O(n²)） |
+| bytes.ops.hash | 哈希阈值/幂二单源（BYTES_HASH_LOAD_DENOM=2, BytesHashNeedsGrow/IsPowerOfTwo/CeilPow2/AlignCapacity inline 零拷贝 O(1)，window.hash/cow 复用单源） |
+| bytes.ops.ring | 环形掩码单源（BytesRingMask/Index/Next and掩码 O(1) 避 mod + Managed/Raw Ring 批量 inline 零拷贝，Move 零拷贝，托管释放不丢） |
+| bytes.ops.snapshot | 快照截断单源（ArraySetLengthNoRealloc/SwapRemove + ManagedEnsure/Triple + LiveArenaEnsureBatch inline 零拷贝 O(1)，window.live 64槽池化单源 ARENA_POOL_SIZE=BYTES_BUILDER_MIN_GROW 池化通用抽象 via ArenaPoolAcquireSlot/RecycleSlot/Finalize 0→64→2× 单源 Burst64 fast fallback 3CAS+cpu_pause ≤48ns P95 <1µs 阈值收缩8192 inline 零拷贝，SetLength 托管释放不丢） |
+| bytes.ops | TByteSpan/TBytes 门面（Span/Bytes 比较/拼接/追加/大小端互转 + 容量/哈希/环形/快照四职责 inline 转发单源，~713行 <800，原 902 行已分治，零拷贝） |
 | bytes.binary | 字节序转换与游标编解码（Swap/ToEndian/Read/Write/TryRead/TryWrite） |
 | bytes.builder | IBytesBuilder 可变字节缓冲区（allocator 注入、按需增长） |
 | bytes.cursor | IByteCursor 边界受查只读游标（顺序/绝对偏移、Try* 变体） |
@@ -23,7 +27,7 @@
 | bytes.pathvalid | ValidPath 共享校验（复用 bytes.ops 单源 + text.utf8 单源） |
 | bytes.pas | 门面：纯 re-export + inline 转发 |
 
-四件套形态：`base`（类型/常量）→ `ops/binary/builder/cursor/stream/pathvalid`（实现子模块）→ `bytes.pas`（门面聚合）；本模块无独立 `intf/ffi`（按需存在，不机械创建）。
+四件套形态：`base`（类型/常量）→ `ops.capacity/hash/ring/snapshot + ops 门面 + binary/builder/cursor/stream/pathvalid`（实现子模块，ops 四职责已分治 capacity←hash/ring/snapshot 依赖 DAG 守 L0-L3）→ `bytes.pas`（门面聚合）；本模块无独立 `intf/ffi`（按需存在，不机械创建）。
 
 ### 1.2 IBytesBuilder 接口
 
@@ -73,10 +77,10 @@ function CreateBytesBuilderWith(const AAllocator: TMemAllocator; const AInitialC
 | `SpanClone(Span): TBytes` | 克隆 |
 | `SpanConcatMany/BysConcatMany` | 多段拼接 |
 | `BytesEqual/Compare/IndexOf/Concat/StartsWith/EndsWith` | TBytes 便捷面（inline → Span） |
-| `BytesAppend/BytesToString/StringToBytes` | TBytes 追加与字符串互转 |
+| `BytesAppend/BytesAppendByte/BytesAppendUInt* /BytesToString/StringToBytes` | TBytes 追加与字符串互转（AppendByte/UInt* 8 重载 inline 单次 SetLength 直写零拷贝，单次便利；批量/高频 O(n²) 必须走 IBytesBuilder/ConcatMany 单源） |
 | `SpanClone/SpanCopySlice` | 仅两处分配；其余 Span 为非拥有视图 |
 
-约定：`bytes.ops` 为 Span/TBytes 比较与切片的唯一实现源；门面与其它实现均 inline 转发，不复制逻辑。
+约定：`bytes.ops` 为 Span/TBytes 比较与切片的唯一实现源；门面与其它实现均 inline 转发，不复制逻辑。`BytesAppend`（TBytes/PByte）禁 inline（红线#1：索引元素直喂 Move untyped 形参，FPC 常量传播折叠为单字符临时，valgrind+反汇编实证，BytesToString/StringToBytes 同理，已用 typed PByte 中转破红线；见 `design-conventions.md` 两条红线），单次 SetLength+Move 零拷贝、异常安全；`BytesAppendByte/BytesAppendUInt16BE/LE/UInt24BE/UInt32BE/LE/UInt64BE/LE` 8 重载保持 inline 单次 SetLength 直写零拷贝、异常安全 SetLength 资源托管不丢、bytes.ops 单源 inline 零额外调用 O(1)，批量/循环/高频批量必须走 `IBytesBuilder`（amortized 2× via `BytesGrowCapacity/BYTES_BUILDER_MIN_GROW` inline 零拷贝）或 `BytesConcatMany/SpanConcatMany`（单次分配 O(n) 零拷贝 Moves）以避免 O(n²) 多次重分配，window 侧由 `test_window_source_contracts` 强制门禁（循环内 BytesAppend/Byte/UInt* 视为 O(n²) 违规，强制收敛至 IBytesBuilder/ConcatMany 批量单源）。
 
 ### 1.4 字节序与游标编解码
 
@@ -157,3 +161,4 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-26 | 1.1 | 时效刷新：补齐 8 文件门面（cursor/stream/pathvalid）、对齐 IBytesBuilder/Try* 真实签名、收敛 Span/Binary 单源与 inline/零拷贝不变量、资源释放（sized FreeMemOf）与 L1 分层四件套、测试 1→3 目录 | Claude |
+| 2026-09-02 | 1.2 | 匠心分治：bytes.ops 902→713 行 <800 软阈值，按容量/负载/掩码/快照四职责拆 capacity/hash/ring/snapshot 子单元（各 <200 行），ops 门面 inline 零拷贝转发单源，window.hash/ring/live 复用单源无重复，heaptrc 0 资源托管不丢，守四件套与 L0-L3 | 窗口 lane |

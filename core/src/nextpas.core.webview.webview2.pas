@@ -733,11 +733,11 @@ begin
   if FClosed then Exit;
   case AEvent.Kind of
     weResized: UpdateControllerBounds;
-    weScaleChanged, weDpiChanged:
+    weScaleChanged:
       begin
-        for I := 0 to FScaleHandlersRefCount - 1 do if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](AEvent.NewScale);
-        for I := 0 to FScaleHandlersMethodCount - 1 do if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](AEvent.NewScale);
-        for I := 0 to FScaleHandlersProcCount - 1 do if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](AEvent.NewScale);
+        for I := 0 to FScaleHandlersRefCount - 1 do if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](AEvent.NewScale.Factor);
+        for I := 0 to FScaleHandlersMethodCount - 1 do if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](AEvent.NewScale.Factor);
+        for I := 0 to FScaleHandlersProcCount - 1 do if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](AEvent.NewScale.Factor);
       end;
     weClosed, weCloseRequested: HandleNativeDestroy;
   end;
@@ -762,8 +762,7 @@ function TWebView2Webview.WindowOptionsOf(const AOptions: TWebviewOptions): TWin
 begin
   Result := DefaultWindowOptions;
   Result.Title := AOptions.Title;
-  Result.Width := AOptions.Width;
-  Result.Height := AOptions.Height;
+  Result.Size := TWindowSize.Create(AOptions.Width, AOptions.Height);
   Result.Resizable := AOptions.Resizable;
   Result.Maximized := AOptions.Maximized;
 end;

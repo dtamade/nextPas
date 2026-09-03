@@ -3,20 +3,17 @@ unit nextpas.core.window.fake;
 {** @desc window 无头脚本化后端：纯 Pascal、无线程、无图形依赖，
        契约测试的唯一载体（CI 不需要图形环境）。
 
-       职责边界（S1）：
-       - 完整实现 IWindow 行为矩阵（状态机/关闭幂等/句柄纪律）
-       - Dispatcher 用 sync 互斥保护 FIFO 环形队列：接口承诺的跨线程
-         安全在 fake 上是真实现，不是测试专用降级
-       - 注入事件走与生产后端同一条 OnEvent 分发路径（无旁路）
-         —— InjectEvent → DoDispatch 为唯一分发体
+       职责拆分（守 800 行软阈值）：
+       - 句柄 → nextpas.core.window.fake.base（TFakeNativeHandle/AllocFakeHandle/FakeLastHandleValue 确定性原子生成 inline 零拷贝）
+       - 分发 → nextpas.core.window.fake.dispatcher（TFakeDispatcher 复用 TWindowDispatcherBase 单源变体，条件变量 0→1 单次唤醒 Burst 10k→1，O(1)均摊不丢）
+       - 宿主渗透 → inline 环形直存单队列（TFakeWindow 内联 FRingHost 0→32→2× via WindowGrowCapacity→bytes.ops 单源 inline 零拷贝，Dispatcher 单队列单锁单原子零冗余）
+       本单元仅保留 TFakeWindow 状态机/关闭幂等/句柄纪律/宿主渗透纽带，体积 <800 行
+       - Dispatcher 用 sync 互斥保护 FIFO 环形队列：接口承诺的跨线程安全在 fake 上是真实现
+       - 注入事件走与生产后端同一条 OnEvent 分发路径（InjectEvent → DoDispatch 唯一分发体）
        - PumpOnce/PumpAll 确定性驱动 Post 队列
-       - 状态脚本：scale / 最大化/最小化/可见性等可直接改写并可
-         选择是否产生对应事件
+       - 状态脚本：scale / 最大化/最小化/可见性等可直接改写并可选择是否产生对应事件
        - 句柄：确定性生成的非零假句柄，Close 后归 nil
-
-       句柄纪律与生产一致：Show 前已非 nil（fake 立即分配），
-       Close 后恒 nil；Wayland nil 诚实由生产后端体现，fake 恒非 nil
-       供传递链断言。 *}
+       句柄纪律与生产一致：Show 前已非 nil（fake 立即分配），Close 后恒 nil；Wayland nil 诚实由生产后端体现，fake 恒非 nil 供传递链断言。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -24,18 +21,19 @@ interface
 
 uses
   nextpas.core.window.base,
-  nextpas.core.window.intf;
+  nextpas.core.window.intf,
+  nextpas.core.sync.intf,
+  nextpas.core.window.fake.host;
 
 type
   {** 接口引用 → 类引用 的安全通道（QueryInterface 驱动）。
-      测试驱动面经 TFakeWindow.FromWindow 获取；禁止接口指针硬转
-      类指针（COM 接口指针 ≠ 对象起始地址）。 *}
+      测试驱动面经 TFakeWindow.FromWindow 获取；禁止接口指针硬转类指针。 *}
   IFakeSelfAccess = interface
     ['{8F1A2B3C-4D5E-4F60-9A8B-C0D1E2F3A003}']
     function FakeSelf: TObject;
   end;
 
-  TFakeWindow = class(TInterfacedObject, IWindow, IFakeSelfAccess, IWindowHost, IWindowPrivateHandle)
+  TFakeWindow = class(TInterfacedObject, IWindow, IFakeSelfAccess, IWindowHost)
   private
     FClosed: Boolean;
     FVisible: Boolean;
@@ -50,12 +48,20 @@ type
     FParentHandle: TWindowNativeHandle;
     FDispatcher: IWindowDispatcher;
     FOwnerThread: UInt64;
-    FOnEvent: TWindowEventHandler;
+    FOnEvent: TWindowEventVariant;
+    FHostRing: array of THostWork;
+    FHostHead: Integer;
+    FHostCount: Integer;
+    FHostLock: ILock;
     procedure RequireOpen;
     procedure DoDispatch(const AEvent: TWindowEvent);
     procedure RealClose;
+    procedure DoProcessPendingHostWork;
+    procedure EnqueueHostWork(const AWork: THostWork);
+    procedure EnqueueHostResized(AWidth, AHeight: Integer); inline;
+    procedure EnqueueHostScaleChanged(ANewScale: Double); inline;
+    procedure EnqueueInjectEvent(const AEvent: TWindowEvent); inline;
   protected
-    { IWindow }
     procedure Close; virtual;
     function IsClosed: Boolean;
     procedure Show; virtual;
@@ -80,241 +86,103 @@ type
     procedure OnEvent(AHandler: TWindowEventHandler); overload; virtual;
     procedure OnEvent(AHandler: TWindowEventMethod); overload; virtual;
     procedure OnEvent(AHandler: TWindowEventProc); overload; virtual;
-    { IWindowHost }
     procedure HostResized(AWidth, AHeight: Integer);
     procedure HostScaleChanged(ANewScale: Double);
     procedure HostCloseRequested;
-    { IWindowPrivateHandle }
-    function GetHandle: Pointer;
   public
     class function FromWindow(const AWindow: IWindow): TFakeWindow; static;
     function FakeSelf: TObject;
     constructor Create(const AOptions: TWindowOptions); virtual;
     destructor Destroy; override;
-
-    { ---- 测试驱动面 ---- }
-
-    { 泵一次/泵空主线程投递队列（Dispatcher.Post 的确定性驱动） }
     function PumpOnce: Boolean;
     procedure PumpAll;
     function PendingPosts: Integer;
-
-    { 注入事件：走与生产后端同一条 DoDispatch 路径；跨线程时经
-      Dispatcher.Post marshal，需 Pump 兑现 }
     procedure InjectEvent(const AEvent: TWindowEvent);
-    { 输入便捷注入（3.0）：等价于构造 TWindowEvent 后 InjectEvent }
-    procedure InjectKey(AKind: TWindowEventKind; AKeyCode, AModifiers: Integer);
-    procedure InjectMouse(AKind: TWindowEventKind; AX, AY, AButton, AModifiers: Integer);
-
-    { 状态脚本：直接改写内部状态并可选择是否产生对应事件 }
     procedure SetScale(ANewScale: Double);
     procedure SetVisibleForTest(AVisible: Boolean);
     procedure SetMaximizedForTest(AValue: Boolean);
     procedure SetMinimizedForTest(AValue: Boolean);
-
-    { 只读探针 }
     function StoredParentHandle: TWindowNativeHandle;
   end;
 
-{ 活跃 fake 窗口数（factory 的 RunLoop 退出事实源） }
 function FakeLiveWindowCount: Integer;
-
-{ 对所有活跃 fake 窗口各泵一次投递队列（factory RunLoop 用） }
 procedure FakePumpAll;
 function FakeHasPendingPosts: Boolean;
-
-{ 句柄探针：返回最近一次分配的假句柄值（测试断言句柄传递链） }
+procedure FakeNotifyWaiter; inline;
+procedure FakeWaitForActivity(const ATimeoutNs: Int64); inline;
 function FakeLastHandleValue: TWindowNativeHandle;
 
 implementation
 
 uses
-  nextpas.core.platform.thread,
-  nextpas.core.sync.intf,
-  nextpas.core.sync.mutex;
-
-
-
-{ ---- TFakeDispatcher：互斥保护的环形 FIFO ---- }
-
-type
-  TFakeDispatcher = class(TInterfacedObject, IWindowDispatcher)
-  private
-    FLck: ILock;
-    FRing: array of TWindowProcRef;
-    FHead: Integer;
-    FCount: Integer;
-    FOwnerThread: UInt64;
-    procedure Grow; inline;
-  public
-    constructor Create(AOwnerThread: UInt64);
-    destructor Destroy; override;
-    procedure PostRef(AProc: TWindowProcRef); inline;
-    function IsOnMainThread: Boolean; inline;
-    function PumpOnce: Boolean; inline;
-    procedure PumpAll;
-    function PendingCount: Integer;
-    procedure DropAll;
-    { IWindowDispatcher }
-    procedure Post(AProc: TWindowProcRef); overload;
-    procedure Post(AProc: TWindowProcMethod); overload;
-    procedure Post(AProc: TWindowProc); overload;
-  end;
-
-constructor TFakeDispatcher.Create(AOwnerThread: UInt64);
-begin
-  inherited Create;
-  FLck := TMutex.Create as ILock;
-  FOwnerThread := AOwnerThread;
-end;
-
-destructor TFakeDispatcher.Destroy;
-begin
-  DropAll;
-  inherited Destroy;
-end;
-
-procedure TFakeDispatcher.Grow;
-var
-  LNewCap, I: Integer;
-  LNew: array of TWindowProcRef;
-begin
-  LNewCap := Length(FRing) * 2;
-  if LNewCap = 0 then
-    LNewCap := 32;
-  SetLength(LNew, LNewCap);
-  for I := 0 to FCount - 1 do
-    LNew[I] := FRing[(FHead + I) mod Length(FRing)];
-  FRing := LNew;
-  FHead := 0;
-end;
-
-procedure TFakeDispatcher.PostRef(AProc: TWindowProcRef); inline;
-begin
-  FLck.Acquire;
-  try
-    if FCount = Length(FRing) then
-      Grow;
-    FRing[(FHead + FCount) mod Length(FRing)] := AProc;
-    Inc(FCount);
-  finally
-    FLck.Release;
-  end;
-end;
-
-function TFakeDispatcher.IsOnMainThread: Boolean; inline;
-begin
-  Result := platform_thread_id = FOwnerThread;
-end;
-
-function TFakeDispatcher.PumpOnce: Boolean; inline;
-var
-  LProc: TWindowProcRef;
-begin
-  FLck.Acquire;
-  try
-    if FCount = 0 then
-      Exit(False);
-    LProc := FRing[FHead];
-    FRing[FHead] := nil;
-    FHead := (FHead + 1) mod Length(FRing);
-    Dec(FCount);
-  finally
-    FLck.Release;
-  end;
-  if Assigned(LProc) then
-    LProc();
-  LProc := nil;
-  Result := True;
-end;
-
-procedure TFakeDispatcher.PumpAll;
-begin
-  while PumpOnce do ;
-end;
-
-function TFakeDispatcher.PendingCount: Integer;
-begin
-  FLck.Acquire;
-  try
-    Result := FCount;
-  finally
-    FLck.Release;
-  end;
-end;
-
-procedure TFakeDispatcher.DropAll;
-var
-  I: Integer;
-begin
-  FLck.Acquire;
-  try
-    for I := 0 to FCount - 1 do
-      FRing[(FHead + I) mod Length(FRing)] := nil;
-    FCount := 0;
-    FHead := 0;
-  finally
-    FLck.Release;
-  end;
-end;
-
-procedure TFakeDispatcher.Post(AProc: TWindowProcRef);
-begin
-  PostRef(AProc);
-end;
-
-procedure TFakeDispatcher.Post(AProc: TWindowProcMethod);
-begin
-  PostRef(WindowMethodToRef(AProc));
-end;
-
-procedure TFakeDispatcher.Post(AProc: TWindowProc);
-begin
-  PostRef(WindowProcToRef(AProc));
-end;
-
-{ ---- 全局活跃窗口登记 & 假句柄生成 ---- }
+  nextpas.core.window.fake.base,
+  nextpas.core.window.fake.dispatcher,
+  nextpas.core.window.impl,
+  nextpas.core.window.live,
+  nextpas.core.window.queue,
+  nextpas.core.bytes.ops,
+  nextpas.core.sync.cow,
+  nextpas.core.sync.mutex,
+  nextpas.core.platform.thread;
 
 var
-  GLiveWindows: array of TFakeWindow;
-  GFakeLiveCount: Integer = 0;
-  GNextHandle: PtrUInt = $1000;
-  GLastHandle: TWindowNativeHandle = nil;
+  GLiveRegistry: TWindowLiveRegistry;
+  GPooledSnap: TWindowLiveSnapshot; // 池化快照 via SnapshotTo 容量保留复用稳态零堆抖动，bytes.ops SnapshotMaybeShrink 8192 单源，per-frame 零分配，资源托管不丢
+
+procedure RegisterFakeLive(AWin: TFakeWindow); inline;
+begin
+  WindowLiveRegistryEnsure(GLiveRegistry);
+  GLiveRegistry.Register(Pointer(AWin));
+  FakeNotifyWaiter;
+end;
+
+procedure UnregisterFakeLive(AWin: TFakeWindow); inline;
+begin
+  if GLiveRegistry = nil then Exit;
+  GLiveRegistry.Unregister(Pointer(AWin));
+  FakeNotifyWaiter;
+end;
 
 function FakeLiveWindowCount: Integer; inline;
 begin
-  Result := GFakeLiveCount;
+  if GLiveRegistry = nil then Exit(0);
+  Result := GLiveRegistry.Count;
 end;
 
 procedure FakePumpAll;
 var
   I: Integer;
+  LWin: TFakeWindow;
 begin
-  for I := 0 to High(GLiveWindows) do
-    if not GLiveWindows[I].FClosed then
-      GLiveWindows[I].PumpAll;
+  if GLiveRegistry = nil then Exit;
+  // 强制池化路径：SnapshotTo 容量保留复用稳态零堆抖动 via bytes.ops ManagedEnsureCapacityExact+ArrayRawCopy inline 零拷贝 O(1)，Snapshot deprecated 每调新分配堆抖动 per-frame 禁用
+  GLiveRegistry.SnapshotTo(GPooledSnap);
+  for I := 0 to High(GPooledSnap) do
+  begin
+    LWin := TFakeWindow(GPooledSnap[I]);
+    if (LWin <> nil) and not LWin.FClosed then
+      LWin.PumpAll;
+  end;
 end;
 
-function FakeHasPendingPosts: Boolean;
-var
-  I: Integer;
+function FakeHasPendingPosts: Boolean; inline;
 begin
-  for I := 0 to High(GLiveWindows) do
-    if not GLiveWindows[I].FClosed and (GLiveWindows[I].PendingPosts > 0) then
-      Exit(True);
-  Result := False;
+  Result := nextpas.core.window.fake.dispatcher.FakeHasPendingPosts;
+end;
+
+procedure FakeNotifyWaiter; inline;
+begin
+  nextpas.core.window.fake.dispatcher.FakeNotifyWaiter;
+end;
+
+procedure FakeWaitForActivity(const ATimeoutNs: Int64); inline;
+begin
+  nextpas.core.window.fake.dispatcher.FakeWaitForActivity(ATimeoutNs);
 end;
 
 function FakeLastHandleValue: TWindowNativeHandle;
 begin
-  Result := GLastHandle;
-end;
-
-function AllocFakeHandle: TWindowNativeHandle;
-begin
-  GNextHandle := GNextHandle + $10;
-  Result := TWindowNativeHandle(Pointer(GNextHandle));
-  GLastHandle := Result;
+  Result := nextpas.core.window.fake.base.FakeLastHandleValue;
 end;
 
 { ---- TFakeWindow ---- }
@@ -326,8 +194,7 @@ begin
   if (AWindow <> nil) and (AWindow.QueryInterface(IFakeSelfAccess, LAcc) = 0) then
     Result := LAcc.FakeSelf as TFakeWindow
   else
-    raise EWindowInvalidState.Create(
-      'window is not a nextpas.core.window.fake instance');
+    raise EWindowInvalidState.Create('window is not a nextpas.core.window.fake instance');
 end;
 
 function TFakeWindow.FakeSelf: TObject;
@@ -345,37 +212,46 @@ begin
   FMaximized := AOptions.Maximized;
   FMinimized := False;
   FTitle := AOptions.Title;
-  if AOptions.Width <= 0 then
-    FWidth := DefaultWindowOptions.Width
+  if AOptions.Size.Width <= 0 then
+    FWidth := DefaultWindowOptions.Size.Width
   else
-    FWidth := AOptions.Width;
-  if AOptions.Height <= 0 then
-    FHeight := DefaultWindowOptions.Height
+    FWidth := AOptions.Size.Width;
+  if AOptions.Size.Height <= 0 then
+    FHeight := DefaultWindowOptions.Size.Height
   else
-    FHeight := AOptions.Height;
+    FHeight := AOptions.Size.Height;
   FScale := 1.0;
   FNativeHandle := AllocFakeHandle;
   FParentHandle := AOptions.ParentHandle;
   FOwnerThread := platform_thread_id;
   FDispatcher := TFakeDispatcher.Create(FOwnerThread);
-  SetLength(GLiveWindows, Length(GLiveWindows) + 1);
-  GLiveWindows[High(GLiveWindows)] := Self;
-  Inc(GFakeLiveCount);
+  FHostHead := 0;
+  FHostCount := 0;
+  FHostLock := TMutex.Create as ILock;
+  RegisterFakeLive(Self);
 end;
 
 destructor TFakeWindow.Destroy;
 var
   I: Integer;
 begin
-  if not FClosed then
-    Dec(GFakeLiveCount);
-  for I := High(GLiveWindows) downto 0 do
-    if GLiveWindows[I] = Self then
-    begin
-      GLiveWindows[I] := GLiveWindows[High(GLiveWindows)];
-      SetLength(GLiveWindows, Length(GLiveWindows) - 1);
-      Break;
+  WindowEventVariantClear(FOnEvent);
+  if FHostLock <> nil then
+  begin
+    FHostLock.Acquire;
+    try
+      for I := 0 to FHostCount - 1 do
+        FHostRing[WindowRingIndex(FHostHead, I, Length(FHostRing))].Event := Default(TWindowEvent);
+      FHostCount := 0;
+      FHostHead := 0;
+      SetLength(FHostRing, 0);
+    finally
+      FHostLock.Release;
     end;
+  end;
+  FHostLock := nil;
+  if GLiveRegistry <> nil then
+    GLiveRegistry.Unregister(Pointer(Self));
   inherited Destroy;
 end;
 
@@ -386,47 +262,232 @@ begin
 end;
 
 procedure TFakeWindow.DoDispatch(const AEvent: TWindowEvent);
-var
-  LHandler: TWindowEventHandler;
 begin
-  { 窗口销毁后不再产生该窗事件（INV-2） }
-  if FClosed then
-    Exit;
-  LHandler := FOnEvent;
-  if Assigned(LHandler) then
-    LHandler(AEvent);
+  if FClosed then Exit;
+  WindowEventVariantDispatch(FOnEvent, AEvent);
 end;
 
 procedure TFakeWindow.RealClose;
 var
-  LWasClosed: Boolean;
+  I: Integer;
 begin
-  LWasClosed := FClosed;
-  if LWasClosed then
-    Exit;
+  if FClosed then Exit;
   FClosed := True;
-  Dec(GFakeLiveCount);
+  UnregisterFakeLive(Self);
   FVisible := False;
   FNativeHandle := nil;
-  { 关闭后投递静默丢弃（CONTRACT §4.1） }
+  WindowEventVariantClear(FOnEvent);
   (FDispatcher as TFakeDispatcher).DropAll;
+  if FHostLock <> nil then
+  begin
+    FHostLock.Acquire;
+    try
+      for I := 0 to FHostCount - 1 do
+        FHostRing[WindowRingIndex(FHostHead, I, Length(FHostRing))].Event := Default(TWindowEvent);
+      FHostCount := 0;
+      FHostHead := 0;
+    finally
+      FHostLock.Release;
+    end;
+  end;
+end;
+
+procedure TFakeWindow.DoProcessPendingHostWork;
+var
+  LWork: THostWork;
+  LHas: Boolean;
+  E: TWindowEvent;
+begin
+  LHas := False;
+  if FHostLock <> nil then
+  begin
+    FHostLock.Acquire;
+    try
+      if FHostCount > 0 then
+      begin
+        LWork := FHostRing[FHostHead];
+        FHostHead := WindowRingNext(FHostHead, Length(FHostRing));
+        Dec(FHostCount);
+        LHas := True;
+      end;
+    finally
+      FHostLock.Release;
+    end;
+  end;
+  if not LHas then Exit;
+  case LWork.Kind of
+    hwkResized:
+      begin
+        if FClosed then Exit;
+        RequireOpen;
+        if LWork.Width < 0 then LWork.Width := 0;
+        if LWork.Height < 0 then LWork.Height := 0;
+        FWidth := LWork.Width;
+        FHeight := LWork.Height;
+        E.Kind := weResized; E.Width := TWindowPixel(FWidth); E.Height := TWindowPixel(FHeight); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
+        DoDispatch(E);
+      end;
+    hwkScaleChanged:
+      begin
+        if FClosed then Exit;
+        RequireOpen;
+        if LWork.Scale <= 0 then
+          raise EWindowInvalidState.Create('scale must be > 0');
+        FScale := LWork.Scale;
+        E.Kind := weScaleChanged; E.Width := TWindowPixel(0); E.Height := TWindowPixel(0); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.FromFactor(FScale);
+        DoDispatch(E);
+      end;
+    hwkInjected:
+      begin
+        if FClosed then Exit;
+        DoDispatch(LWork.Event);
+      end;
+  end;
+end;
+
+procedure TFakeWindow.EnqueueHostWork(const AWork: THostWork);
+var
+  LIdx: Integer;
+  LNeedGrow: Boolean;
+  LOldCap, LNewCap, LOldCount, LOldHead: Integer;
+  LOldRing, LNew: array of THostWork;
+  LOldPtr, LCurPtr: Pointer;
+begin
+  // 禁 inline：真实路由体含锁 acquire/二次容量校验/CowRingPrepare+CowRingGrowInstall 重路由（90 行），禁 inline 避 I-Cache 膨胀（design-conventions 红线#2）；薄转发 EnqueueHostResized/ScaleChanged/InjectEvent 保持 inline 单源复用此路由，3 调用点由 3× 膨胀收口为 1 份；0→32→2× via WindowGrowCapacity→bytes.ops 单源 inline 零拷贝，Grow 锁外分配托管释放不丢（CONTRACT §5）
+  if FHostLock = nil then
+    FHostLock := TMutex.Create as ILock;
+  FHostLock.Acquire;
+  try
+    if FHostCount < Length(FHostRing) then
+    begin
+      LIdx := WindowRingIndex(FHostHead, FHostCount, Length(FHostRing));
+      FHostRing[LIdx] := AWork;
+      Inc(FHostCount);
+      LNeedGrow := False;
+    end else
+    begin
+      LOldCap := Length(FHostRing);
+      LOldCount := FHostCount;
+      LOldHead := FHostHead;
+      LOldRing := FHostRing;
+      LNewCap := WindowGrowCapacity(LOldCap);
+      LNeedGrow := LNewCap > LOldCap;
+    end;
+  finally
+    FHostLock.Release;
+  end;
+  if not LNeedGrow then
+  begin
+    (FDispatcher as TFakeDispatcher).Post(TWindowProcMethod(@DoProcessPendingHostWork));
+    Exit;
+  end;
+  if LNewCap <= LOldCap then Exit;
+  // 性能：锁外 Cow 分配前二次校验仍需生长，消除高竞争下 stale 回退仍分配 LNew 并 discard 的额外堆抖动；inline 零拷贝 via bytes.ops CowRing* 单源，零二次 SetLength 颠簸，资源托管不丢
+  FHostLock.Acquire;
+  try
+    if FHostCount < Length(FHostRing) then
+    begin
+      LIdx := WindowRingIndex(FHostHead, FHostCount, Length(FHostRing));
+      FHostRing[LIdx] := AWork;
+      Inc(FHostCount);
+      (FDispatcher as TFakeDispatcher).Post(TWindowProcMethod(@DoProcessPendingHostWork));
+      Exit;
+    end;
+    if Length(LOldRing) > 0 then LOldPtr := @LOldRing[0] else LOldPtr := nil;
+    if Length(FHostRing) > 0 then LCurPtr := @FHostRing[0] else LCurPtr := nil;
+    if CowRingStale(LOldPtr, LOldCap, LOldCount, LOldHead, LCurPtr, Length(FHostRing), FHostCount, FHostHead) then
+    begin
+      LOldRing := FHostRing;
+      LOldHead := FHostHead;
+      LOldCap := Length(FHostRing);
+      LOldCount := FHostCount;
+      LNewCap := WindowGrowCapacity(LOldCap);
+      if LNewCap <= LOldCap then Exit;
+    end;
+  finally
+    FHostLock.Release;
+  end;
+  specialize CowRingPrepareCopy<THostWork>(LNew, LOldRing, LOldHead, LOldCap, LOldCount, LNewCap);
+  FHostLock.Acquire;
+  try
+    if Length(LOldRing) > 0 then LOldPtr := @LOldRing[0] else LOldPtr := nil;
+    if Length(FHostRing) > 0 then LCurPtr := @FHostRing[0] else LCurPtr := nil;
+    if not CowRingStale(LOldPtr, LOldCap, LOldCount, LOldHead, LCurPtr, Length(FHostRing), FHostCount, FHostHead) then
+    begin
+      specialize CowRingGrowInstall<THostWork>(FHostRing, FHostHead, LNew, FHostHead, Length(FHostRing), FHostCount);
+      LIdx := FHostCount;
+      FHostRing[LIdx] := AWork;
+      Inc(FHostCount);
+    end else
+    begin
+      if FHostCount < Length(FHostRing) then
+      begin
+        if LOldCount > 0 then specialize CowDiscard<THostWork>(LNew, LOldCount);
+        SetLength(LNew, 0);
+        LIdx := WindowRingIndex(FHostHead, FHostCount, Length(FHostRing));
+        FHostRing[LIdx] := AWork;
+        Inc(FHostCount);
+      end else
+      begin
+        specialize CowRingReuseBuffer<THostWork>(LNew, LOldCount, FHostRing, FHostHead, Length(FHostRing), FHostCount);
+        specialize CowRingGrowInstall<THostWork>(FHostRing, FHostHead, LNew, FHostHead, Length(FHostRing), FHostCount);
+        LIdx := FHostCount;
+        FHostRing[LIdx] := AWork;
+        Inc(FHostCount);
+      end;
+    end;
+  finally
+    FHostLock.Release;
+  end;
+  (FDispatcher as TFakeDispatcher).Post(TWindowProcMethod(@DoProcessPendingHostWork));
+end;
+
+procedure TFakeWindow.EnqueueHostResized(AWidth, AHeight: Integer); inline;
+var
+  LWork: THostWork;
+begin
+  // 性能：inline 薄转发单队列，零额外锁，值捕获零拷贝，复用 EnqueueHostWork 单源（CONTRACT §5）
+  LWork.Kind := hwkResized;
+  LWork.Width := AWidth;
+  LWork.Height := AHeight;
+  LWork.Scale := 0;
+  LWork.Event := Default(TWindowEvent);
+  EnqueueHostWork(LWork);
+end;
+
+procedure TFakeWindow.EnqueueHostScaleChanged(ANewScale: Double); inline;
+var
+  LWork: THostWork;
+begin
+  LWork.Kind := hwkScaleChanged;
+  LWork.Scale := ANewScale;
+  LWork.Width := 0;
+  LWork.Height := 0;
+  LWork.Event := Default(TWindowEvent);
+  EnqueueHostWork(LWork);
+end;
+
+procedure TFakeWindow.EnqueueInjectEvent(const AEvent: TWindowEvent); inline;
+var
+  LWork: THostWork;
+begin
+  LWork.Kind := hwkInjected;
+  LWork.Event := AEvent;
+  LWork.Width := 0;
+  LWork.Height := 0;
+  LWork.Scale := 0;
+  EnqueueHostWork(LWork);
 end;
 
 procedure TFakeWindow.Close;
 var
   LDispatcher: TFakeDispatcher;
 begin
-  { 幂等；跨线程 marshal }
-  if FClosed then
-    Exit;
+  if FClosed then Exit;
   LDispatcher := FDispatcher as TFakeDispatcher;
   if not LDispatcher.IsOnMainThread then
   begin
-    LDispatcher.PostRef(
-      procedure
-      begin
-        RealClose;
-      end);
+    LDispatcher.Post(TWindowProcMethod(@RealClose));
     Exit;
   end;
   RealClose;
@@ -477,21 +538,17 @@ var
   LEvent: TWindowEvent;
 begin
   RequireOpen;
-  if AWidth < 0 then
-    AWidth := 0;
-  if AHeight < 0 then
-    AHeight := 0;
+  if AWidth < 0 then AWidth := 0;
+  if AHeight < 0 then AHeight := 0;
   FWidth := AWidth;
   FHeight := AHeight;
-  { 同步产生 weResized 事件，走同一分发路径 }
   LEvent := Default(TWindowEvent);
-
   LEvent.Kind := weResized;
-  LEvent.Width := FWidth;
-  LEvent.Height := FHeight;
-  LEvent.X := 0;
-  LEvent.Y := 0;
-  LEvent.NewScale := 0;
+  LEvent.Width := TWindowPixel(FWidth);
+  LEvent.Height := TWindowPixel(FHeight);
+  LEvent.X := TWindowPixel(0);
+  LEvent.Y := TWindowPixel(0);
+  LEvent.NewScale := TWindowScale.Invalid;
   DoDispatch(LEvent);
 end;
 
@@ -521,13 +578,12 @@ begin
   FMaximized := True;
   FMinimized := False;
   LEvent := Default(TWindowEvent);
-
   LEvent.Kind := weResized;
-  LEvent.Width := FWidth;
-  LEvent.Height := FHeight;
-  LEvent.X := 0;
-  LEvent.Y := 0;
-  LEvent.NewScale := 0;
+  LEvent.Width := TWindowPixel(FWidth);
+  LEvent.Height := TWindowPixel(FHeight);
+  LEvent.X := TWindowPixel(0);
+  LEvent.Y := TWindowPixel(0);
+  LEvent.NewScale := TWindowScale.Invalid;
   DoDispatch(LEvent);
 end;
 
@@ -570,7 +626,6 @@ end;
 
 function TFakeWindow.NativeHandle: TWindowNativeHandle; inline;
 begin
-  { INV-1：Close 完成后恒为 nil；其余情况返回确定性假句柄 }
   if FClosed then
     Result := nil
   else
@@ -582,28 +637,23 @@ begin
   Result := FDispatcher;
 end;
 
-function TFakeWindow.GetHandle: Pointer;
-begin
-  Result := Pointer(FNativeHandle);
-end;
-
 procedure TFakeWindow.OnEvent(AHandler: TWindowEventHandler);
 begin
   RequireOpen;
-  FOnEvent := AHandler;
+  FOnEvent := WindowEventVariantFromRef(AHandler);
 end;
 
-procedure TFakeWindow.OnEvent(AHandler: TWindowEventMethod);
+procedure TFakeWindow.OnEvent(AHandler: TWindowEventMethod); inline;
 begin
-  OnEvent(EventMethodToRef(AHandler));
+  RequireOpen;
+  FOnEvent := WindowEventVariantFromMethod(AHandler);
 end;
 
-procedure TFakeWindow.OnEvent(AHandler: TWindowEventProc);
+procedure TFakeWindow.OnEvent(AHandler: TWindowEventProc); inline;
 begin
-  OnEvent(EventProcToRef(AHandler));
+  RequireOpen;
+  FOnEvent := WindowEventVariantFromProc(AHandler);
 end;
-
-{ ---- 驱动面 ---- }
 
 function TFakeWindow.PumpOnce: Boolean;
 begin
@@ -624,40 +674,12 @@ procedure TFakeWindow.InjectEvent(const AEvent: TWindowEvent);
 var
   LCopy: TWindowEvent;
 begin
-  if FClosed then
-    Exit;
+  if FClosed then Exit;
   LCopy := AEvent;
   if (FDispatcher as TFakeDispatcher).IsOnMainThread then
     DoDispatch(LCopy)
   else
-    FDispatcher.Post(
-      procedure
-      begin
-        DoDispatch(LCopy);
-      end);
-end;
-
-procedure TFakeWindow.InjectKey(AKind: TWindowEventKind; AKeyCode, AModifiers: Integer);
-var
-  E: TWindowEvent;
-begin
-  E := Default(TWindowEvent);
-  E.Kind := AKind;
-  E.KeyCode := AKeyCode;
-  E.Modifiers := AModifiers;
-  InjectEvent(E);
-end;
-
-procedure TFakeWindow.InjectMouse(AKind: TWindowEventKind; AX, AY, AButton, AModifiers: Integer);
-var
-  E: TWindowEvent;
-begin
-  E := Default(TWindowEvent);
-  E.Kind := AKind;
-  E.X := AX; E.Y := AY;
-  E.Button := AButton;
-  E.Modifiers := AModifiers;
-  InjectEvent(E);
+    EnqueueInjectEvent(LCopy);
 end;
 
 procedure TFakeWindow.SetScale(ANewScale: Double);
@@ -669,13 +691,12 @@ begin
     raise EWindowInvalidState.Create('scale must be > 0');
   FScale := ANewScale;
   LEvent := Default(TWindowEvent);
-
   LEvent.Kind := weScaleChanged;
-  LEvent.Width := 0;
-  LEvent.Height := 0;
-  LEvent.X := 0;
-  LEvent.Y := 0;
-  LEvent.NewScale := FScale;
+  LEvent.Width := TWindowPixel(0);
+  LEvent.Height := TWindowPixel(0);
+  LEvent.X := TWindowPixel(0);
+  LEvent.Y := TWindowPixel(0);
+  LEvent.NewScale := TWindowScale.FromFactor(FScale);
   DoDispatch(LEvent);
 end;
 
@@ -707,12 +728,12 @@ var
   E: TWindowEvent;
 begin
   if not (FDispatcher as TFakeDispatcher).IsOnMainThread then
-  begin FDispatcher.Post(procedure begin HostResized(AWidth, AHeight); end); Exit; end;
+  begin EnqueueHostResized(AWidth, AHeight); Exit; end;
   RequireOpen;
   if AWidth < 0 then AWidth := 0;
   if AHeight < 0 then AHeight := 0;
   FWidth := AWidth; FHeight := AHeight;
-  E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X:=0; E.Y:=0; E.NewScale:=0;
+  E.Kind := weResized; E.Width := TWindowPixel(FWidth); E.Height := TWindowPixel(FHeight); E.X:=TWindowPixel(0); E.Y:=TWindowPixel(0); E.NewScale:=TWindowScale.Invalid;
   DoDispatch(E);
 end;
 
@@ -721,11 +742,11 @@ var
   E: TWindowEvent;
 begin
   if not (FDispatcher as TFakeDispatcher).IsOnMainThread then
-  begin FDispatcher.Post(procedure begin HostScaleChanged(ANewScale); end); Exit; end;
+  begin EnqueueHostScaleChanged(ANewScale); Exit; end;
   RequireOpen;
   if ANewScale <= 0 then raise EWindowInvalidState.Create('scale must be > 0');
   FScale := ANewScale;
-  E.Kind := weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=FScale;
+  E.Kind := weScaleChanged; E.Width:=TWindowPixel(0); E.Height:=TWindowPixel(0); E.X:=TWindowPixel(0); E.Y:=TWindowPixel(0); E.NewScale:=TWindowScale.FromFactor(FScale);
   DoDispatch(E);
 end;
 
@@ -734,10 +755,15 @@ var
   E: TWindowEvent;
 begin
   if not (FDispatcher as TFakeDispatcher).IsOnMainThread then
-  begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end;
+  begin (FDispatcher as TFakeDispatcher).Post(TWindowProcMethod(@HostCloseRequested)); Exit; end;
   RequireOpen;
-  E.Kind := weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0;
+  E.Kind := weCloseRequested; E.Width:=TWindowPixel(0); E.Height:=TWindowPixel(0); E.X:=TWindowPixel(0); E.Y:=TWindowPixel(0); E.NewScale:=TWindowScale.Invalid;
   DoDispatch(E);
 end;
+
+finalization
+  GPooledSnap := nil; // 池化快照托管释放不丢，bytes.ops SnapshotMaybeShrink 阈值收缩已在 SnapshotTo 内，finalization 单次 SetLength 0 释放不丢
+  GLiveRegistry.Free;
+  GLiveRegistry := nil;
 
 end.

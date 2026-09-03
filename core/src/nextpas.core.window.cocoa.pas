@@ -26,6 +26,7 @@ function CreateWindowCocoa(const AOptions: TWindowOptions): IWindow;
 function CocoaLiveWindowCount: Integer;
 procedure WindowCocoaRunLoop;
 procedure WindowCocoaQuitLoop;
+function CocoaPumpOnce: Boolean;
 
 implementation
 
@@ -37,8 +38,11 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.time.base,
+  nextpas.core.window.impl,
   nextpas.core.window.live,
   nextpas.core.window.queue,
+  nextpas.core.window.dispatcher.base,
+  nextpas.core.window.registry,
   nextpas.core.window.cocoa.ffi,
   nextpas.core.window.cocoa.loader;
 
@@ -63,8 +67,7 @@ end;
 
 procedure RegisterLive(AWin: Pointer);
 begin
-  if GLiveRegistry = nil then
-    GLiveRegistry := TWindowLiveRegistry.Create;
+  RegistryEnsureLiveRegistry(GLiveRegistry);
   GLiveRegistry.Register(AWin);
 end;
 
@@ -74,12 +77,15 @@ begin
   GLiveRegistry.Unregister(AWin);
 end;
 
+procedure CocoaDispatcherWake(AData: Pointer);
+begin
+  DispatcherWake;
+end;
+
 procedure DispatcherPush(AProc: TWindowProcRef);
 begin
-  if GQueue = nil then
-    GQueue := TWindowQueue.Create;
-  if GWaitEvent = nil then
-    GWaitEvent := CreateEvent(False);
+  if GQueue = nil then GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then GWaitEvent := RegistryEnsureDispatcherWait;
   GQueue.Push(AProc);
   GWaitEvent.SetEvent;
 end;
@@ -106,36 +112,21 @@ var
 begin
   if not Assigned(dispatch_get_main_queue) or not Assigned(dispatch_async_f) then Exit;
   Q := dispatch_get_main_queue();
-  // Use dispatch_async_f with C function that drains
   dispatch_async_f(Q, nil, @DispatcherDrain);
 end;
 
 type
-  TWindowCocoaDispatcher = class(TInterfacedObject, IWindowDispatcher)
-  private
-    FOwnerThread: UInt64;
+  TWindowCocoaDispatcher = class(TWindowDispatcherBase)
   public
-    constructor Create(AOwnerThread: UInt64);
-    function IsOnMainThread: Boolean; inline;
-    procedure Post(AProc: TWindowProcRef); overload;
-    procedure Post(AProc: TWindowProcMethod); overload;
-    procedure Post(AProc: TWindowProc); overload;
+    constructor Create(AOwnerThread: UInt64); reintroduce;
   end;
 
 constructor TWindowCocoaDispatcher.Create(AOwnerThread: UInt64);
-begin inherited Create; FOwnerThread := AOwnerThread; end;
-
-function TWindowCocoaDispatcher.IsOnMainThread: Boolean; inline;
-begin Result := platform_thread_id = FOwnerThread; end;
-
-procedure TWindowCocoaDispatcher.Post(AProc: TWindowProcRef);
-begin if not Assigned(AProc) then Exit; DispatcherPush(AProc); DispatcherWake; end;
-
-procedure TWindowCocoaDispatcher.Post(AProc: TWindowProcMethod);
-begin Post(WindowMethodToRef(AProc)); end;
-
-procedure TWindowCocoaDispatcher.Post(AProc: TWindowProc);
-begin Post(WindowProcToRef(AProc)); end;
+begin
+  if GQueue = nil then GQueue := RegistryEnsureDispatcherQueue;
+  if GWaitEvent = nil then GWaitEvent := RegistryEnsureDispatcherWait;
+  inherited Create(WindowFamilyToken, AOwnerThread, GQueue, GWaitEvent, @CocoaDispatcherWake, nil, False);
+end;
 
 type
   TWindowCocoa = class(TInterfacedObject, IWindow)
@@ -147,7 +138,7 @@ type
     FWidth, FHeight: Integer;
     FOwnerThread: UInt64;
     FDispatcher: IWindowDispatcher;
-    FOnEvent: TWindowEventHandler;
+    FOnEvent: TWindowEventVariant;
     procedure RequireOpen; inline;
     procedure DoDispatch(const AEvent: TWindowEvent); inline;
     procedure RealClose;
@@ -196,8 +187,8 @@ begin
   FClosed := False;
   FVisible := False;
   FTitle := AOptions.Title;
-  if AOptions.Width <= 0 then FWidth := DefaultWindowOptions.Width else FWidth := AOptions.Width;
-  if AOptions.Height <= 0 then FHeight := DefaultWindowOptions.Height else FHeight := AOptions.Height;
+  if AOptions.Size.Width <= 0 then FWidth := DefaultWindowOptions.Size.Width else FWidth := AOptions.Size.Width;
+  if AOptions.Size.Height <= 0 then FHeight := DefaultWindowOptions.Size.Height else FHeight := AOptions.Size.Height;
   FOwnerThread := platform_thread_id;
   FDispatcher := TWindowCocoaDispatcher.Create(FOwnerThread);
   FHandle := id(Pointer($CACA0001)); // placeholder non-nil until real NSWindow*
@@ -206,6 +197,7 @@ end;
 
 destructor TWindowCocoa.Destroy;
 begin
+  WindowEventVariantClear(FOnEvent);
   UnregisterLive(Pointer(Self));
   inherited;
 end;
@@ -213,19 +205,18 @@ end;
 procedure TWindowCocoa.RequireOpen;
 begin if FClosed then raise EWindowClosed.Create('window is closed'); end;
 
-procedure TWindowCocoa.DoDispatch(const AEvent: TWindowEvent);
-var
-  H: TWindowEventHandler;
+procedure TWindowCocoa.DoDispatch(const AEvent: TWindowEvent); inline;
 begin
+  // 零堆分配分发：Method/Proc 直存 variant，inline 零拷贝
   if FClosed then Exit;
-  H := FOnEvent;
-  if Assigned(H) then H(AEvent);
+  WindowEventVariantDispatch(FOnEvent, AEvent);
 end;
 
 procedure TWindowCocoa.RealClose;
 begin
   if FClosed then Exit;
   FClosed := True;
+  WindowEventVariantClear(FOnEvent);
   FVisible := False;
   FHandle := nil;
   UnregisterLive(Pointer(Self));
@@ -282,7 +273,7 @@ begin
   if AWidth < 0 then AWidth := 0;
   if AHeight < 0 then AHeight := 0;
   FWidth := AWidth; FHeight := AHeight;
-  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := TWindowPixel(FWidth); E.Height := TWindowPixel(FHeight); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
   DoDispatch(E);
 end;
 
@@ -300,7 +291,7 @@ var
   E: TWindowEvent;
 begin
   RequireOpen;
-  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := TWindowPixel(FWidth); E.Height := TWindowPixel(FHeight); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;
   DoDispatch(E);
 end;
 
@@ -336,14 +327,17 @@ end;
 function TWindowCocoa.GetDispatcher: IWindowDispatcher; inline;
 begin Result := FDispatcher; end;
 
-procedure TWindowCocoa.OnEvent(AHandler: TWindowEventHandler);
-begin RequireOpen; FOnEvent := AHandler; end;
+procedure TWindowCocoa.OnEvent(AHandler: TWindowEventHandler); inline;
+begin RequireOpen; FOnEvent := WindowEventVariantFromRef(AHandler); end;
 
-procedure TWindowCocoa.OnEvent(AHandler: TWindowEventMethod);
-begin OnEvent(EventMethodToRef(AHandler)); end;
+procedure TWindowCocoa.OnEvent(AHandler: TWindowEventMethod); inline;
+begin
+  // 零堆分配直存 wedkMethod，inline 零拷贝
+  RequireOpen; FOnEvent := WindowEventVariantFromMethod(AHandler);
+end;
 
-procedure TWindowCocoa.OnEvent(AHandler: TWindowEventProc);
-begin OnEvent(EventProcToRef(AHandler)); end;
+procedure TWindowCocoa.OnEvent(AHandler: TWindowEventProc); inline;
+begin RequireOpen; FOnEvent := WindowEventVariantFromProc(AHandler); end;
 
 function CreateWindowCocoa(const AOptions: TWindowOptions): IWindow;
 begin Result := TWindowCocoa.Create(AOptions); end;
@@ -351,7 +345,7 @@ begin Result := TWindowCocoa.Create(AOptions); end;
 procedure WindowCocoaRunLoop;
 begin
   GLoopQuit := False;
-  if GWaitEvent=nil then GWaitEvent := CreateEvent(False);
+  if GWaitEvent=nil then GWaitEvent := RegistryEnsureDispatcherWait;
   while not GLoopQuit do
   begin
     DispatcherDrain;
@@ -368,9 +362,40 @@ begin
   DispatcherWake;
 end;
 
+function CocoaPumpOnce: Boolean;
+begin
+  Result := False;
+  // 非阻塞泵：零拷贝锁外 Drain，无分配；inline Count 快速路径
+  if Assigned(GQueue) and (GQueue.Count > 0) then
+  begin
+    DispatcherDrain;
+    Result := True;
+  end;
+  // macOS 真机上 NSRunLoop 的 nextEventMatchingMask 需在 Show 后有 NSWindow* 才处理；
+  // Linux compile-only 下仅以 dispatcher 队列为准，避免空转；stability: Drain 逐条 nil 释放
+end;
+
+procedure RegisterCocoaBackend;
+var LDesc: TBackendDesc;
+begin
+  LDesc.Kind := wkCocoa;
+  LDesc.Probe := @WindowCocoaIsAvailable;
+  LDesc.Create := @CreateWindowCocoa;
+  LDesc.Live := @CocoaLiveWindowCount;
+  LDesc.Run := @WindowCocoaRunLoop;
+  LDesc.Quit := @WindowCocoaQuitLoop;
+  LDesc.Pump := @CocoaPumpOnce;
+  LDesc.Sonames := WINDOW_COCOA_SONAMES;
+  RegistryRegister(LDesc);
+end;
+
+initialization
+  RegisterCocoaBackend;
+
 finalization
   GLiveRegistry.Free;
-  GQueue.Free;
+  // 单源托管：GQueue/GWaitEvent 由 registry 统一释放，backend 仅置 nil 不双重 Free，heaptrc 0
+  GQueue := nil;
   GWaitEvent := nil;
 
 end.

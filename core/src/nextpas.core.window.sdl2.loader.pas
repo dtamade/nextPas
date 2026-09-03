@@ -22,6 +22,9 @@ function TryLoadWindowSdl2(out AInfo: TWindowSdl2LoadInfo): Boolean;
 procedure UnloadWindowSdl2;
 function WindowSdl2LoadInfo: TWindowSdl2LoadInfo;
 function WindowSdl2IsLoaded: Boolean;
+const
+  WINDOW_SDL2_SONAMES = 'libSDL2-2.0.so.0|libSDL2.so|libSDL2.so.0';
+function WindowSdl2Sonames: string; inline;
 
 implementation
 
@@ -156,6 +159,12 @@ end;
 function WindowSdl2IsLoaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function WindowSdl2Sonames: string; inline;
+begin
+  // 单源：与 TryDlOpen 数组同源，registry 诊断经此零拷贝 inline 转发，零重复字面量
+  Result := WINDOW_SDL2_SONAMES;
 end;
 
 end.

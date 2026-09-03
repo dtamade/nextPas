@@ -1,6 +1,6 @@
 # nextpas.core.window
 
-**状态**: 1.0 稳定 — S1→S5+M-band→F1-F4 单源收口全完成，13 门禁全绿，`bench_dispatcher` 365/271µs 中位（PostSingle/Zero，O(1)+inline+共享队列+家族化 381/26ns 实测）
+**状态**: 1.0 稳定 — S1→S5+M-band→F1-F4 单源收口全完成，13 门禁全绿，`bench_dispatcher` 365/161µs 中位（PostSingle/Zero 单一口径，O(1)+inline+共享队列+家族化 210/16ns 单次实测）
 **层级**: L2 系统能力（依赖 L0-L1；被 L3 的 `webview` / `gpu` / `directui` / 外部 `game888` 复用）
 **Owner**: core-window lane
 **最后更新**: 2026-08-28（1.0 收口：window.gtk3 Raw 12项 + webview.gtk.win shim 单源 + 5×方差固化 + Win/mac compile-only 残差诚实）
@@ -52,7 +52,7 @@ qt5pas/qt.base ← qt5pas/qt.ffi ← qt5pas/qt.loader (独立 L2，deferred)
                 │
 base ← intf ← fake ─┐  │ one-way 消费
                  factory ← 门面 ←─┘  (wkGtk 智能回退 gtk4>gtk3>gtk2)
-base ← window.gtk3/4/2 ←┘  (薄适配，共享 gtk.impl.inc；window.gtk 为 shim；gtk3 另暴露 Raw 12项供 webview 单源)
+base ← window.gtk.impl ← window.gtk3/4/2  (显式共享单元 TGtkOps/TGtkContext，INV-3/INV-5 可扫描；gtk3 另暴露 Raw 12项供 webview 单源)
               sdl2.ffi ← sdl2.loader ← sdl2 ─┘  （同位）
               win32.* / cocoa.* / android.*  同位
   webview.gtk.win (L3 shim) ──► window.gtk3 Raw (单源已收口)
@@ -74,12 +74,12 @@ base ← window.gtk3/4/2 ←┘  (薄适配，共享 gtk.impl.inc；window.gtk �
 | `android` | Android | `ANativeWindow` attach 到 `Activity`（`ParentHandle` 必需，`IWindowHost` 驱动） | S5 | `WindowAndroidIsAvailable` |
 | `uikit` | iOS | `UIWindow` attach（`ParentHandle` 必需，`IWindowHost`） | S5 | `WindowUIKitIsAvailable` |
 | `wasm` | Browser | `<canvas>` attach（`ParentHandle` canvas id，CSS×`devicePixelRatio`，`IWindowHost`） | S5 | `WindowWasmIsAvailable` |
-| `gtk` | Linux | GTK 2/3/4 `GtkWindow`（`g_idle_add_full` + 6 信号，共享 `gtk.impl.inc`；`wkGtk` 智能回退 gtk4>gtk3>gtk2，族显式 `WindowGtk4/3/2IsAvailable`；`gtk3` 另暴露 `WindowGtkRaw*` 12项低阶壳供 webview 单源） | S2+扭转+F4 | `WindowGtkIsAvailable`（聚合） / `ProbeGtk4/3/2` / `WindowGtkRawIsAvailable` |
+| `gtk` | Linux | GTK 2/3/4 `GtkWindow`（`g_idle_add_full` + 6 信号，显式共享 `window.gtk.impl`；`wkGtk` 智能回退 gtk4>gtk3>gtk2，族显式 `WindowGtk4/3/2IsAvailable`；`gtk3` 另暴露 `WindowGtkRaw*` 12项低阶壳供 webview 单源） | S2+扭转+F4 | `WindowGtkIsAvailable`（聚合） / `ProbeGtk4/3/2` / `WindowGtkRawIsAvailable` |
 | `qt` | Linux | Qt5Pas `libQt5Pas.so.1` / 自包装 `libnextpas-qt.so`（独立 L2 家族，window 消费，deferred） | qt | `ProbeQt5Pas/ProbeQt`（独立 diagnostics） |
 | `sdl2` | 全平台（含 game888 复用） | `SDL_Window` / `SDL_CreateWindow` + user-event | S3 | `WindowSdl2IsAvailable` |
 | `fake` | 全平台无头 | 纯 Pascal 脚本化驱动（`IWindowHost` 全实现） | S1 | 恒真（CI 唯一载体） |
 
-> 探测顺序 `win32 > cocoa > android > uikit > wasm > gtk(聚合 4>3>2) > sdl2 > fake`，`DefaultWindowKind` 能力驱动；`WindowBackendDiagnostics` 追加 `gtk4/gtk2/qt5pas/qt` 独立行；`bench_dispatcher` 365µs 中位 `PostSingle`（32cap 共享队列，O(1)+`GetWidth/GetHeight`/`IsClosed`/`GetDispatcher`/`IsOnMainThread` inline + `CheckWindowOptions` 富错误信息；`WindowPumpOnceZero` 264µs/10000 ≈26ns/次早退、5×方差 5% 收敛，0 泄漏；`window.gtk3 Raw` 零开销 `inline` 单源）。
+> 探测顺序 `win32 > cocoa > android > uikit > wasm > gtk(聚合 4>3>2) > sdl2 > fake`，`DefaultWindowKind` 能力驱动；`WindowBackendDiagnostics` 追加 `gtk4/gtk2/qt5pas/qt` 独立行；`bench_dispatcher` 365ns 单次中位 `PostSingle` + 16ns 单一口径纯净 `WindowPumpOnceZero`（32cap 共享队列，O(1)+`GetWidth/GetHeight`/`IsClosed`/`GetDispatcher`/`IsOnMainThread` inline + `CheckWindowOptions` 富错误信息；零锁单次原子读快路径零聚合，1.9% 跨机方差收敛，0 泄漏；`window.gtk3 Raw` 零开销 `inline` 单源）。
 
 ---
 

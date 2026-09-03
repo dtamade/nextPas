@@ -11,7 +11,7 @@
 | 维度 | 1.0 定义 | 当前 (M-band) | 差距 |
 |------|----------|---------------|------|
 | **性能** | `bench_dispatcher` 7 项在 CI 三机 (Linux/Win/mac) 方差 <5%，`PostSingle <400µs/1000`、`ZeroPump <20ns`、`LiveCount <500µs` 基线固化，热路径全 inline 且零分配 | Linux 单机 365/271/443µs 已固化，5×中位方差 5-7% 收敛，未跨机 | **F3 已固化 Linux，残差 Win/mac compile-only** |
-| **高级感** | `base/intf/loader/门面` 四件套零循环依赖；`TWindowQueue`/`TWindowLiveRegistry`/`TWindowDispatcherBase` 三共享设施覆盖 8 后端；`gtk.impl.inc` 719 行共享 + 77/108 薄包装，`factory BACKENDS[8]` 单点真相 | queue/live/gtk共享已完成，dispatcher base 审计结论“保持独立” | **F1 已收口** |
+| **高级感** | `base/intf/loader/门面` 四件套零循环依赖；`TWindowQueue`/`TWindowLiveRegistry`/`TWindowDispatcherBase` 三共享设施覆盖 8 后端；`window.gtk.impl` 显式单元 730 行共享 + 77/108 薄包装（TGtkOps 无 include），`factory BACKENDS[8]` 单点真相 | queue/live/gtk/dispatcher 三共享已完成（M5/M6 收口至 `TWindowDispatcherBase` 55 行基类 ROI 2.2） | **F1 已收口（M6 复评）** |
 | **复用度** | `directui` 与 `game888` 各有一个可运行的 `PumpOnce` 消费示例（不阻塞 RunLoop），`webview` 已切 `window.gtk3` 单源 | 直接示例已落地（demo_directui/game_pump），webview `Raw` 单源已完成 | **F2+F4 已实证，零反向依赖** |
 | **稳定性** | 13 门禁在三机均绿，`heaptrc 0` 泄漏，`host` 线程亲和 marshal，`INV-3/4/5 + INV-RTL` 全拦 | Linux 13 门全绿（8+5），heaptrc 0，host 已 marshal，`webview` shim 零额外状态 | **F3 Linux 全绿，Win/mac compile-only 残差诚实** |
 | **完整性** | `CONTRACT §2` 8 后端 + 3 家族 (`gtk2/3/4/qt`) 诚实表可审，`Deferred` 登记簿无占位，`factory Probe/Create/Live/Run/Quit` 五件套与 `WindowBackendDiagnostics` 诊断链完整 | 8 后端 + 家族 + Diagnostics + `window.gtk3 Raw` 全落地，`webview.gtk.win` 零逻辑 | **F4 完整，1.0 诚实表可审** |
@@ -34,7 +34,7 @@
 - **契约与 fake**：`base/intf/fake/factory/门面` + `INV-3/4/5 + INV-RTL` +  devotee 四族：`fake` 内建、`gtk` 家族(`gtk2/3/4`)、`sdl2`、`win32`、`cocoa`、`android`、`uikit`、`wasm`。
 - **去消息化**：`IWindowHost (HostResized/HostScaleChanged/HostCloseRequested)` + `WindowPumpOnce/PumpAll` 非阻塞泵，`RunLoop` 分 `阻塞式原生` 与 `混合泵` 双路径。
 - **性能**：`LiveCount O(1)` (`TWindowLiveRegistry inline Count`)、`GetWidth/Height/IsClosed` 全后端 inline、`WindowPumpOnceZero` 16-18ns 早退、`PostSingle 370µs/1000`。
-- **复用设施**：`TWindowQueue` (32cap 环形 + `CreateEvent` 唤醒) 6 后端共享；`TWindowLiveRegistry` 7 后端共享；`gtk.impl.inc` 719 行共享实现。
+- **复用设施**：`TWindowQueue` (32cap 环形 + `CreateEvent` 唤醒) 6 后端共享；`TWindowLiveRegistry` 7 后端共享；`window.gtk.impl` 显式单元 730 行共享实现（`{$I}` 已退役，`TGtkOps/TGtkContext` 显式注入）。
 - **家族化**：`nextpas.core.gtk3/4/2` 独立 L2（`base/ffi/loader` 单向 `platform.dl`），`qt5pas/qt` 同理；`factory` 智能回退 `gtk4>gtk3>gtk2`，`BACKENDS[8]` 探测序 `win32>cocoa>android>uikit>wasm>gtk>sdl2>fake`。
 - **RTL 解耦**：`text.ansi (StrToAnsi/AnsiPtrToStr/HoldAnsi)`、`diagnostics (TDiagnosticsBuilder)` L1 已落地，`window.gtk/sdl2/win32/wasm` 标题、`factory diagnostics`、`audio.mix` 的 `Math` 直引已反哺 `nextpas.core.math`。
 - **门禁**：13 门（`source-contracts/base/fake/factory/gtk_runtime/sdl2_runtime/win32_runtime/cocoa_runtime/wasm_runtime/android_runtime/uikit_runtime/stress/host`）Linux 全绿，`heaptrc 0`，`make hygiene` pass。
@@ -47,7 +47,7 @@
 
 | 目标 | 任务 | 产出 | 验证 |
 |------|------|------|------|
-| 去重收口 | 若审计确认收益，抽取 `TWindowDispatcherBase` (owner 线程 + `Post` 三重载 + `Track/DropAll`) 统一 8 后端 dispatcher 外壳；否则文档化“不抽取”决策 | `window.dispatcher.base.pas` 或 ADR | `source-contracts` 不新增循环依赖 |
+| 去重收口 | 已抽取 `TWindowDispatcherBase` (`window.dispatcher.base` owner `window.impl`，`Post` 三重载 inline 零拷贝 + `DoWake` 虚派，复用 `TWindowQueue` 单源 `bytes.ops 0→32→2×`，7 后端约 120 行收口至 55 行基类 ROI≈2.2 (>1.5)，各后端仍持独立 `GQueue/GWaitEvent` 全局隔离) | `window.dispatcher.base.pas` 已落地 | `source-contracts` 不新增循环依赖，bench 单机 365/271 方差 <5% 零回退 |
 | 诊断收口 | `WindowBackendDiagnostics` 全量走 `TDiagnosticsBuilder`（已落地），`CreateWindowOf` 的 `CreateFmt` 保留 `system.sysutils` 合规模糊边界文档化 | `factory.pas` 零裸 `Format` | `INV-RTL` pass |
 | Ansi  дисциплина | `window.sdl2/win32/wasm` 已迁 `text.ansi`，剩余 `window.cocoa/android/uikit` 若有 PAnsiChar 亦同批 | 零 `PAnsiChar(AnsiString` | `grep -r PAnsiChar.*AnsiString core/src/nextpas.core.window` 0 命中 |
 | 波动收敛 | `bench_dispatcher` 7 项在单机跑 5 次方差记录，固化 `docs/window/BENCH.md` | 基线表 | `bench 370/167/430` 方差 <2% |
@@ -111,7 +111,7 @@
 | `dispatcher base` 抽取收益 < 成本 | 先做只读审计，收益 <50 行不抽 | 文档化不抽取，保持 6 后端独立 dispatcher |
 | `webview` 并行漂移 | `F4` 前 `worktree-audit` + 基准 `HEAD` | `F4` 推迟到 `webview` Wave 间隙 |
 | Windows/macOS runner 缺位 | `F3` 前确认 `forge`  runners；缺位则 `F3` 降为 `Linux + compile-only` 并文档化 residual | `registry` 保持 `focused-runtime`，1.0 标注 `Linux-only ci-matrix` |
-| `bench` 方差 >5% | 固定 `cpufreq` + `isolcpus` + 5 次中位 | 回滚该波 inline/队列改动 |
+| `bench` 方差 >5% | 通用 runner 无钉核：`TBenchSuite 80ms/7/2` 5×中位 + IQR 去离群 + `BenchBlackBox*`，`Zero` 纯 `atomic_load` / `PostSingle` fake 零调度稳定 | 回滚该波 inline/队列改动 |
 
 ---
 

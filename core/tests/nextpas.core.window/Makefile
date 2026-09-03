@@ -1,6 +1,6 @@
-.PHONY: test test-base test-fake test-factory test-host test-gtk-runtime test-sdl2-runtime test-win32-runtime test-cocoa-runtime test-wasm-runtime test-android-runtime test-uikit-runtime test-qt-runtime test-polish test-stress test-source-contracts clean
+.PHONY: test test-base test-fake test-factory test-host test-gtk-runtime test-sdl2-runtime test-win32-runtime test-cocoa-runtime test-wasm-runtime test-android-runtime test-uikit-runtime test-qt-runtime test-polish test-stress test-live-arena test-source-contracts clean
 
-test: test-source-contracts test-base test-fake test-factory test-host test-gtk-runtime test-sdl2-runtime test-win32-runtime test-cocoa-runtime test-wasm-runtime test-android-runtime test-uikit-runtime test-qt-runtime test-polish test-stress
+test: test-source-contracts test-base test-fake test-factory test-host test-gtk-runtime test-sdl2-runtime test-win32-runtime test-cocoa-runtime test-wasm-runtime test-android-runtime test-uikit-runtime test-qt-runtime test-polish test-stress test-live-arena
 
 test-source-contracts:
 	$(MAKE) -C test_window_source_contracts test
@@ -47,6 +47,9 @@ test-polish:
 test-stress:
 	$(MAKE) -C test_window_stress clean test
 
+test-live-arena:
+	$(MAKE) -C test_window_live_arena clean test
+
 clean:
 	$(MAKE) -C test_window_base clean
 	$(MAKE) -C test_window_fake clean
@@ -62,4 +65,5 @@ clean:
 	$(MAKE) -C test_window_qt_runtime clean
 	$(MAKE) -C test_window_polish clean
 	$(MAKE) -C test_window_stress clean
+	$(MAKE) -C test_window_live_arena clean
 	$(MAKE) -C test_window_source_contracts clean

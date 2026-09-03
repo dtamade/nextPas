@@ -180,8 +180,7 @@ function TWkWebview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOpt
 begin
   Result := DefaultWindowOptions;
   Result.Title := AOptions.Title;
-  Result.Width := AOptions.Width;
-  Result.Height := AOptions.Height;
+  Result.Size := TWindowSize.Create(AOptions.Width, AOptions.Height);
   Result.Resizable := AOptions.Resizable;
   Result.Maximized := AOptions.Maximized;
 end;
@@ -191,7 +190,7 @@ begin
   if FClosed then Exit;
   case AEvent.Kind of
     weResized: UpdateChildBounds;
-    weScaleChanged, weDpiChanged: DoScaleChanged(AEvent.NewScale);
+    weScaleChanged: DoScaleChanged(AEvent.NewScale.Factor);
     weClosed, weCloseRequested: Close;
   end;
 end;

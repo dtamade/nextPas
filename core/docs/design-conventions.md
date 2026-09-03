@@ -157,6 +157,8 @@ end.
   `platform.thread` 这类跨平台统一 API 默认不创建自己的 `*.ffi.pas`，而是消费
   `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
   owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
+- `window` 家族内共享设施（占用 `window.*` 但非独立公开模块）：范围 `window.live`/`queue`/`hash`/`dispatcher.base` 及其子 shard `live.arena`/`queue.base`/`ring`/`backpressure`（共 8 项，各 <150 行，`queue` 门面 <800）；`Public facade=no`，不经 `nextpas.core.window` 门面，仅 `window.*` 后端 `uses`（`hash→live`、`live.arena→live`、`queue.*→queue`）；守四件套 `base←impl`（`base` 纯数据类型，`impl` Owner 单源）与 L0-L3（L2→L1 `bytes.ops` 单源），边界由抽象与 `CONTRACT §1` + source-contract allowed-uses 守，不靠 `TWindowFamilyToken strict private` 特权豁免；`window.impl` 保留 transitional `TWindowFamilyToken`（`private` + inline 零拷贝 O(1) 兼容）仅过渡，`bytes.ops` 单源 `WindowGrowCapacity 0→32→2×` inline 零拷贝 O(1)均摊；`Clear`/`Finalize` 成对释放不丢；缺能力反哺 `bytes.ops` owner 单源。
+- `dialog` 等 8 项已落地四件套（`window.loop/chrome/input/view/dpi/event/constraints` + `dialog` L3）为 Owner-faithful 独立模块（`base←intf←impl←门面`，`bytes.ops` 单源 inline 零拷贝，不经 `window` 门面，见 `core/docs/window/CONTRACT.md §1/§7.1` 与 `core/docs/core-module-registry.md`）。
 
 ### 单元体积指引
 
@@ -881,6 +883,15 @@ build/
 | `mime`       | MIME 格式（RFC 2045/2046/2047/2231；mail 依赖） |
 | `respack`    | 资源打包格式（v1 线格式、writer/reader、embed 工具链） |
 | `vfs`        | 只读虚拟文件树（memtree/embedded/os/sub + ETag/Decompress 装饰器门面） |
+| `window`     | 窗口 shell + surface（window 家族，1.0 单源收口含 gtk3 Raw，L2，允许 L0-L1 含 diagnostics/text/system.typinfo（factory 经 `GetEnumName` 枚举桥薄委托 registry/probe）+ `platform.dl` + 单向 L2 `gtk2/gtk3/gtk4/qt5pas/qt`，详见 `core-module-registry.md:102`） |
+| `window` shards | `window.live/queue/hash/dispatcher.base` + 子 shard `live.arena/queue.base/ring/backpressure`（共 8 项，家族内特权 `Public facade=no`，`window.impl` `TWindowFamilyToken`，各 <150 行/`queue`门面<800，`bytes.ops` 单源 inline 零拷贝） |
+| `gtk2`       | GTK2 绑定（`nextpas.core.gtk2`，dlopen `libgtk-x11-2.0.so.0`） |
+| `gtk3`       | GTK3 绑定（`nextpas.core.gtk3`，dlopen `libgtk-3.so.0`） |
+| `gtk4`       | GTK4 绑定（`nextpas.core.gtk4`，dlopen `libgtk-4.so.1`） |
+| `qt5pas`     | Qt5Pas 绑定（`nextpas.core.qt5pas`，dlopen `libQt5Pas.so.1`） |
+| `qt`         | Qt 绑定 via self-wrap C shim（`nextpas.core.qt`，dlopen `libnextpas-qt.so`） |
+
+> 注：本表示例，层级以 `core/docs/core-module-registry.md` 为准；`window` L2 `ci-matrix`，8 shard L2 `source-contract` `Public facade=no` + `TWindowFamilyToken` 三重锁定，`gtk` 家族 L2，勿误判 L3。
 
 ### L3: 框架（只依赖 L0-L2）
 

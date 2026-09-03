@@ -36,7 +36,7 @@
 | 项 | 状态 |
 |----|------|
 | Stage | **2.3 完美化**（2026-08-29）：11×4 严格 52 单元 + 7 事件 `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged` + 185 inline (`LiveGtkSmart/QtIsLoaded/WindowPumpOnce/All + Builder 9` 链) + `BENCH 365µs/24.3ns` 5× 4.1%/3.0% + 13 门禁全绿 `heaptrc 0` |
-| 源码 | `core/src/nextpas.core.window.{base,intf,fake,factory,live,queue,window}.pas + {gtk2,gtk3,gtk4,qt,sdl2,win32,cocoa,wasm,android,uikit,fake}.{base,ffi,loader,pas} + gtk.impl.inc + window.gtk shim`（11 后端 52 单元，`text.ansi` 单源，`platform.dl` 唯一触点） |
+| 源码 | `core/src/nextpas.core.window.{base,intf,fake,factory,live,queue,window}.pas + {gtk2,gtk3,gtk4,qt,sdl2,win32,cocoa,wasm,android,uikit,fake}.{base,ffi,loader,pas} + window.gtk.impl(显式共享单元，TGtkOps) + window.gtk shim`（11 后端 52 单元，`text.ansi` 单源，`platform.dl` 唯一触点） |
 | Registry | 已进入：`window` L2 focused-runtime（`core/docs/core-module-registry.md` 一行，`BENCH 2.0`/`FINAL_ROADMAP` 2.1 六维表） |
 | **NEXT** | **2.x freeze**（只修 `hygiene/heaptrc`；`3.0 input` 需单独立项，见 §6） |
 

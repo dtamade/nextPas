@@ -8,7 +8,8 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
-  nextpas.core.window.base;
+  nextpas.core.window.base,
+  nextpas.core.window.impl;
 
 procedure TestDefaultsSnapshot;
 var
@@ -16,15 +17,18 @@ var
 begin
   LOptions := DefaultWindowOptions;
   CheckEqual('', LOptions.Title);
-  CheckEqual(Int64(1024), Int64(LOptions.Width));
-  CheckEqual(Int64(768), Int64(LOptions.Height));
-  CheckEqual(Int64(0), Int64(LOptions.MinWidth));
-  CheckEqual(Int64(0), Int64(LOptions.MinHeight));
-  CheckEqual(Int64(0), Int64(LOptions.MaxWidth));
-  CheckEqual(Int64(0), Int64(LOptions.MaxHeight));
+  CheckEqual(Int64(1024), Int64(LOptions.Size.Width));
+  CheckEqual(Int64(768), Int64(LOptions.Size.Height));
+  CheckEqual(Int64(0), Int64(LOptions.Constraints.MinWidth));
+  CheckEqual(Int64(0), Int64(LOptions.Constraints.MinHeight));
+  CheckEqual(Int64(0), Int64(LOptions.Constraints.MaxWidth));
+  CheckEqual(Int64(0), Int64(LOptions.Constraints.MaxHeight));
   CheckEqual(True, LOptions.Resizable);
   CheckEqual(False, LOptions.Maximized);
   Check(LOptions.ParentHandle = nil, 'default ParentHandle nil');
+  { 强类型封装：Size/Constraints 双记录 inline 零拷贝值语义 }
+  Check(LOptions.Size.Width = 1024, 'Size strongly typed');
+  Check(LOptions.Constraints.IsEmpty, 'Constraints strongly typed empty');
 end;
 
 procedure TestOptionsAcceptPath;
@@ -39,9 +43,10 @@ var
   LOptions: TWindowOptions;
 begin
   LOptions := DefaultWindowOptions;
-  LOptions.Width := 0;
-  LOptions.Height := 0;
+  LOptions.Size.Width := 0;
+  LOptions.Size.Height := 0;
   CheckWindowOptions(LOptions);
+  Check(LOptions.Size.IsEmpty, 'Size empty after zero');
 end;
 
 procedure TestNegativeDimensionsRejected;
@@ -49,7 +54,7 @@ var
   LOptions: TWindowOptions;
 begin
   LOptions := DefaultWindowOptions;
-  LOptions.Width := -1;
+  LOptions.Size.Width := -1;
   try
     CheckWindowOptions(LOptions);
     Check(False, 'expected EWindowInvalidState for Width -1');
@@ -60,7 +65,7 @@ begin
   end;
 
   LOptions := DefaultWindowOptions;
-  LOptions.MinWidth := -1;
+  LOptions.Constraints.MinWidth := -1;
   try
     CheckWindowOptions(LOptions);
     Check(False, 'expected EWindowInvalidState for MinWidth -1');
@@ -71,7 +76,7 @@ begin
   end;
 
   LOptions := DefaultWindowOptions;
-  LOptions.MaxHeight := -5;
+  LOptions.Constraints.MaxHeight := -5;
   try
     CheckWindowOptions(LOptions);
     Check(False, 'expected EWindowInvalidState for MaxHeight -5');
@@ -87,8 +92,8 @@ var
   LOptions: TWindowOptions;
 begin
   LOptions := DefaultWindowOptions;
-  LOptions.MinWidth := 800;
-  LOptions.MaxWidth := 400;
+  LOptions.Constraints.MinWidth := 800;
+  LOptions.Constraints.MaxWidth := 400;
   try
     CheckWindowOptions(LOptions);
     Check(False, 'expected EWindowInvalidState for MaxWidth < MinWidth');
@@ -99,8 +104,8 @@ begin
   end;
 
   LOptions := DefaultWindowOptions;
-  LOptions.MinHeight := 600;
-  LOptions.MaxHeight := 200;
+  LOptions.Constraints.MinHeight := 600;
+  LOptions.Constraints.MaxHeight := 200;
   try
     CheckWindowOptions(LOptions);
     Check(False, 'expected EWindowInvalidState for MaxHeight < MinHeight');
@@ -112,13 +117,13 @@ begin
 
   { 仅一侧为 0 时不校验 }
   LOptions := DefaultWindowOptions;
-  LOptions.MinWidth := 800;
-  LOptions.MaxWidth := 0;
+  LOptions.Constraints.MinWidth := 800;
+  LOptions.Constraints.MaxWidth := 0;
   CheckWindowOptions(LOptions);
 
   LOptions := DefaultWindowOptions;
-  LOptions.MinWidth := 0;
-  LOptions.MaxWidth := 400;
+  LOptions.Constraints.MinWidth := 0;
+  LOptions.Constraints.MaxWidth := 400;
   CheckWindowOptions(LOptions);
 end;
 
@@ -156,19 +161,37 @@ begin
   Check(Ord(wkWasm) < Ord(wkFake), 'wasm before fake');
 end;
 
+procedure TestStrongTypes;
+var
+  LSize: TWindowSize;
+  LC: TWindowConstraints;
+begin
+  LSize := TWindowSize.Create(1024, 768);
+  CheckEqual(Int64(1024), Int64(LSize.Width));
+  CheckEqual(Int64(768), Int64(LSize.Height));
+  Check(not LSize.IsEmpty, 'size not empty');
+  LSize := TWindowSize.Default;
+  CheckEqual(Int64(1024), Int64(LSize.Width), 'default width');
+  LC := TWindowConstraints.Create(0, 0, 800, 600);
+  CheckEqual(Int64(800), Int64(LC.MaxWidth));
+  Check(not LC.IsEmpty, 'constraints not empty');
+  LC := TWindowConstraints.Default;
+  Check(LC.IsEmpty, 'default constraints empty');
+end;
+
 procedure TestEventRecordZeroFields;
 var
   LEvent: TWindowEvent;
 begin
   FillChar(LEvent, SizeOf(LEvent), 0);
   LEvent.Kind := weResized;
-  LEvent.Width := 800;
-  LEvent.Height := 600;
+  LEvent.Width := TWindowPixel(800);
+  LEvent.Height := TWindowPixel(600);
   CheckEqual(Int64(800), Int64(LEvent.Width));
   CheckEqual(Int64(600), Int64(LEvent.Height));
   CheckEqual(Int64(0), Int64(LEvent.X));
   CheckEqual(Int64(0), Int64(LEvent.Y));
-  CheckEqual(Double(0.0), LEvent.NewScale);
+  CheckEqual(Double(0.0), LEvent.NewScale.Factor);
 end;
 
 var
@@ -182,6 +205,7 @@ begin
   T.Test('max less than min rejected', @TestMaxLessThanMinRejected);
   T.Test('error category table', @TestErrorCategoryTable);
   T.Test('window kind order', @TestWindowKindOrder);
+  T.Test('strong types', @TestStrongTypes);
   T.Test('event record zero fields', @TestEventRecordZeroFields);
   if not T.Run then Halt(1);
 end.
