@@ -4,8 +4,6 @@ program benchmark_tls;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   benchmark_utils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
@@ -14,8 +12,7 @@ uses
   nextpas.core.tls.cert.builder,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.base,
-  SysUtils;
+  nextpas.core.tls.openssl.base, nextpas.core.fs;
 
 const
   PORT = '8443'; // BIO uses string port
@@ -60,10 +57,18 @@ begin
 
   // Setup listening BIO
   LAcceptBio := BIO_new_accept(PAnsiChar(PORT));
-  if LAcceptBio = nil then RaiseLastOSError;
+  if LAcceptBio = nil then
+  begin
+    WriteLn('[FAIL] BIO_new_accept failed');
+    Halt(1);
+  end;
 
   // BIO_do_accept is an OpenSSL macro (BIO_ctrl(b, BIO_C_DO_STATE_MACHINE, 0, nil))
-  if BIO_ctrl(LAcceptBio, 101, 0, nil) <= 0 then RaiseLastOSError;
+  if BIO_ctrl(LAcceptBio, 101, 0, nil) <= 0 then
+  begin
+    WriteLn('[FAIL] BIO_ctrl bind/listen failed');
+    Halt(1);
+  end;
 
   LBench := TBenchmark.Create('TLS 1.3 Handshake (Loopback)');
   LBench.SetIterations(ITERATIONS);

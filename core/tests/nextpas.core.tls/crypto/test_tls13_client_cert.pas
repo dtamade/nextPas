@@ -4,10 +4,10 @@ program test_tls13_client_cert;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.text.conv,
+  nextpas.core.net.sync, nextpas.core.net.intf;
 
 var
   LTotal, LPassed: Integer;
@@ -31,7 +31,7 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LSocket: TInetSocket;
+  LTcp: ITcpStream;
   LBuf: array[0..4095] of Byte;
   LRead: Integer;
   LPort: Word;
@@ -64,9 +64,9 @@ begin
   LCtx.LoadPrivateKey(LKeyFile);
 
   WriteLn('--- Connection with client certificate ---');
-  LSocket := TInetSocket.Create('127.0.0.1', LPort);
+  LTcp := TcpConnect('127.0.0.1', LPort);
   try
-    LConn := LCtx.CreateConnection(THandle(LSocket.Handle));
+    LConn := LCtx.CreateConnection(THandle((LTcp as ITcpSocketRuntime).NativeSocketHandle));
     Check(LConn.Connect, 'TLS 1.3 handshake with client cert succeeded');
     Check(LConn.GetProtocolVersion = sslProtocolTLS13, 'Protocol = TLS 1.3');
     WriteLn('  Cipher: ', LConn.GetCipherName);
@@ -82,7 +82,7 @@ begin
     LConn.Shutdown;
     LConn := nil;
   finally
-    LSocket.Free;
+    LTcp := nil;
   end;
 
   LCtx := nil;

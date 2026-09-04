@@ -4,10 +4,10 @@ program test_tls13_early_data_interop;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.base.utils, nextpas.core.text.conv,
+  nextpas.core.net.sync, nextpas.core.net.intf;
 
 var
   LTotal, LPassed: Integer;
@@ -32,7 +32,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LSession: ISSLSession;
-  LSocket: TInetSocket;
+  LTcp: ITcpStream;
   LBuf: array[0..4095] of Byte;
   LRead, LWritten: Integer;
   LPort: Word;
@@ -61,9 +61,9 @@ begin
     LEarlyCtx.SetClientEarlyDataEnabled(True);
 
   WriteLn('--- Phase 1: Full handshake to obtain session ticket ---');
-  LSocket := TInetSocket.Create('127.0.0.1', LPort);
+  LTcp := TcpConnect('127.0.0.1', LPort);
   try
-    LConn := LCtx.CreateConnection(THandle(LSocket.Handle));
+    LConn := LCtx.CreateConnection(THandle((LTcp as ITcpSocketRuntime).NativeSocketHandle));
     Check(LConn.Connect, 'Initial TLS 1.3 handshake succeeded');
     Check(LConn.GetProtocolVersion = sslProtocolTLS13, 'Protocol = TLS 1.3');
 
@@ -82,7 +82,7 @@ begin
     LConn.Shutdown;
     LConn := nil;
   finally
-    LSocket.Free;
+    LTcp := nil;
   end;
 
   if (LSession = nil) or (not LSession.IsResumable) then
@@ -95,15 +95,15 @@ begin
 
   WriteLn;
   WriteLn('--- Phase 2: Resumed connection with early data ---');
-  LSocket := TInetSocket.Create('127.0.0.1', LPort);
+  LTcp := TcpConnect('127.0.0.1', LPort);
   try
-    LConn := LCtx.CreateConnection(THandle(LSocket.Handle));
+    LConn := LCtx.CreateConnection(THandle((LTcp as ITcpSocketRuntime).NativeSocketHandle));
     LConn.SetSession(LSession);
 
     if Supports(LConn, ISSLEarlyDataConnection, LEarlyData) then
     begin
       LReq := 'GET /early HTTP/1.0'#13#10'Host: localhost'#13#10#13#10;
-      LEarlyData.SetEarlyData(BytesOf(LReq));
+      LEarlyData.SetEarlyData(StringToUTF8Bytes(LReq));
     end;
 
     Check(LConn.Connect, 'Resumed TLS 1.3 handshake succeeded');
@@ -130,7 +130,7 @@ begin
     LConn.Shutdown;
     LConn := nil;
   finally
-    LSocket.Free;
+    LTcp := nil;
   end;
 
   LSession := nil;

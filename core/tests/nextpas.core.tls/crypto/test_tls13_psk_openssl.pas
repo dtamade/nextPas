@@ -4,10 +4,10 @@ program test_tls13_psk_openssl;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.freepascal.lib;
+  nextpas.core.tls.freepascal.lib, nextpas.core.text.conv,
+  nextpas.core.net.sync, nextpas.core.net.intf;
 
 var
   LTotal, LPassed: Integer;
@@ -32,7 +32,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LSession: ISSLSession;
-  LSocket: TInetSocket;
+  LTcp: ITcpStream;
   LBuf: array[0..4095] of Byte;
   LRead: Integer;
   LPort: Word;
@@ -57,9 +57,9 @@ begin
 
   // First connection: full handshake
   WriteLn('--- First connection (full) ---');
-  LSocket := TInetSocket.Create('127.0.0.1', LPort);
+  LTcp := TcpConnect('127.0.0.1', LPort);
   try
-    LConn := LCtx.CreateConnection(THandle(LSocket.Handle));
+    LConn := LCtx.CreateConnection(THandle((LTcp as ITcpSocketRuntime).NativeSocketHandle));
     Check(LConn.Connect, 'TLS 1.3 handshake succeeded');
     Check(LConn.GetProtocolVersion = sslProtocolTLS13, 'Protocol = TLS 1.3');
     WriteLn('  Cipher: ', LConn.GetCipherName);
@@ -84,14 +84,14 @@ begin
     LConn.Shutdown;
     LConn := nil;
   finally
-    LSocket.Free;
+    LTcp := nil;
   end;
 
   // Second connection: PSK resume
   WriteLn('--- Second connection (PSK resume) ---');
-  LSocket := TInetSocket.Create('127.0.0.1', LPort);
+  LTcp := TcpConnect('127.0.0.1', LPort);
   try
-    LConn := LCtx.CreateConnection(THandle(LSocket.Handle));
+    LConn := LCtx.CreateConnection(THandle((LTcp as ITcpSocketRuntime).NativeSocketHandle));
     LConn.SetSession(LSession);
     if LConn.Connect then
     begin
@@ -108,7 +108,7 @@ begin
     end;
     LConn := nil;
   finally
-    LSocket.Free;
+    LTcp := nil;
   end;
 
   LSession := nil;

@@ -3,7 +3,6 @@ program test_openssl_connection_posthandshake_ocsp_storectx_issuer_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.ocsp,
@@ -24,7 +23,7 @@ uses
   nextpas.core.tls.openssl.api.obj,
   nextpas.core.tls.openssl.certificate,
   nextpas.core.tls.openssl.connection,
-  nextpas.core.tls.openssl.backed;
+  nextpas.core.tls.openssl.backed, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception;
 type
   TOpenSSLConnectionPostHandshakeAccess = class(TOpenSSLConnection)
   private
@@ -103,7 +102,7 @@ begin
   Result := 1;
 end;
 
-function StubSSLGetVerifyResultOK(const ssl: PSSL): clong; cdecl;
+function StubSSLGetVerifyResultOK(const ssl: PSSL): nextpas.core.tls.openssl.base.clong; cdecl;
 begin
   Result := X509_V_OK;
 end;

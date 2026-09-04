@@ -4,13 +4,11 @@ program test_direct_library_early_data_replay_store_parity;
 
 uses
   nextpas.core.system,
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
-  SysUtils,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.freepascal.lib,
   nextpas.core.tls.freepascal.session,
-  nextpas.core.tls.tls13.wire;
+  nextpas.core.tls.tls13.wire, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.fs, nextpas.core.path, nextpas.core.text, nextpas.core.text.conv, nextpas.core.time;
 
 var
   GTestsPassed: Integer = 0;
@@ -48,13 +46,13 @@ end;
 
 function BuildReplayStoreFilePath(const ALabel: string): string;
 begin
-  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  Result := IncludeTrailingPathDelimiter(GetTempDir()) +
     'nextpas_ssl_' + ALabel + '_direct_library_replay_store.bin';
 end;
 
 function BuildReplayStoreDirectoryPath(const ALabel: string): string;
 begin
-  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  Result := IncludeTrailingPathDelimiter(GetTempDir()) +
     'nextpas_ssl_' + ALabel + '_direct_library_replay_store_dir';
 end;
 
@@ -67,33 +65,8 @@ begin
 end;
 
 procedure RemovePathTree(const APath: string);
-var
-  LSearch: TSearchRec;
-  LChildPath: string;
 begin
-  if not DirectoryExists(APath) then
-  begin
-    if FileExists(APath) then
-      DeleteFile(APath);
-    Exit;
-  end;
-
-  if FindFirst(IncludeTrailingPathDelimiter(APath) + '*', faAnyFile, LSearch) = 0 then
-  begin
-    repeat
-      if (LSearch.Name = '.') or (LSearch.Name = '..') then
-        Continue;
-
-      LChildPath := IncludeTrailingPathDelimiter(APath) + LSearch.Name;
-      if (LSearch.Attr and faDirectory) <> 0 then
-        RemovePathTree(LChildPath)
-      else
-        DeleteFile(LChildPath);
-    until FindNext(LSearch) <> 0;
-    FindClose(LSearch);
-  end;
-
-  RemoveDir(APath);
+  RemoveAll(APath);
 end;
 
 procedure CleanupReplayStoreDirectory(const ADirectoryName: string);
@@ -112,8 +85,8 @@ var
   LPSK: TBytes;
 begin
   LSession := TFreePascalSession.Create;
-  LTicket := BytesOf('ticket-' + ALabel);
-  LPSK := BytesOf('0123456789abcdef0123456789abcdef');
+  LTicket := StringToUTF8Bytes('ticket-' + ALabel);
+  LPSK := StringToUTF8Bytes('0123456789abcdef0123456789abcdef');
   LSession.ConfigureResumption(
     TLS13_CIPHER_CHACHA20_POLY1305_SHA256,
     'TLS_CHACHA20_POLY1305_SHA256',
@@ -122,7 +95,7 @@ begin
     LPSK,
     7200,
     $01020304,
-    Now,
+    DateTimeNow,
     7200,
     AMaxEarlyDataSize
   );

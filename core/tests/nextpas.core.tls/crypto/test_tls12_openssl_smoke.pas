@@ -3,16 +3,16 @@ program test_tls12_openssl_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.socket_stream,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.ciphersuite,
   nextpas.core.tls.tls12.recordcrypto,
-  nextpas.core.tls.tls12.chacha20record;
+  nextpas.core.tls.tls12.chacha20record, nextpas.core.base, nextpas.core.exception, nextpas.core.io.intf, nextpas.core.text.conv,
+  nextpas.core.net.sync, nextpas.core.net.intf;
 
 var
   LPort: Word;
-  LSocket: TInetSocket;
+  LTcp: ITcpStream;
   LStream: IStream;
   LState: TTLS12ClientState;
   LError: string;
@@ -23,6 +23,24 @@ var
   LHeader: TBytes;
   LLen, LRead: Integer;
   LSuiteInfo: TTLS12CipherSuiteInfo;
+
+procedure WriteAll(const AStream: ITcpStream; const AData: TBytes);
+var
+  LOff, LWrote: SizeUInt;
+begin
+  LOff := 0;
+  while LOff < SizeUInt(Length(AData)) do
+  begin
+    LWrote := AStream.Write(AData[LOff], SizeUInt(Length(AData)) - LOff);
+    if LWrote = 0 then
+    begin
+      WriteLn('[FAIL] socket write returned 0');
+      Halt(1);
+    end;
+    Inc(LOff, LWrote);
+  end;
+end;
+
 begin
   if ParamCount < 1 then
   begin
@@ -34,7 +52,7 @@ begin
   WriteLn('[INFO] Connecting to localhost:', LPort);
 
   try
-    LSocket := TInetSocket.Create('127.0.0.1', LPort);
+    LTcp := TcpConnect('127.0.0.1', LPort);
   except
     on E: Exception do
     begin
@@ -45,7 +63,7 @@ begin
 
   try
     LProtos[0] := 'http/1.1';
-    LStream := SocketHandleAsIStream(LSocket.Handle);
+    LStream := SocketHandleAsIStream(THandle((LTcp as ITcpSocketRuntime).NativeSocketHandle));
     LOk := TryTLS12ClientHandshake(LStream, 'localhost', LProtos, LState, LError);
 
     if not LOk then
@@ -58,7 +76,7 @@ begin
     WriteLn('  Cipher suite: 0x', IntToHex(LState.CipherSuite, 4));
     WriteLn('  EMS: ', LState.HasEMS);
 
-    LRequest := BytesOf('GET / HTTP/1.0'#13#10'Host: localhost'#13#10#13#10);
+    LRequest := StringToUTF8Bytes('GET / HTTP/1.0'#13#10'Host: localhost'#13#10#13#10);
 
     TLS12GetCipherSuiteInfo(LState.CipherSuite, LSuiteInfo);
     LOk := False;
@@ -83,11 +101,11 @@ begin
     LHeader[2] := 3;
     LHeader[3] := Byte(Length(LEncrypted) shr 8);
     LHeader[4] := Byte(Length(LEncrypted));
-    LSocket.WriteBuffer(LHeader[0], 5);
-    LSocket.WriteBuffer(LEncrypted[0], Length(LEncrypted));
+    WriteAll(LTcp, LHeader);
+    WriteAll(LTcp, LEncrypted);
 
     SetLength(LHeader, 5);
-    LRead := LSocket.Read(LHeader[0], 5);
+    LRead := Integer(LTcp.Read(LHeader[0], 5));
     if LRead <> 5 then
     begin
       WriteLn('[FAIL] Failed to read response record header');
@@ -104,7 +122,7 @@ begin
     end;
 
     SetLength(LRecvData, LLen);
-    LRead := LSocket.Read(LRecvData[0], LLen);
+    LRead := Integer(LTcp.Read(LRecvData[0], LLen));
     if LRead <> LLen then
     begin
       WriteLn('[FAIL] Short read on response data');
@@ -128,9 +146,9 @@ begin
 
     WriteLn('[PASS] Application data exchange succeeded');
     WriteLn('  Response length: ', Length(LDecrypted), ' bytes');
-    WriteLn('  First line: ', Copy(StringOf(LDecrypted), 1, 40));
+    WriteLn('  First line: ', Copy(UTF8BytesToString(LDecrypted), 1, 40));
     Halt(0);
   finally
-    LSocket.Free;
+    LTcp := nil;
   end;
 end.
