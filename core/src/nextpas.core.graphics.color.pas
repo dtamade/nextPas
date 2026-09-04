@@ -147,9 +147,9 @@ begin
     V := I / LUT_SCALE;
     // init 单次 Power 填充，per-pixel 仅 LUT lerp，无 Ln/Exp 逐像素
     if V <= 0.04045 then GLutS2L[I] := V / 12.92
-    else GLutS2L[I] := Power((V + 0.055) / 1.055, 2.4);
+    else GLutS2L[I] := Power(Double((V + 0.055) / 1.055), 2.4);
     if V <= 0.0031308 then GLutL2S[I] := V * 12.92
-    else GLutL2S[I] := 1.055 * Power(V, 1.0 / 2.4) - 0.055;
+    else GLutL2S[I] := 1.055 * Power(V, Double(1.0 / 2.4)) - 0.055;
   end;
   GLutInitDone := True;
 end;

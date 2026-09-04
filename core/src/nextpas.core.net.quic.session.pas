@@ -15,10 +15,8 @@ unit nextpas.core.net.quic.session;
 interface
 
 uses
-  nextpas.core.exception,
-  nextpas.core.text.conv,
-  nextpas.core.time,
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.io.base,
@@ -131,9 +129,12 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.net.quic.varint,
+  nextpas.core.crypto.random,
   nextpas.core.hash.blake2b,
-  nextpas.core.crypto.random;
+  nextpas.core.net.quic.varint,
+  nextpas.core.net.sync,
+  nextpas.core.text.conv,
+  nextpas.core.time;
 
 type
   TQuicSession = class;

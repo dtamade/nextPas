@@ -5,10 +5,11 @@ unit nextpas.core.compress.intf;
 interface
 
 uses
-  nextpas.core.exception,
-  nextpas.core.text.conv,
   nextpas.core.base,
-  nextpas.core.io.intf;
+  nextpas.core.exception,
+  nextpas.core.io.intf,
+  nextpas.core.text.conv,
+  nextpas.core.text.utils;
 
 type
   ICompressWriter = interface(IWriter)
@@ -43,13 +44,13 @@ uses
 function CompressIsLimitExceededMsg(const AMsg: string): Boolean; inline;
 begin
   // perf: inline single Pos scan; single source for limit detection, avoids duplication in callers
-  Result := Pos('exceeds limit', LowerCase(AMsg)) > 0;
+  Result := PosEx('exceeds limit', LowerCase(AMsg)) > 0;
 end;
 
 function CompressIsLimitExceeded(const E: Exception): Boolean; inline;
 begin
   if E = nil then Exit(False);
-  Result := Pos('exceeds limit', LowerCase(E.Message)) > 0;
+  Result := PosEx('exceeds limit', LowerCase(E.Message)) > 0;
 end;
 
 function CompressBZip2IsAvailable: Boolean; inline;

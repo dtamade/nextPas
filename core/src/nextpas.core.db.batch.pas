@@ -160,7 +160,7 @@ end;
 function DbBatchSupportsBulkCopy(const AConn: IDbConnection): Boolean; inline;
 var
   LCap: IDbCapabilities;
-  LDummy: IInterface;
+  LBulk: IDbBulkCopy;
 begin
   Result := False;
   if AConn = nil then Exit;
@@ -168,7 +168,7 @@ begin
   if Supports(AConn, IDbCapabilities, LCap) and (LCap <> nil) then
     Result := LCap.SupportsBulkCopy
   else
-    Result := Supports(AConn, IDbBulkCopy, LDummy);
+    Result := Supports(AConn, IDbBulkCopy, LBulk);
 end;
 
 function DbBatchSupportsArrayBinding(const AConn: IDbConnection): Boolean; inline;
@@ -187,7 +187,7 @@ end;
 function DbBatchSupportsBatchExecutor(const AConn: IDbConnection): Boolean; inline;
 var
   LCap: IDbCapabilities;
-  LDummy: IInterface;
+  LExec: IDbBatchExecutor;
 begin
   Result := False;
   if AConn = nil then Exit;
@@ -195,13 +195,13 @@ begin
   if Supports(AConn, IDbCapabilities, LCap) and (LCap <> nil) then
     Result := LCap.SupportsBatchExecutor
   else
-    Result := Supports(AConn, IDbBatchExecutor, LDummy);
+    Result := Supports(AConn, IDbBatchExecutor, LExec);
 end;
 
 function DbBatchSupportsLargeObjects(const AConn: IDbConnection): Boolean; inline;
 var
   LCap: IDbCapabilities;
-  LDummy: IInterface;
+  LLarge: IDbLargeObjectControl;
 begin
   Result := False;
   if AConn = nil then Exit;
@@ -209,16 +209,16 @@ begin
   if Supports(AConn, IDbCapabilities, LCap) and (LCap <> nil) then
     Result := LCap.SupportsLargeObjects
   else
-    Result := Supports(AConn, IDbLargeObjectControl, LDummy);
+    Result := Supports(AConn, IDbLargeObjectControl, LLarge);
 end;
 
 function DbBatchSupportsRowBlob(const AConn: IDbConnection): Boolean; inline;
 var
-  LDummy: IInterface;
+  LRow: IDbRowBlobControl;
 begin
   Result := False;
   if AConn = nil then Exit;
-  Result := Supports(AConn, IDbRowBlobControl, LDummy);
+  Result := Supports(AConn, IDbRowBlobControl, LRow);
 end;
 
 function DbBatchTryBulkCopy(const AConn: IDbConnection; out ABulk: IDbBulkCopy): Boolean; inline;

@@ -22,11 +22,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-  {$IFDEF WINDOWS}
-  Windows, winsock2,
-  {$ELSE}
-  Sockets,
-  {$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.sync, nextpas.core.time,
   nextpas.core.io.intf,
   nextpas.core.tls.base,
@@ -149,6 +145,7 @@ type
     function ServerHandshake: Boolean;
     function SendData(const ABuffer; ASize: Integer): Integer;
     function RecvData(var ABuffer; ASize: Integer): Integer;
+    function SocketAsPlatformSocket(const AHandle: THandle): TPlatformSocket;
 
     // 握手辅助方法
     procedure PrepareInputBufferDesc(var AInBuffers: array of TSecBuffer;
@@ -664,37 +661,48 @@ end;
 // 内部方法 - 数据收发
 // ============================================================================
 
+function TWinSSLConnection.SocketAsPlatformSocket(const AHandle: THandle): TPlatformSocket;
+begin
+  {$IFDEF WINDOWS}
+  Result.Value := PtrUInt(AHandle);
+  {$ELSE}
+  Result.Value := Int32(AHandle);
+  {$ENDIF}
+end;
+
 function TWinSSLConnection.SendData(const ABuffer; ASize: Integer): Integer;
+var
+  LSocket: TPlatformSocket;
+  LSent: Int32;
 begin
   if FStream <> nil then
     Result := FStream.Write(ABuffer, ASize)
   else if FSocket <> INVALID_HANDLE_VALUE then
   begin
-    {$IFDEF WINDOWS}
-    Result := winsock2.send(FSocket, ABuffer, ASize, 0);
-    if Result = SOCKET_ERROR then
-      Result := -1;
-    {$ELSE}
-    Result := fpSend(FSocket, @ABuffer, ASize, 0);
-    {$ENDIF}
+    LSocket := SocketAsPlatformSocket(FSocket);
+    if platform_socket_send(LSocket, @ABuffer, Int32(ASize), PLATFORM_MSG_NOSIGNAL, LSent) <> 0 then
+      Result := -1
+    else
+      Result := LSent;
   end
   else
     Result := -1;
 end;
 
 function TWinSSLConnection.RecvData(var ABuffer; ASize: Integer): Integer;
+var
+  LSocket: TPlatformSocket;
+  LRecvd: Int32;
 begin
   if FStream <> nil then
     Result := FStream.Read(ABuffer, ASize)
   else if FSocket <> INVALID_HANDLE_VALUE then
   begin
-    {$IFDEF WINDOWS}
-    Result := winsock2.recv(FSocket, ABuffer, ASize, 0);
-    if Result = SOCKET_ERROR then
-      Result := -1;
-    {$ELSE}
-    Result := fpRecv(FSocket, @ABuffer, ASize, 0);
-    {$ENDIF}
+    LSocket := SocketAsPlatformSocket(FSocket);
+    if platform_socket_recv(LSocket, @ABuffer, Int32(ASize), 0, LRecvd) <> 0 then
+      Result := -1
+    else
+      Result := LRecvd;
   end
   else
     Result := -1;
