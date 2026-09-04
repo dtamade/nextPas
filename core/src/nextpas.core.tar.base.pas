@@ -55,6 +55,7 @@ type
     MTimeUnix: Int64;
     UName: string;
     GName: string;
+    Sparse: Boolean;
   end;
 
   {** @desc 读取选项：单条目与总量 bomb 守卫 *}
@@ -208,6 +209,7 @@ begin
   Result.MTimeUnix := 0;
   Result.UName := '';
   Result.GName := '';
+  Result.Sparse := False;
 end;
 
 function DefaultTarReadOptions: TTarReadOptions; inline;

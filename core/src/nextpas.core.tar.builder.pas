@@ -42,6 +42,8 @@ type
     function AddDirectoryWithOptions(const AName: string; const AOpts: TTarAddOptions): ITarBuilder; inline;
     function AddEntry(const AHdr: TTarHeader; const AData: TBytes): ITarBuilder; inline;
     function AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
+    function AddSparse(const AName: string; const AData: TBytes): ITarBuilder; inline;
+    function AddSparseWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions): ITarBuilder; inline;
     function Finish: TBytes; inline;
   end;
 
@@ -85,6 +87,22 @@ end;
 function TTarBuilder.AddWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions): ITarBuilder; inline;
 begin
   FWriter.AddEntryWithOptions(AName, AData, AOpts);
+  Result := Self;
+end;
+
+function TTarBuilder.AddSparse(const AName: string; const AData: TBytes): ITarBuilder; inline;
+begin
+  FWriter.AddSparseFile(AName, AData);
+  Result := Self;
+end;
+
+function TTarBuilder.AddSparseWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions): ITarBuilder; inline;
+var
+  LOpts: TTarAddOptions;
+begin
+  LOpts := AOpts;
+  LOpts.Sparse := True;
+  FWriter.AddEntryWithOptions(AName, AData, LOpts);
   Result := Self;
 end;
 

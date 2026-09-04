@@ -28,6 +28,8 @@ type
     function AddDirectoryWithOptions(const AName: string; const AOpts: TTarAddOptions): ITarBuilder;
     function AddEntry(const AHdr: TTarHeader; const AData: TBytes): ITarBuilder;
     function AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder;
+    function AddSparse(const AName: string; const AData: TBytes): ITarBuilder;
+    function AddSparseWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions): ITarBuilder;
     function Finish: TBytes;
   end;
 

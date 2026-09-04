@@ -37,12 +37,14 @@ type
     procedure FillTrailerFields(ABlock: PByte; const AHdr: TTarHeader); inline;
     procedure WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
     procedure DoCopyAndPad(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
+    procedure EmitSparse10Entry(const AName: string; const AData: TBytes; AMode: Cardinal; AUID, AGID: Cardinal; AMTimeUnix: Int64; const AUName, AGName: string);
   public
     constructor Create(const ADst: IWriter);
     procedure SetLogger(const ALogger: ILogger); inline;
     procedure AddEntry(const AHdr: TTarHeader; const AData: TBytes);
     procedure AddEntryWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions); overload;
     procedure AddFile(const AName: string; const AData: TBytes; AMode: Cardinal = C_TAR_DEFAULT_FILE_MODE; AMTimeUnix: Int64 = 0);
+    procedure AddSparseFile(const AName: string; const AData: TBytes; AMode: Cardinal = C_TAR_DEFAULT_FILE_MODE; AMTimeUnix: Int64 = 0);
     procedure AddDir(const AName: string; AMode: Cardinal = C_TAR_DEFAULT_DIR_MODE; AMTimeUnix: Int64 = 0);
     procedure AddDirWithOptions(const AName: string; const AOpts: TTarAddOptions);
     procedure AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
@@ -60,7 +62,62 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.tar.common,
   nextpas.core.tar.capacity,
-  nextpas.core.tar.log;
+  nextpas.core.tar.log,
+  nextpas.core.text.number;
+
+type
+  TSparseWriteSeg = record Off, Len: Int64; end;
+  TSparseWriteSegs = array of TSparseWriteSeg;
+
+function DecOfInt64(AValue: Int64): string;
+var
+  Buf: array[0..19] of AnsiChar;
+  N: Int32;
+begin
+  // decimal 单源 text.number.IntToBuffer
+  N := IntToBuffer(AValue, @Buf[0]);
+  if N <= 0 then
+    Exit('0');
+  SetString(Result, PAnsiChar(@Buf[0]), N);
+end;
+
+procedure CollectDataSegs(const AData: TBytes; out ASegs: TSparseWriteSegs);
+var
+  I, N, Start: Integer;
+begin
+  // 零洞扫描：非零 run 即段，全零/空得空集，外联
+  ASegs := nil;
+  N := Length(AData);
+  I := 0;
+  while I < N do
+  begin
+    if AData[I] = 0 then
+    begin
+      Inc(I);
+      Continue;
+    end;
+    Start := I;
+    repeat
+      Inc(I);
+    until (I >= N) or (AData[I] = 0);
+    SetLength(ASegs, Length(ASegs) + 1);
+    ASegs[High(ASegs)].Off := Start;
+    ASegs[High(ASegs)].Len := I - Start;
+  end;
+end;
+
+function BuildSparseMapBytes(const ASegs: TSparseWriteSegs; AReal: Int64): TBytes;
+var
+  S: string;
+  I: Integer;
+begin
+  // 1.0 文本 map：count + offset/size 对 + (realsize, 0) 终结符，读侧 ParseSparseMapText 严格对称
+  S := DecOfInt64(Length(ASegs) + 1) + #10;
+  for I := 0 to High(ASegs) do
+    S := S + DecOfInt64(ASegs[I].Off) + #10 + DecOfInt64(ASegs[I].Len) + #10;
+  S := S + DecOfInt64(AReal) + #10 + '0' + #10;
+  Result := StringToBytes(S);
+end;
 
 const
   C_STREAM_BUF_SIZE = C_TAR_BUILDER_INITIAL_CAPACITY;
@@ -323,6 +380,91 @@ begin
   EmitEntry(AHdr, AData);
 end;
 
+procedure TTarWriter.EmitSparse10Entry(const AName: string; const AData: TBytes; AMode: Cardinal; AUID, AGID: Cardinal; AMTimeUnix: Int64; const AUName, AGName: string);
+const
+  C_SPARSE_PLACEHOLDER_PREFIX = './GNUSparseFile.0/';
+var
+  LSegs: TSparseWriteSegs;
+  LMapBytes: TBytes;
+  LPlaceName: string;
+  LStored, LDense, LSegTotal, LPad: Int64;
+  I: Integer;
+  Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
+  H: TTarHeader;
+begin
+  // 显式稀疏写出（pax 1.0）：占位名确定性取 .0 后缀；名过长/无收益/空数据回退 dense，字节与 AddFile 一致
+  if FFinished then
+    raise EInvalidOperationError.Create('tar: writer already finished');
+  ValidateTarEntryName(AName);
+  LPlaceName := C_SPARSE_PLACEHOLDER_PREFIX + AName;
+  if Length(AData) = 0 then
+  begin
+    H := Default(TTarHeader);
+    H.Name := AName;
+    H.Kind := tekRegular;
+    H.Mode := AMode;
+    H.MTimeUnix := AMTimeUnix;
+    EmitEntry(H, nil);
+    Exit;
+  end;
+  CollectDataSegs(AData, LSegs);
+  LMapBytes := BuildSparseMapBytes(LSegs, Length(AData));
+  LSegTotal := 0;
+  for I := 0 to High(LSegs) do
+    LSegTotal := LSegTotal + LSegs[I].Len;
+  LStored := (Length(LMapBytes) + TarPadToBlock(Length(LMapBytes))) + LSegTotal;
+  LDense := Length(AData) + TarPadToBlock(Length(AData));
+  if (Length(LPlaceName) > C_TAR_LAYOUT.Name.Len) or (LStored >= LDense) then
+  begin
+    H := Default(TTarHeader);
+    H.Name := AName;
+    H.Kind := tekRegular;
+    H.Mode := AMode;
+    H.UID := AUID;
+    H.GID := AGID;
+    H.MTimeUnix := AMTimeUnix;
+    H.UName := AUName;
+    H.GName := AGName;
+    H.Size := Length(AData);
+    EmitEntry(H, AData);
+    Exit;
+  end;
+  if FPaxBuilder = nil then
+    FPaxBuilder := CreateBytesBuilder(256)
+  else
+    FPaxBuilder.Clear;
+  TarAppendPaxRecord(FPaxBuilder, 'GNU.sparse.major', '1');
+  TarAppendPaxRecord(FPaxBuilder, 'GNU.sparse.minor', '0');
+  TarAppendPaxRecord(FPaxBuilder, 'GNU.sparse.name', AName);
+  TarAppendPaxRecord(FPaxBuilder, 'GNU.sparse.realsize', DecOfInt64(Length(AData)));
+  EmitPaxHeader(FPaxBuilder.ToBytes);
+  H := Default(TTarHeader);
+  H.Kind := tekRegular;
+  H.Mode := AMode;
+  H.UID := AUID;
+  H.GID := AGID;
+  H.MTimeUnix := AMTimeUnix;
+  H.UName := AUName;
+  H.GName := AGName;
+  SpanFill(TByteSpan.Create(@Block[0], SizeOf(Block)), 0);
+  FillNameFields(@Block[0], LPlaceName, 0);
+  FillNumericFields(@Block[0], H, LStored);
+  SpanFill(TByteSpan.Create(@Block[C_TAR_LAYOUT.Chksum.Off], C_TAR_LAYOUT.Chksum.Len), Ord(' '));
+  Block[C_TAR_LAYOUT.TypeFlag.Off] := Byte(KindToTypeFlag(H.Kind));
+  FillTrailerFields(@Block[0], H);
+  TarFinalizeHeaderChecksum(@Block[0]);
+  WriteBlock(Block);
+  WriteChecked(@LMapBytes[0], SizeUInt(Length(LMapBytes)));
+  LPad := TarPadToBlock(Length(LMapBytes));
+  if LPad > 0 then
+    WriteChecked(ZeroBufPtr, SizeUInt(LPad));
+  for I := 0 to High(LSegs) do
+    WriteChecked(@AData[LSegs[I].Off], SizeUInt(LSegs[I].Len));
+  LPad := TarPadToBlock(LStored);
+  if LPad > 0 then
+    WriteChecked(ZeroBufPtr, SizeUInt(LPad));
+end;
+
 procedure TTarWriter.AddEntryWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions);
 var
   H: TTarHeader;
@@ -339,6 +481,11 @@ begin
   H.UName := AOpts.UName;
   H.GName := AOpts.GName;
   H.Size := Length(AData);
+  if AOpts.Sparse then
+  begin
+    EmitSparse10Entry(AName, AData, H.Mode, H.UID, H.GID, H.MTimeUnix, H.UName, H.GName);
+    Exit;
+  end;
   EmitEntry(H, AData);
 end;
 
@@ -353,6 +500,12 @@ begin
   H.MTimeUnix := AMTimeUnix;
   H.Size := Length(AData);
   EmitEntry(H, AData);
+end;
+
+procedure TTarWriter.AddSparseFile(const AName: string; const AData: TBytes; AMode: Cardinal; AMTimeUnix: Int64);
+begin
+  // 显式稀疏写出：需全量洞扫描，流式入口不支持
+  EmitSparse10Entry(AName, AData, AMode, 0, 0, AMTimeUnix, '', '');
 end;
 
 procedure TTarWriter.AddDir(const AName: string; AMode: Cardinal; AMTimeUnix: Int64);
