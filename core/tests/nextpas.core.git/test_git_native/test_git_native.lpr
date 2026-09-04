@@ -12,6 +12,7 @@ uses
   nextpas.core.os.env,
   nextpas.core.process,
   nextpas.core.hash.sha1,
+  nextpas.core.git.base,
   nextpas.core.git.native.base,
   nextpas.core.git.native,
   nextpas.core.git.native.objects,
@@ -26,7 +27,8 @@ uses
   nextpas.core.git.native.negotiate,
   nextpas.core.git.native.sideband,
   nextpas.core.git.native.blame,
-  nextpas.core.git.native.revwalk;
+  nextpas.core.git.native.revwalk,
+  nextpas.core.git.native.repository.diff;
 
 const
   // git hash-object of "blob 6\0hello\n"
@@ -4520,6 +4522,50 @@ begin
   end;
 end;
 
+procedure TestWorkdirDiffApplyCheckoutRoundTrip;
+var
+  LRepo, LGitDir, LPatch, LBefore: string;
+  LPaths: TStringArray;
+  D: TGitDiff;
+begin
+  // covers repository.diff query+mutate shards end to end against git CLI
+  // (worktree diff, patch text, apply, checkout-paths round-trip)
+  LRepo := PathJoin([GetTempDir, 'nextpas_git_diff_' + IntToStr(GetProcessID)]);
+  RemoveAll(LRepo);
+  MkdirAll(LRepo, PermDirDefault);
+  try
+    RunInChecked('git', ['init', '--quiet'], LRepo);
+    RunInChecked('git', ['config', 'user.email', 'test@example.com'], LRepo);
+    RunInChecked('git', ['config', 'user.name', 'Test Er'], LRepo);
+    LGitDir := PathJoin([LRepo, '.git']);
+    WriteFileText(PathJoin([LRepo, 'a.txt']), 'hello'#10);
+    RunInChecked('git', ['add', 'a.txt'], LRepo);
+    RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'one'], LRepo);
+    WriteFileText(PathJoin([LRepo, 'a.txt']), 'hello world'#10);
+    D := RepositoryDiffWorkingTreeEx(LGitDir, LRepo, 'HEAD', DefaultGitDiffOptions);
+    CheckEqual(1, Length(D.Files), 'worktree diff sees tracked modification');
+    CheckEqual('a.txt', D.Files[0].NewPath, 'diff path');
+    CheckTrue(Length(D.Files[0].Hunks) > 0, 'diff hunks produced');
+    LPatch := RepositoryWorkdirPatchText(LGitDir, LRepo, 'HEAD', nil, True);
+    CheckTrue(Pos('diff --git', LPatch) = 1, 'patch text header');
+    CheckTrue(Pos('b/a.txt', LPatch) > 0, 'patch mentions a.txt');
+    D := RepositoryDiffEx(LGitDir, 'HEAD', 'HEAD', DefaultGitDiffOptions);
+    CheckEqual(0, Length(D.Files), 'head-vs-head empty');
+    LBefore := ReadFileText(PathJoin([LRepo, 'a.txt']));
+    RunInChecked('git', ['checkout', '-q', '--', 'a.txt'], LRepo);
+    CheckEqual('hello'#10, ReadFileText(PathJoin([LRepo, 'a.txt'])), 'cli checkout restores');
+    RepositoryApplyPatch(LGitDir, LRepo, LPatch);
+    CheckEqual(LBefore, ReadFileText(PathJoin([LRepo, 'a.txt'])), 'apply patch restores');
+    WriteFileText(PathJoin([LRepo, 'a.txt']), 'zzz'#10);
+    SetLength(LPaths, 1);
+    LPaths[0] := 'a.txt';
+    RepositoryCheckoutPaths(LGitDir, LRepo, 'HEAD', LPaths);
+    CheckEqual('hello'#10, ReadFileText(PathJoin([LRepo, 'a.txt'])), 'checkout paths restores');
+  finally
+    RemoveAll(LRepo);
+  end;
+end;
+
 procedure SetupFixture;
 begin
   GRepo := PathJoin([GetTempDir,
@@ -4686,6 +4732,7 @@ begin
     T.Test('blame threshold edge 1M', @TestBlameThresholdEdge);
     T.Test('blame large-file fallback 3k×3k', @TestBlameLargeFileFallback);
     T.Test('parse cache growth no duplicates', @TestParseCacheGrowthNoDuplicates);
+    T.Test('workdir diff apply checkout round-trip', @TestWorkdirDiffApplyCheckoutRoundTrip);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;
