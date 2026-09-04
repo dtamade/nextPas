@@ -30,7 +30,6 @@ type
     FMask: SizeInt;
     procedure EnsureCapacity;
     procedure Rehash(ANewCap: SizeInt);
-    procedure Clear;
     procedure CompactEvict; // LRU bounded eviction keeps 2048 newest at 4096 cap, avoids full clear jitter
   public
     destructor Destroy; override;
@@ -43,6 +42,9 @@ implementation
 uses
   nextpas.core.git.native.revwalk.hashset;
 
+{ hard capacity bound: fallbacks below evict instead of growing past this }
+const CMaxParseCacheCap = 4096;
+
 destructor TCommitParseCache.Destroy;
 var I: Integer;
 begin
@@ -51,33 +53,15 @@ begin
   inherited Destroy;
 end;
 
-procedure TCommitParseCache.Clear;
-var I: Integer;
-begin
-  for I := 0 to High(FParents) do
-    SetLength(FParents[I], 0);
-  SetLength(FBuckets, 0);
-  SetLength(FHashes, 0);
-  SetLength(FWhens, 0);
-  SetLength(FParents, 0);
-  SetLength(FStates, 0);
-  SetLength(FTicks, 0);
-  FCap := 0;
-  FMask := 0;
-  FCount := 0;
-  FTick := 0;
-end;
-
 procedure TCommitParseCache.EnsureCapacity;
-const CMaxCap = 4096;
 begin
   if not OidShouldGrow(FCount, FCap) then Exit;
   if FCap = 0 then
     Rehash(16)
-  else if FCap >= CMaxCap then
+  else if FCap >= CMaxParseCacheCap then
     CompactEvict
-  else if FCap * 2 > CMaxCap then
-    Rehash(CMaxCap)
+  else if FCap * 2 > CMaxParseCacheCap then
+    Rehash(CMaxParseCacheCap)
   else
     Rehash(FCap * 2);
 end;
@@ -133,17 +117,19 @@ begin
         LHash := LOldHashes[I]; { reuse cached hash }
         LIdx := OidProbeEmpty(FStates, FMask, LHash);
         if LIdx < 0 then
+          { at-cap safety: drop the entry instead of growing past CMaxParseCacheCap;
+            a parse cache stays valid on eviction (re-parse on miss) }
+          SetLength(LOldParents[I], 0)
+        else
         begin
-          Rehash(FCap * 2);
-          LIdx := OidProbeEmpty(FStates, FMask, LHash);
+          FBuckets[LIdx] := LOldBuckets[I];
+          FHashes[LIdx] := LHash;
+          FWhens[LIdx] := LOldWhens[I];
+          FParents[LIdx] := LOldParents[I]; { CoW share }
+          FTicks[LIdx] := LOldTicks[I];
+          FStates[LIdx] := 1;
+          Inc(FCount);
         end;
-        FBuckets[LIdx] := LOldBuckets[I];
-        FHashes[LIdx] := LHash;
-        FWhens[LIdx] := LOldWhens[I];
-        FParents[LIdx] := LOldParents[I]; { CoW share }
-        FTicks[LIdx] := LOldTicks[I];
-        FStates[LIdx] := 1;
-        Inc(FCount);
       end
       else
         SetLength(LOldParents[I], 0);
@@ -239,7 +225,11 @@ begin
   end;
   if (LIdx < 0) or (LIdx >= FCap) or (FStates[LIdx] = 1) then
   begin
-    Rehash(FCap * 2);
+    { bounded fallback: evict at cap instead of growing past CMaxParseCacheCap }
+    if FCap >= CMaxParseCacheCap then
+      CompactEvict
+    else
+      Rehash(FCap * 2);
     { reuse LHash }
     if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
     begin
@@ -255,7 +245,11 @@ begin
       LIdx := OidProbeEmpty(FStates, FMask, LHash);
       if LIdx < 0 then
       begin
-        Rehash(FCap * 2);
+        { bounded fallback: evict at cap instead of growing past CMaxParseCacheCap }
+        if FCap >= CMaxParseCacheCap then
+          CompactEvict
+        else
+          Rehash(FCap * 2);
         LIdx := OidProbeEmpty(FStates, FMask, LHash);
       end;
     end;

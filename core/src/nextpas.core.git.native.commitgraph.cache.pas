@@ -221,8 +221,8 @@ begin
         Idx := FindLRUCacheIndex // O(Cap) scan (16 trivial), single overwrite
       else
       begin
-        // perf: geometric growth via bytes.ops GrowArrayCapacity single source
-        //   (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), bounded Cap=16
+        // perf: exact-size insert via bytes.ops GrowArrayCapacity single source
+        //   (BYTES_BUILDER_MIN_GROW + *2), truncated back to fit, bounded Cap=16
         Idx := Length(GGraphCache);
         SetLength(GGraphCache, Integer(GrowArrayCapacity(SizeUInt(Length(GGraphCache)), SizeUInt(Idx + 1))));
         if Length(GGraphCache) > GGraphCacheCap then

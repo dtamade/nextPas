@@ -147,7 +147,8 @@ begin
   L := LowerCase(Trim(AUrl));
   Result := (Copy(L, 1, 7) = 'http://') or (Copy(L, 1, 8) = 'https://') or
     (Copy(L, 1, 6) = 'ssh://') or (Copy(L, 1, 10) = 'git+ssh://') or
-    (Copy(L, 1, 6) = 'git://') or (Copy(L, 1, 11) = 'ftp://ftps:') or
+    (Copy(L, 1, 6) = 'git://') or (Copy(L, 1, 6) = 'ftp://') or
+    (Copy(L, 1, 7) = 'ftps://') or
     (Pos('@', L) > 0) and (Pos(':', L) > Pos('@', L));
 end;
 
@@ -331,7 +332,6 @@ end;
 function TNativeGitManager.SetGlobalConfig(const AKey, AValue: string): Boolean;
 begin
   raise EGitError.Create('set global config not supported in native backend (use libgit2 backend or git CLI): ' + Trim(AKey));
-  Result := False;
 end;
 
 function TNativeGitManager.Version: string;
