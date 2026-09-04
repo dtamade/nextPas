@@ -625,6 +625,7 @@ end;
 
 procedure TInputEditor.PushUndo;
 var Snap: TEditorSnapshot;
+  LI: Integer;
 begin
   Snap.Text := FText;
   Snap.CurByte := FCurByte;
@@ -636,10 +637,12 @@ begin
   end
   else
   begin
-    { Move 搬托管 record 会绕开引用计数：先释放槽 0 旧串再搬移，
-      否则每次栈满推送泄漏一个快照串（tui888 PH111 符号化实证） }
-    FUndoStack[0] := Default(TEditorSnapshot);
-    Move(FUndoStack[1], FUndoStack[0], (UNDO_MAX - 1) * SizeOf(TEditorSnapshot));
+    { 栈满丢最旧：逐项托管赋值移位（Move 搬托管 record 绕开引用计数，
+      在位实证与本编辑器上下文伴随堆损坏——Default 整记录赋值与
+      .Text 字段直写两版均复现；逐项赋值每次引用计数自洽，
+      tui888 PH111 edtest4 1000 删除序列验证）。 }
+    for LI := 0 to UNDO_MAX - 2 do
+      FUndoStack[LI] := FUndoStack[LI + 1];
     FUndoStack[UNDO_MAX - 1] := Snap;
   end;
   FRedoCount := 0;
