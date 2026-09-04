@@ -19,7 +19,8 @@ uses
   nextpas.core.io.poller,
   nextpas.core.net.base,
   nextpas.core.net.intf,
-  nextpas.core.net.tcp;
+  nextpas.core.net.tcp,
+  nextpas.core.net.async.tcp;
 
 var
   T: TTestSuite;
@@ -1549,6 +1550,31 @@ begin
   LPoller.Close;
 end;
 
+{ C-29: async listener teardown must not crash the loop teardown.
+  AsyncTcpListen + Close drains reactor entries to zero; the following
+  loop Free runs ReleasePendingEntries on the empty state, which
+  underflowed `0 to FEntryCount - 1` (UInt32) into a 4-billion-iteration
+  OOB walk (AV + hung process). Multiple rounds: Close is idempotent. }
+procedure TestAsyncLoopTeardownAfterAsyncListen;
+var
+  LLoop: TAsyncLoop;
+  LListener: IAsyncTcpListener;
+  LRound: Integer;
+begin
+  for LRound := 1 to 3 do
+  begin
+    LLoop := TAsyncLoop.Create(32);
+    Check(LLoop.IsValid, 'loop valid');
+    LListener := AsyncTcpListen(LLoop, '127.0.0.1', 0);
+    Check(LListener <> nil, 'async listen ok');
+    Check(LListener.LocalAddr.Port <> 0, 'system assigned port');
+    LListener.Close;
+    LListener := nil;
+    LLoop.Free;
+  end;
+  Check(True, 'listen+close+free teardown x3 without crash');
+end;
+
 { Three-form PostRef/PostMethod/etc tests deferred: API not on main yet
   (merge 6c12e2d33 landed tests without loop/task implementations). }
 
@@ -1624,5 +1650,7 @@ begin
   T.Test('AsyncLoopAsyncRecvTimeoutExpired',
     @TestAsyncLoopAsyncRecvTimeoutExpired);
   T.Test('PollerDirectCreateAndBackend', @TestPollerDirectCreateAndBackend);
+  T.Test('AsyncLoopTeardownAfterAsyncListen',
+    @TestAsyncLoopTeardownAfterAsyncListen);
   if not T.Run then Halt(1);
 end.
