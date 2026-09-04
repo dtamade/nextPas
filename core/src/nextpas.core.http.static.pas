@@ -825,6 +825,14 @@ begin
     end;
     { Build full path }
     LFullPath := ARoot + '/' + LRelative;
+    { Missing files short-circuit to 404 here: FsPathAbs resolves symlinks
+      only for existing paths, so the prefix gate below would misread a
+      missing leaf under a symlinked root as an escape (403). }
+    if not nextpas.core.fs.Exists(LFullPath) then
+    begin
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
+      Exit;
+    end;
     { Security: verify resolved path stays within root directory.
       This prevents symlink-based directory traversal attacks. }
     LNormalizedRoot := FsPathClean(FsPathAbs(ARoot));
