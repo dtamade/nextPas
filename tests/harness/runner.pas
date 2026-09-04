@@ -102,6 +102,29 @@ const
      UsesSnapshot: False; CompilerMode: cmHostFpcBuildRun)
   );
 
+const
+  { Single source for host-fpc fixture unit search paths. Mirrors
+    scripts/stage0-fpc-flags.sh STAGE0_FPC_FLAGS: when compiler/core layout
+    moves, update here once instead of per-group branches (drift here turned
+    toolchain/rtl/crt red when backend units consolidated into compiler/src). }
+  HOST_UNIT_SEARCH_FLAGS: array[0..14] of string = (
+    '-Furtl/core/base',
+    '-Furtl/core/text',
+    '-Fucompiler/src',
+    '-Fucompiler/frontend',
+    '-Fucompiler/diagnostics',
+    '-Fucompiler/targets',
+    '-Fucompiler/syntax',
+    '-Fucompiler/sema',
+    '-Fucompiler/lower',
+    '-Fucompiler/ir',
+    '-Fucompiler/backend',
+    '-Fucompiler/toolchain',
+    '-Futools/stage0',
+    '-Fucore/src',
+    '-Ficore/src'
+  );
+
 type
   TGroupRunSummary = record
     FixtureCount: SizeInt;
@@ -492,6 +515,34 @@ procedure ClearStage0FixtureArtifacts(
 );
 begin
   DeleteIfExists(FixtureBinaryPath(AGroup, AFixturePath));
+end;
+
+procedure ClearFixtureUnitCache(
+  const AGroup: THarnessGroup;
+  const AFixturePath: string
+);
+var
+  SearchRec: TSearchRec;
+  CacheDir: string;
+  CacheExt: string;
+begin
+  { Fixture -FU caches rot across source moves: half-stale .ppu has crashed
+    fpc itself and poisoned recompiles with stale dependency interfaces.
+    Host fixture builds are small; rebuild the world per fixture. }
+  CacheDir := FixtureTempDirectory(AGroup, AFixturePath);
+  if not DirectoryExists(CacheDir) then
+    Exit;
+  if FindFirst(IncludeTrailingPathDelimiter(CacheDir) + '*', faAnyFile, SearchRec) <> 0 then
+    Exit;
+  try
+    repeat
+      CacheExt := LowerCase(ExtractFileExt(SearchRec.Name));
+      if (CacheExt = '.ppu') or (CacheExt = '.o') or (CacheExt = '.a') or (CacheExt = '.res') then
+        DeleteIfExists(IncludeTrailingPathDelimiter(CacheDir) + SearchRec.Name);
+    until FindNext(SearchRec) <> 0;
+  finally
+    FindClose(SearchRec);
+  end;
 end;
 
 function GroupFixtureMatches(
@@ -1200,6 +1251,8 @@ begin
   AExecution.ToolName := AToolName;
   if ACompilerExecutable = Stage0ExecutablePath then
     ClearStage0FixtureArtifacts(AGroup, AFixturePath);
+  if ACompilerExecutable = HostCompilerExecutable then
+    ClearFixtureUnitCache(AGroup, AFixturePath);
 
   Params := TStringList.Create;
   try
@@ -1254,45 +1307,19 @@ var
   BuildOutput: string;
   RunOutput: string;
   TempBinaryPath: string;
+  HostFlagIndex: Integer;
 begin
   AExecution.ToolName := 'host-fpc-build-run';
   TempBinaryPath := FixtureBinaryPath(AGroup, AFixturePath);
+  ClearFixtureUnitCache(AGroup, AFixturePath);
 
   { Build step }
   Params := TStringList.Create;
   try
     Params.Add('-FE' + FixtureBinaryDirectory(AGroup, AFixturePath));
     Params.Add('-FU' + FixtureTempDirectory(AGroup, AFixturePath));
-    if AGroup = hgToolchain then
-    begin
-      Params.Add('-Furtl/core/base');
-      Params.Add('-Furtl/core/text');
-      Params.Add('-Fucompiler/sema');
-      Params.Add('-Fucompiler/backend');
-      Params.Add('-Fucompiler/diagnostics');
-      Params.Add('-Fucompiler/frontend');
-      Params.Add('-Fucompiler/ir');
-      Params.Add('-Fucompiler/syntax');
-      Params.Add('-Fucompiler/toolchain');
-      Params.Add('-Fucompiler/targets');
-      Params.Add('-Fucompiler/src');
-      Params.Add('-Fucompiler/lower');
-      Params.Add('-Futools/stage0');
-      Params.Add('-Fucore/src');
-      Params.Add('-Ficore/src');
-    end
-    else if AGroup = hgRTL then
-    begin
-      Params.Add('-Furtl/core/base');
-      Params.Add('-Furtl/core/text');
-      Params.Add('-Fucore/src');
-      Params.Add('-Ficore/src');
-    end
-    else if AGroup = hgCRT then
-    begin
-      Params.Add('-Fucore/src');
-      Params.Add('-Ficore/src');
-    end;
+    for HostFlagIndex := Low(HOST_UNIT_SEARCH_FLAGS) to High(HOST_UNIT_SEARCH_FLAGS) do
+      Params.Add(HOST_UNIT_SEARCH_FLAGS[HostFlagIndex]);
     Params.Add(AFixturePath);
     SafeRunProcessCapture(
       HostCompilerExecutable, '', Params, BuildOutput,
