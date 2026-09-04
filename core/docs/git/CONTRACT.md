@@ -97,7 +97,7 @@
 | git.native.wildmatch | **已移除**（owner 已收敛至 L1 `text.wildmatch` 单源，`*`/`?`/`**`/`[]` 含转义/字符类，零 SysUtils；`ignore`/`attributes` 直连 `text.wildmatch.WildSegment*` inline 零拷贝 via `bytes.ops` 单源，原 thin shim 已删除） |
 | git.factory | TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator 选择层（静态仅 native.manager，注册注入 libgit2，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
-| git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')；值对象三小类 + 适配器支撑 helpers 已抽 `repository.objects` 分片，本体 934→640 行，接口零改动） |
+| git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 全方法实现；值对象三小类 + 适配器支撑 helpers 已抽 `repository.objects` 分片，本体 934→640 行，接口零改动） |
 | git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，唯一 inline 零拷贝网关，<400 行；native 为已折叠空 BC shim 零类型/常量/函数转发 `@deprecated`，唯一门面为 objects） |
 | git.native.staging | 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops） |
 | git.native.history.traversal | 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元 <210 行，inline 零拷贝 via bytes.ops） |
@@ -125,7 +125,7 @@
   index 的 split-index/sparse 扩展（小写强制扩展）遇到即拒绝而不是跳过；
   SHA-256 对象格式不支持（仅 SHA-1，20-byte `TGitOid` 权威）；
   shallow/grafts 不支持（revwalk 仍遍历全父链）；
-  网络 `http(s)/ssh/git` 抓取/推送不支持（`CloneRepository` 仅本地目录与 `file://`，网络抛 `EGitError(transport)`；`Fetch` 返回 `False`）；
+  网络 `http(s)/ssh/git` 抓取/推送不支持（`CloneRepository` 仅本地目录与 `file://`，网络抛 `EGitError(transport)`；`Fetch` 返回 `False`；网络凭据/证书钩子只接受 `nil`，传入非空处理器抛显式 `EGitError`）；
   `SetGlobalConfig` 写不支持（读支持全局两文件+`XDG`，写需 `libgit2` 或 CLI）；
   cache-tree 冲突失效为整树粒度（git 是按目录最小失效，消费语义等价——
   无效缓存本就必须重算）；checkout 对 linked worktree 的 `commondir` 透明（经 `EffectiveGitDir` 读对象、`AGitDir` 写 index）；

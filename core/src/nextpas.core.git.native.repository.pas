@@ -18,7 +18,6 @@ type
     FWorkTree: string;
     FClosed: Boolean;
     procedure EnsureOpen;
-    procedure RaiseNotImpl(const AMethod: string);
   public
     constructor Create(const AGitDir, AWorkTree: string);
     // IGitRepository
@@ -101,11 +100,6 @@ procedure TNativeRepositoryAdapter.EnsureOpen;
 begin
   if FClosed then
     raise EGitError.Create('repository is closed');
-end;
-
-procedure TNativeRepositoryAdapter.RaiseNotImpl(const AMethod: string);
-begin
-  raise EGitError.Create('not implemented for native backend: ' + AMethod);
 end;
 
 function TNativeRepositoryAdapter.Path: string;

@@ -26,6 +26,22 @@ begin
     Move(AText[1], Result[0], Length(AText));
 end;
 
+type
+  TDummyCredHandler = class
+    function Acquire(const Url, UserFromURL: string; AllowedTypes: Cardinal): Boolean;
+    function CheckCert(const Host: string; Valid: Boolean): Boolean;
+  end;
+
+function TDummyCredHandler.Acquire(const Url, UserFromURL: string; AllowedTypes: Cardinal): Boolean;
+begin
+  Result := False;
+end;
+
+function TDummyCredHandler.CheckCert(const Host: string; Valid: Boolean): Boolean;
+begin
+  Result := False;
+end;
+
 function MkTempDir(const APrefix: string): string;
 begin
   Inc(GUniq);
@@ -552,6 +568,42 @@ begin
   end;
 end;
 
+// CONTRACT: native backend owns no network, so credential/certificate
+// hooks accept nil and raise an explicit EGitError for non-nil handlers
+procedure TestNativeCredentialHandlersPinned;
+var
+  LMgr: IGitManager;
+  LDummy: TDummyCredHandler;
+  LRaised: Boolean;
+begin
+  LMgr := NewGitManager(gbNative);
+  Check(LMgr.Initialize, 'init');
+  LMgr.SetCredentialAcquireHandler(nil);
+  LMgr.SetCertificateCheckHandler(nil);
+  Check(True, 'nil credential handlers accepted');
+  LDummy := TDummyCredHandler.Create;
+  try
+    LRaised := False;
+    try
+      LMgr.SetCredentialAcquireHandler(LDummy.Acquire);
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'non-nil credential handler raises explicit EGitError');
+    LRaised := False;
+    try
+      LMgr.SetCertificateCheckHandler(LDummy.CheckCert);
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'non-nil certificate handler raises explicit EGitError');
+  finally
+    LDummy.Free;
+  end;
+end;
+
 // CONTRACT INV-O4: SetVerifySSL/VerifySSL Manager granularity, default True, affects only subsequent network ops
 procedure TestSetVerifySSLInvariants;
 var
@@ -601,6 +653,7 @@ begin
   Suite.Test('TestCommitOnHeadInvariants', @TestCommitOnHeadInvariants);
   Suite.Test('TestAddWorktreeInvariants', @TestAddWorktreeInvariants);
   Suite.Test('TestSetVerifySSLInvariants', @TestSetVerifySSLInvariants);
+  Suite.Test('TestNativeCredentialHandlersPinned', @TestNativeCredentialHandlersPinned);
 
   if not Suite.Run then
     Halt(1);
