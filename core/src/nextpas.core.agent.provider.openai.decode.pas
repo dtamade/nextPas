@@ -78,10 +78,15 @@ begin
   AgentInitUsageUnknown(AU);
   if not AV.IsObject then
     Exit;
+  { 兼容网关偶发 Anthropic 式键名：主鍵缺失才回落，不覆盖显式值 }
   if AV.Get('prompt_tokens').IsInt then
-    AU.InputTokens := AV.Get('prompt_tokens').AsInt;
+    AU.InputTokens := AV.Get('prompt_tokens').AsInt
+  else if AV.Get('input_tokens').IsInt then
+    AU.InputTokens := AV.Get('input_tokens').AsInt;
   if AV.Get('completion_tokens').IsInt then
-    AU.OutputTokens := AV.Get('completion_tokens').AsInt;
+    AU.OutputTokens := AV.Get('completion_tokens').AsInt
+  else if AV.Get('output_tokens').IsInt then
+    AU.OutputTokens := AV.Get('output_tokens').AsInt;
   LD := AV.Get('completion_tokens_details');
   if LD.IsObject and LD.Get('reasoning_tokens').IsInt then
     AU.ReasoningTokens := LD.Get('reasoning_tokens').AsInt;

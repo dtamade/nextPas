@@ -71,10 +71,15 @@ begin
   AgentInitUsageUnknown(AU);
   if not AV.IsObject then
     Exit;
+  { 兼容网关偶发 Anthropic 式键名：主鍵缺失才回落，不覆盖显式值 }
   if AV.Get('prompt_tokens').IsInt then
-    AU.InputTokens := AV.Get('prompt_tokens').AsInt;
+    AU.InputTokens := AV.Get('prompt_tokens').AsInt
+  else if AV.Get('input_tokens').IsInt then
+    AU.InputTokens := AV.Get('input_tokens').AsInt;
   if AV.Get('completion_tokens').IsInt then
-    AU.OutputTokens := AV.Get('completion_tokens').AsInt;
+    AU.OutputTokens := AV.Get('completion_tokens').AsInt
+  else if AV.Get('output_tokens').IsInt then
+    AU.OutputTokens := AV.Get('output_tokens').AsInt;
   LD := AV.Get('completion_tokens_details');
   if LD.IsObject and LD.Get('reasoning_tokens').IsInt then
     AU.ReasoningTokens := LD.Get('reasoning_tokens').AsInt;
@@ -188,6 +193,7 @@ procedure TOpenAIWireDecoder.DecodeEvent(const AEvent: TWireSSEEvent;
 var
   Doc: IJsonDocument;
   Root, LChoices, LC0, LDv, LU, LF: TJsonValue;
+  LC0U: TJsonValue;
   LD: TStreamDelta;
   LId, LModel, LRv, LUnmapped, LCapture: string;
   B: TAgentDeltaBuilder;
@@ -205,6 +211,7 @@ begin
   if FDone then
     Exit;
   B.Init;
+  LC0U := Default(TJsonValue);
 
   Doc := JsonParse(AEvent.Data);
   if Doc.HasError or (not Doc.Root.IsObject) then
@@ -242,6 +249,7 @@ begin
     if LChoices.ArrayLen > 0 then
     begin
       LC0 := LChoices.ArrayGet(0);
+      LC0U := LC0.Get('usage');
 
       LDv := LC0.Get('delta');
       if LDv.IsObject then
@@ -308,7 +316,11 @@ begin
     end;
   end;
 
+  { 顶层 usage 缺席时回落 choices[0].usage（部分兼容网关随首条 delta 捎带）；
+    顶层一旦是对象即赢，不合并 }
   LU := Root.Get('usage');
+  if not LU.IsObject then
+    LU := LC0U;
   if LU.IsObject then
   begin
     LD := Default(TStreamDelta);
