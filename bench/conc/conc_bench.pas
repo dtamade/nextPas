@@ -11,7 +11,7 @@ program conc_bench;
 }
 
 uses
-  cthreads,
+  nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,

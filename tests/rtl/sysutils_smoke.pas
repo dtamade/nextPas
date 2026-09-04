@@ -1,7 +1,7 @@
 program SysUtilsSmoke;
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 begin
   WriteLn(UpperCase('nextpas rtl smoke'));

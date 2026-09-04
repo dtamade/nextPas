@@ -7,10 +7,10 @@ program bench_pool;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  Classes, SyncObjs,  { Classes for TThread — cross-language benchmark requires FPC RTL }
+  {$IFDEF UNIX}nextpas.core.thread.init,{$ENDIF}
   nextpas.core.time.base,
-  nextpas.core.sync.pool;
+  nextpas.core.sync.pool,
+  nextpas.core.platform.thread;
 
 const
   N = 1000000;
@@ -21,13 +21,11 @@ type
     Value: Integer;
   end;
 
-  TWorkerThread = class(TThread)
-  public
+  PWorkerCtx = ^TWorkerCtx;
+  TWorkerCtx = record
     Pool: TSyncPool;
     Iterations: Integer;
     InternalMs: QWord; { 内部计时, 排除线程创建/销毁开销 }
-    T0, T1: TInstant;
-    procedure Execute; override;
   end;
 
 var
@@ -42,27 +40,30 @@ begin
   Result := LObj;
 end;
 
-procedure TWorkerThread.Execute;
+function WorkerProc(AArg: Pointer): Pointer; cdecl;
 var
+  LCtx: PWorkerCtx;
   I: Integer;
   LObj: TTestObj;
-  LStart: QWord;
+  T0, T1: TInstant;
 begin
+  LCtx := PWorkerCtx(AArg);
   { warmup: 填充 TLS }
   for I := 1 to 1000 do begin
-    LObj := TTestObj(Pool.Get);
+    LObj := TTestObj(LCtx^.Pool.Get);
     LObj.Value := I;
-    Pool.Put(LObj);
+    LCtx^.Pool.Put(LObj);
   end;
   { 计时: 仅测量 get/put 循环 }
   T0 := TInstant.Now;
-  for I := 1 to Iterations do begin
-    LObj := TTestObj(Pool.Get);
+  for I := 1 to LCtx^.Iterations do begin
+    LObj := TTestObj(LCtx^.Pool.Get);
     LObj.Value := I;
-    Pool.Put(LObj);
+    LCtx^.Pool.Put(LObj);
   end;
   T1 := TInstant.Now;
-  InternalMs := T1.DurationSince(T0).AsMilliseconds;
+  LCtx^.InternalMs := T1.DurationSince(T0).AsMilliseconds;
+  Result := nil;
 end;
 
 procedure BenchDirectAlloc;
@@ -120,7 +121,8 @@ var
   LStart: QWord;
   I: Integer;
   LObj: TTestObj;
-  LThreads: array of TWorkerThread;
+  LThreads: array of TPlatformThreadRecord;
+  LCtxs: array of PWorkerCtx;
 begin
   LPerThread := N div AThreadCount;
   LPool := CreateSyncPool(@FactoryFunc);
@@ -134,26 +136,30 @@ begin
     end;
 
     SetLength(LThreads, AThreadCount);
+    SetLength(LCtxs, AThreadCount);
     for I := 0 to AThreadCount - 1 do
     begin
-      LThreads[I] := TWorkerThread.Create(True);
-      LThreads[I].Pool := LPool;
-      LThreads[I].Iterations := LPerThread;
-      LThreads[I].FreeOnTerminate := False;
+      New(LCtxs[I]);
+      LCtxs[I]^.Pool := LPool;
+      LCtxs[I]^.Iterations := LPerThread;
+      LCtxs[I]^.InternalMs := 0;
+      if platform_thread_spawn(LThreads[I], @WorkerProc, LCtxs[I]) <> 0 then
+      begin
+        WriteLn('thread spawn failed');
+        Halt(1);
+      end;
     end;
 
-    { 启动所有线程 }
+    { 等待所有线程 }
     for I := 0 to AThreadCount - 1 do
-      LThreads[I].Start;
-    for I := 0 to AThreadCount - 1 do
-      LThreads[I].WaitFor;
+      platform_thread_wait(LThreads[I]);
 
     { 取最长内部计时 (排除线程创建/销毁开销) }
     LStart := 0;
     for I := 0 to AThreadCount - 1 do begin
-      if LThreads[I].InternalMs > LStart then
-        LStart := LThreads[I].InternalMs;
-      LThreads[I].Free;
+      if LCtxs[I]^.InternalMs > LStart then
+        LStart := LCtxs[I]^.InternalMs;
+      Dispose(LCtxs[I]);
     end;
 
     WriteLn('Pool ', AThreadCount:2, 'T x ', LPerThread * AThreadCount:7,

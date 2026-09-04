@@ -10,7 +10,7 @@ program bench_arena2;
 {$modeswitch functionreferences}
 
 uses
-  {$ifdef unix}cthreads,{$endif}
+  {$ifdef unix}nextpas.core.thread.init,{$endif}
   nextpas.core.collections.hashmap,
   nextpas.core.text.builder,
   nextpas.core.json,

@@ -3,7 +3,9 @@ program bench_tls_handshake;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, BaseUnix, Sockets,
+  nextpas.core.base,
+  nextpas.core.text.format,
+  nextpas.core.platform.socket,
   nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.keyschedule,
@@ -59,7 +61,7 @@ begin
   LEnd := ClockGetTimeNs;
 
   LUsPerIter := (LEnd - LStart) / 1000.0 / AIters;
-  WriteLn(Format('  Pure Pascal key exchange:  %8.1f us/op  (%d iters)', [LUsPerIter, AIters]));
+  WriteLn(TextFormat('  Pure Pascal key exchange:  %8.1f us/op  (%d iters)', [LUsPerIter, AIters]));
 end;
 
 procedure BenchOpenSSLHandshake(AIters: Integer);
@@ -67,8 +69,8 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LSock: LongInt;
-  LAddr: sockaddr_in;
+  LSock: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
   LStart, LEnd: Int64;
   I, LSuccess: Integer;
   LUsPerIter: Double;
@@ -80,34 +82,33 @@ begin
   LCtx.SetVerifyMode([]);
   LCtx.SetServerName('cloudflare.com');
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(443);
-  LAddr.sin_addr := StrToNetAddr('1.1.1.1');
+  platform_sockaddr_ipv4(443, platform_ipv4_parse('1.1.1.1'), LAddr);
 
   LSuccess := 0;
   LStart := ClockGetTimeNs;
   for I := 1 to AIters do
   begin
-    LSock := fpSocket(AF_INET, SOCK_STREAM, 0);
-    if fpConnect(LSock, @LAddr, SizeOf(LAddr)) <> 0 then
+    if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+      0, LSock) <> 0 then
+      Continue;
+    if platform_socket_connect(LSock, @LAddr.Storage[0], LAddr.Len) <> 0 then
     begin
-      fpClose(LSock);
+      platform_socket_close(LSock);
       Continue;
     end;
 
-    LConn := LCtx.CreateConnection(THandle(LSock));
+    LConn := LCtx.CreateConnection(THandle(LSock.Value));
     if LConn.Connect then
       Inc(LSuccess);
     LConn.Shutdown;
     LConn.Close;
     LConn := nil;
-    fpClose(LSock);
+    platform_socket_close(LSock);
   end;
   LEnd := ClockGetTimeNs;
 
   LUsPerIter := (LEnd - LStart) / 1000.0 / AIters;
-  WriteLn(Format('  OpenSSL TLS 1.3 handshake: %8.1f us/op  (%d/%d success)', [LUsPerIter, LSuccess, AIters]));
+  WriteLn(TextFormat('  OpenSSL TLS 1.3 handshake: %8.1f us/op  (%d/%d success)', [LUsPerIter, LSuccess, AIters]));
 
   LCtx := nil;
   LLib.Finalize;

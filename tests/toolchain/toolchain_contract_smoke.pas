@@ -15,7 +15,7 @@ program toolchain_contract_smoke;
 {$UNITPATH ../../tools/stage0}
 
 uses
-  Classes, SysUtils, BaseUnix, nextpas.driver.target_config, nextpas.compiler.backend.plan,
+  nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.fs, nextpas.core.path, nextpas.driver.target_config, nextpas.compiler.backend.plan,
   nextpas.compiler.diagnostics.sink, nextpas.compiler.frontend.package_manifest, nextpas.compiler.frontend.package_workflow,
   nextpas.compiler.frontend.source_database, nextpas.compiler.targets.facts, nextpas.compiler.toolchain.plan, nextpas.compiler.frontend.unit_resolver,
   nextpas.compiler.frontend.workspace_model, nextpas.compiler.toolchain.runner;
@@ -223,30 +223,13 @@ begin
 end;
 
 procedure WriteTextFile(const APath: string; const AText: string);
-var
-  Stream: TFileStream;
 begin
-  Stream := TFileStream.Create(APath, fmCreate);
-  try
-    if Length(AText) > 0 then
-      Stream.WriteBuffer(AText[1], Length(AText));
-  finally
-    Stream.Free;
-  end;
+  WriteFileText(APath, AText);
 end;
 
 function ReadTextFile(const APath: string): string;
-var
-  Stream: TFileStream;
 begin
-  Stream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, Stream.Size);
-    if Stream.Size > 0 then
-      Stream.ReadBuffer(Result[1], Stream.Size);
-  finally
-    Stream.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 procedure DeleteFileIfExists(const APath: string);
@@ -263,11 +246,11 @@ end;
 
 function NormalizeWhitespace(const Value: string): string;
 begin
-  Result := StringReplace(Value, #13, ' ', [rfReplaceAll]);
-  Result := StringReplace(Result, #10, ' ', [rfReplaceAll]);
-  Result := StringReplace(Result, #9, ' ', [rfReplaceAll]);
+  Result := StringReplace(Value, #13, ' ', True);
+  Result := StringReplace(Result, #10, ' ', True);
+  Result := StringReplace(Result, #9, ' ', True);
   while Pos('  ', Result) > 0 do
-    Result := StringReplace(Result, '  ', ' ', [rfReplaceAll]);
+    Result := StringReplace(Result, '  ', ' ', True);
   Result := Trim(Result);
 end;
 
@@ -441,8 +424,12 @@ end;
 procedure WriteExecutableScript(const APath: string; const AText: string);
 begin
   WriteTextFile(APath, AText);
-  if fpChmod(APath, &755) <> 0 then
-    raise Exception.Create('failed to chmod script: ' + APath);
+  try
+    Chmod(APath, TFilePermission(&755));
+  except
+    on E: Exception do
+      raise Exception.Create('failed to chmod script: ' + APath);
+  end;
 end;
 
 procedure PrintLlvmExecutionContract(const ATargetFacts: TTargetFactsView);
@@ -968,7 +955,7 @@ begin
         );
         WriteLn(
           'bootstrap-run-missing-assembly-has-exit-code=',
-          BoolToStr(RunResult.StepAt(2).HasExitCode, True)
+          BoolToStr(RunResult.StepAt(2).HasExitCode)
         );
         WriteLn(
           'bootstrap-run-missing-assembly-resolved-path=',

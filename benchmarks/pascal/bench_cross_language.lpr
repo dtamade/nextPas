@@ -2,7 +2,12 @@ program bench_cross_language;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, Math, baseunix, unix;
+  nextpas.core.base,
+  nextpas.core.time.base,
+  nextpas.core.text.format;
+
+var
+  GBenchStart: TInstant;
 
 type
   TBenchResult = record
@@ -18,11 +23,8 @@ type
   end;
 
 function GetMicroTime: Int64;
-var
-  tv: ttimeval;
 begin
-  fpgettimeofday(@tv, nil);
-  Result := Int64(tv.tv_sec) * 1000000 + tv.tv_usec;
+  Result := TInstant.Now.DurationSince(GBenchStart).AsMicroseconds;
 end;
 
 function RunBenchmark(const AName: string; N: Integer; AProc: TProcedure): TBenchResult;
@@ -149,6 +151,7 @@ var
   I: Integer;
   N: Integer;
 begin
+  GBenchStart := TInstant.Now;
   N := 1000;
 
   WriteLn('=== Pascal Benchmark Results ===');
@@ -161,7 +164,7 @@ begin
 
   for I := 0 to 3 do
   begin
-    WriteLn(Format('%-20s: N=%d, Mean=%.0f ns, Min=%d ns, Max=%d ns, Median=%.0f ns, StdDev=%.0f ns, Ops/sec=%.0f',
+    WriteLn(TextFormat('%-20s: N=%d, Mean=%.0f ns, Min=%d ns, Max=%d ns, Median=%.0f ns, StdDev=%.0f ns, Ops/sec=%.0f',
       [Results[I].Name, Results[I].N, Results[I].MeanNs, Results[I].MinNs, Results[I].MaxNs,
        Results[I].MedianNs, Results[I].StdDevNs, Results[I].OpsPerSec]));
   end;

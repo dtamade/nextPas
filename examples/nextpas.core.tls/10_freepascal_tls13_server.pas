@@ -1,15 +1,16 @@
 program freepascal_tls13_server;
 
 {$mode objfpc}{$H+}
-{$IFDEF UNIX}
-uses cthreads, BaseUnix, Sockets, SysUtils, Classes,
+uses
+  nextpas.core.thread.init,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.platform.signal,
+  nextpas.core.platform.socket,
   nextpas.core.tls.base, nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib;
-{$ELSE}
-uses SysUtils, Classes, WinSock2,
-  nextpas.core.tls.base, nextpas.core.tls.factory,
-  nextpas.core.tls.freepascal.lib;
-{$ENDIF}
 
 { ============================================================================
   FreePascal TLS 1.3 Server — 纯 Pascal，零外部依赖
@@ -28,28 +29,24 @@ const
 
 {$IFDEF UNIX}
 procedure IgnoreSIGPIPE;
-var SA: SigActionRec;
 begin
-  FillChar(SA, SizeOf(SA), 0);
-  SA.sa_handler := SigActionHandler(SIG_IGN);
-  fpSigAction(SIGPIPE, @SA, nil);
+  platform_signal_ignore(PLATFORM_SIGPIPE);
 end;
 {$ENDIF}
 
-function CreateListenSocket(APort: Word): cint;
-var LAddr: TInetSockAddr; LOptVal: cint;
+function CreateListenSocket(APort: Word): TPlatformSocket;
+var LAddr: TPlatformSockAddr; LOptVal: LongInt;
 begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result < 0 then begin WriteLn('ERROR: socket() failed'); Halt(1); end;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    0, Result) <> 0 then
+  begin WriteLn('ERROR: socket() failed'); Halt(1); end;
   LOptVal := 1;
-  fpSetSockOpt(Result, SOL_SOCKET, SO_REUSEADDR, @LOptVal, SizeOf(LOptVal));
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  LAddr.sin_addr.s_addr := htonl(INADDR_ANY);
-  if fpBind(Result, @LAddr, SizeOf(LAddr)) <> 0 then
+  platform_socket_setsockopt(Result, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_REUSEADDR, @LOptVal, SizeOf(LOptVal));
+  platform_sockaddr_ipv4(APort, platform_ipv4_parse('0.0.0.0'), LAddr);
+  if platform_socket_bind(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin WriteLn('ERROR: bind() failed on port ', APort); Halt(1); end;
-  if fpListen(Result, 5) <> 0 then
+  if platform_socket_listen(Result, 5) <> 0 then
   begin WriteLn('ERROR: listen() failed'); Halt(1); end;
 end;
 procedure PrintLastHandshakeError(const AConn: ISSLConnection);
@@ -67,9 +64,9 @@ end;
 
 var
   LPort: Word;
-  LListenSock, LClientSock: cint;
-  LAddr: TInetSockAddr;
-  LAddrLen: TSockLen;
+  LListenSock, LClientSock: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  LAddrLen: Int32;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LBuf: array[0..4095] of Byte;
@@ -106,11 +103,12 @@ begin
   LServed := False;
   while True do
   begin
-    LAddrLen := SizeOf(LAddr);
-    LClientSock := fpAccept(LListenSock, @LAddr, @LAddrLen);
-    if LClientSock < 0 then Continue;
+    LAddr.Clear;
+    LAddrLen := SizeOf(LAddr.Storage);
+    if platform_socket_accept(LListenSock, @LAddr.Storage[0],
+      @LAddrLen, LClientSock) <> 0 then Continue;
 
-    LConn := LCtx.CreateConnection(THandle(LClientSock));
+    LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
     if LConn.Accept then
     begin
       LRead := LConn.Read(LBuf[0], SizeOf(LBuf));
@@ -123,7 +121,7 @@ begin
           'Connection: close'#13#10 +
           #13#10 +
           RESPONSE_BODY;
-        LResponseBytes := TEncoding.UTF8.GetBytes(LResponse);
+        LResponseBytes := StringToUTF8Bytes(LResponse);
         LConn.Write(LResponseBytes[0], Length(LResponseBytes));
       end;
       LConn.Shutdown;
@@ -137,17 +135,14 @@ begin
     end;
 
     LConn := nil;
-    fpClose(LClientSock);
+    platform_socket_close(LClientSock);
 
     if LOnce then
     begin
-      fpClose(LListenSock);
+      platform_socket_close(LListenSock);
       if LServed then Halt(0) else Halt(1);
     end;
   end;
 
-  fpClose(LListenSock);
-end.
-
-  fpClose(LListenSock);
+  platform_socket_close(LListenSock);
 end.

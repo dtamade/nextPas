@@ -14,7 +14,11 @@ program file_encryption;
   ============================================================================ }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.crypto,
@@ -43,7 +47,10 @@ function DeriveKey(const aPassword: string; const aSalt: TBytes): TBytes;
 var
   LPasswordBytes: TBytes;
 begin
-  LPasswordBytes := BytesOf(AnsiString(aPassword));
+  LPasswordBytes := nil;
+  SetLength(LPasswordBytes, Length(aPassword));
+  if Length(aPassword) > 0 then
+    Move(aPassword[1], LPasswordBytes[0], Length(aPassword));
   SetLength(Result, KEY_SIZE);
   
   if PKCS5_PBKDF2_HMAC(
@@ -57,20 +64,25 @@ begin
 end;
 
 function GetFileSize(const aFileName: string): Int64;
-var
-  LStream: TFileStream;
 begin
-  LStream := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyNone);
-  try
-    Result := LStream.Size;
-  finally
-    LStream.Free;
-  end;
+  Result := FileSize(aFileName);
+end;
+
+procedure WriteExact(const AFile: IFile; const ABuf; ACount: SizeUInt);
+begin
+  if AFile.Write(ABuf, ACount) <> ACount then
+    raise Exception.Create('Failed to write output file');
+end;
+
+procedure ReadExact(const AFile: IFile; var ABuf; ACount: SizeUInt);
+begin
+  if AFile.Read(ABuf, ACount) <> ACount then
+    raise Exception.Create('Failed to read input file');
 end;
 
 procedure EncryptFile(const aInputFile, aOutputFile, aPassword: string);
 var
-  LInput, LOutput: TFileStream;
+  LInput, LOutput: IFile;
   LHeader: TFileHeader;
   LSalt, LIV, LKey, LTag: TBytes;
   LPlainChunk, LCipherChunk: TBytes;
@@ -84,9 +96,9 @@ begin
   
   // 1. 打开文件
   WriteLn('[1/7] 打开文件...');
-  LInput := TFileStream.Create(aInputFile, fmOpenRead or fmShareDenyWrite);
+  LInput := Open(aInputFile, [fmRead]);
   try
-    LOutput := TFileStream.Create(aOutputFile, fmCreate);
+    LOutput := Create(aOutputFile);
     try
       WriteLn('      ✓ 输入文件: ', aInputFile, ' (', LInput.Size, ' 字节)');
       
@@ -116,7 +128,7 @@ begin
       Move(LIV[0], LHeader.IV[0], IV_SIZE);
       // Tag 将在加密完成后写入
       
-      LOutput.WriteBuffer(LHeader, SizeOf(LHeader));
+      WriteExact(LOutput, LHeader, SizeOf(LHeader));
       WriteLn('      ✓ 文件头已写入');
       
       // 5. 初始化加密上下文
@@ -141,7 +153,7 @@ begin
         LTotalOut := 0;
         
         repeat
-          LBytesRead := LInput.Read(LPlainChunk[0], Length(LPlainChunk));
+          LBytesRead := Integer(LInput.Read(LPlainChunk[0], SizeUInt(Length(LPlainChunk))));
           if LBytesRead > 0 then
           begin
             if EVP_EncryptUpdate(LCtx, @LCipherChunk[0], LOutLen,
@@ -149,7 +161,7 @@ begin
               raise Exception.Create('Failed to encrypt data');
             
             if LOutLen > 0 then
-              LOutput.WriteBuffer(LCipherChunk[0], LOutLen);
+              WriteExact(LOutput, LCipherChunk[0], SizeUInt(LOutLen));
             
             Inc(LTotalIn, LBytesRead);
             Inc(LTotalOut, LOutLen);
@@ -167,7 +179,7 @@ begin
         
         if LOutLen > 0 then
         begin
-          LOutput.WriteBuffer(LCipherChunk[0], LOutLen);
+          WriteExact(LOutput, LCipherChunk[0], SizeUInt(LOutLen));
           Inc(LTotalOut, LOutLen);
         end;
         
@@ -181,10 +193,10 @@ begin
         
         // 回到头部位置写入 Tag
         LOutput.Position := 0;
-        LOutput.ReadBuffer(LHeader, SizeOf(LHeader));
+        ReadExact(LOutput, LHeader, SizeOf(LHeader));
         Move(LTag[0], LHeader.Tag[0], TAG_SIZE);
         LOutput.Position := 0;
-        LOutput.WriteBuffer(LHeader, SizeOf(LHeader));
+        WriteExact(LOutput, LHeader, SizeOf(LHeader));
         
         WriteLn('      ✓ 认证标签已写入');
         
@@ -193,10 +205,10 @@ begin
       end;
       
     finally
-      LOutput.Free;
+      LOutput := nil;
     end;
   finally
-    LInput.Free;
+    LInput := nil;
   end;
   
   WriteLn;
@@ -207,7 +219,7 @@ end;
 
 procedure DecryptFile(const aInputFile, aOutputFile, aPassword: string);
 var
-  LInput, LOutput: TFileStream;
+  LInput, LOutput: IFile;
   LHeader: TFileHeader;
   LSalt, LIV, LKey, LTag: TBytes;
   LCipherChunk, LPlainChunk: TBytes;
@@ -221,9 +233,9 @@ begin
   
   // 1. 打开文件
   WriteLn('[1/6] 打开文件...');
-  LInput := TFileStream.Create(aInputFile, fmOpenRead or fmShareDenyWrite);
+  LInput := Open(aInputFile, [fmRead]);
   try
-    LOutput := TFileStream.Create(aOutputFile, fmCreate);
+    LOutput := Create(aOutputFile);
     try
       WriteLn('      ✓ 输入文件: ', aInputFile, ' (', LInput.Size, ' 字节)');
       
@@ -232,7 +244,7 @@ begin
       if LInput.Size < SizeOf(LHeader) then
         raise Exception.Create('Invalid encrypted file: too small');
       
-      LInput.ReadBuffer(LHeader, SizeOf(LHeader));
+      ReadExact(LInput, LHeader, SizeOf(LHeader));
       
       if string(LHeader.Magic) <> 'FAFAFA01' then
         raise Exception.Create('Invalid encrypted file: wrong magic');
@@ -280,7 +292,7 @@ begin
         LTotalOut := 0;
         
         repeat
-          LBytesRead := LInput.Read(LCipherChunk[0], Length(LCipherChunk));
+          LBytesRead := Integer(LInput.Read(LCipherChunk[0], SizeUInt(Length(LCipherChunk))));
           if LBytesRead > 0 then
           begin
             if EVP_DecryptUpdate(LCtx, @LPlainChunk[0], LOutLen,
@@ -288,7 +300,7 @@ begin
               raise Exception.Create('Failed to decrypt data');
             
             if LOutLen > 0 then
-              LOutput.WriteBuffer(LPlainChunk[0], LOutLen);
+              WriteExact(LOutput, LPlainChunk[0], SizeUInt(LOutLen));
             
             Inc(LTotalIn, LBytesRead);
             Inc(LTotalOut, LOutLen);
@@ -310,7 +322,7 @@ begin
         
         if LOutLen > 0 then
         begin
-          LOutput.WriteBuffer(LPlainChunk[0], LOutLen);
+          WriteExact(LOutput, LPlainChunk[0], SizeUInt(LOutLen));
           Inc(LTotalOut, LOutLen);
         end;
         
@@ -322,10 +334,10 @@ begin
       end;
       
     finally
-      LOutput.Free;
+      LOutput := nil;
     end;
   finally
-    LInput.Free;
+    LInput := nil;
   end;
   
   WriteLn;

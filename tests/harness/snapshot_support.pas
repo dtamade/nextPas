@@ -34,7 +34,8 @@ function RelativeFixtureName(
 implementation
 
 uses
-  Classes, SysUtils;
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.fs,
+  nextpas.core.path;
 
 function GroupUsesSnapshot(const AGroupName: string): Boolean;
 begin
@@ -94,9 +95,9 @@ begin
   RelativeName := ChangeFileExt(RelativeFixtureName(AGroupRoot, AFixturePath), '');
   RelativeName := StringReplace(
     RelativeName,
-    PathDelim,
+    DirectorySeparator,
     '-',
-    [rfReplaceAll]
+    True
   );
 
   if AGroupName = 'compiler-fail' then
@@ -127,43 +128,26 @@ end;
 
 function ReadTextFile(const APath: string): string;
 var
-  Stream: TFileStream;
-  Buffer: RawByteString;
+  Data: TBytes;
 begin
-  Stream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Buffer, Stream.Size);
-    if Stream.Size > 0 then
-      Stream.ReadBuffer(Buffer[1], Stream.Size);
-  finally
-    Stream.Free;
-  end;
-
-  Result := string(Buffer);
+  Data := ReadFile(APath);
+  SetLength(Result, Length(Data));
+  if Length(Data) > 0 then
+    Move(Data[0], Result[1], Length(Data));
 end;
 
 procedure WriteTextFile(const APath: string; const AText: string);
-var
-  Stream: TFileStream;
-  Buffer: RawByteString;
 begin
   ForceDirectories(ExtractFileDir(APath));
-  Stream := TFileStream.Create(APath, fmCreate);
-  try
-    Buffer := RawByteString(AText);
-    if Length(Buffer) > 0 then
-      Stream.WriteBuffer(Buffer[1], Length(Buffer));
-  finally
-    Stream.Free;
-  end;
+  WriteFileText(APath, AText);
 end;
 
 function NormalizeSnapshotText(const AText: string): string;
 var
   Normalized: string;
 begin
-  Normalized := StringReplace(AText, #13#10, #10, [rfReplaceAll]);
-  Normalized := StringReplace(Normalized, #13, #10, [rfReplaceAll]);
+  Normalized := StringReplace(AText, #13#10, #10, True);
+  Normalized := StringReplace(Normalized, #13, #10, True);
 
   Result := Normalized;
 end;

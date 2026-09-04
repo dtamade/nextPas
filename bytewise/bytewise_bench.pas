@@ -1,6 +1,6 @@
 {$mode ObjFPC}{$H+}
 program bytearray_bench;
-uses SysUtils, Classes,
+uses
   nextpas.core.base, nextpas.core.time.base,
   nextpas.core.bench, nextpas.core.bench.intf;
 const

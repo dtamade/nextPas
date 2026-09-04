@@ -1,7 +1,6 @@
 program recops_bench;
 {$mode ObjFPC}{$H+}{$inline on}
 uses
-  Math,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,

@@ -29,7 +29,9 @@ program lex_bench;
 {$UNITPATH ../../rtl/core/classes}
 
 uses
-  SysUtils, Classes, nextpas.compiler.syntax.lexer, np_bench_timing;
+  nextpas.core.base,
+  nextpas.core.fs,
+  nextpas.compiler.syntax.lexer, np_bench_timing;
 
 const
   TARGET_BYTES: Int64 = 16 * 1024 * 1024;
@@ -41,23 +43,8 @@ begin
 end;
 
 function ReadEntireFile(const APath: string): string;
-var
-  Stream: TFileStream;
-  Bytes: TBytes;
-  Len: SizeInt;
 begin
-  Stream := TFileStream.Create(APath, fmOpenRead or fmShareDenyWrite);
-  try
-    Len := Stream.Size;
-    SetLength(Bytes, Len);
-    if Len > 0 then
-      Stream.ReadBuffer(Bytes[0], Len);
-    SetLength(Result, Len);
-    if Len > 0 then
-      Move(Bytes[0], Result[1], Len);
-  finally
-    Stream.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 var

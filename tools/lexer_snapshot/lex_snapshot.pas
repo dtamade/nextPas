@@ -31,7 +31,11 @@ program lex_snapshot;
 {$UNITPATH ../../rtl/core/classes}
 
 uses
-  SysUtils, Classes, nextpas.compiler.syntax.lexer;
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.compiler.syntax.lexer;
 
 procedure Die(const AMsg: string; const AExitCode: LongInt);
 begin
@@ -40,23 +44,8 @@ begin
 end;
 
 function ReadEntireFile(const APath: string): string;
-var
-  Stream: TFileStream;
-  Bytes: TBytes;
-  Len: SizeInt;
 begin
-  Stream := TFileStream.Create(APath, fmOpenRead or fmShareDenyWrite);
-  try
-    Len := Stream.Size;
-    SetLength(Bytes, Len);
-    if Len > 0 then
-      Stream.ReadBuffer(Bytes[0], Len);
-    SetLength(Result, Len);
-    if Len > 0 then
-      Move(Bytes[0], Result[1], Len);
-  finally
-    Stream.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 function EscapeLexeme(const AValue: string): string;
