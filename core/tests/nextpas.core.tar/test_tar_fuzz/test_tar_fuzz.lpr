@@ -841,6 +841,89 @@ begin
   SetLength(Stored, 0);
 end;
 
+procedure TestFuzzCorruptSparseNoCrash;
+var
+  Base, Mut, Holey, Data: TBytes;
+  Segs: array[0..1] of TSparseTestSeg;
+  S: IStream; W: TTarWriter;
+  I, J, Clean, Raised: Integer;
+  R: TTarReader;
+  H: TTarHeader;
+  LSlice: TByteSpan;
+  Op: Cardinal;
+  Cut: Integer;
+begin
+  SetLength(Holey, 9000);
+  FillChar(Holey[0], 9000, 0);
+  for I := 0 to 99 do Holey[I] := Ord('A');
+  for I := 0 to 199 do Holey[5000 + I] := Ord('B');
+  S := CreateBytesStream;
+  W := TTarWriter.Create(S as IWriter);
+  try
+    W.AddSparseFile('corrupt-me.bin', Holey);
+    W.AddFile('plain.txt', StringToBytes('plain'));
+    W.Finish;
+    SetLength(Base, S.Size);
+    if Length(Base) > 0 then
+    begin S.Seek(0, soBeginning); S.Read(Base[0], Length(Base)); end;
+  finally W.Free; end;
+  Segs[0].Off := 0; Segs[0].Len := 50;
+  Segs[1].Off := 1000; Segs[1].Len := 50;
+  Data := nil;
+  AppendRep(Data, 'm', 50);
+  AppendRep(Data, 'n', 50);
+  EmitSparseOld(Base, 'oldstyle.bin', [Segs[0], Segs[1]], 1200, True, Data);
+  AppendZeros(Base, 1024);
+  SetLength(Data, 0);
+  SetLength(Holey, 0);
+  RandInit(31337);
+  Clean := 0;
+  Raised := 0;
+  for I := 1 to 200 do
+  begin
+    Mut := nil;
+    SetLength(Mut, Length(Base));
+    if Length(Base) > 0 then
+      for J := 0 to High(Base) do
+        Mut[J] := Base[J];
+    Op := RandRange(3);
+    if Op = 0 then
+      Mut[Integer(RandRange(Cardinal(Length(Mut))))] :=
+        Byte(Mut[Integer(RandRange(Cardinal(Length(Mut))))] xor (1 shl Integer(RandRange(8))))
+    else if Op = 1 then
+    begin
+      Cut := Length(Mut) - Integer(RandRange(Cardinal(Length(Mut) div 2) + 1)) - 1;
+      if Cut < 1 then
+        Cut := 1;
+      SetLength(Mut, Cut);
+    end
+    else
+      AppendPayload(Mut, RandomBytes(Integer(RandRange(600))));
+    R := TTarReader.Create(Mut);
+    try
+      try
+        while R.Next(H) do
+          if R.TrySlice(LSlice) then
+            CheckTrue((LSlice.Len = 0) or (LSlice.Data <> nil), 'touch sparse slice');
+        Inc(Clean);
+      except
+        on E: EIOError do
+          Inc(Raised);
+        on E: EParseError do
+          Inc(Raised);
+        on E: Exception do
+          CheckTrue(False, 'unexpected exception: ' + E.ClassName);
+      end;
+    finally
+      R.Free;
+    end;
+    SetLength(Mut, 0);
+  end;
+  CheckTrue(Raised > 0, 'sparse corruption detected sometimes');
+  CheckTrue(Clean > 0, 'sparse benign mutations still parse');
+  SetLength(Base, 0);
+end;
+
 procedure TestSparseRead;
 var
   Arc: TBytes;
@@ -1664,6 +1747,7 @@ begin
   Suite.Test('random roundtrip metadata and links', @TestFuzzRoundTrip);
   Suite.Test('boundary sizes', @TestFuzzBoundarySizes);
   Suite.Test('corrupt input never crashes', @TestFuzzCorruptNoCrash);
+  Suite.Test('corrupt sparse never crashes', @TestFuzzCorruptSparseNoCrash);
   Suite.Test('gnu L/K long names', @TestGnuLongNameLink);
   Suite.Test('pax full keywords', @TestPaxFullKeywords);
   Suite.Test('numeric full range', @TestNumericFullRange);
