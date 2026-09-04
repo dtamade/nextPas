@@ -414,7 +414,7 @@ hygiene、门禁或 smoke 变红，且能定位到某次 landing commit，会直
 
 模块负责人不要汇报每个小动作，只在状态变化时汇报：
 
-- `Ready`：实现和 focused verification 已完成，等待 landing review。
+- `Ready`：实现和 focused verification 已完成，可按“Lane 自主 Landing”节自行合入；需要设计复核时等 review。
 - `Blocked`：继续推进需要总控或用户决策。
 - `Landed`：改动已进入 `main`，验证已复跑，清理状态已知。
 - `Needs Review`：继续写代码前需要设计或跨模块决策。
@@ -422,7 +422,7 @@ hygiene、门禁或 smoke 变红，且能定位到某次 landing commit，会直
 `Ready` 汇报必须包含分支、worktree 路径、`HEAD`、改动文件清单、不能带入主线的文件、
 focused verification 证据和 merge 建议。
 `scripts/report-envelope-check.sh --status <Ready|Blocked|Landed> <report.md>` 可用于本地检查这些
-汇报 envelope 的必填字段；它只做文本契约检查，不替代验证命令或 landing review。
+汇报 envelope 的必填字段；它只做文本契约检查，不替代验证命令、landing 条件或设计复核。
 
 如果包含受控跨模块修改，`Ready` 还必须包含：
 
