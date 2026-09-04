@@ -1,119 +1,19 @@
-# FPC broad RTL file-level allowlist (auto-generated)|
-# Format: <Unit>|<relative-path>
-#|
-# SysUtils: 130 files|
-SysUtils|nextpas.core.bench.pas
-SysUtils|nextpas.core.errors.pas
+# FPC broad RTL file-level allowlist (regenerated 2026-09-04: pruned 100+ stale
+# entries other lanes cleaned without pruning; format unchanged
+# <Unit>|<relative-path> to keep the gate's grep lookup stable).
+# Only live src truth remains:
+# KEEP: no owner exists (exception) / system self-zone (typinfo).
+# DEFERRED: owned by sibling lanes (winssl.connection -> istream-only IStream-ectomy,
+#   winssl.enterprise -> tls lane; touch only with lane-owner sign-off).
+# INFRA: deliberate bootstrap bindings, documented in-unit (thread.init cthreads,
+#   compress zlib FFI).
 SysUtils|nextpas.core.exception.pas
-SysUtils|nextpas.core.thread.base.pas
-SysUtils|nextpas.core.git.libgit2.backend.pas
-SysUtils|nextpas.core.git.libgit2.pas
-SysUtils|nextpas.core.http.impl.h1.parser.pas
-SysUtils|nextpas.core.mem.allocator.mimalloc.pas
-SysUtils|nextpas.core.mem.pool.fixed.pas
-SysUtils|nextpas.core.platform.error.pas
-# SysUtils|nextpas.core.tls.winssl.errors.pas  <- migrated to time+text.conv
-SysUtils|nextpas.core.tui.image_mgr.pas
-SysUtils|nextpas.core.tui.keybind.pas
-SysUtils|nextpas.core.tui.sixel.pas
-SysUtils|nextpas.core.tui.widget.calendar.pas
-SysUtils|nextpas.core.tui.widget.command_palette.pas
-SysUtils|nextpas.core.tui.widget.markdown.pas
-SysUtils|nextpas.core.tui.widget.progress_group.pas
-SysUtils|nextpas.core.tui.widget.timeline.pas
-#|
-# Classes: 47 files|
-Classes|nextpas.core.tui.task.pas
-#|
-# TypInfo: 1 files|
 TypInfo|nextpas.core.system.typinfo.pas
-#|
-# DateUtils: 18 files|
-DateUtils|nextpas.core.git.libgit2.backend.pas
-DateUtils|nextpas.core.git.libgit2.pas
-DateUtils|nextpas.core.tui.widget.calendar.pas
-#|
-# BaseUnix: 11 files|
-BaseUnix|nextpas.core.platform.crash.pas
-BaseUnix|nextpas.core.simd.cpuinfo.darwin.pas
-BaseUnix|nextpas.core.tui.clipboard.pas
-#|
-# Unix: 7 files|
-Unix|nextpas.core.simd.cpuinfo.unix.pas
-Unix|nextpas.core.tui.clipboard.pas
-#|
-# Windows: 20 files|
-Windows|nextpas.core.simd.cpuinfo.diagnostic.pas
-Windows|nextpas.core.simd.cpuinfo.windows.pas
-Windows|nextpas.core.tls.winssl.api.pas
-Windows|nextpas.core.tls.winssl.base.pas
-Windows|nextpas.core.tls.winssl.certificate.pas
-Windows|nextpas.core.tls.winssl.certstore.pas
 Windows|nextpas.core.tls.winssl.connection.pas
-Windows|nextpas.core.tls.winssl.context.pas
-Windows|nextpas.core.tls.winssl.enterprise.pas
-Windows|nextpas.core.tls.winssl.errors.pas
-Windows|nextpas.core.tls.winssl.lib.pas
-Windows|nextpas.core.tls.winssl.session.pas
-Windows|nextpas.core.tls.winssl.utils.pas
-#|
-Classes|nextpas.core.io.stream_adapter.pas
-SysUtils|nextpas.core.io.stream_adapter.pas
-SysUtils|nextpas.core.http.headers.pas
-SysUtils|nextpas.core.bench.parallel.pas
-SysUtils|nextpas.core.http.fuzz.pas
-# 2026-07-13 latest-main baseline debt surfaced by broad RTL gate
-SysUtils|nextpas.core.lockfree.consistent_hashring.pas
-SysUtils|nextpas.core.lockfree.counting_bloom.pas
-SysUtils|nextpas.core.lockfree.countminsketch.pas
-SysUtils|nextpas.core.lockfree.cuckooset.pas
-SysUtils|nextpas.core.lockfree.deque_lf.pas
-SysUtils|nextpas.core.lockfree.fibheap.pas
-SysUtils|nextpas.core.lockfree.hashmap.numa.pas
-SysUtils|nextpas.core.lockfree.hashmap.rtm.pas
-SysUtils|nextpas.core.lockfree.hyperloglog.pas
-SysUtils|nextpas.core.lockfree.intervaltree.pas
-SysUtils|nextpas.core.lockfree.lru_cache.pas
-SysUtils|nextpas.core.lockfree.persistent_vector.pas
-SysUtils|nextpas.core.lockfree.roaring_bitmap.pas
-SysUtils|nextpas.core.lockfree.skiplist_map.pas
-SysUtils|nextpas.core.lockfree.suffixarray.pas
-SysUtils|nextpas.core.lockfree.timeseries_ringbuffer.pas
-SysUtils|nextpas.core.lockfree.trie_hmt.pas
-SysUtils|nextpas.core.lockfree.trie_map.pas
-SysUtils|nextpas.core.lockfree.ttl_cache.pas
-# 2026-07-23 D2 M0: pre-existing main debt (net async UDP uses SysUtils)
-SysUtils|nextpas.core.net.async.udp.pas
-# 2026-08-24 baseline sweep: pre-existing main debt (db pg adapter IntToStr in
-# extended-protocol param typing; pending text.conv migration by db lane)
-SysUtils|nextpas.core.db.pg.adapter.pas
-# 2026-08-31 polish-20 sweep: pre-existing debt surfaced by stricter gate (audio/webview/websocket etc.)
-SysUtils|nextpas.core.audio.bank.pas
-SysUtils|nextpas.core.audio.device.null.pas
-SysUtils|nextpas.core.audio.event.pas
-SysUtils|nextpas.core.audio.graph.pas
-SysUtils|nextpas.core.audio.sfx.pas
-SysUtils|nextpas.core.audio.timeline.pas
-SysUtils|nextpas.core.encoding.msgpack.pas
-SysUtils|nextpas.core.git.native.repository.pas
-SysUtils|nextpas.core.http.client_earlydata.pas
-SysUtils|nextpas.core.http.earlydata.pas
-SysUtils|nextpas.core.http.impl.h1.conn.pas
-SysUtils|nextpas.core.http.impl.h2.session.pas
-SysUtils|nextpas.core.http.middleware.earlydata.adaptive.pas
-SysUtils|nextpas.core.http.middleware.earlydata.pas
-SysUtils|nextpas.core.net.async.cancel.pas
-Classes|nextpas.core.net.async.tlspas.pas
-SysUtils|nextpas.core.net.async.tlspas.pas
-SysUtils|nextpas.core.net.quic.session.pas
-Classes|nextpas.core.sevenz.writer.pas
-SysUtils|nextpas.core.sevenz.writer.pas
-SysUtils|nextpas.core.websocket.blazor.pas
-Classes|nextpas.core.websocket.upstream.pas
-SysUtils|nextpas.core.webview.base.pas
-SysUtils|nextpas.core.webview.bridge.pas
-SysUtils|nextpas.core.webview.gtk.loader.pas
-SysUtils|nextpas.core.webview.gtk.pas
-SysUtils|nextpas.core.webview.webview2.pas
-SysUtils|nextpas.core.zlib.base.pas
-SysUtils|nextpas.core.zlib.ffi.pas
+Sockets|nextpas.core.tls.winssl.connection.pas
+winsock2|nextpas.core.tls.winssl.connection.pas
+Registry|nextpas.core.tls.winssl.enterprise.pas
+cthreads|nextpas.core.thread.init.pas
+zlib|nextpas.core.compress.deflate.pas
+zlib|nextpas.core.compress.gzip.pas
+zlib|nextpas.core.compress.zlib.ffi.pas

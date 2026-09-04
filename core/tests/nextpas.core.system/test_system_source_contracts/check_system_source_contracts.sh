@@ -1715,7 +1715,7 @@ require_no_new_fpc_rtl_debt() {
 
   while IFS='|' read -r file unit_name; do
     case "$unit_name" in
-      SysUtils|Classes|TypInfo|DateUtils|BaseUnix|Unix|Windows)
+      SysUtils|Classes|TypInfo|DateUtils|BaseUnix|Unix|Windows|Dos|Crt|Sockets|sockets|ssockets|WinSock2|winsock2|NetDB|Math|Variants|StrUtils|SyncObjs|Process|DynLibs|dynlibs|ctypes|Contnrs|fgl|fpjson|jsonparser|Registry|registry|zlib|cthreads|CThreads)
         local basename="${file##*/}"
         if ! grep -qF "$unit_name|$basename" "$allowlist" 2>/dev/null; then
           local rel="${file#$CORE_ROOT/src/}"
@@ -1735,6 +1735,75 @@ require_no_new_fpc_rtl_debt() {
 }
 
 require_no_new_fpc_rtl_debt
+
+# === FPC RTL tests-scope enforcement gate (ratchet: no NEW debt) ===
+# heaptrc is exempt in tests (memory-trace harness). Allowlist format:
+# <lowercase-unit>|<repo-relative-path>, seeded 2026-09-04 post rtlfree-purge.
+require_no_new_fpc_rtl_debt_tests() {
+  local allowlist="$CORE_ROOT/tests/nextpas.core.system/test_system_source_contracts/fpc_rtl_tests_allowlist.txt"
+  local fail_count=0
+  local file unit_name unit_lc rel
+
+  local file_list
+  file_list="$(mktemp)"
+  find "$REPO_ROOT" \
+    \( -path "$REPO_ROOT/core/src" -o -path "$REPO_ROOT/units" -o -path "$REPO_ROOT/rtl" \
+       -o -path "$REPO_ROOT/.worktrees" -o -path "$REPO_ROOT/build" -o -path "$REPO_ROOT/.nextpas" \) -prune \
+    -o \( -name '*.pas' -o -name '*.lpr' \) -print 2>/dev/null | sort -u > "$file_list"
+
+  local all_found
+  all_found="$(mktemp)"
+  # shellcheck disable=SC2016
+  awk '
+    function trim(s) { gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s); return s }
+    function emit_units(file, line, parts, i, unit) {
+      gsub(/\{[^}]*\}/, "", line)
+      sub(/\/\/.*/, "", line)
+      gsub(/^[ \t]*uses[ \t]*/, "", line)
+      split(line, parts, /[,;]/)
+      for (i in parts) {
+        unit = trim(parts[i])
+        if (unit != "" && unit !~ /^\$/) {
+          print file "|" unit
+        }
+      }
+    }
+    /^[ \t]*uses[ \t]*/ {
+      in_uses = 1
+      emit_units(FILENAME, $0)
+      if ($0 ~ /;/) in_uses = 0
+      next
+    }
+    in_uses {
+      emit_units(FILENAME, $0)
+      if ($0 ~ /;/) in_uses = 0
+    }
+  ' $(cat "$file_list") 2>/dev/null | sort -u > "$all_found"
+  rm -f "$file_list"
+
+  while IFS='|' read -r file unit_name; do
+    [[ -n "$unit_name" ]] || continue
+    unit_lc="$(printf '%s' "$unit_name" | tr '[:upper:]' '[:lower:]')"
+    case "$unit_lc" in
+      heaptrc) continue ;;
+      sysutils|classes|typinfo|dateutils|baseunix|unix|windows|dos|crt|sockets|ssockets|winsock2|netdb|math|variants|strutils|syncobjs|process|dynlibs|ctypes|contnrs|fgl|fpjson|jsonparser|generics.collections|system|syscall|registry|zlib|cthreads|objects|sharemem)
+        rel="${file#$REPO_ROOT/}"
+        if ! grep -qF "$unit_lc|$rel" "$allowlist" 2>/dev/null; then
+          echo "[FAIL] FPC RTL tests debt: $rel uses $unit_name but not in fpc_rtl_tests_allowlist.txt" >&2
+          fail_count=$((fail_count + 1))
+        fi
+        ;;
+    esac
+  done < "$all_found"
+
+  rm -f "$all_found"
+
+  if [ "$fail_count" -gt 0 ]; then
+    fail "FPC RTL tests-scope gate rejected $fail_count new debt entries"
+  fi
+}
+
+require_no_new_fpc_rtl_debt_tests
 
 # ============================================================================
 # SECTION: TTypeKind drift detection (S11.1)
