@@ -231,6 +231,29 @@ begin
     'facade re-exports daAuto value for facade-only consumers');
   Check(Pos('daGzip: TDecompressAlgo = nextpas.core.vfs.base.daGzip', Src) > 0,
     'facade re-exports daGzip value for facade-only consumers');
+  { 全族 IVfsView 透传：三后端 + Sub/mount/overlay/transform/compressed 全部实现，
+    门面导出视图助手；overlay 热点 List 经 vfs.cache 单源 }
+  Check(Pos('IVfsView', LoadSourceText('src/nextpas.core.vfs.sub.pas')) > 0,
+    'sub implements IVfsView');
+  Check(Pos('IVfsView', LoadSourceText('src/nextpas.core.vfs.mount.pas')) > 0,
+    'mount implements IVfsView');
+  Check(Pos('IVfsView', LoadSourceText('src/nextpas.core.vfs.overlay.pas')) > 0,
+    'overlay implements IVfsView');
+  Check(Pos('IVfsView', LoadSourceText('src/nextpas.core.vfs.transform.pas')) > 0,
+    'transform implements IVfsView');
+  Check(Pos('IVfsView', LoadSourceText('src/nextpas.core.vfs.compressed.pas')) > 0,
+    'compressed implements IVfsView');
+  Check(Pos('nextpas.core.vfs.cache', LoadSourceText('src/nextpas.core.vfs.overlay.pas')) > 0,
+    'overlay List cache via vfs.cache single source');
+  Check(Pos('VfsReadAllTextView', Src) > 0,
+    'facade exposes view helpers');
+  { 二分单源：memtree/embedded 字符串/视图二分收敛于 vfs.base VfsLowerBoundSpan }
+  Check(Pos('VfsLowerBoundSpan', LoadSourceText('src/nextpas.core.vfs.base.pas')) > 0,
+    'vfs.base declares VfsLowerBoundSpan single source');
+  Check(Pos('VfsLowerBoundSpan', LoadSourceText('src/nextpas.core.vfs.memtree.pas')) > 0,
+    'memtree reuses VfsLowerBoundSpan');
+  Check(Pos('VfsLowerBoundSpan', LoadSourceText('src/nextpas.core.vfs.embedded.pas')) > 0,
+    'embedded reuses VfsLowerBoundSpan');
   { decorator 聚合：门面扇出收敛单点收口，复用 transform/compressed 单源，bytes.ops 单源 inline 零拷贝，try-finally 不丢 }  Src := LoadSourceText('src/nextpas.core.vfs.decorator.pas');
   Check(Pos('nextpas.core.vfs.transform', Src) > 0,
     'decorator aggregates transform (single-point fan-out reduction)');
