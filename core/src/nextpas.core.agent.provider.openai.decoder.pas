@@ -193,7 +193,6 @@ procedure TOpenAIWireDecoder.DecodeEvent(const AEvent: TWireSSEEvent;
 var
   Doc: IJsonDocument;
   Root, LChoices, LC0, LDv, LU, LF: TJsonValue;
-  LC0U: TJsonValue;
   LD: TStreamDelta;
   LId, LModel, LRv, LUnmapped, LCapture: string;
   B: TAgentDeltaBuilder;
@@ -211,7 +210,6 @@ begin
   if FDone then
     Exit;
   B.Init;
-  LC0U := Default(TJsonValue);
 
   Doc := JsonParse(AEvent.Data);
   if Doc.HasError or (not Doc.Root.IsObject) then
@@ -249,7 +247,6 @@ begin
     if LChoices.ArrayLen > 0 then
     begin
       LC0 := LChoices.ArrayGet(0);
-      LC0U := LC0.Get('usage');
 
       LDv := LC0.Get('delta');
       if LDv.IsObject then
@@ -317,10 +314,12 @@ begin
   end;
 
   { 顶层 usage 缺席时回落 choices[0].usage（部分兼容网关随首条 delta 捎带）；
-    顶层一旦是对象即赢，不合并 }
+    顶层一旦是对象即赢，不合并。取值一律经 Get（缺键返回文档内合法
+    无效值），绝不对 TJsonValue 用 Default（其 FDoc=nil 会使后续
+    IsObject 直接解引用空指针） }
   LU := Root.Get('usage');
-  if not LU.IsObject then
-    LU := LC0U;
+  if (not LU.IsObject) and LChoices.IsArray and (LChoices.ArrayLen > 0) then
+    LU := LChoices.ArrayGet(0).Get('usage');
   if LU.IsObject then
   begin
     LD := Default(TStreamDelta);

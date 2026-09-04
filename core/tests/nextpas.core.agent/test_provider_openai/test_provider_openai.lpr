@@ -570,6 +570,27 @@ begin
     '"choices":[{"delta":{"content":"x"}}]}'), Arr);
   CheckEqual(Int64(50), Arr[High(Arr)].Usage.InputTokens, 'alias in');
   CheckEqual(Int64(9), Arr[High(Arr)].Usage.OutputTokens, 'alias out');
+
+  { 无 usage 处处缺席：仅正文增量，不崩溃（Default(TJsonValue) 的
+    FDoc=nil，绝不经它做回落赋值） }
+  D := NewOpenAIWireDecoder(nil);
+  D.DecodeEvent(Ev('{"choices":[{"delta":{"content":"hi"}}]}'), Arr);
+  CheckEqual(Integer(1), Integer(Length(Arr)), 'text only length');
+  Check(Arr[0].Kind = sdkTextDelta, 'text only kind');
+
+  { 空 choices 且无 usage：零增量，不崩溃 }
+  D := NewOpenAIWireDecoder(nil);
+  D.DecodeEvent(Ev('{"choices":[]}'), Arr);
+  CheckEqual(Integer(0), Integer(Length(Arr)), 'empty choices no usage');
+
+  { 顶层 usage 为 null：视同缺席，回落 choices[0] }
+  D := NewOpenAIWireDecoder(nil);
+  D.DecodeEvent(Ev('{"usage":null,' +
+    '"choices":[{"delta":{"content":"x"},' +
+    '"usage":{"prompt_tokens":4,"completion_tokens":1}}]}'), Arr);
+  Check(Arr[High(Arr)].Kind = sdkUsage, 'null top usage fallback kind');
+  CheckEqual(Int64(4), Arr[High(Arr)].Usage.InputTokens, 'null top fallback in');
+  CheckEqual(Int64(1), Arr[High(Arr)].Usage.OutputTokens, 'null top fallback out');
 end;
 
 procedure TestDecoderBucketsAndEmptyChoices;
