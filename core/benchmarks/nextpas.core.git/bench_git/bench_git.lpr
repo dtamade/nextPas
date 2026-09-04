@@ -18,7 +18,7 @@ uses
   nextpas.core.git.native.base,
   nextpas.core.git.native.blame,
   nextpas.core.git.native.zlib,
-  nextpas.core.git.native.wildmatch,
+  nextpas.core.text.wildmatch,
   nextpas.core.git.native.pack,
   nextpas.core.git.native.revwalk;
 
@@ -49,6 +49,7 @@ var
   GRevOids1K: array[0..999] of TGitOid;
   GParseCache1K: TCommitParseCache;
   GCommitGraphPaths: array[0..15] of string;
+  GMissPath: string;
 
 procedure FillBlameLines(var ALines: TStringArray; ACount, ASeed: Integer); inline;
 var I: Integer;
@@ -115,6 +116,7 @@ begin
   // commitgraph: 16-repo Cap=16 LRU paths for CacheHit|Miss hash+scan <30ns via bytes.ops SpanHashFNV1a single source, IMappedFile zero-copy inline
   for I := 0 to 15 do
     GCommitGraphPaths[I] := '/tmp/bench_git_repo_' + IntToStr(I);
+  GMissPath := 'miss_path_not_in_cache';
   // stability: TStringArray managed, auto-released on exception, no leak; zero-copy CoW share until modify
 end;
 
@@ -201,21 +203,21 @@ end;
 procedure BenchWildSegment(const ACtx: IBenchContext);
 var R: Boolean;
 begin
-  R := GitWildSegment(KPatternStar, KNameFoo);
+  R := WildSegment(KPatternStar, KNameFoo);
   GSink := GSink xor Byte(R);
 end;
 
 procedure BenchWildClass(const ACtx: IBenchContext);
 var R: Boolean;
 begin
-  R := GitWildSegment(KPatternClass, KNameClass);
+  R := WildSegment(KPatternClass, KNameClass);
   GSink := GSink xor Byte(R);
 end;
 
 procedure BenchSegmentsMatch(const ACtx: IBenchContext);
 var R: Boolean;
 begin
-  R := GitSegmentsMatch(KPatternSegs, KPathSegs);
+  R := WildSegmentsMatch(KPatternSegs, KPathSegs);
   GSink := GSink xor Byte(R);
 end;
 
@@ -255,7 +257,7 @@ procedure BenchCommitGraphCacheMiss(const ACtx: IBenchContext);
 var H: UInt32; I: Integer;
 begin
   // perf: miss path O(Cap) victim scan 16×UInt64 <30ns + mmap rebuild+verify via io.mapped zero-copy, bytes.ops single source, single Move per op
-  H := SpanHashFNV1a(TByteSpan.Create(PByte('miss_path_not_in_cache'), 22));
+  H := SpanHashFNV1a(TByteSpan.Create(PByte(@GMissPath[1]), SizeUInt(Length(GMissPath))));
   for I := 0 to 15 do
     if SpanHashFNV1a(TByteSpan.Create(PByte(@GCommitGraphPaths[I][1]), SizeUInt(Length(GCommitGraphPaths[I])))) = H then Break;
   GSink := GSink xor UInt64(H);
