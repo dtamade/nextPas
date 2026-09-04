@@ -330,8 +330,122 @@ begin
 end;
 
 function TNativeGitManager.SetGlobalConfig(const AKey, AValue: string): Boolean;
+var
+  LKey, LSection, LSub, LName, LHome, LPath: string;
+  LLines: TStringArray;
+  I, Dot1, Dot2, Eq: Integer;
+  LHeader, LWant, LLine, LTrim, LCur: string;
+  LFound, LPlaced: Boolean;
+  LOut: string;
 begin
-  raise EGitError.Create('set global config not supported in native backend (use libgit2 backend or git CLI): ' + Trim(AKey));
+  LKey := Trim(AKey);
+  if LKey = '' then
+    raise EGitError.Create('set global config: key empty');
+  Dot1 := Pos('.', LKey);
+  if Dot1 <= 1 then
+    raise EGitError.CreateFmt('set global config: invalid key "%s"', [LKey]);
+  Dot2 := 0;
+  for I := Dot1 + 1 to Length(LKey) do
+    if LKey[I] = '.' then
+    begin
+      Dot2 := I;
+      Break;
+    end;
+  if Dot2 = 0 then
+  begin
+    LSection := Copy(LKey, 1, Dot1 - 1);
+    LSub := '';
+    LName := Copy(LKey, Dot1 + 1, MaxInt);
+  end
+  else
+  begin
+    LSection := Copy(LKey, 1, Dot1 - 1);
+    LSub := Copy(LKey, Dot1 + 1, Dot2 - Dot1 - 1);
+    LName := Copy(LKey, Dot2 + 1, MaxInt);
+    for I := Dot2 + 1 to Length(LKey) do
+      if LKey[I] = '.' then
+      begin
+        LSub := Copy(LKey, Dot1 + 1, I - Dot1 - 1);
+        LName := Copy(LKey, I + 1, MaxInt);
+      end;
+  end;
+  if (Trim(LSection) = '') or (Trim(LName) = '') then
+    raise EGitError.CreateFmt('set global config: invalid key "%s"', [LKey]);
+  LHome := PathClean(UserHomeDir);
+  if LHome = '' then
+    raise EGitError.Create('set global config: HOME not set');
+  LPath := PathJoin2(LHome, '.gitconfig');
+  SetLength(LLines, 0);
+  if FileExists(LPath) then
+  try
+    LLines := ReadFileLines(LPath);
+  except
+    on E: Exception do
+      raise EGitError.Create('set global config: ' + E.Message);
+  end;
+  if LSub = '' then
+    LWant := LowerCase('[' + Trim(LSection) + ']')
+  else
+    LWant := LowerCase('[' + Trim(LSection) + ' "' + LSub + '"]');
+  LFound := False;
+  LPlaced := False;
+  LCur := '';
+  LOut := '';
+  for I := 0 to High(LLines) do
+  begin
+    LLine := LLines[I];
+    LTrim := Trim(LLine);
+    if (LTrim <> '') and (LTrim[1] = '[') and (LTrim[Length(LTrim)] = ']') then
+    begin
+      if LFound and not LPlaced then
+      begin
+        LOut := LOut + #9 + Trim(LName) + ' = ' + AValue + #10;
+        LPlaced := True;
+      end;
+      LCur := LowerCase(LTrim);
+      LFound := LCur = LWant;
+      LOut := LOut + LLine + #10;
+      Continue;
+    end;
+    if LFound and not LPlaced then
+    begin
+      Eq := Pos('=', LLine);
+      if Eq > 0 then
+      begin
+        LHeader := Trim(Copy(LLine, 1, Eq - 1));
+        if LowerCase(LHeader) = LowerCase(Trim(LName)) then
+        begin
+          LOut := LOut + #9 + Trim(LName) + ' = ' + AValue + #10;
+          LPlaced := True;
+          Continue;
+        end;
+      end;
+    end;
+    LOut := LOut + LLine + #10;
+  end;
+  if not LFound then
+  begin
+    if LSub = '' then
+      LHeader := '[' + Trim(LSection) + ']'
+    else
+      LHeader := '[' + Trim(LSection) + ' "' + LSub + '"]';
+    if (LOut <> '') and (LOut[Length(LOut)] <> #10) then
+      LOut := LOut + #10;
+    LOut := LOut + LHeader + #10 + #9 + Trim(LName) + ' = ' + AValue + #10;
+  end
+  else if not LPlaced then
+    LOut := LOut + #9 + Trim(LName) + ' = ' + AValue + #10;
+  try
+    if PathDir(LPath) <> '' then
+      MkdirAll(PathDir(LPath), PermDirDefault);
+    WriteFileText(LPath, LOut);
+  except
+    on E: EGitError do
+      raise;
+    on E: Exception do
+      raise EGitError.Create('set global config: ' + E.Message);
+  end;
+  Result := True;
 end;
 
 function TNativeGitManager.Version: string;

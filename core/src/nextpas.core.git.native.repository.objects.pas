@@ -50,8 +50,10 @@ type
   private
     FName: string;
     FUrl: string;
+    FGitDir: string;
   public
-    constructor Create(const AName, AUrl: string);
+    constructor Create(const AName, AUrl: string); overload;
+    constructor Create(const AGitDir, AName, AUrl: string); overload;
     function Name: string;
     function URL: string;
     function Fetch: Boolean;
@@ -69,6 +71,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.git.native.base,
+  nextpas.core.git.native.clone,
   nextpas.core.git.native.util;
 
 { TNativeReference }
@@ -203,6 +206,15 @@ begin
   inherited Create;
   FName := AName;
   FUrl := AUrl;
+  FGitDir := '';
+end;
+
+constructor TNativeRemote.Create(const AGitDir, AName, AUrl: string);
+begin
+  inherited Create;
+  FGitDir := AGitDir;
+  FName := AName;
+  FUrl := AUrl;
 end;
 
 function TNativeRemote.Name: string;
@@ -217,7 +229,9 @@ end;
 
 function TNativeRemote.Fetch: Boolean;
 begin
-  Result := False;
+  if FGitDir = '' then
+    raise EGitError.CreateFmt('fetch: repository context missing for remote "%s"', [FName]);
+  Result := nextpas.core.git.native.clone.GitFetch(FGitDir, FName);
 end;
 
 procedure CollectRemoteBranches(const AGitDir: string; var AOut: nextpas.core.base.TStringArray);

@@ -81,6 +81,7 @@ uses
   nextpas.core.git.native.write,
   nextpas.core.git.native.index,
   nextpas.core.git.native.checkout,
+  nextpas.core.git.native.clone,
   nextpas.core.git.native.revwalk,
   nextpas.core.git.native.repository.diff,
   nextpas.core.git.native.repository.worktree,
@@ -265,13 +266,18 @@ begin
     LName := 'origin';
   if not GitRemoteFind(FGitDir, LName, LRemote) then
     raise EGitError.CreateFmt('remote "%s" not found', [LName]);
-  Result := TNativeRemote.Create(LRemote.Name, LRemote.Url);
+  Result := TNativeRemote.Create(FGitDir, LRemote.Name, LRemote.Url);
 end;
 
 function TNativeRepositoryAdapter.Fetch(const RemoteName: string): Boolean;
+var
+  RName: string;
 begin
   EnsureOpen;
-  Result := False;
+  RName := Trim(RemoteName);
+  if RName = '' then
+    RName := 'origin';
+  Result := GitFetch(FGitDir, RName);
 end;
 
 function TNativeRepositoryAdapter.CheckoutBranch(const Branch: string): Boolean;
@@ -495,12 +501,33 @@ var
   I, StartIdx: Integer;
   H: TGitBlameHunk;
   CurId: string;
+  HeadOid, TreeOid, BlobOid: TGitOid;
+  Repo: TNativeRepository;
 begin
   EnsureOpen;
   Result.Path:=APath;
   Result.Hunks:=nil;
   if TrimInline(APath)='' then
     Exit;
+  try
+    HeadOid := GitResolveHead(FGitDir);
+  except
+    on EGitError do
+      Exit;
+  end;
+  Repo := TNativeRepository.Create(FGitDir);
+  try
+    try
+      TreeOid := GitPeelToTree(Repo, HeadOid);
+    except
+      on EGitError do raise;
+      on Exception do raise EGitError.Create(CurrentExceptionMessage);
+    end;
+    if not GitFindBlobInTree(Repo, TreeOid, TrimInline(APath), BlobOid) then
+      Exit;
+  finally
+    Repo.Free;
+  end;
   try
     NativeBlame:=GitBlame(FGitDir,APath);
   except

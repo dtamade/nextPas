@@ -116,6 +116,7 @@ function GitCloneBare(const ARemoteGitDir, ALocalGitDir: string): TGitOid; inlin
 function GitCloneBareHead(const ARemoteGitDir, ALocalGitDir: string): string; inline;
 function GitClone(const ARemoteGitDir, ALocalWorkTree: string): TGitOid; inline;
 function GitCloneHead(const ARemoteGitDir, ALocalWorkTree: string): string; inline;
+function GitFetch(const ALocalGitDir, ARemoteName: string): Boolean; inline;
 
 procedure GitCheckoutTree(const AGitDir, AWorkTree: string; const ATreeOid: TGitOid); inline;
 procedure GitCheckoutHead(const AGitDir, AWorkTree: string); inline;
@@ -391,6 +392,11 @@ end;
 function GitCloneHead(const ARemoteGitDir, ALocalWorkTree: string): string; inline;
 begin
   Result := nextpas.core.git.native.clone.GitCloneHead(ARemoteGitDir, ALocalWorkTree);
+end;
+
+function GitFetch(const ALocalGitDir, ARemoteName: string): Boolean; inline;
+begin
+  Result := nextpas.core.git.native.clone.GitFetch(ALocalGitDir, ARemoteName);
 end;
 
 procedure GitCheckoutTree(const AGitDir, AWorkTree: string; const ATreeOid: TGitOid); inline;
