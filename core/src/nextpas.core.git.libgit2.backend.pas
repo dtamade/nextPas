@@ -80,6 +80,8 @@ type
     procedure BuildDiffOptions(const AOptions: TGitDiffOptions;
       out LOpts: git_diff_options; var LPathStrs: TStringArray;
       var LPathPtrs: TPAnsiCharArray);
+    procedure MakeSignature(const AName, AEmail: string; out ASig: git_signature;
+      const AOperation: string);
   public
     constructor Create(const APath: string);
     constructor Clone(const AURL, ALocalPath: string);
@@ -139,6 +141,30 @@ type
     function GetRemote(const AName: string): TGitRemote;
     function Fetch(const ARemoteName: string = 'origin'): Boolean;
     function PullFastForward(const ARemoteName: string; out AError: string): TGitPullFastForwardResult;
+    function RevParseOid(const ASpec: string): TGitOID;
+
+    // Workflow ops: branch / tag / stash / notes / reset / push
+    function BranchCreate(const AName: string; const ATarget: TGitOID; AForce: Boolean): TGitOID;
+    function BranchCreateFromSpec(const AName, ASpec: string; AForce: Boolean): TGitOID;
+    procedure BranchDelete(const AName: string);
+    function BranchMove(const AOld, ANew: string; AForce: Boolean): TGitOID;
+    function TagList: TStringArray;
+    function TagCreate(const AName: string; const ATarget: TGitOID; AForce: Boolean): TGitOID;
+    function TagCreateAnnotated(const AName: string; const ATarget: TGitOID; const AMessage, AAuthorName, AAuthorEmail: string; AForce: Boolean): TGitOID;
+    procedure TagDelete(const AName: string);
+    function StashSave(const AMessage, AAuthorName, AAuthorEmail: string): TGitOID;
+    procedure StashApply(AIndex: Integer);
+    procedure StashPop(AIndex: Integer);
+    procedure StashDrop(AIndex: Integer);
+    procedure StashClear;
+    function StashList: TStringArray;
+    function StashCount: Integer;
+    function ResetHardSpec(const ASpec: string): TGitOID;
+    function PushBranch(const ARemoteName, ABranch: string): Boolean;
+    function NoteCreate(const ATarget: TGitOID; const ANote, AAuthorName, AAuthorEmail: string; AForce: Boolean): TGitOID;
+    function NoteRead(const ATarget: TGitOID): string;
+    function NoteRemove(const ATarget: TGitOID; const AAuthorName, AAuthorEmail: string): Boolean;
+    function NoteList: TStringArray;
 
     property Path: string read GetPath;
     property WorkDir: string read GetWorkDir;
@@ -335,6 +361,35 @@ function StatusListCb(const APath: PChar; AFlags: cuint; APayload: Pointer): cin
 begin
   if (AFlags <> GIT_STATUS_CURRENT) and (APayload <> nil) then
     PStatusListPayload(APayload)^.List.Add(string(APath));
+  Result := 0;
+end;
+
+type
+  PStashListPayload = ^TStashListPayload;
+  TStashListPayload = record
+    List: TStringArray;
+  end;
+  PNoteListPayload = ^TNoteListPayload;
+  TNoteListPayload = record
+    List: TStringArray;
+  end;
+
+function StashListCb(AIndex: csize_t; const AMessage: PChar; const AStashId: Pgit_oid; APayload: Pointer): cint; cdecl;
+begin
+  if APayload <> nil then
+    PStashListPayload(APayload)^.List.Add(string(AMessage));
+  Result := 0;
+end;
+
+function NoteListCb(const ABlobId, AAnnotatedId: Pgit_oid; APayload: Pointer): cint; cdecl;
+var
+  LOid: TGitOID;
+begin
+  if (APayload <> nil) and Assigned(AAnnotatedId) then
+  begin
+    Move(AAnnotatedId^, LOid, SizeOf(TGitOID));
+    PNoteListPayload(APayload)^.List.Add(GitOIDToString(LOid));
+  end;
   Result := 0;
 end;
 
@@ -601,6 +656,16 @@ begin
   Result := FPath;
 end;
 
+procedure TGitRepository.MakeSignature(const AName, AEmail: string;
+  out ASig: git_signature; const AOperation: string);
+begin
+  ASig := nil;
+  if (Trim(AName) = '') or (Trim(AEmail) = '') then
+    CheckResult(git_signature_default(ASig, FHandle), AOperation)
+  else
+    CheckResult(git_signature_now(ASig, PChar(AName), PChar(AEmail)), AOperation);
+end;
+
 function TGitRepository.GetWorkDir: string;
 begin
   if FWorkDir = '' then
@@ -664,6 +729,7 @@ begin
   try
     Result := HeadRef.ShortName;
   finally
+    HeadRef.Free;
   end;
 end;
 
@@ -987,6 +1053,393 @@ begin
     ErrorMsg := AError;
     if ErrorMsg = '' then;
   end;
+end;
+
+function TGitRepository.RevParseOid(const ASpec: string): TGitOID;
+var
+  Obj: git_object;
+begin
+  Obj := nil;
+  try
+    CheckGitResult(git_revparse_single(Obj, FHandle, PChar(ASpec)), 'Resolve revision');
+    Move(git_object_id(Obj)^, Result, SizeOf(TGitOID));
+  finally
+    if Assigned(Obj) then git_object_free(Obj);
+  end;
+end;
+
+{ TGitRepository workflow ops }
+
+function TGitRepository.BranchCreate(const AName: string; const ATarget: TGitOID; AForce: Boolean): TGitOID;
+var
+  Cmt: git_commit;
+  Ref: git_reference;
+  ForceFlag: cint;
+begin
+  Cmt := nil;
+  Ref := nil;
+  try
+    CheckGitResult(git_commit_lookup(Cmt, FHandle, @ATarget.Data), 'Lookup branch target');
+    try
+      if AForce then ForceFlag := 1 else ForceFlag := 0;
+      CheckGitResult(git_branch_create(Ref, FHandle, PChar(AName), Cmt, ForceFlag), 'Create branch');
+      Move(git_reference_target(Ref)^, Result, SizeOf(TGitOID));
+    finally
+      if Assigned(Ref) then git_reference_free(Ref);
+    end;
+  finally
+    if Assigned(Cmt) then git_commit_free(Cmt);
+  end;
+end;
+
+function TGitRepository.BranchCreateFromSpec(const AName, ASpec: string; AForce: Boolean): TGitOID;
+var
+  Obj, Peeled: git_object;
+  Ref: git_reference;
+  ForceFlag: cint;
+begin
+  Obj := nil;
+  Peeled := nil;
+  Ref := nil;
+  try
+    CheckGitResult(git_revparse_single(Obj, FHandle, PChar(ASpec)), 'Resolve start ref');
+    try
+      CheckGitResult(git_object_peel(Peeled, Obj, GIT_OBJECT_COMMIT), 'Peel start to commit');
+      if AForce then ForceFlag := 1 else ForceFlag := 0;
+      CheckGitResult(git_branch_create(Ref, FHandle, PChar(AName), git_commit(Peeled), ForceFlag), 'Create branch');
+      Move(git_reference_target(Ref)^, Result, SizeOf(TGitOID));
+    finally
+      if Assigned(Peeled) then git_object_free(Peeled);
+      if Assigned(Ref) then git_reference_free(Ref);
+    end;
+  finally
+    if Assigned(Obj) then git_object_free(Obj);
+  end;
+end;
+
+procedure TGitRepository.BranchDelete(const AName: string);
+var
+  Ref: git_reference;
+  rc: cint;
+begin
+  Ref := nil;
+  CheckGitResult(git_branch_lookup(Ref, FHandle, PChar(AName), GIT_BRANCH_LOCAL), 'Lookup branch');
+  rc := git_branch_delete(Ref);
+  if rc <> GIT_OK then
+  begin
+    git_reference_free(Ref);
+    CheckGitResult(rc, 'Delete branch');
+  end;
+end;
+
+function TGitRepository.BranchMove(const AOld, ANew: string; AForce: Boolean): TGitOID;
+var
+  OldRef, NewRef: git_reference;
+  ForceFlag: cint;
+begin
+  OldRef := nil;
+  NewRef := nil;
+  try
+    CheckGitResult(git_branch_lookup(OldRef, FHandle, PChar(AOld), GIT_BRANCH_LOCAL), 'Lookup branch');
+    try
+      if AForce then ForceFlag := 1 else ForceFlag := 0;
+      CheckGitResult(git_branch_move(NewRef, OldRef, PChar(ANew), ForceFlag), 'Rename branch');
+      Move(git_reference_target(NewRef)^, Result, SizeOf(TGitOID));
+    finally
+      if Assigned(NewRef) then git_reference_free(NewRef);
+    end;
+  finally
+    if Assigned(OldRef) then git_reference_free(OldRef);
+  end;
+end;
+
+function TGitRepository.TagList: TStringArray;
+var
+  SA: git_strarray;
+  I: Integer;
+begin
+  Result := nil;
+  SA := Default(git_strarray);
+  CheckGitResult(git_tag_list(SA, FHandle), 'List tags');
+  try
+    SetLength(Result, Integer(SA.count));
+    for I := 0 to Integer(SA.count) - 1 do
+      Result[I] := string(SA.strings[I]);
+  finally
+    git_strarray_free(@SA);
+  end;
+end;
+
+function TGitRepository.TagCreate(const AName: string; const ATarget: TGitOID; AForce: Boolean): TGitOID;
+var
+  Obj: git_object;
+  OutOid: git_oid;
+  ForceFlag: cint;
+begin
+  Obj := nil;
+  try
+    CheckGitResult(git_object_lookup(Obj, FHandle, @ATarget.Data, GIT_OBJECT_ANY), 'Lookup tag target');
+    try
+      if AForce then ForceFlag := 1 else ForceFlag := 0;
+      CheckGitResult(git_tag_create_lightweight(OutOid, FHandle, PChar(AName), Obj, ForceFlag), 'Create lightweight tag');
+      Move(OutOid, Result, SizeOf(TGitOID));
+    finally
+      git_object_free(Obj);
+    end;
+  finally
+  end;
+end;
+
+function TGitRepository.TagCreateAnnotated(const AName: string; const ATarget: TGitOID; const AMessage, AAuthorName, AAuthorEmail: string; AForce: Boolean): TGitOID;
+var
+  Obj: git_object;
+  Sig: git_signature;
+  OutOid: git_oid;
+  ForceFlag: cint;
+begin
+  Obj := nil;
+  Sig := nil;
+  try
+    CheckGitResult(git_object_lookup(Obj, FHandle, @ATarget.Data, GIT_OBJECT_ANY), 'Lookup tag target');
+    try
+      MakeSignature(AAuthorName, AAuthorEmail, Sig, 'Create tagger signature');
+      try
+        if AForce then ForceFlag := 1 else ForceFlag := 0;
+        CheckGitResult(git_tag_create(OutOid, FHandle, PChar(AName), Obj, Sig, PChar(AMessage), ForceFlag), 'Create annotated tag');
+        Move(OutOid, Result, SizeOf(TGitOID));
+      finally
+        if Sig <> nil then git_signature_free(Sig);
+      end;
+    finally
+      git_object_free(Obj);
+    end;
+  finally
+  end;
+end;
+
+procedure TGitRepository.TagDelete(const AName: string);
+begin
+  CheckGitResult(git_tag_delete(FHandle, PChar(AName)), 'Delete tag');
+end;
+
+function TGitRepository.StashSave(const AMessage, AAuthorName, AAuthorEmail: string): TGitOID;
+var
+  Sig: git_signature;
+  OutOid: git_oid;
+begin
+  Sig := nil;
+  try
+    MakeSignature(AAuthorName, AAuthorEmail, Sig, 'Create stasher signature');
+    try
+      CheckGitResult(git_stash_save(OutOid, FHandle, Sig, PChar(AMessage), 0), 'Save stash');
+      Move(OutOid, Result, SizeOf(TGitOID));
+    finally
+      if Sig <> nil then git_signature_free(Sig);
+    end;
+  finally
+  end;
+end;
+
+procedure TGitRepository.StashApply(AIndex: Integer);
+begin
+  if AIndex < 0 then
+    raise EGitError.Create(GIT_EINVALID, 'Apply stash: negative index');
+  CheckGitResult(git_stash_apply(FHandle, csize_t(AIndex), nil), 'Apply stash');
+end;
+
+procedure TGitRepository.StashPop(AIndex: Integer);
+begin
+  if AIndex < 0 then
+    raise EGitError.Create(GIT_EINVALID, 'Pop stash: negative index');
+  CheckGitResult(git_stash_pop(FHandle, csize_t(AIndex), nil), 'Pop stash');
+end;
+
+procedure TGitRepository.StashDrop(AIndex: Integer);
+begin
+  if AIndex < 0 then
+    raise EGitError.Create(GIT_EINVALID, 'Drop stash: negative index');
+  CheckGitResult(git_stash_drop(FHandle, csize_t(AIndex)), 'Drop stash');
+end;
+
+procedure TGitRepository.StashClear;
+var
+  N, I: Integer;
+begin
+  N := StashCount;
+  for I := N - 1 downto 0 do
+    CheckGitResult(git_stash_drop(FHandle, csize_t(I)), 'Clear stash');
+end;
+
+function TGitRepository.StashList: TStringArray;
+var
+  LP: TStashListPayload;
+begin
+  LP.List := nil;
+  CheckGitResult(git_stash_foreach(FHandle, @StashListCb, @LP), 'List stashes');
+  Result := LP.List;
+end;
+
+function TGitRepository.StashCount: Integer;
+begin
+  Result := Length(StashList);
+end;
+
+function TGitRepository.ResetHardSpec(const ASpec: string): TGitOID;
+var
+  Obj, Peeled: git_object;
+begin
+  Obj := nil;
+  Peeled := nil;
+  try
+    CheckGitResult(git_revparse_single(Obj, FHandle, PChar(ASpec)), 'Resolve reset target');
+    try
+      CheckGitResult(git_reset(FHandle, Obj, GIT_RESET_HARD, nil), 'Hard reset');
+      CheckGitResult(git_object_peel(Peeled, Obj, GIT_OBJECT_COMMIT), 'Peel reset target');
+      Move(git_object_id(Peeled)^, Result, SizeOf(TGitOID));
+    finally
+      if Assigned(Peeled) then git_object_free(Peeled);
+    end;
+  finally
+    if Assigned(Obj) then git_object_free(Obj);
+  end;
+end;
+
+function TGitRepository.PushBranch(const ARemoteName, ABranch: string): Boolean;
+var
+  Rem: git_remote;
+  Spec: string;
+  SpecPtr: PChar;
+  SA: git_strarray;
+  Opts: git_push_options;
+  TrackRef, LocalRef: TGitReference;
+  RName: string;
+begin
+  Result := False;
+  RName := Trim(ABranch);
+  if RName = '' then
+    raise EGitError.Create(GIT_EINVALID, 'Push: branch required');
+  if Copy(RName, 1, 11) = 'refs/heads/' then
+    RName := Copy(RName, 12, MaxInt);
+  Rem := nil;
+  try
+    CheckGitResult(git_remote_lookup(Rem, FHandle, PChar(ARemoteName)), 'Lookup remote');
+    try
+      TrackRef := nil;
+      LocalRef := nil;
+      try
+        try
+          TrackRef := GetReference('refs/remotes/' + string(ARemoteName) + '/' + RName);
+          LocalRef := GetReference('refs/heads/' + RName);
+          if GitOIDEquals(LocalRef.OID, TrackRef.OID) then
+            Exit(False);
+        except
+          on E: EGitError do
+          begin
+            { no tracking ref yet: push proceeds };
+          end;
+        end;
+      finally
+        if Assigned(TrackRef) then TrackRef.Free;
+        if Assigned(LocalRef) then LocalRef.Free;
+      end;
+      Spec := 'refs/heads/' + RName;
+      SpecPtr := PChar(Spec);
+      SA.count := 1;
+      SA.strings := @SpecPtr;
+      FillChar(Opts, SizeOf(Opts), 0);
+      CheckGitResult(git_push_options_init(@Opts, GIT_PUSH_OPTIONS_VERSION), 'Init push options');
+      CheckGitResult(git_remote_push(Rem, @SA, @Opts), 'Push branch');
+      Result := True;
+    finally
+      git_remote_free(Rem);
+    end;
+  finally
+  end;
+end;
+
+function TGitRepository.NoteCreate(const ATarget: TGitOID; const ANote, AAuthorName, AAuthorEmail: string; AForce: Boolean): TGitOID;
+var
+  Auth, Comm: git_signature;
+  OutOid: git_oid;
+  ForceFlag: cint;
+begin
+  Auth := nil;
+  Comm := nil;
+  try
+    MakeSignature(AAuthorName, AAuthorEmail, Auth, 'Create note author');
+    try
+      MakeSignature(AAuthorName, AAuthorEmail, Comm, 'Create note committer');
+      try
+        if AForce then ForceFlag := 1 else ForceFlag := 0;
+        CheckGitResult(git_note_create(OutOid, FHandle, nil, Auth, Comm, @ATarget.Data, PChar(ANote), ForceFlag), 'Create note');
+        Move(OutOid, Result, SizeOf(TGitOID));
+      finally
+        if Comm <> nil then git_signature_free(Comm);
+      end;
+    finally
+      if Auth <> nil then git_signature_free(Auth);
+    end;
+  finally
+  end;
+end;
+
+function TGitRepository.NoteRead(const ATarget: TGitOID): string;
+var
+  Note: git_note;
+  rc: cint;
+begin
+  Result := '';
+  Note := nil;
+  rc := git_note_read(Note, FHandle, nil, @ATarget.Data);
+  if rc = GIT_ENOTFOUND then
+    Exit('');
+  CheckGitResult(rc, 'Read note');
+  try
+    Result := string(git_note_message(Note));
+  finally
+    if Assigned(Note) then git_note_free(Note);
+  end;
+end;
+
+function TGitRepository.NoteRemove(const ATarget: TGitOID; const AAuthorName, AAuthorEmail: string): Boolean;
+var
+  Auth, Comm: git_signature;
+  rc: cint;
+begin
+  Result := False;
+  Auth := nil;
+  Comm := nil;
+  try
+    MakeSignature(AAuthorName, AAuthorEmail, Auth, 'Create note author');
+    try
+      MakeSignature(AAuthorName, AAuthorEmail, Comm, 'Create note committer');
+      try
+        rc := git_note_remove(FHandle, nil, Auth, Comm, @ATarget.Data);
+        if rc = GIT_ENOTFOUND then
+          Exit(False);
+        CheckGitResult(rc, 'Remove note');
+        Result := True;
+      finally
+        if Comm <> nil then git_signature_free(Comm);
+      end;
+    finally
+      if Auth <> nil then git_signature_free(Auth);
+    end;
+  finally
+  end;
+end;
+
+function TGitRepository.NoteList: TStringArray;
+var
+  LP: TNoteListPayload;
+  rc: cint;
+begin
+  LP.List := nil;
+  rc := git_note_foreach(FHandle, nil, @NoteListCb, @LP);
+  if rc = GIT_ENOTFOUND then
+    Exit(nil);
+  CheckGitResult(rc, 'List notes');
+  Result := LP.List;
 end;
 
 constructor TGitCommit.Create(ARepository: TGitRepository; const AOID: TGitOID);

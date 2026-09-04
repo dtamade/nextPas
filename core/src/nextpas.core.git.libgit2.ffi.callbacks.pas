@@ -21,6 +21,8 @@ type
   git_transfer_progress_cb = function(const stats: Pgit_indexer_progress; payload: Pointer): cint; cdecl;
   git_indexer_progress_cb = function(const stats: Pgit_indexer_progress; payload: Pointer): cint; cdecl;
   git_status_cb = function(const path: PChar; status_flags: cuint; payload: Pointer): cint; cdecl;
+  git_stash_cb = function(index: csize_t; const message: PChar; const stash_id: Pgit_oid; payload: Pointer): cint; cdecl;
+  git_note_foreach_cb = function(const blob_id: Pgit_oid; const annotated_object_id: Pgit_oid; payload: Pointer): cint; cdecl;
 
 implementation
 

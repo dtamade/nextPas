@@ -36,6 +36,8 @@ type
   git_worktree = Pointer;
   git_status_list = Pointer;
   git_branch_iterator = Pointer;
+  git_note = Pointer;
+  git_note_iterator = Pointer;
   git_config_iterator = Pointer;
   git_signature = Pointer;
 

@@ -79,6 +79,30 @@ function git_branch_delete(branch: git_reference): cint; cdecl;
 function git_branch_iterator_new(out iter: git_branch_iterator; repo: git_repository; list_flags: git_branch_t): cint; cdecl;
 function git_branch_next(out ref_out: git_reference; out branch_type: git_branch_t; iter: git_branch_iterator): cint; cdecl;
 procedure git_branch_iterator_free(iter: git_branch_iterator); cdecl;
+// Branch operations (extended: lookup/move/name for workflow ops)
+function git_branch_lookup(out ref_out: git_reference; repo: git_repository; const branch_name: PChar; branch_type: git_branch_t): cint; cdecl;
+function git_branch_move(out ref_out: git_reference; branch: git_reference; const new_branch_name: PChar; force: cint): cint; cdecl;
+function git_branch_name(out out_name: PChar; ref: git_reference): cint; cdecl;
+// Tag operations
+function git_tag_create(out oid: git_oid; repo: git_repository; const tag_name: PChar; target: git_object; tagger: git_signature; const message: PChar; force: cint): cint; cdecl;
+function git_tag_create_lightweight(out oid: git_oid; repo: git_repository; const tag_name: PChar; target: git_object; force: cint): cint; cdecl;
+function git_tag_delete(repo: git_repository; const tag_name: PChar): cint; cdecl;
+function git_tag_list(out tag_names: git_strarray; repo: git_repository): cint; cdecl;
+// Stash operations
+function git_stash_save(out oid: git_oid; repo: git_repository; stasher: git_signature; const message: PChar; flags: cuint): cint; cdecl;
+function git_stash_apply(repo: git_repository; index: csize_t; const options: Pointer): cint; cdecl;
+function git_stash_pop(repo: git_repository; index: csize_t; const options: Pointer): cint; cdecl;
+function git_stash_drop(repo: git_repository; index: csize_t): cint; cdecl;
+function git_stash_foreach(repo: git_repository; callback: git_stash_cb; payload: Pointer): cint; cdecl;
+// Reset operations
+function git_reset(repo: git_repository; target: git_object; reset_type: cint; const checkout_opts: Pointer): cint; cdecl;
+// Note operations
+function git_note_create(out out_id: git_oid; repo: git_repository; const notes_ref: PChar; author: git_signature; committer: git_signature; target_id: Pgit_oid; const note: PChar; force: cint): cint; cdecl;
+function git_note_read(out out_note: git_note; repo: git_repository; const notes_ref: PChar; target_id: Pgit_oid): cint; cdecl;
+function git_note_remove(repo: git_repository; const notes_ref: PChar; author: git_signature; committer: git_signature; target_id: Pgit_oid): cint; cdecl;
+function git_note_foreach(repo: git_repository; const notes_ref: PChar; note_cb: git_note_foreach_cb; payload: Pointer): cint; cdecl;
+procedure git_note_free(note: git_note); cdecl;
+function git_note_message(note: git_note): PChar; cdecl;
 
 // Object operations
 function git_object_lookup(out obj: git_object; repo: git_repository; const id: Pgit_oid; obj_type: git_object_t): cint; cdecl;
@@ -206,6 +230,7 @@ function git_credential_ssh_key_from_agent(out cred: Pointer; const username: PC
 // Signature operations
 function git_signature_new(out sig: git_signature; const name: PChar; const email: PChar; time: git_time_t; offset: cint): cint; cdecl;
 function git_signature_now(out sig: git_signature; const name: PChar; const email: PChar): cint; cdecl;
+function git_signature_default(out sig: git_signature; repo: git_repository): cint; cdecl;
 procedure git_signature_free(sig: git_signature); cdecl;
 
 // Utility frees
@@ -309,6 +334,25 @@ type
   TLibGit2_git_branch_iterator_new = function(out iter: git_branch_iterator; repo: git_repository; list_flags: git_branch_t): cint; cdecl;
   TLibGit2_git_branch_next = function(out ref_out: git_reference; out branch_type: git_branch_t; iter: git_branch_iterator): cint; cdecl;
   TLibGit2_git_branch_iterator_free = procedure(iter: git_branch_iterator); cdecl;
+  TLibGit2_git_branch_lookup = function(out ref_out: git_reference; repo: git_repository; const branch_name: PChar; branch_type: git_branch_t): cint; cdecl;
+  TLibGit2_git_branch_move = function(out ref_out: git_reference; branch: git_reference; const new_branch_name: PChar; force: cint): cint; cdecl;
+  TLibGit2_git_branch_name = function(out out_name: PChar; ref: git_reference): cint; cdecl;
+  TLibGit2_git_tag_create = function(out oid: git_oid; repo: git_repository; const tag_name: PChar; target: git_object; tagger: git_signature; const message: PChar; force: cint): cint; cdecl;
+  TLibGit2_git_tag_create_lightweight = function(out oid: git_oid; repo: git_repository; const tag_name: PChar; target: git_object; force: cint): cint; cdecl;
+  TLibGit2_git_tag_delete = function(repo: git_repository; const tag_name: PChar): cint; cdecl;
+  TLibGit2_git_tag_list = function(out tag_names: git_strarray; repo: git_repository): cint; cdecl;
+  TLibGit2_git_stash_save = function(out oid: git_oid; repo: git_repository; stasher: git_signature; const message: PChar; flags: cuint): cint; cdecl;
+  TLibGit2_git_stash_apply = function(repo: git_repository; index: csize_t; const options: Pointer): cint; cdecl;
+  TLibGit2_git_stash_pop = function(repo: git_repository; index: csize_t; const options: Pointer): cint; cdecl;
+  TLibGit2_git_stash_drop = function(repo: git_repository; index: csize_t): cint; cdecl;
+  TLibGit2_git_stash_foreach = function(repo: git_repository; callback: git_stash_cb; payload: Pointer): cint; cdecl;
+  TLibGit2_git_reset = function(repo: git_repository; target: git_object; reset_type: cint; const checkout_opts: Pointer): cint; cdecl;
+  TLibGit2_git_note_create = function(out out_id: git_oid; repo: git_repository; const notes_ref: PChar; author: git_signature; committer: git_signature; target_id: Pgit_oid; const note: PChar; force: cint): cint; cdecl;
+  TLibGit2_git_note_read = function(out out_note: git_note; repo: git_repository; const notes_ref: PChar; target_id: Pgit_oid): cint; cdecl;
+  TLibGit2_git_note_remove = function(repo: git_repository; const notes_ref: PChar; author: git_signature; committer: git_signature; target_id: Pgit_oid): cint; cdecl;
+  TLibGit2_git_note_foreach = function(repo: git_repository; const notes_ref: PChar; note_cb: git_note_foreach_cb; payload: Pointer): cint; cdecl;
+  TLibGit2_git_note_free = procedure(note: git_note); cdecl;
+  TLibGit2_git_note_message = function(note: git_note): PChar; cdecl;
   TLibGit2_git_object_lookup = function(out obj: git_object; repo: git_repository; const id: Pgit_oid; obj_type: git_object_t): cint; cdecl;
   TLibGit2_git_object_id = function(obj: git_object): Pgit_oid; cdecl;
   TLibGit2_git_object_type = function(obj: git_object): git_object_t; cdecl;
@@ -394,6 +438,7 @@ type
   TLibGit2_git_credential_ssh_key_from_agent = function(out cred: Pointer; const username: PChar): cint; cdecl;
   TLibGit2_git_signature_new = function(out sig: git_signature; const name: PChar; const email: PChar; time: git_time_t; offset: cint): cint; cdecl;
   TLibGit2_git_signature_now = function(out sig: git_signature; const name: PChar; const email: PChar): cint; cdecl;
+  TLibGit2_git_signature_default = function(out sig: git_signature; repo: git_repository): cint; cdecl;
   TLibGit2_git_signature_free = procedure(sig: git_signature); cdecl;
   TLibGit2_git_strarray_free = procedure(arr: Pgit_strarray); cdecl;
   TLibGit2_git_buf_dispose = procedure(buffer: Pgit_buf); cdecl;
@@ -458,6 +503,25 @@ var
   dyn_git_branch_iterator_new: TLibGit2_git_branch_iterator_new = nil;
   dyn_git_branch_next: TLibGit2_git_branch_next = nil;
   dyn_git_branch_iterator_free: TLibGit2_git_branch_iterator_free = nil;
+  dyn_git_branch_lookup: TLibGit2_git_branch_lookup = nil;
+  dyn_git_branch_move: TLibGit2_git_branch_move = nil;
+  dyn_git_branch_name: TLibGit2_git_branch_name = nil;
+  dyn_git_tag_create: TLibGit2_git_tag_create = nil;
+  dyn_git_tag_create_lightweight: TLibGit2_git_tag_create_lightweight = nil;
+  dyn_git_tag_delete: TLibGit2_git_tag_delete = nil;
+  dyn_git_tag_list: TLibGit2_git_tag_list = nil;
+  dyn_git_stash_save: TLibGit2_git_stash_save = nil;
+  dyn_git_stash_apply: TLibGit2_git_stash_apply = nil;
+  dyn_git_stash_pop: TLibGit2_git_stash_pop = nil;
+  dyn_git_stash_drop: TLibGit2_git_stash_drop = nil;
+  dyn_git_stash_foreach: TLibGit2_git_stash_foreach = nil;
+  dyn_git_reset: TLibGit2_git_reset = nil;
+  dyn_git_note_create: TLibGit2_git_note_create = nil;
+  dyn_git_note_read: TLibGit2_git_note_read = nil;
+  dyn_git_note_remove: TLibGit2_git_note_remove = nil;
+  dyn_git_note_foreach: TLibGit2_git_note_foreach = nil;
+  dyn_git_note_free: TLibGit2_git_note_free = nil;
+  dyn_git_note_message: TLibGit2_git_note_message = nil;
   dyn_git_object_lookup: TLibGit2_git_object_lookup = nil;
   dyn_git_object_id: TLibGit2_git_object_id = nil;
   dyn_git_object_type: TLibGit2_git_object_type = nil;
@@ -543,6 +607,7 @@ var
   dyn_git_credential_ssh_key_from_agent: TLibGit2_git_credential_ssh_key_from_agent = nil;
   dyn_git_signature_new: TLibGit2_git_signature_new = nil;
   dyn_git_signature_now: TLibGit2_git_signature_now = nil;
+  dyn_git_signature_default: TLibGit2_git_signature_default = nil;
   dyn_git_signature_free: TLibGit2_git_signature_free = nil;
   dyn_git_strarray_free: TLibGit2_git_strarray_free = nil;
   dyn_git_buf_dispose: TLibGit2_git_buf_dispose = nil;
@@ -604,6 +669,25 @@ begin
   dyn_git_branch_iterator_new := nil;
   dyn_git_branch_next := nil;
   dyn_git_branch_iterator_free := nil;
+  dyn_git_branch_lookup := nil;
+  dyn_git_branch_move := nil;
+  dyn_git_branch_name := nil;
+  dyn_git_tag_create := nil;
+  dyn_git_tag_create_lightweight := nil;
+  dyn_git_tag_delete := nil;
+  dyn_git_tag_list := nil;
+  dyn_git_stash_save := nil;
+  dyn_git_stash_apply := nil;
+  dyn_git_stash_pop := nil;
+  dyn_git_stash_drop := nil;
+  dyn_git_stash_foreach := nil;
+  dyn_git_reset := nil;
+  dyn_git_note_create := nil;
+  dyn_git_note_read := nil;
+  dyn_git_note_remove := nil;
+  dyn_git_note_foreach := nil;
+  dyn_git_note_free := nil;
+  dyn_git_note_message := nil;
   dyn_git_object_lookup := nil;
   dyn_git_object_id := nil;
   dyn_git_object_type := nil;
@@ -689,6 +773,7 @@ begin
   dyn_git_credential_ssh_key_from_agent := nil;
   dyn_git_signature_new := nil;
   dyn_git_signature_now := nil;
+  dyn_git_signature_default := nil;
   dyn_git_signature_free := nil;
   dyn_git_strarray_free := nil;
   dyn_git_buf_dispose := nil;
@@ -1087,6 +1172,139 @@ begin
   if not Assigned(dyn_git_branch_iterator_free) then
     Pointer(dyn_git_branch_iterator_free) := ResolveLibGit2Symbol('git_branch_iterator_free');
   dyn_git_branch_iterator_free(iter);
+end;
+
+function git_branch_lookup(out ref_out: git_reference; repo: git_repository; const branch_name: PChar; branch_type: git_branch_t): cint; cdecl;
+begin
+  if not Assigned(dyn_git_branch_lookup) then
+    Pointer(dyn_git_branch_lookup) := ResolveLibGit2Symbol('git_branch_lookup');
+  Result := dyn_git_branch_lookup(ref_out, repo, branch_name, branch_type);
+end;
+
+function git_branch_move(out ref_out: git_reference; branch: git_reference; const new_branch_name: PChar; force: cint): cint; cdecl;
+begin
+  if not Assigned(dyn_git_branch_move) then
+    Pointer(dyn_git_branch_move) := ResolveLibGit2Symbol('git_branch_move');
+  Result := dyn_git_branch_move(ref_out, branch, new_branch_name, force);
+end;
+
+function git_branch_name(out out_name: PChar; ref: git_reference): cint; cdecl;
+begin
+  if not Assigned(dyn_git_branch_name) then
+    Pointer(dyn_git_branch_name) := ResolveLibGit2Symbol('git_branch_name');
+  Result := dyn_git_branch_name(out_name, ref);
+end;
+
+function git_tag_create(out oid: git_oid; repo: git_repository; const tag_name: PChar; target: git_object; tagger: git_signature; const message: PChar; force: cint): cint; cdecl;
+begin
+  if not Assigned(dyn_git_tag_create) then
+    Pointer(dyn_git_tag_create) := ResolveLibGit2Symbol('git_tag_create');
+  Result := dyn_git_tag_create(oid, repo, tag_name, target, tagger, message, force);
+end;
+
+function git_tag_create_lightweight(out oid: git_oid; repo: git_repository; const tag_name: PChar; target: git_object; force: cint): cint; cdecl;
+begin
+  if not Assigned(dyn_git_tag_create_lightweight) then
+    Pointer(dyn_git_tag_create_lightweight) := ResolveLibGit2Symbol('git_tag_create_lightweight');
+  Result := dyn_git_tag_create_lightweight(oid, repo, tag_name, target, force);
+end;
+
+function git_tag_delete(repo: git_repository; const tag_name: PChar): cint; cdecl;
+begin
+  if not Assigned(dyn_git_tag_delete) then
+    Pointer(dyn_git_tag_delete) := ResolveLibGit2Symbol('git_tag_delete');
+  Result := dyn_git_tag_delete(repo, tag_name);
+end;
+
+function git_tag_list(out tag_names: git_strarray; repo: git_repository): cint; cdecl;
+begin
+  if not Assigned(dyn_git_tag_list) then
+    Pointer(dyn_git_tag_list) := ResolveLibGit2Symbol('git_tag_list');
+  Result := dyn_git_tag_list(tag_names, repo);
+end;
+
+function git_stash_save(out oid: git_oid; repo: git_repository; stasher: git_signature; const message: PChar; flags: cuint): cint; cdecl;
+begin
+  if not Assigned(dyn_git_stash_save) then
+    Pointer(dyn_git_stash_save) := ResolveLibGit2Symbol('git_stash_save');
+  Result := dyn_git_stash_save(oid, repo, stasher, message, flags);
+end;
+
+function git_stash_apply(repo: git_repository; index: csize_t; const options: Pointer): cint; cdecl;
+begin
+  if not Assigned(dyn_git_stash_apply) then
+    Pointer(dyn_git_stash_apply) := ResolveLibGit2Symbol('git_stash_apply');
+  Result := dyn_git_stash_apply(repo, index, options);
+end;
+
+function git_stash_pop(repo: git_repository; index: csize_t; const options: Pointer): cint; cdecl;
+begin
+  if not Assigned(dyn_git_stash_pop) then
+    Pointer(dyn_git_stash_pop) := ResolveLibGit2Symbol('git_stash_pop');
+  Result := dyn_git_stash_pop(repo, index, options);
+end;
+
+function git_stash_drop(repo: git_repository; index: csize_t): cint; cdecl;
+begin
+  if not Assigned(dyn_git_stash_drop) then
+    Pointer(dyn_git_stash_drop) := ResolveLibGit2Symbol('git_stash_drop');
+  Result := dyn_git_stash_drop(repo, index);
+end;
+
+function git_stash_foreach(repo: git_repository; callback: git_stash_cb; payload: Pointer): cint; cdecl;
+begin
+  if not Assigned(dyn_git_stash_foreach) then
+    Pointer(dyn_git_stash_foreach) := ResolveLibGit2Symbol('git_stash_foreach');
+  Result := dyn_git_stash_foreach(repo, callback, payload);
+end;
+
+function git_reset(repo: git_repository; target: git_object; reset_type: cint; const checkout_opts: Pointer): cint; cdecl;
+begin
+  if not Assigned(dyn_git_reset) then
+    Pointer(dyn_git_reset) := ResolveLibGit2Symbol('git_reset');
+  Result := dyn_git_reset(repo, target, reset_type, checkout_opts);
+end;
+
+function git_note_create(out out_id: git_oid; repo: git_repository; const notes_ref: PChar; author: git_signature; committer: git_signature; target_id: Pgit_oid; const note: PChar; force: cint): cint; cdecl;
+begin
+  if not Assigned(dyn_git_note_create) then
+    Pointer(dyn_git_note_create) := ResolveLibGit2Symbol('git_note_create');
+  Result := dyn_git_note_create(out_id, repo, notes_ref, author, committer, target_id, note, force);
+end;
+
+function git_note_read(out out_note: git_note; repo: git_repository; const notes_ref: PChar; target_id: Pgit_oid): cint; cdecl;
+begin
+  if not Assigned(dyn_git_note_read) then
+    Pointer(dyn_git_note_read) := ResolveLibGit2Symbol('git_note_read');
+  Result := dyn_git_note_read(out_note, repo, notes_ref, target_id);
+end;
+
+function git_note_remove(repo: git_repository; const notes_ref: PChar; author: git_signature; committer: git_signature; target_id: Pgit_oid): cint; cdecl;
+begin
+  if not Assigned(dyn_git_note_remove) then
+    Pointer(dyn_git_note_remove) := ResolveLibGit2Symbol('git_note_remove');
+  Result := dyn_git_note_remove(repo, notes_ref, author, committer, target_id);
+end;
+
+function git_note_foreach(repo: git_repository; const notes_ref: PChar; note_cb: git_note_foreach_cb; payload: Pointer): cint; cdecl;
+begin
+  if not Assigned(dyn_git_note_foreach) then
+    Pointer(dyn_git_note_foreach) := ResolveLibGit2Symbol('git_note_foreach');
+  Result := dyn_git_note_foreach(repo, notes_ref, note_cb, payload);
+end;
+
+procedure git_note_free(note: git_note); cdecl;
+begin
+  if not Assigned(dyn_git_note_free) then
+    Pointer(dyn_git_note_free) := ResolveLibGit2Symbol('git_note_free');
+  dyn_git_note_free(note);
+end;
+
+function git_note_message(note: git_note): PChar; cdecl;
+begin
+  if not Assigned(dyn_git_note_message) then
+    Pointer(dyn_git_note_message) := ResolveLibGit2Symbol('git_note_message');
+  Result := dyn_git_note_message(note);
 end;
 
 function git_object_lookup(out obj: git_object; repo: git_repository; const id: Pgit_oid; obj_type: git_object_t): cint; cdecl;
@@ -1684,6 +1902,13 @@ begin
   if not Assigned(dyn_git_signature_now) then
     Pointer(dyn_git_signature_now) := ResolveLibGit2Symbol('git_signature_now');
   Result := dyn_git_signature_now(sig, name, email);
+end;
+
+function git_signature_default(out sig: git_signature; repo: git_repository): cint; cdecl;
+begin
+  if not Assigned(dyn_git_signature_default) then
+    Pointer(dyn_git_signature_default) := ResolveLibGit2Symbol('git_signature_default');
+  Result := dyn_git_signature_default(sig, repo);
 end;
 
 procedure git_signature_free(sig: git_signature); cdecl;

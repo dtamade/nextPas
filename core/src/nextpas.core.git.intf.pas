@@ -145,6 +145,50 @@ type
       const AAuthorName, AAuthorEmail: string): string;
   end;
 
+  // Local workflow operations: branch / tag / stash / notes / reset / push.
+  // Implemented by the native adapter (libgit2 adapter follows in its own
+  // slice; backends that cannot serve an op must be fixed, not stubbed).
+  // Naming follows git CLI verbs. Unresolvable refs, missing entries and
+  // invalid names raise EGitError; AForce maps to git -f/-M semantics.
+  IGitWorkflowOps = interface
+    ['{C4D5E6F7-0891-2345-6789-ABCDEF012345}']
+    function ListTags: TStringArray;
+    // Create branch at AStartRef (rev-parse spec; '' = HEAD). Returns tip oid.
+    function CreateBranch(const AName, AStartRef: string;
+      AForce: Boolean = False): string;
+    procedure DeleteBranch(const AName: string);
+    // Rename branch (follows HEAD symref). Returns tip oid.
+    function RenameBranch(const AOldName, ANewName: string;
+      AForce: Boolean = False): string;
+    // Create tag at ATarget (rev-parse spec). Returns tag oid.
+    function CreateLightweightTag(const AName, ATarget: string;
+      AForce: Boolean = False): string;
+    function CreateAnnotatedTag(const AName, ATarget, AMessage,
+      AAuthorName, AAuthorEmail: string; AForce: Boolean = False): string;
+    procedure DeleteTag(const AName: string);
+    function StashCount: Integer;
+    // Stash messages in git stash list order (index 0 = newest).
+    function StashList: TStringArray;
+    // Push worktree+index changes onto the stash. Returns stash commit oid.
+    function StashPush(const AMessage: string): string;
+    procedure StashApply(AIndex: Integer);
+    procedure StashPop(AIndex: Integer);
+    procedure StashDrop(AIndex: Integer);
+    procedure StashClear;
+    // Hard reset worktree+index+HEAD to ATarget (rev-parse spec).
+    procedure ResetHard(const ATarget: string);
+    // Push ABranch to ARemoteName (local transport; network URLs raise
+    // the documented transport EGitError). Returns True when the remote
+    // ref moved.
+    function PushBranch(const ARemoteName, ABranch: string): Boolean;
+    // Note text for the commit ATargetOid (40-hex); '' when absent.
+    function NotesForTarget(const ATargetOid: string): string;
+    procedure NotesAdd(const ATargetOid, ANote: string);
+    function NotesRemove(const ATargetOid: string): Boolean;
+    // Target oids (40-hex) carrying notes on the default notes ref.
+    function NotesList: TStringArray;
+  end;
+
   IGitManager = interface
     ['{DECE8C92-7891-4831-A0C2-7D1A2FA8B9C1}']
     function Initialize: Boolean;

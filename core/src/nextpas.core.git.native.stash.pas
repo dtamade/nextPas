@@ -54,6 +54,7 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.util,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
@@ -390,7 +391,6 @@ var
   NeedIndexCommit: Boolean;
   Builder: TGitCommitBuilder;
   ReflogPath, RefPath, OldHex, NewHex, Line: string;
-  LogData: TBytes;
   ShortHead: string;
 begin
   if AGitDir = '' then raise EGitError.Create('stash push: gitdir empty');
@@ -495,14 +495,9 @@ begin
   ReflogPath := GitReflogPath(AGitDir, 'refs/stash');
   MkdirAll(PathDir(ReflogPath), PermDirDefault);
   Line := OldHex + ' ' + NewHex + ' ' + SignatureToString(Sig) + #9 + StashMsg + #10;
-  // append
+  // append-only: the log grows one line per push, never rewrite the whole file
   if FileExists(ReflogPath) then
-  begin
-    LogData := ReadFile(ReflogPath);
-    SetLength(LogData, Length(LogData) + Length(Line));
-    Move(Line[1], LogData[Length(LogData) - Length(Line)], Length(Line));
-    WriteFile(ReflogPath, LogData, PermDefault);
-  end
+    AppendFile(ReflogPath, nextpas.core.bytes.ops.StringToBytes(Line))
   else
     WriteFileText(ReflogPath, Line);
   RefPath := PathJoin([AGitDir, 'refs', 'stash']);
