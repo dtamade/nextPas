@@ -636,6 +636,9 @@ begin
   end
   else
   begin
+    { Move 搬托管 record 会绕开引用计数：先释放槽 0 旧串再搬移，
+      否则每次栈满推送泄漏一个快照串（tui888 PH111 符号化实证） }
+    FUndoStack[0] := Default(TEditorSnapshot);
     Move(FUndoStack[1], FUndoStack[0], (UNDO_MAX - 1) * SizeOf(TEditorSnapshot));
     FUndoStack[UNDO_MAX - 1] := Snap;
   end;
