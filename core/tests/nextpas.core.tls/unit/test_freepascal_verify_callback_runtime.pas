@@ -4,7 +4,10 @@ program test_freepascal_verify_callback_runtime;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context,
   nextpas.core.tls.freepascal.context.material;
@@ -49,19 +52,8 @@ begin
 end;
 
 function ReadTextFile(const AFileName: string): string;
-var
-  LStream: TFileStream;
-  LBytes: TBytes;
 begin
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
-  try
-    SetLength(LBytes, LStream.Size);
-    if Length(LBytes) > 0 then
-      LStream.ReadBuffer(LBytes[0], Length(LBytes));
-    Result := StringOf(LBytes);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFileText(AFileName);
 end;
 
 procedure TestContextReturnsStoredVerifyCallback;

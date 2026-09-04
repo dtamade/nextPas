@@ -3,7 +3,8 @@ program test_winssl_enterprise;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.exception, nextpas.core.system.classes,
   nextpas.core.tls.winssl.enterprise;
 
 type
@@ -108,7 +109,7 @@ begin
       LSuccess := LConfig.LoadFromSystem;
 
       AddTestResult('Test 3: Load From System', LSuccess,
-        Format('Configuration loaded: %s', [BoolToStr(LSuccess, True)]));
+        Format('Configuration loaded: %s', [BoolToStr(LSuccess)]));
     finally
       LConfig.Free;
     end;

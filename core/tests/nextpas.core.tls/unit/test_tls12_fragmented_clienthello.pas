@@ -4,7 +4,9 @@ program test_tls12_fragmented_clienthello;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.clienthello,
   nextpas.core.tls.tls12.io,
@@ -47,10 +49,10 @@ begin
   AppendBytes(Result, APayload);
 end;
 
-procedure WriteBytes(AStream: TStream; const AData: TBytes);
+procedure WriteBytes(AStream: IStream; const AData: TBytes);
 begin
   if Length(AData) > 0 then
-    AStream.WriteBuffer(AData[0], Length(AData));
+    AStream.Write(AData[0], Length(AData));
 end;
 
 function CopyBytes(const AData: TBytes; AOffset, ACount: Integer): TBytes;
@@ -77,7 +79,7 @@ begin
   Result := BuildTLS12ClientHello(LOptions, LRandom);
 end;
 
-procedure WriteFragmentedClientHello(AStream: TStream; const AClientHello: TBytes);
+procedure WriteFragmentedClientHello(AStream: IStream; const AClientHello: TBytes);
 var
   LFirstLen, LSecondLen: Integer;
   LCCS: TBytes;
@@ -100,7 +102,7 @@ end;
 
 procedure TestServerReadsFragmentedClientHello;
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LClientHello: TBytes;
   LConfig: TTLS12ServerConfig;
   LState: TTLS12ServerState;
@@ -109,7 +111,7 @@ begin
   WriteLn('TestServerReadsFragmentedClientHello');
   LClientHello := BuildClientHello;
 
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConfig.Certificate := TX509Certificate.Create;
   try
     WriteFragmentedClientHello(LStream, LClientHello);
@@ -128,13 +130,13 @@ begin
       'Server consumed complete fragmented ClientHello before failing later');
   finally
     LConfig.Certificate.Free;
-    LStream.Free;
+    LStream := nil;
   end;
 end;
 
 procedure TestReadHandshakeMessageSkipsCCSAndReassembles;
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LClientHello, LBody, LFull: TBytes;
   LType: Byte;
   LError: string;
@@ -142,20 +144,16 @@ begin
   WriteLn('TestReadHandshakeMessageSkipsCCSAndReassembles');
   LClientHello := BuildClientHello;
 
-  LStream := TMemoryStream.Create;
-  try
-    WriteFragmentedClientHello(LStream, LClientHello);
+  LStream := CreateBytesStream;
+  WriteFragmentedClientHello(LStream, LClientHello);
 
-    Check(TLS12ReadHandshakeMessage(LStream, LType, LBody, LFull, LError),
-      'Fragmented ClientHello is reassembled');
-    Check(LType = TLS12_HANDSHAKE_CLIENT_HELLO, 'Handshake type is ClientHello');
-    Check(Length(LFull) = Length(LClientHello), 'Full message length preserved');
-    Check(Length(LBody) = Length(LClientHello) - 4, 'Body length excludes handshake header');
-    Check((Length(LBody) >= 34) and (LBody[0] = TLS12_VERSION_MAJOR) and (LBody[1] = TLS12_VERSION_MINOR),
-      'Body starts at ClientHello version');
-  finally
-    LStream.Free;
-  end;
+  Check(TLS12ReadHandshakeMessage(LStream, LType, LBody, LFull, LError),
+    'Fragmented ClientHello is reassembled');
+  Check(LType = TLS12_HANDSHAKE_CLIENT_HELLO, 'Handshake type is ClientHello');
+  Check(Length(LFull) = Length(LClientHello), 'Full message length preserved');
+  Check(Length(LBody) = Length(LClientHello) - 4, 'Body length excludes handshake header');
+  Check((Length(LBody) >= 34) and (LBody[0] = TLS12_VERSION_MAJOR) and (LBody[1] = TLS12_VERSION_MINOR),
+    'Body starts at ClientHello version');
 end;
 
 begin

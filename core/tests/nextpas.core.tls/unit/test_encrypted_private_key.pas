@@ -3,7 +3,9 @@ program test_encrypted_private_key;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.base,
+  nextpas.core.fs,
   nextpas.core.tls.pem,
   nextpas.core.tls.crypto.pkcs8;
 
@@ -26,19 +28,8 @@ begin
 end;
 
 function ReadFileToString(const AFileName: string): string;
-var
-  LStream: TFileStream;
-  LBytes: TBytes;
 begin
-  LStream := TFileStream.Create(AFileName, fmOpenRead);
-  try
-    SetLength(LBytes, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(LBytes[0], LStream.Size);
-    Result := StringOf(LBytes);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFileText(AFileName);
 end;
 
 procedure TestPKCS8Decryption;
@@ -145,8 +136,8 @@ begin
   // RFC 7914 test: password="passwd", salt="salt", c=1, dkLen=64
   // We test a simpler case: password="password", salt="salt", c=1, dkLen=32
   LKey := PBKDF2_HMAC_SHA256(
-    BytesOf('password'),
-    BytesOf('salt'),
+    StringToUTF8Bytes('password'),
+    StringToUTF8Bytes('salt'),
     1, 32
   );
   // Known vector from RFC 7914 / various test suites

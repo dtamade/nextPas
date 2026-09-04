@@ -4,7 +4,10 @@ program test_nonblocking;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.tls.nonblocking;
+  nextpas.core.io.intf,
+  nextpas.core.io.base,
+  nextpas.core.io.memory,
+  nextpas.core.tls.nonblocking;
 
 var
   LTotal, LPassed: Integer;
@@ -26,98 +29,84 @@ end;
 
 procedure TestNonBlockingStreamRead;
 var
-  LInner: TMemoryStream;
+  LInner: IStream;
   LNB: TNonBlockingStream;
   LBuf: array[0..9] of Byte;
   LRead: Longint;
 begin
   WriteLn('TestNonBlockingStreamRead');
-  LInner := TMemoryStream.Create;
-  try
-    LInner.Write(PAnsiChar('HelloWorld')^, 10);
-    LInner.Position := 0;
+  LInner := CreateBytesStream;
+  LInner.Write(PAnsiChar('HelloWorld')^, 10);
+  LInner.Position := 0;
 
-    LNB := TNonBlockingStream.Create(LInner);
-    try
-      LRead := LNB.Read(LBuf, 10);
-      Check(LRead = 10, 'Read 10 bytes');
-      Check(LNB.LastIOResult = ioSuccess, 'LastIOResult = ioSuccess');
-      Check(LBuf[0] = Ord('H'), 'Data correct');
-    finally
-      LNB.Free;
-    end;
+  LNB := TNonBlockingStream.Create(LInner);
+  try
+    LRead := LNB.Read(LBuf, 10);
+    Check(LRead = 10, 'Read 10 bytes');
+    Check(LNB.LastIOResult = ioSuccess, 'LastIOResult = ioSuccess');
+    Check(LBuf[0] = Ord('H'), 'Data correct');
   finally
-    LInner.Free;
+    LNB.Free;
   end;
 end;
 
 procedure TestNonBlockingStreamEOF;
 var
-  LInner: TMemoryStream;
+  LInner: IStream;
   LNB: TNonBlockingStream;
   LBuf: array[0..9] of Byte;
   LRead: Longint;
 begin
   WriteLn('TestNonBlockingStreamEOF');
-  LInner := TMemoryStream.Create;
+  LInner := CreateBytesStream;
+  LNB := TNonBlockingStream.Create(LInner);
   try
-    LNB := TNonBlockingStream.Create(LInner);
-    try
-      LRead := LNB.Read(LBuf, 10);
-      Check(LRead = 0, 'Read 0 at EOF');
-      Check(LNB.LastIOResult = ioClosed, 'LastIOResult = ioClosed');
-    finally
-      LNB.Free;
-    end;
+    LRead := LNB.Read(LBuf, 10);
+    Check(LRead = 0, 'Read 0 at EOF');
+    Check(LNB.LastIOResult = ioClosed, 'LastIOResult = ioClosed');
   finally
-    LInner.Free;
+    LNB.Free;
   end;
 end;
 
 procedure TestNonBlockingStreamWrite;
 var
-  LInner: TMemoryStream;
+  LInner: IStream;
   LNB: TNonBlockingStream;
   LData: array[0..3] of Byte;
   LWritten: Longint;
 begin
   WriteLn('TestNonBlockingStreamWrite');
-  LInner := TMemoryStream.Create;
+  LInner := CreateBytesStream;
+  LNB := TNonBlockingStream.Create(LInner);
   try
-    LNB := TNonBlockingStream.Create(LInner);
-    try
-      LData[0] := $DE; LData[1] := $AD; LData[2] := $BE; LData[3] := $EF;
-      LWritten := LNB.Write(LData, 4);
-      Check(LWritten = 4, 'Wrote 4 bytes');
-      Check(LNB.LastIOResult = ioSuccess, 'Write success');
-      Check(LInner.Size = 4, 'Inner stream has 4 bytes');
-    finally
-      LNB.Free;
-    end;
+    LData[0] := $DE; LData[1] := $AD; LData[2] := $BE; LData[3] := $EF;
+    LWritten := LNB.Write(LData, 4);
+    Check(LWritten = 4, 'Wrote 4 bytes');
+    Check(LNB.LastIOResult = ioSuccess, 'Write success');
+    Check(LInner.Size = 4, 'Inner stream has 4 bytes');
   finally
-    LInner.Free;
+    LNB.Free;
   end;
 end;
 
 procedure TestNonBlockingStreamSeek;
 var
-  LInner: TMemoryStream;
+  LInner: IStream;
   LNB: TNonBlockingStream;
   LPos: Int64;
+  LFill: array[0..99] of Byte;
 begin
   WriteLn('TestNonBlockingStreamSeek');
-  LInner := TMemoryStream.Create;
+  LInner := CreateBytesStream;
+  FillChar(LFill, SizeOf(LFill), 0);
+  LInner.Write(LFill, SizeOf(LFill));
+  LNB := TNonBlockingStream.Create(LInner);
   try
-    LInner.Size := 100;
-    LNB := TNonBlockingStream.Create(LInner);
-    try
-      LPos := LNB.Seek(Int64(50), soBeginning);
-      Check(LPos = 50, 'Seek to 50');
-    finally
-      LNB.Free;
-    end;
+    LPos := LNB.Seek(Int64(50), soBeginning);
+    Check(LPos = 50, 'Seek to 50');
   finally
-    LInner.Free;
+    LNB.Free;
   end;
 end;
 
@@ -133,20 +122,16 @@ end;
 
 procedure TestInnerStreamProperty;
 var
-  LInner: TMemoryStream;
+  LInner: IStream;
   LNB: TNonBlockingStream;
 begin
   WriteLn('TestInnerStreamProperty');
-  LInner := TMemoryStream.Create;
+  LInner := CreateBytesStream;
+  LNB := TNonBlockingStream.Create(LInner);
   try
-    LNB := TNonBlockingStream.Create(LInner);
-    try
-      Check(LNB.InnerStream = LInner, 'InnerStream property');
-    finally
-      LNB.Free;
-    end;
+    Check(LNB.InnerStream = LInner, 'InnerStream property');
   finally
-    LInner.Free;
+    LNB.Free;
   end;
 end;
 

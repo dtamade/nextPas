@@ -13,7 +13,6 @@ program benchmark_memory_isolated;
 {$ENDIF}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.text.conv,
   {$IFDEF TEST_OPENSSL}

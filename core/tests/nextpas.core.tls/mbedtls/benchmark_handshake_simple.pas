@@ -9,7 +9,8 @@ program benchmark_handshake_simple;
 }
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,

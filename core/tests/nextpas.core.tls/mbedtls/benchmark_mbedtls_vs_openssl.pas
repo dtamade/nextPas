@@ -14,9 +14,9 @@ program benchmark_mbedtls_vs_openssl;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.time,
-  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.mbedtls.lib,
@@ -111,10 +111,10 @@ begin
         LConn := LCtx.CreateConnection(LSock);
 
         // 计时握手
-        LStartTime := Now;
+        LStartTime := DateTimeNow;
         if LConn.Connect then
         begin
-          LEndTime := Now;
+          LEndTime := DateTimeNow;
           LTotalTime := LTotalTime + DateTimeMillisecondsBetween(LEndTime, LStartTime);
 
           // 第一次获取详细信息
@@ -213,7 +213,7 @@ begin
 
       // 计时读取
       LTotalBytes := 0;
-      LStartTime := Now;
+      LStartTime := DateTimeNow;
 
       repeat
         LBytesRead := LConn.Read(LBuffer, SizeOf(LBuffer));
@@ -221,7 +221,7 @@ begin
           LTotalBytes := LTotalBytes + LBytesRead;
       until LBytesRead <= 0;
 
-      LEndTime := Now;
+      LEndTime := DateTimeNow;
       LSeconds := (LEndTime - LStartTime) * 86400.0;
 
       if LSeconds > 0 then

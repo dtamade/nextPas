@@ -4,7 +4,12 @@ program test_freepascal_certificate;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.base,
+  nextpas.core.time,
+  nextpas.core.fs,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib;
 
@@ -44,17 +49,10 @@ end;
 procedure TestLoadFromPEM;
 var
   LCert: ISSLCertificate;
-  LStream: TFileStream;
   LPEM: string;
 begin
   WriteLn('TestLoadFromPEM');
-  LStream := TFileStream.Create('tests/certs/server-cert.pem', fmOpenRead);
-  try
-    SetLength(LPEM, LStream.Size);
-    LStream.ReadBuffer(LPEM[1], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  LPEM := ReadFileText('tests/certs/server-cert.pem');
   LCert := LLib.CreateCertificate;
   Check(LCert.LoadFromPEM(LPEM), 'LoadFromPEM');
   Check(LCert.GetSubjectCN = 'localhost', 'PEM cert SubjectCN');
@@ -63,17 +61,10 @@ end;
 procedure TestLoadFromDER;
 var
   LCert: ISSLCertificate;
-  LStream: TFileStream;
   LData: TBytes;
 begin
   WriteLn('TestLoadFromDER');
-  LStream := TFileStream.Create('tests/certs/winssl-san-test.cer', fmOpenRead);
-  try
-    SetLength(LData, LStream.Size);
-    LStream.ReadBuffer(LData[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  LData := ReadFile('tests/certs/winssl-san-test.cer');
   LCert := LLib.CreateCertificate;
   Check(LCert.LoadFromDER(LData), 'LoadFromDER');
   Check(LCert.GetSubjectCN <> '', 'DER cert has CN');
@@ -82,33 +73,22 @@ end;
 procedure TestLoadFromStream;
 var
   LCert: ISSLCertificate;
-  LStream: TFileStream;
+  LStream: IStream;
 begin
   WriteLn('TestLoadFromStream');
-  LStream := TFileStream.Create('tests/certs/server-cert.pem', fmOpenRead);
-  try
-    LCert := LLib.CreateCertificate;
-    Check(LCert.LoadFromStream(LStream), 'LoadFromStream');
-    Check(LCert.GetSubjectCN = 'localhost', 'Stream cert SubjectCN');
-  finally
-    LStream.Free;
-  end;
+  LStream := CreateBytesStreamFrom(ReadFile('tests/certs/server-cert.pem'));
+  LCert := LLib.CreateCertificate;
+  Check(LCert.LoadFromStream(LStream), 'LoadFromStream');
+  Check(LCert.GetSubjectCN = 'localhost', 'Stream cert SubjectCN');
 end;
 
 procedure TestLoadFromMemory;
 var
   LCert: ISSLCertificate;
-  LStream: TFileStream;
   LData: TBytes;
 begin
   WriteLn('TestLoadFromMemory');
-  LStream := TFileStream.Create('tests/certs/winssl-san-test.cer', fmOpenRead);
-  try
-    SetLength(LData, LStream.Size);
-    LStream.ReadBuffer(LData[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  LData := ReadFile('tests/certs/winssl-san-test.cer');
   LCert := LLib.CreateCertificate;
   Check(LCert.LoadFromMemory(@LData[0], Length(LData)), 'LoadFromMemory');
   Check(LCert.GetSubjectCN <> '', 'Memory cert has CN');
@@ -143,7 +123,7 @@ end;
 procedure TestSaveToFileAndStream;
 var
   LCert, LCert2: ISSLCertificate;
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   WriteLn('TestSaveToFileAndStream');
   LCert := LLib.CreateCertificate;
@@ -155,17 +135,13 @@ begin
   Check(LCert2.GetSubjectCN = 'localhost', 'Saved file CN matches');
   DeleteFile('/tmp/test_cert_save.pem');
 
-  LStream := TMemoryStream.Create;
-  try
-    Check(LCert.SaveToStream(LStream), 'SaveToStream');
-    Check(LStream.Size > 0, 'Stream has data');
-    LStream.Position := 0;
-    LCert2 := LLib.CreateCertificate;
-    Check(LCert2.LoadFromStream(LStream), 'Reload from stream');
-    Check(LCert2.GetSubjectCN = 'localhost', 'Stream reload CN matches');
-  finally
-    LStream.Free;
-  end;
+  LStream := CreateBytesStream;
+  Check(LCert.SaveToStream(LStream), 'SaveToStream');
+  Check(LStream.Size > 0, 'Stream has data');
+  LStream.Position := 0;
+  LCert2 := LLib.CreateCertificate;
+  Check(LCert2.LoadFromStream(LStream), 'Reload from stream');
+  Check(LCert2.GetSubjectCN = 'localhost', 'Stream reload CN matches');
 end;
 
 procedure TestCertificateInfo;
@@ -182,8 +158,8 @@ begin
   Check(LCert.GetSerialNumber <> '', 'SerialNumber not empty');
   Check(LCert.GetNotBefore > 0, 'NotBefore > 0');
   Check(LCert.GetNotAfter > LCert.GetNotBefore, 'NotAfter > NotBefore');
-  Check(LCert.GetNotBefore < Now, 'NotBefore < Now');
-  Check(LCert.GetNotAfter > Now, 'NotAfter > Now (not expired)');
+  Check(LCert.GetNotBefore < DateTimeNow, 'NotBefore < Now');
+  Check(LCert.GetNotAfter > DateTimeNow, 'NotAfter > Now (not expired)');
   Check(LCert.GetPublicKeyAlgorithm <> '', 'PublicKeyAlgorithm not empty');
   Check(LCert.GetSignatureAlgorithm <> '', 'SignatureAlgorithm not empty');
   Check(LCert.GetVersion = 3, 'Version = 3');

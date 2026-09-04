@@ -20,7 +20,8 @@ program test_winssl_monitoring;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.exception,
+  nextpas.core.base.utils, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib,
   nextpas.core.tls.winssl.context,
@@ -288,7 +289,7 @@ end;
 begin
   WriteLn('=========================================');
   WriteLn('WinSSL 监控和诊断功能单元测试');
-  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn('=========================================');
   WriteLn;
 

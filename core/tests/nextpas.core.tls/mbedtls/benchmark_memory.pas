@@ -9,7 +9,7 @@ program benchmark_memory;
 }
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,

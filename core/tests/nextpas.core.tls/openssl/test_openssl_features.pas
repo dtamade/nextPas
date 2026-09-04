@@ -3,8 +3,11 @@ program test_openssl_features;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
@@ -13,7 +16,6 @@ uses
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.platform.dl,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.ec,
@@ -197,7 +199,7 @@ begin
   WriteLn('Store created: TRUE');
 
   LoadedSystem := Store.LoadSystemStore;
-  WriteLn('System store loaded: ', BoolToStr(LoadedSystem, True));
+  WriteLn('System store loaded: ', BoolToStr(LoadedSystem));
 
   Count := Store.GetCount;
   Require(Count >= 0, 'Certificate count must be >= 0');
@@ -272,7 +274,7 @@ begin
   Require(Store <> nil, 'CreateCertificateStore returned nil');
 
   LoadedSystem := Store.LoadSystemStore;
-  WriteLn('System store loaded for verification: ', BoolToStr(LoadedSystem, True));
+  WriteLn('System store loaded for verification: ', BoolToStr(LoadedSystem));
 
   Require(Store.GetCount >= 0, 'Store.GetCount should be >= 0');
 
@@ -795,7 +797,7 @@ var
   LCaps: TSSLBackendCapabilities;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LProbeStream: TMemoryStream;
+  LProbeStream: IStream;
   LCT: ISSLCertificateTransparency;
   LCTValidation: ISSLCertificateTransparencyValidation;
   LOrigCTLoaded: Boolean;
@@ -812,18 +814,14 @@ begin
     Exit;
   end;
 
-  LProbeStream := TMemoryStream.Create;
-  try
-    LCtx := LProbeLib.CreateContext(sslCtxClient);
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LProbeStream, False));
+  LProbeStream := CreateBytesStream;
+  LCtx := LProbeLib.CreateContext(sslCtxClient);
+  LConn := LCtx.CreateConnection(LProbeStream);
 
-    Require(not Supports(LConn, ISSLCertificateTransparency, LCT),
-      'OpenSSL connection must not expose ISSLCertificateTransparency by default');
-    Require(not Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
-      'OpenSSL connection must not expose ISSLCertificateTransparencyValidation by default');
-  finally
-    LProbeStream.Free;
-  end;
+  Require(not Supports(LConn, ISSLCertificateTransparency, LCT),
+    'OpenSSL connection must not expose ISSLCertificateTransparency by default');
+  Require(not Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
+    'OpenSSL connection must not expose ISSLCertificateTransparencyValidation by default');
 
   LConn := nil;
   LCtx := nil;
