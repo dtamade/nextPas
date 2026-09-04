@@ -15,7 +15,9 @@ unit nextpas.core.net.quic.session;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.base,
   nextpas.core.net.base,
   nextpas.core.net.intf,
@@ -128,6 +130,7 @@ function CreateQuicSession(const ALoop: TAsyncLoop): IQuicSession;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.net.quic.varint,
   nextpas.core.hash.blake2b,
   nextpas.core.crypto.random;

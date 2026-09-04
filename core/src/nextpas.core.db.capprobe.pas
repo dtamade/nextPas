@@ -50,7 +50,7 @@ function DbProbeCapabilities(const AConn: IDbConnection): IDbCapabilities; inlin
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.text.view;
 

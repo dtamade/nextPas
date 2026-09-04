@@ -5,7 +5,8 @@ unit nextpas.core.compress.intf;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.io.intf;
 

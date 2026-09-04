@@ -71,7 +71,7 @@ function BlazorParseInboxRows(const ABatch: TBlazorRenderBatch; out ARows: nextp
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 function BlazorEncodeVarintU32(const AVal: UInt32): nextpas.core.base.TBytes;
 var

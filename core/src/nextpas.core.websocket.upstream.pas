@@ -5,7 +5,7 @@ unit nextpas.core.websocket.upstream;
 interface
 
 uses
-  Classes,
+  nextpas.core.thread.base,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.http.base,
@@ -43,7 +43,7 @@ type
     FPolicy: TUpstreamWsReconnectPolicy;
     FOnFrame: TUpstreamWsOnFrame;
     FSocket: IWebSocket;
-    FReader: TThread;
+    FReader: TWorkerThread;
     procedure StartReader;
     procedure StopReader;
     function GetIsConnected: Boolean;
@@ -71,7 +71,7 @@ uses
   nextpas.core.http.intf;
 
 type
-  TUpstreamWsReaderThread = class(TThread)
+  TUpstreamWsReaderThread = class(TWorkerThread)
   private
     FSession: TUpstreamWsSession;
   protected
@@ -82,8 +82,7 @@ type
 
 constructor TUpstreamWsReaderThread.Create(ASession: TUpstreamWsSession);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FSession := ASession;
 end;
 
@@ -249,12 +248,12 @@ begin
   if not Assigned(FOnFrame) then Exit;
   if not IsConnected then Exit;
   FReader := TUpstreamWsReaderThread.Create(Self);
-  TUpstreamWsReaderThread(FReader).Start;
+  FReader.Start;
 end;
 
 procedure TUpstreamWsSession.StopReader;
 var
-  LReader: TThread;
+  LReader: TWorkerThread;
 begin
   LReader := FReader;
   FReader := nil;

@@ -16,9 +16,6 @@ unit nextpas.core.tls.winssl.session;
 interface
 
 uses
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ENDIF}
   nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.text.format,

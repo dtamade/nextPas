@@ -80,9 +80,6 @@ function MsgPackDecodeVarintU32(const AData: TBytes; AOffset: Integer; out AValu
 
 implementation
 
-uses
-  SysUtils;
-
 class function TMsgPackValue.NilVal: TMsgPackValue;
 begin
   Result := Default(TMsgPackValue);

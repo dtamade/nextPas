@@ -51,7 +51,7 @@ function DbBatchBlobUseStream(const ASize: Int64): Boolean; inline;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.text.builder,
   nextpas.core.text.sql,
   nextpas.core.db.tx.template;
@@ -160,6 +160,7 @@ end;
 function DbBatchSupportsBulkCopy(const AConn: IDbConnection): Boolean; inline;
 var
   LCap: IDbCapabilities;
+  LDummy: IInterface;
 begin
   Result := False;
   if AConn = nil then Exit;
@@ -167,7 +168,7 @@ begin
   if Supports(AConn, IDbCapabilities, LCap) and (LCap <> nil) then
     Result := LCap.SupportsBulkCopy
   else
-    Result := Supports(AConn, IDbBulkCopy);
+    Result := Supports(AConn, IDbBulkCopy, LDummy);
 end;
 
 function DbBatchSupportsArrayBinding(const AConn: IDbConnection): Boolean; inline;
@@ -186,6 +187,7 @@ end;
 function DbBatchSupportsBatchExecutor(const AConn: IDbConnection): Boolean; inline;
 var
   LCap: IDbCapabilities;
+  LDummy: IInterface;
 begin
   Result := False;
   if AConn = nil then Exit;
@@ -193,12 +195,13 @@ begin
   if Supports(AConn, IDbCapabilities, LCap) and (LCap <> nil) then
     Result := LCap.SupportsBatchExecutor
   else
-    Result := Supports(AConn, IDbBatchExecutor);
+    Result := Supports(AConn, IDbBatchExecutor, LDummy);
 end;
 
 function DbBatchSupportsLargeObjects(const AConn: IDbConnection): Boolean; inline;
 var
   LCap: IDbCapabilities;
+  LDummy: IInterface;
 begin
   Result := False;
   if AConn = nil then Exit;
@@ -206,14 +209,16 @@ begin
   if Supports(AConn, IDbCapabilities, LCap) and (LCap <> nil) then
     Result := LCap.SupportsLargeObjects
   else
-    Result := Supports(AConn, IDbLargeObjectControl);
+    Result := Supports(AConn, IDbLargeObjectControl, LDummy);
 end;
 
 function DbBatchSupportsRowBlob(const AConn: IDbConnection): Boolean; inline;
+var
+  LDummy: IInterface;
 begin
   Result := False;
   if AConn = nil then Exit;
-  Result := Supports(AConn, IDbRowBlobControl);
+  Result := Supports(AConn, IDbRowBlobControl, LDummy);
 end;
 
 function DbBatchTryBulkCopy(const AConn: IDbConnection; out ABulk: IDbBulkCopy): Boolean; inline;

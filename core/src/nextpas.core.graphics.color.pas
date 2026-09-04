@@ -17,7 +17,7 @@ function ColorConvert(const C: TRgba; Src, Dst: TColorSpace): TRgba;
 implementation
 
 uses
-  Math;
+  nextpas.core.math;
 
 const
   // sRGB linear -> Display P3 linear (D65), via XYZ (Lindbloom)
