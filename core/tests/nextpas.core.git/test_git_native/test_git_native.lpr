@@ -4796,6 +4796,210 @@ begin
   end;
 end;
 
+procedure TestCommitGraphWriteVerify;
+var
+  Work, GitDir, GraphPath: string;
+  Entries: TGitLogArray;
+  Oids: TGitOidArray;
+  Graph: TCommitGraph;
+  Entry: TCommitGraphEntry;
+  Built: TBytes;
+begin
+  // covers commit-graph build/write/verify/load/invalidate
+  MakeTwoCommitRepo('nextpas_git_cgwrite', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    SetLength(Oids, 2);
+    Oids[0] := Entries[0].Oid;
+    Oids[1] := Entries[1].Oid;
+    Built := GitBuildCommitGraph(GitDir, Oids);
+    CheckTrue(Length(Built) > 0, 'built graph non-empty');
+    GraphPath := GitWriteCommitGraph(GitDir, Oids);
+    CheckTrue(FileExists(GraphPath), 'graph file written');
+    CheckEqual(GitCommitGraphPath(GitDir), GraphPath, 'path helper agrees');
+    CheckTrue(GitVerifyCommitGraph(GitDir), 'graph verifies');
+    CheckTrue(GitTryLoadCommitGraph(GitDir, Graph), 'graph loads');
+    try
+      CheckEqual(2, Integer(Graph.NumCommits), 'two graph commits');
+      CheckTrue(Graph.TryFind(Oids[0], Entry), 'head found in graph');
+    finally
+      Graph.Free;
+    end;
+    InvalidateCommitGraphCache(GitDir);
+    CheckTrue(GitTryLoadCommitGraph(GitDir, Graph), 'graph reloads after invalidate');
+    Graph.Free;
+    Remove(GraphPath);
+    GraphPath := GitWriteCommitGraphAll(GitDir);
+    CheckTrue(GitVerifyCommitGraph(GitDir), 'write-all verifies');
+    MustCaptureIn('git', ['commit-graph', 'verify', '--object-dir',
+      PathJoin([GitDir, 'objects'])], Work);
+    CheckTrue(True, 'git verifies our graph without error');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestWorktreeAddRemove;
+var
+  Work, GitDir, WtPath, CliOut: string;
+begin
+  // covers worktree add/detached/remove against git CLI
+  MakeTwoCommitRepo('nextpas_git_wt', Work, GitDir);
+  try
+    WtPath := Work + '_linked';
+    RemoveAll(WtPath);
+    GitWorktreeAdd(GitDir, WtPath, 'linked-branch');
+    CheckTrue(FileExists(PathJoin([WtPath, 'f.txt'])), 'linked worktree checked out');
+    CheckEqual(2, GitWorktreeCount(GitDir), 'two worktrees listed');
+    CheckTrue(Length(GitWorktreeList(GitDir)) = 2, 'list helper agrees');
+    CliOut := MustCaptureIn('git', ['worktree', 'list', '--porcelain'], Work);
+    CheckTrue(Pos(WtPath, CliOut) > 0, 'git agrees linked path');
+    GitWorktreeRemove(GitDir, WtPath, True);
+    CheckEqual(1, GitWorktreeCount(GitDir), 'one worktree after remove');
+    RemoveAll(WtPath);
+    WtPath := Work + '_detached';
+    RemoveAll(WtPath);
+    GitWorktreeAddDetached(GitDir, WtPath, GitResolveHead(GitDir));
+    CheckTrue(FileExists(PathJoin([WtPath, 'f.txt'])), 'detached worktree checked out');
+    GitWorktreeRemove(GitDir, WtPath);
+    CheckEqual(1, GitWorktreeCount(GitDir), 'one worktree after detached remove');
+    RemoveAll(WtPath);
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestSubmoduleAtRef;
+var
+  Work, GitDir: string;
+  Txt: string;
+  ByHead, ByTree, Listed: TGitSubmoduleArray;
+  Tree: TGitOid;
+begin
+  // covers submodule at-ref/at-tree listing on a real .gitmodules commit
+  Work := PathJoin([GetTempDir, 'nextpas_git_subref_' + IntToStr(GetProcessID)]);
+  RemoveAll(Work);
+  MkdirAll(Work, PermDirDefault);
+  try
+    RunInChecked('git', ['init', '--quiet', '-b', 'main'], Work);
+    RunInChecked('git', ['config', 'user.email', 'test@example.com'], Work);
+    RunInChecked('git', ['config', 'user.name', 'Test Er'], Work);
+    Txt := '[submodule "lib/foo"]'#10'  path = lib/foo'#10'  url = https://example.com/foo.git'#10;
+    WriteFileText(PathJoin([Work, '.gitmodules']), Txt);
+    RunInChecked('git', ['add', '.gitmodules'], Work);
+    RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'sub'], Work);
+    GitDir := PathJoin([Work, '.git']);
+    Listed := GitListSubmodules(GitDir);
+    CheckEqual(1, Length(Listed), 'worktree list one');
+    ByHead := GitListSubmodulesAtRef(GitDir, 'HEAD');
+    CheckEqual(1, Length(ByHead), 'at-ref one');
+    CheckEqual('lib/foo', ByHead[0].Path, 'at-ref path');
+    Tree := GitLogList(GitDir, 1)[0].Tree;
+    ByTree := GitListSubmodulesAtTree(GitDir, Tree);
+    CheckEqual(1, Length(ByTree), 'at-tree one');
+    CheckEqual('lib/foo', ByTree[0].Path, 'at-tree path');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestBundleFromRevsRange;
+var
+  Work, GitDir, P1, P2, CliOut: string;
+  N: Integer;
+  Hdr: TGitBundleHeader;
+begin
+  // covers bundle create-from-revs/range/parse-bytes against git bundle
+  MakeTwoCommitRepo('nextpas_git_bundle2', Work, GitDir);
+  try
+    P1 := PathJoin([GetTempDir, 'nextpas_revs_' + IntToStr(GetProcessID) + '.bundle']);
+    P2 := PathJoin([GetTempDir, 'nextpas_range_' + IntToStr(GetProcessID) + '.bundle']);
+    try Remove(P1) except end;
+    try Remove(P2) except end;
+    N := GitBundleCreateFromRevs(GitDir, ['HEAD'], P1);
+    CheckTrue(N >= 1, 'from-revs writes refs');
+    CheckTrue(GitBundleVerify(P1), 'from-revs verifies');
+    N := GitBundleCreateRange(GitDir, 'HEAD~1', 'HEAD', P2);
+    CheckTrue(N >= 1, 'range writes refs');
+    CheckTrue(GitBundleVerify(P2), 'range verifies');
+    Hdr := GitBundleParseHeaderBytes(ReadFile(P1));
+    CheckTrue(Length(Hdr.Refs) >= 1, 'header bytes parse');
+    CliOut := MustCaptureIn('git', ['bundle', 'list-heads', P1], Work);
+    CheckTrue(Pos('HEAD', CliOut) > 0, 'git reads our bundle');
+    try Remove(P1) except end;
+    try Remove(P2) except end;
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestGrepTreeCommits;
+var
+  Work, GitDir, CliOut: string;
+  Entries: TGitLogArray;
+  Hits: TGitGrepHitArray;
+begin
+  // covers grep-tree/grep-commits against git grep
+  MakeTwoCommitRepo('nextpas_git_greptree', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    Hits := GitGrepTree(GitDir, Entries[0].Tree, 'c2', False);
+    CheckTrue(Length(Hits) >= 1, 'tree grep hits');
+    CheckEqual('f.txt', Hits[0].Path, 'tree hit path');
+    Hits := GitGrep(GitDir, 'HEAD', 'C2', True);
+    CheckTrue(Length(Hits) >= 1, 'case-insensitive rev grep hits');
+    CliOut := Trim(MustCaptureIn('git', ['grep', '-n', 'c2', 'HEAD'], Work));
+    CheckTrue(Pos('f.txt', CliOut) > 0, 'git grep agrees on path');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestSmallSiblingOverloads;
+var
+  Work, GitDir, Golden, Pretty, OutPath, OursList, CliList, OursPath, CliPath: string;
+  Head: TGitOid;
+  CF: TGitCatFile;
+  NoteOid: TGitOid;
+  NoteRaw: TBytes;
+  Notes: TGitNoteArray;
+begin
+  // covers describe-tags/archive/catfile-pretty-size/notes-bytes siblings
+  MakeTwoCommitRepo('nextpas_git_siblings', Work, GitDir);
+  try
+    Head := GitResolveHead(GitDir);
+    RunInChecked('git', ['tag', 'v0.9', 'HEAD~1'], Work);
+    Golden := Trim(MustCaptureIn('git', ['describe', '--tags', 'HEAD'], Work));
+    CheckEqual(Golden, GitDescribeTags(GitDir, 'HEAD'), 'describe-tags matches git');
+    CF := GitCatFile(GitDir, Head);
+    Pretty := GitCatFilePretty(GitDir, Head);
+    CheckEqual(CF.Text, Pretty, 'pretty equals catfile text');
+    CheckEqual(CF.Text, GitCatFilePretty(GitDir, 'HEAD'), 'pretty rev overload');
+    CheckEqual(CF.Size, GitCatFileSize(GitDir, Head), 'size equals catfile size');
+    CheckEqual(CF.Size, GitCatFileSize(GitDir, 'HEAD'), 'size rev overload');
+    CheckTrue(Length(GitArchive(GitDir, GitLogList(GitDir, 1)[0].Tree)) > 0, 'archive by tree');
+    OursPath := PathJoin([GetTempDir, 'nextpas_sib_ours_' + IntToStr(GetProcessID) + '.tar']);
+    CliPath := PathJoin([GetTempDir, 'nextpas_sib_cli_' + IntToStr(GetProcessID) + '.tar']);
+    OutPath := GitArchiveToFile(GitDir, 'HEAD', OursPath);
+    CheckEqual(OursPath, OutPath, 'archive-to-file returns path');
+    WriteFile(CliPath, BytesOfString(MustCaptureIn('git', ['archive', 'HEAD'], Work)));
+    OursList := Trim(MustCaptureIn('tar', ['-tf', OursPath], Work));
+    CliList := Trim(MustCaptureIn('tar', ['-tf', CliPath], Work));
+    CheckEqual(CliList, OursList, 'archive-to-file matches git');
+    NoteOid := GitNotesAddBytes(GitDir, 'commits', Head, BytesOfString('bytes-note'#10));
+    CheckFalse(GitOidIsZero(NoteOid), 'add-bytes returns oid');
+    NoteRaw := GitNotesGet(GitDir, 'commits', Head);
+    CheckTrue(Pos('bytes-note', BytesToString(NoteRaw)) > 0, 'get raw bytes');
+    CheckTrue(GitNotesRefExists(GitDir, 'commits'), 'notes ref exists');
+    Notes := GitNotesList(GitDir, 'commits');
+    CheckEqual(1, Length(Notes), 'ref-scoped list one');
+    try Remove(OursPath) except end;
+    try Remove(CliPath) except end;
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
 procedure TestStashPushPopRoundTrip;
 var
   Work, GitDir: string;
@@ -5368,6 +5572,12 @@ begin
     T.Test('stash push pop round-trip', @TestStashPushPopRoundTrip);
     T.Test('tag create delete rename', @TestTagCreateDeleteRename);
     T.Test('branch create delete rename', @TestBranchCreateDeleteRename);
+    T.Test('commit-graph write verify', @TestCommitGraphWriteVerify);
+    T.Test('worktree add remove', @TestWorktreeAddRemove);
+    T.Test('submodule at ref', @TestSubmoduleAtRef);
+    T.Test('bundle from revs range', @TestBundleFromRevsRange);
+    T.Test('grep tree commits', @TestGrepTreeCommits);
+    T.Test('small sibling overloads', @TestSmallSiblingOverloads);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;
