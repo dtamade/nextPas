@@ -832,7 +832,7 @@ done
 # SECTION: Runtime contract name and helper mapping checks
 # ============================================================================
 
-require_repo_file "compiler/ir/np_system_contracts.pas"
+require_repo_file "compiler/src/nextpas.compiler.ir.system_contracts.pas"
 
 contract_ledger_tmp_dir="$(mktemp -d)"
 trap 'rm -rf -- "$contract_ledger_tmp_dir"' EXIT
@@ -849,7 +849,7 @@ awk '
   match($0, /^[ \t]*SemanticName:[ \t]*(NPSYSTEM_[A-Z0-9_]+)[ \t]*;/, parts) {
     print parts[1]
   }
-' "$REPO_ROOT/compiler/ir/np_system_contracts.pas" | sort >"$ledger_constants"
+' "$REPO_ROOT/compiler/src/nextpas.compiler.ir.system_contracts.pas" | sort >"$ledger_constants"
 [[ -s "$contract_constants" ]] || fail "system contract declarations are empty"
 [[ -s "$ledger_constants" ]] || fail "typed ledger semantic-name rows are empty"
 if ! diff -u "$contract_constants" "$ledger_constants"; then
@@ -1321,7 +1321,7 @@ require_repo_owner_family_token "compiler/src" "nextpas.compiler.ir.hir.llvm_emi
 require_repo_file "tests/hir/test_hir_object_free_contract.pas"
 require_repo_file "tests/semantic/test_semantic_call_bindings.pas"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-runtime"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np_system_contracts"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "nextpas.compiler.ir.system_contracts"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFree)"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeDestroy)"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeCleanup)"
