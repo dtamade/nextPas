@@ -3,7 +3,11 @@ program test_new_modules;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.text.conv,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.tls.websocket,
   nextpas.core.tls.quic.crypto,
   nextpas.core.tls.dane.pure,
@@ -24,73 +28,61 @@ end;
 procedure TestWebSocketFrameBuilder;
 var
   LWS: TWebSocketConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LFrame: TWebSocketFrame;
 begin
   WriteLn('Test: WebSocket frame build + read roundtrip');
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
+  LWS := TWebSocketConnection.Create(LStream, False);
   try
-    LWS := TWebSocketConnection.Create(LStream, False);
-    try
-      LWS.SendText('Hello WebSocket');
-      LStream.Position := 0;
-      Check(LWS.ReadFrame(LFrame), 'Should read frame');
-      Check(LFrame.FIN, 'FIN should be set');
-      Check(LFrame.Opcode = wsOpText, 'Opcode should be text');
-      Check(not LFrame.Masked, 'Server frames not masked');
-      Check(StringOf(LFrame.Payload) = 'Hello WebSocket', 'Payload match');
-    finally
-      LWS.Free;
-    end;
+    LWS.SendText('Hello WebSocket');
+    LStream.Position := 0;
+    Check(LWS.ReadFrame(LFrame), 'Should read frame');
+    Check(LFrame.FIN, 'FIN should be set');
+    Check(LFrame.Opcode = wsOpText, 'Opcode should be text');
+    Check(not LFrame.Masked, 'Server frames not masked');
+    Check(UTF8BytesToString(LFrame.Payload) = 'Hello WebSocket', 'Payload match');
   finally
-    LStream.Free;
+    LWS.Free;
   end;
 end;
 
 procedure TestWebSocketMaskedFrame;
 var
   LWS: TWebSocketConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LFrame: TWebSocketFrame;
 begin
   WriteLn('Test: WebSocket client masked frame');
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
+  LWS := TWebSocketConnection.Create(LStream, True);
   try
-    LWS := TWebSocketConnection.Create(LStream, True);
-    try
-      LWS.SendBinary(BytesOf('test'));
-      LStream.Position := 0;
-      Check(LWS.ReadFrame(LFrame), 'Should read masked frame');
-      Check(LFrame.Opcode = wsOpBinary, 'Opcode should be binary');
-      Check(StringOf(LFrame.Payload) = 'test', 'Unmasked payload match');
-    finally
-      LWS.Free;
-    end;
+    LWS.SendBinary(StringToUTF8Bytes('test'));
+    LStream.Position := 0;
+    Check(LWS.ReadFrame(LFrame), 'Should read masked frame');
+    Check(LFrame.Opcode = wsOpBinary, 'Opcode should be binary');
+    Check(UTF8BytesToString(LFrame.Payload) = 'test', 'Unmasked payload match');
   finally
-    LStream.Free;
+    LWS.Free;
   end;
 end;
 
 procedure TestWebSocketUpgradeKey;
 var
   LWS: TWebSocketConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LKey, LRequest: string;
 begin
   WriteLn('Test: WebSocket upgrade request');
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
+  LWS := TWebSocketConnection.Create(LStream, True);
   try
-    LWS := TWebSocketConnection.Create(LStream, True);
-    try
-      LRequest := LWS.BuildUpgradeRequest('example.com', '/ws', LKey);
-      Check(Pos('Upgrade: websocket', LRequest) > 0, 'Has Upgrade header');
-      Check(Pos('Sec-WebSocket-Key: ' + LKey, LRequest) > 0, 'Has key');
-      Check(Length(LKey) > 0, 'Key not empty');
-    finally
-      LWS.Free;
-    end;
+    LRequest := LWS.BuildUpgradeRequest('example.com', '/ws', LKey);
+    Check(Pos('Upgrade: websocket', LRequest) > 0, 'Has Upgrade header');
+    Check(Pos('Sec-WebSocket-Key: ' + LKey, LRequest) > 0, 'Has key');
+    Check(Length(LKey) > 0, 'Key not empty');
   finally
-    LStream.Free;
+    LWS.Free;
   end;
 end;
 
@@ -137,7 +129,7 @@ var
   LError: string;
 begin
   WriteLn('Test: DANE TLSA verification');
-  LCertDER := BytesOf('fake cert data for testing');
+  LCertDER := StringToUTF8Bytes('fake cert data for testing');
   LHash := SHA256(LCertDER);
 
   LRecords[0] := BuildTLSARecord(3, 0, 1, LHash);
@@ -156,7 +148,7 @@ var
 begin
   WriteLn('Test: DANE with no records');
   SetLength(LRecords, 0);
-  LCertDER := BytesOf('cert');
+  LCertDER := StringToUTF8Bytes('cert');
   Check(not VerifyDANE(LRecords, LCertDER, LError), 'No records should fail');
   Check(LError = 'No TLSA records provided', 'Correct error message');
 end;

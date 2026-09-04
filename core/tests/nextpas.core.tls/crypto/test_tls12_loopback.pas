@@ -3,21 +3,28 @@ program test_tls12_loopback;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.server,
   nextpas.core.tls.x509,
   nextpas.core.tls.pem;
 
 type
-  TPipeStream = class(TStream)
+  TPipeStream = class(TInterfacedObject, IStream)
   private
     FBuffer: TBytes;
     FReadPos: Integer;
   public
     constructor Create;
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
     procedure Inject(const AData: TBytes);
     function Extract: TBytes;
   end;
@@ -29,29 +36,62 @@ begin
   FReadPos := 0;
 end;
 
-function TPipeStream.Read(var Buffer; Count: Longint): Longint;
+function TPipeStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvail: Integer;
 begin
   LAvail := Length(FBuffer) - FReadPos;
-  if Count > LAvail then
-    Count := LAvail;
-  if Count > 0 then
+  if LAvail < 0 then
+    LAvail := 0;
+  if SizeUInt(LAvail) > ACount then
+    Result := ACount
+  else
+    Result := SizeUInt(LAvail);
+  if Result > 0 then
   begin
-    Move(FBuffer[FReadPos], Buffer, Count);
-    Inc(FReadPos, Count);
+    Move(FBuffer[FReadPos], ABuf, Result);
+    Inc(FReadPos, Integer(Result));
   end;
-  Result := Count;
 end;
 
-function TPipeStream.Write(const Buffer; Count: Longint): Longint;
+function TPipeStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LOld: Integer;
 begin
   LOld := Length(FBuffer);
-  SetLength(FBuffer, LOld + Count);
-  Move(Buffer, FBuffer[LOld], Count);
-  Result := Count;
+  SetLength(FBuffer, LOld + Integer(ACount));
+  if ACount > 0 then
+    Move(ABuf, FBuffer[LOld], ACount);
+  Result := ACount;
+end;
+
+function TPipeStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+begin
+  case AOrigin of
+    soBeginning: FReadPos := Integer(AOffset);
+    soCurrent: Inc(FReadPos, Integer(AOffset));
+    soEnd: FReadPos := Length(FBuffer) + Integer(AOffset);
+  end;
+  Result := FReadPos;
+end;
+
+procedure TPipeStream.Close;
+begin
+end;
+
+function TPipeStream.GetSize: Int64;
+begin
+  Result := Length(FBuffer);
+end;
+
+function TPipeStream.GetPosition: Int64;
+begin
+  Result := FReadPos;
+end;
+
+procedure TPipeStream.SetPosition(const AValue: Int64);
+begin
+  FReadPos := Integer(AValue);
 end;
 
 procedure TPipeStream.Inject(const AData: TBytes);

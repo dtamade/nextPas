@@ -8,7 +8,12 @@ program test_enterprise_crypto;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.exceptions;
 
@@ -16,12 +21,12 @@ procedure TestAPIOverloads;
 var
   LHashBytes, LHashString: TBytes;
   LHashHex1, LHashHex2: string;
-  LStream: TStringStream;
+  LStream: IStream;
 begin
   WriteLn('[1] 测试API重载...');
 
   // TBytes重载
-  LHashBytes := TCryptoUtils.SHA256(BytesOf('Hello'));
+  LHashBytes := TCryptoUtils.SHA256(StringToUTF8Bytes('Hello'));
 
   // string重载
   LHashString := TCryptoUtils.SHA256('Hello');
@@ -38,13 +43,9 @@ begin
   Assert(Length(LHashHex1) = 64, 'SHA256Hex should return 64 chars');
 
   //Stream重载
-  LStream := TStringStream.Create('Stream Data');
-  try
-    LHashBytes := TCryptoUtils.SHA256(LStream);
-    Assert(Length(LHashBytes) = 32, 'Stream hash should work');
-  finally
-    LStream.Free;
-  end;
+  LStream := CreateBytesStreamFrom(StringToUTF8Bytes('Stream Data'));
+  LHashBytes := TCryptoUtils.SHA256(LStream);
+  Assert(Length(LHashBytes) = 32, 'Stream hash should work');
 
   WriteLn('  ✓ API重载测试通过');
   WriteLn;
@@ -61,7 +62,7 @@ begin
 
   LKey := TCryptoUtils.GenerateKey(256);
   LIV := TCryptoUtils.GenerateIV(12);
-  LData := BytesOf('Test Data');
+  LData := StringToUTF8Bytes('Test Data');
 
   // Try加密 - 正常情况
   LSuccess := TCryptoUtils.TryAES_GCM_Encrypt(LData, LKey, LIV, LResult);
@@ -139,7 +140,7 @@ begin
   try
     SetLength(LBadKey, 24);  // 不是256位
     TCryptoUtils.AES_GCM_Encrypt(
-      BytesOf('test'),
+      StringToUTF8Bytes('test'),
       LBadKey,
       TCryptoUtils.GenerateIV(12)
     );
@@ -165,7 +166,6 @@ end;
 procedure TestFileHashing;
 var
   LTempFile: string;
-  LStream: TFileStream;
   LHash: TBytes;
   LHashHex: string;
   LData: AnsiString;
@@ -174,13 +174,8 @@ begin
 
   // 创建临时文件
   LTempFile := '/tmp/test_crypto_v2.tmp';
-  LStream := TFileStream.Create(LTempFile, fmCreate);
-  try
-    LData := 'File Content for Hashing';
-    LStream.Write(LData[1], Length(LData));
-  finally
-    LStream.Free;
-  end;
+  LData := 'File Content for Hashing';
+  WriteFileText(LTempFile, string(LData));
 
   try
     // 使用SHA256File方法

@@ -24,7 +24,10 @@ program test_p2_cms_comprehensive;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.cms,
@@ -270,7 +273,6 @@ var
   LCert: PX509;
   LKey: PEVP_PKEY;
   LCMS: PCMS_ContentInfo;
-  LStream: TFileStream;
   LData: TBytes;
   LEmptyData: TBytes;
   LTamperedData: TBytes;
@@ -296,14 +298,7 @@ begin
   if (LCert = nil) or (LKey = nil) then
     Exit;
 
-  LStream := TFileStream.Create(DATA_PATH, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LData, LStream.Size);
-    if Length(LData) > 0 then
-      LStream.ReadBuffer(LData[0], Length(LData));
-  finally
-    LStream.Free;
-  end;
+  LData := ReadFile(DATA_PATH);
 
   Test('读取原始数据用于签名', Length(LData) > 0);
   if Length(LData) = 0 then
@@ -352,7 +347,6 @@ var
   LWrongCert: PX509;
   LWrongKey: PEVP_PKEY;
   LRecipients: PSTACK_OF_X509;
-  LStream: TFileStream;
   LData: TBytes;
   LEncryptedCMS: PCMS_ContentInfo;
   LOutBio: PBIO;
@@ -402,14 +396,7 @@ begin
 
   OPENSSL_sk_push(LRecipients, LRecipientCert);
 
-  LStream := TFileStream.Create(DATA_PATH, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LData, LStream.Size);
-    if Length(LData) > 0 then
-      LStream.ReadBuffer(LData[0], Length(LData));
-  finally
-    LStream.Free;
-  end;
+  LData := ReadFile(DATA_PATH);
 
   Test('读取待加密数据', Length(LData) > 0);
   if Length(LData) = 0 then
@@ -466,7 +453,6 @@ const
   FIXTURE_PATH = './tests/fixtures/p2/cms/cms_malformed_v1.der';
 var
   LFixtureExists: Boolean;
-  LStream: TFileStream;
   LData: TBytes;
   LInputPtr: PByte;
   LCMS: PCMS_ContentInfo;
@@ -483,14 +469,7 @@ begin
   if not Assigned(d2i_CMS_ContentInfo) then
     Exit;
 
-  LStream := TFileStream.Create(FIXTURE_PATH, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LData, LStream.Size);
-    if Length(LData) > 0 then
-      LStream.ReadBuffer(LData[0], Length(LData));
-  finally
-    LStream.Free;
-  end;
+  LData := ReadFile(FIXTURE_PATH);
 
   Test('CMS malformed fixture 非空', Length(LData) > 0);
   if Length(LData) = 0 then

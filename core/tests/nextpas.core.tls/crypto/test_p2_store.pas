@@ -3,7 +3,9 @@ program test_p2_store;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.store,
@@ -196,7 +198,6 @@ procedure TestCreateTestCertificateFile;
 var
   certPem: string;
   keyPem: string;
-  fs: TFileStream;
 begin
   StartTest('Create temporary test certificate file');
   try
@@ -221,18 +222,13 @@ begin
       '-----END CERTIFICATE-----' + sLineBreak;
 
     // Save to temp file
-    fs := TFileStream.Create('test_cert.pem', fmCreate);
-    try
-      if Length(certPem) > 0 then
-      begin
-        fs.WriteBuffer(certPem[1], Length(certPem));
-        PassTest;
-      end
-      else
-        FailTest('Certificate content is empty');
-    finally
-      fs.Free;
-    end;
+    if Length(certPem) > 0 then
+    begin
+      WriteFileText('test_cert.pem', certPem);
+      PassTest;
+    end
+    else
+      FailTest('Certificate content is empty');
   except
     on E: Exception do
       FailTest('Exception: ' + E.Message);

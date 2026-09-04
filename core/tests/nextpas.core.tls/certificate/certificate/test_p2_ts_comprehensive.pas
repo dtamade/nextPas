@@ -21,7 +21,10 @@ program test_p2_ts_comprehensive;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ts,
   nextpas.core.tls.openssl.api.asn1,
@@ -297,7 +300,6 @@ const
   FIXTURE_PATH = './tests/fixtures/p2/ts/ts_response_malformed_v1.der';
 var
   LFixtureExists: Boolean;
-  LStream: TFileStream;
   LData: TBytes;
   LBio: PBIO;
   LResp: PTS_RESP;
@@ -318,14 +320,7 @@ begin
   if (not Assigned(TS_RESP_d2i_bio)) or (not Assigned(BIO_new_mem_buf)) then
     Exit;
 
-  LStream := TFileStream.Create(FIXTURE_PATH, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LData, LStream.Size);
-    if Length(LData) > 0 then
-      LStream.ReadBuffer(LData[0], Length(LData));
-  finally
-    LStream.Free;
-  end;
+  LData := ReadFile(FIXTURE_PATH);
 
   Test('TS malformed fixture 非空', Length(LData) > 0);
   if Length(LData) = 0 then

@@ -24,7 +24,10 @@ program test_p2_pkcs12_comprehensive;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.pkcs12,
   nextpas.core.tls.openssl.api.x509,
@@ -250,7 +253,6 @@ const
   FIXTURE_PATH = './tests/fixtures/p2/pkcs12/pkcs12_malformed_v1.der';
 var
   LFixtureExists: Boolean;
-  LStream: TFileStream;
   LData: TBytes;
   LBio: PBIO;
   LP12: PPKCS12;
@@ -271,14 +273,7 @@ begin
   if (not Assigned(d2i_PKCS12_bio)) or (not Assigned(BIO_new_mem_buf)) then
     Exit;
 
-  LStream := TFileStream.Create(FIXTURE_PATH, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LData, LStream.Size);
-    if Length(LData) > 0 then
-      LStream.ReadBuffer(LData[0], Length(LData));
-  finally
-    LStream.Free;
-  end;
+  LData := ReadFile(FIXTURE_PATH);
 
   Test('PKCS12 malformed fixture 非空', Length(LData) > 0);
   if Length(LData) = 0 then

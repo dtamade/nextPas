@@ -24,7 +24,10 @@ program test_p2_pkcs7_comprehensive;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.pkcs7,
@@ -295,7 +298,6 @@ var
   LEmptyBio: PBIO;
   LTamperedBio: PBIO;
   LP7: PPKCS7;
-  LStream: TFileStream;
   LEmptyData: array[0..0] of Byte;
   LTamperedData: TBytes;
   LResult: Boolean;
@@ -375,14 +377,7 @@ begin
   else
     Test('detached 签名在空输入下验签应失败', False);
 
-  LStream := TFileStream.Create(DATA_PATH, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LTamperedData, LStream.Size);
-    if Length(LTamperedData) > 0 then
-      LStream.ReadBuffer(LTamperedData[0], Length(LTamperedData));
-  finally
-    LStream.Free;
-  end;
+  LTamperedData := ReadFile(DATA_PATH);
 
   Test('读取原始数据用于篡改', Length(LTamperedData) > 0);
   if Length(LTamperedData) = 0 then
@@ -514,7 +509,6 @@ const
   FIXTURE_PATH = './tests/fixtures/p2/pkcs7/pkcs7_malformed_v1.der';
 var
   LFixtureExists: Boolean;
-  LStream: TFileStream;
   LData: TBytes;
   LInputPtr: PByte;
   LP7: PPKCS7;
@@ -531,14 +525,7 @@ begin
   if not Assigned(d2i_PKCS7) then
     Exit;
 
-  LStream := TFileStream.Create(FIXTURE_PATH, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LData, LStream.Size);
-    if Length(LData) > 0 then
-      LStream.ReadBuffer(LData[0], Length(LData));
-  finally
-    LStream.Free;
-  end;
+  LData := ReadFile(FIXTURE_PATH);
 
   Test('PKCS7 malformed fixture 非空', Length(LData) > 0);
   if Length(LData) = 0 then
