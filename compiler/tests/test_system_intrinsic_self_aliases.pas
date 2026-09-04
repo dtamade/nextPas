@@ -3,7 +3,9 @@ program test_system_intrinsic_self_aliases;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,
@@ -382,7 +384,7 @@ begin
   if ParamCount <> 1 then
     Fail('expected-system-source-path');
   SystemPath := ExpandFileName(ParamStr(1));
-  if not FileExists(SystemPath) then
+  if not Exists(SystemPath) then
     Fail('missing-installed-system:' + SystemPath);
 
   SetLength(Failures, 0);
@@ -393,7 +395,7 @@ begin
     'source-populate',
     Failures
   );
-  if FileExists(SystemCacheFilePath) then
+  if Exists(SystemCacheFilePath) then
     RecordSystemAnalysisFailure(Failures, 'source-populate',
       'unexpected-system-cache-file');
 
@@ -406,7 +408,7 @@ begin
     Failures
   );
   SavePoisonedDiskCache(SystemUnitId, SystemPath);
-  if not FileExists(SystemCacheFilePath) then
+  if not Exists(SystemCacheFilePath) then
     RecordSystemAnalysisFailure(Failures, 'disk-warm-setup',
       'missing-poisoned-system-cache-file');
   RunSystemAnalysisPhase(

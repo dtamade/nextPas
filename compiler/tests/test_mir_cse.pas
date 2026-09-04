@@ -3,7 +3,7 @@ program test_mir_cse;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize, nextpas.compiler.ir.mir.pass.cse;
 
 procedure Fail(const AMsg: string);

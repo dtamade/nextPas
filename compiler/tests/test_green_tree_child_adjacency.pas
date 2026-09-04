@@ -3,7 +3,7 @@ program test_green_tree_child_adjacency;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,
   nextpas.compiler.syntax.lexer;

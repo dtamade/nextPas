@@ -3,7 +3,9 @@ program test_incremental_cache_framing;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.fs,
+  nextpas.core.text.format,
   nextpas.compiler.frontend.incremental_cache,
   nextpas.compiler.sema.semantic_model;
 
@@ -27,7 +29,7 @@ var
   Sz: Int64;
 begin
   SetLength(Result, 0);
-  if not FileExists(APath) then Exit;
+  if not Exists(APath) then Exit;
   AssignFile(F, APath);
   Reset(F, 1);
   try
@@ -274,7 +276,7 @@ begin
   end;
 
   WriteLn;
-  WriteLn(Format('Framing tests: %d passed, %d failed', [PassCount, FailCount]));
+  WriteLn(TextFormat('Framing tests: %d passed, %d failed', [PassCount, FailCount]));
   if FailCount > 0 then
     Halt(1);
   WriteLn('incremental-cache-framing=pass');

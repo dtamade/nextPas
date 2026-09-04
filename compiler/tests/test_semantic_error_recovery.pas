@@ -3,7 +3,6 @@ program test_semantic_error_recovery;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,

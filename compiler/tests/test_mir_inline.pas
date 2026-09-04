@@ -3,7 +3,6 @@ program test_mir_inline;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize,
   nextpas.compiler.ir.mir.pass.inline;
 

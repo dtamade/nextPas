@@ -3,7 +3,9 @@ program test_semantic_phase1_type_entry;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,
@@ -22,7 +24,7 @@ procedure WriteTextFile(const APath: string; const AText: string);
 var
   F: Text;
 begin
-  ForceDirectories(ExtractFileDir(APath));
+  MkdirAll(ExtractFileDir(APath));
   Assign(F, APath);
   Rewrite(F);
   try
@@ -34,8 +36,8 @@ end;
 
 procedure DeleteFileIfExists(const APath: string);
 begin
-  if FileExists(APath) then
-    DeleteFile(APath);
+  if Exists(APath) then
+    Remove(APath);
 end;
 
 function BuildModel(const ASource: string; out ADiagnostics: TDiagnosticsSink
@@ -530,7 +532,7 @@ var
   RootSourceText: string;
 begin
   Randomize;
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-phase1-cached-classes-' + IntToStr(Random(MaxInt));
   ClassesPath := ProjectRoot + DirectorySeparator + 'classes.pas';
   RootSourceText :=

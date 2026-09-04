@@ -3,7 +3,7 @@ program test_mir_constfold;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize, nextpas.compiler.ir.mir.pass.constfold;
 
 procedure Fail(const AMsg: string);
