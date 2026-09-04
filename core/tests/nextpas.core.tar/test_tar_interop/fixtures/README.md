@@ -51,6 +51,10 @@ Facts pinned by these fixtures:
   header offset 386, realsize at 483, extension-chain flag at 482/504.
 - `sparse-pax10.tar`: pax 1.0, map prepended to stored data as decimal
   text (`count, offset, size, ...` + `(realsize, 0)` terminator), data entry
-  named `./GNUSparseFile.PID/name`.
+  named `./GNUSparseFile.PID/name`. Each stored chunk is padded to a full
+  512-byte block (GNU tar 1.35 reads chunk `i` at map-block + `i` blocks;
+  tightly packed chunks mis-extract) — our writer (`AddSparseFile`) and
+  reader follow the same block stride; validated live against GNU tar 1.35
+  (`tar -xf`, 1/2/3/multi-segment incl. sub-block sizes, byte-equal).
 - `pax-long.tar` `future.txt`: mtime 16725225600 exceeds 12-char octal,
   carried only by the pax record (ustar field zero).

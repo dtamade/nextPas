@@ -816,6 +816,8 @@ var
   Pax: string;
   MapB, Stored: TBytes;
   Pad: SizeInt;
+  I: Integer;
+  LOff: SizeInt;
 begin
   Pax := ArchivePaxFormatRecord('GNU.sparse.major', '1')
     + ArchivePaxFormatRecord('GNU.sparse.minor', '0')
@@ -833,8 +835,18 @@ begin
     SetLength(Stored, Length(Stored) + Pad);
     FillChar(Stored[Length(Stored) - Pad], Pad, 0);
   end;
-  if Length(AData) > 0 then
-    BytesAppend(Stored, PByte(@AData[0]), SizeUInt(Length(AData)));
+  LOff := 0;
+  for I := 0 to High(ASegs) do
+  begin
+    BytesAppend(Stored, PByte(@AData[LOff]), SizeUInt(ASegs[I].Len));
+    LOff := LOff + ASegs[I].Len;
+    Pad := TarPadToBlock(ASegs[I].Len);
+    if Pad > 0 then
+    begin
+      SetLength(Stored, Length(Stored) + Pad);
+      FillChar(Stored[Length(Stored) - Pad], Pad, 0);
+    end;
+  end;
   EmitRawHeader(AArc, './GNUSparseFile.12345/' + ARealName, '0', Length(Stored));
   AppendPayload(AArc, Stored);
   SetLength(MapB, 0);

@@ -392,7 +392,8 @@ var
   Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   H: TTarHeader;
 begin
-  // 显式稀疏写出（pax 1.0）：占位名确定性取 .0 后缀；名过长/无收益/空数据回退 dense，字节与 AddFile 一致
+  // 显式稀疏写出（pax 1.0）：占位名确定性取 .0 后缀；段存储按 512 补齐（GNU 块语义）；
+  // 名过长/无收益/空数据回退 dense，字节与 AddFile 一致
   if FFinished then
     raise EInvalidOperationError.Create('tar: writer already finished');
   ValidateTarEntryName(AName);
@@ -411,7 +412,7 @@ begin
   LMapBytes := BuildSparseMapBytes(LSegs, Length(AData));
   LSegTotal := 0;
   for I := 0 to High(LSegs) do
-    LSegTotal := LSegTotal + LSegs[I].Len;
+    LSegTotal := LSegTotal + (LSegs[I].Len + TarPadToBlock(LSegs[I].Len));
   LStored := (Length(LMapBytes) + TarPadToBlock(Length(LMapBytes))) + LSegTotal;
   LDense := Length(AData) + TarPadToBlock(Length(AData));
   if (Length(LPlaceName) > C_TAR_LAYOUT.Name.Len) or (LStored >= LDense) then
@@ -459,7 +460,12 @@ begin
   if LPad > 0 then
     WriteChecked(ZeroBufPtr, SizeUInt(LPad));
   for I := 0 to High(LSegs) do
+  begin
     WriteChecked(@AData[LSegs[I].Off], SizeUInt(LSegs[I].Len));
+    LPad := TarPadToBlock(LSegs[I].Len);
+    if LPad > 0 then
+      WriteChecked(ZeroBufPtr, SizeUInt(LPad));
+  end;
   LPad := TarPadToBlock(LStored);
   if LPad > 0 then
     WriteChecked(ZeroBufPtr, SizeUInt(LPad));
