@@ -101,6 +101,12 @@ begin
   GitOidFromHex('not-a-real-oid-at-all-00000000000');
 end;
 
+procedure RaiseSha256Hex;
+begin
+  // contract: SHA-256 unsupported — only 40-hex SHA-1 oids accepted
+  GitOidFromHex(StringOfChar('a', 64));
+end;
+
 procedure RaiseCorruptTrailer;
 var
   Corrupt: TBytes;
@@ -165,6 +171,7 @@ begin
   CheckEqual(Ord(gokCommit), Ord(GitKindFromMode($E000)), 'gitlink mode');
   CheckEqual(Ord(gokTree), Ord(GitKindFromMode($4000)), 'dir mode');
   CheckEqual(Ord(gokBlob), Ord(GitKindFromMode($81A4)), 'regular mode');
+  CheckTrue(RaisedEGitError(@RaiseSha256Hex), '64-hex SHA-256 rejected');
 end;
 
 procedure TestZlibRoundTripAndCorruption;
@@ -353,6 +360,16 @@ procedure TestRepackRefDelta;
 begin
   RunGit(['-c', 'repack.usedeltabaseoffset=false', 'repack', '-adq']);
   AssertAllObjectsReadableFromPacks('ref-delta');
+end;
+
+procedure TestPackDeltaDepthCapPinned;
+begin
+  // contract: delta chains capped at 64; in-cap chains (repack default
+  // depth 50) keep reading — over-cap chains are unrepresentable in
+  // valid packs (bases strictly precede deltas, so chains terminate)
+  CheckEqual(64, GitMaxDeltaDepth, 'delta chain cap pinned at 64');
+  RunGit(['repack', '-adq']);
+  AssertAllObjectsReadableFromPacks('depth-cap');
 end;
 
 procedure TestPackedRefsAfterGc;
@@ -718,6 +735,7 @@ end;
 
 var
   GRawIdx: TBytes;
+  GRawIdxV1: TBytes;
 
 procedure SplitTextLines(const AText: string; out ALines: TStringArray);
 var
@@ -904,6 +922,25 @@ end;
 procedure RaiseIdxSplitLink;
 begin
   GitParseIndex(GRawIdx);
+end;
+
+procedure RaiseIdxV1;
+begin
+  GitParseIndex(GRawIdxV1);
+end;
+
+procedure TestIndexVersion1Refused;
+var
+  I: Integer;
+begin
+  // contract: index v1 unsupported — parser refuses with explicit version error
+  SetLength(GRawIdxV1, 32);
+  GRawIdxV1[0] := Ord('D'); GRawIdxV1[1] := Ord('I');
+  GRawIdxV1[2] := Ord('R'); GRawIdxV1[3] := Ord('C');
+  GRawIdxV1[4] := 0; GRawIdxV1[5] := 0; GRawIdxV1[6] := 0; GRawIdxV1[7] := 1;
+  for I := 8 to 31 do
+    GRawIdxV1[I] := 0;
+  CheckTrue(RaisedEGitError(@RaiseIdxV1), 'v1 header raises unsupported-version');
 end;
 
 procedure TestIndexSplitIndexRefused;
@@ -1851,6 +1888,34 @@ begin
     SetLength(Starts, 0);
     Got := GitCollectCommits(Repo, Starts, -1);
     CheckEqual(0, Length(Got), 'no starts yields nothing');
+  finally
+    Repo.Free;
+  end;
+end;
+
+procedure TestRevWalkIgnoresShallowFile;
+var
+  Starts, Got, Baseline: TGitOidArray;
+  Repo: TNativeRepository;
+  RootSha, ShallowPath: string;
+begin
+  // contract: shallow/grafts unsupported — walker still traverses full parent chains
+  Repo := TNativeRepository.Create(GRwRepo);
+  try
+    SetLength(Starts, 1);
+    Starts[0] := GitResolveHead(PathJoin([GRwRepo, '.git']));
+    Baseline := GitCollectCommits(Repo, Starts, -1);
+    CheckTrue(Length(Baseline) > 1, 'fixture has history');
+    RootSha := GitOidToHex(Baseline[High(Baseline)]);
+    ShallowPath := PathJoin([GRwRepo, '.git', 'shallow']);
+    WriteFileText(ShallowPath, RootSha + #10);
+    try
+      Got := GitCollectCommits(Repo, Starts, -1);
+      CheckEqual(Length(Baseline), Length(Got), 'shallow file ignored, full chain walked');
+      CheckEqual(RootSha, GitOidToHex(Got[High(Got)]), 'root still reached');
+    finally
+      Remove(ShallowPath);
+    end;
   finally
     Repo.Free;
   end;
@@ -3068,6 +3133,51 @@ begin
     if (not E.IsDir) and (Length(E.Name) > 5)
       and (Copy(E.Name, Length(E.Name)-4, 5) = '.pack') then
       Exit(PathJoin([PackDir, E.Name]));
+end;
+
+procedure TestPackIdxCrcNotValidated;
+var
+  PackPath, IdxPath, BadIdx: string;
+  Raw: TBytes;
+  N: Cardinal;
+  CrcOff: SizeInt;
+  Pack: TPackFile;
+  Repo: TNativeRepository;
+  Oid: TGitOid;
+  Kind: TGitObjectKind;
+  Data: TBytes;
+begin
+  // contract: idx CRC table not validated on read (matches git read path)
+  RunGit(['repack', '-adq']);
+  PackPath := FindPackPath;
+  CheckTrue(PackPath <> '', 'pack exists');
+  IdxPath := GitPackIndexPath(PackPath);
+  Raw := ReadFile(IdxPath);
+  N := (Cardinal(Raw[1028]) shl 24) or (Cardinal(Raw[1029]) shl 16) or
+    (Cardinal(Raw[1030]) shl 8) or Cardinal(Raw[1031]);
+  CheckTrue(N > 0, 'idx non-empty');
+  CrcOff := 8 + 1024 + SizeInt(N) * 20;
+  CheckTrue(CrcOff + 4 <= Length(Raw), 'crc table present');
+  Raw[CrcOff] := Raw[CrcOff] xor $FF;
+  BadIdx := PathJoin([GetTempDir, 'nextpas_git_bad_crc_' + IntToStr(GetProcessID) + '.idx']);
+  WriteFile(BadIdx, Raw);
+  try
+    Pack := TPackFile.Create(BadIdx, PackPath);
+    try
+      Repo := TNativeRepository.Create(GGitDir);
+      try
+        Oid := GitResolveHead(GGitDir);
+        Data := Pack.ReadObject(Oid, Kind);
+        CheckTrue(Length(Data) > 0, 'corrupt-crc idx still reads');
+      finally
+        Repo.Free;
+      end;
+    finally
+      Pack.Free;
+    end;
+  finally
+    Remove(BadIdx);
+  end;
 end;
 
 procedure CheckIndexerGolden(const ATag: string);
@@ -4566,6 +4676,126 @@ begin
   end;
 end;
 
+procedure MakeTwoCommitRepo(const APrefix: string; out AWork, AGit: string);
+begin
+  // minimal two-commit fixture: c1 creates f.txt, c2 modifies it
+  AWork := PathJoin([GetTempDir, APrefix + '_' + IntToStr(GetProcessID)]);
+  RemoveAll(AWork);
+  MkdirAll(AWork, PermDirDefault);
+  RunInChecked('git', ['init', '--quiet', '-b', 'main'], AWork);
+  RunInChecked('git', ['config', 'user.email', 'test@example.com'], AWork);
+  RunInChecked('git', ['config', 'user.name', 'Test Er'], AWork);
+  WriteFileText(PathJoin([AWork, 'f.txt']), 'c1'#10);
+  RunInChecked('git', ['add', '.'], AWork);
+  RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c1'], AWork);
+  WriteFileText(PathJoin([AWork, 'f.txt']), 'c2'#10);
+  RunInChecked('git', ['add', '.'], AWork);
+  RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c2'], AWork);
+  AGit := PathJoin([AWork, '.git']);
+end;
+
+procedure TestNotesAddGetRemoveRoundTrip;
+var
+  Work, GitDir, CliOut: string;
+  Target, NoteOid: TGitOid;
+  Notes: TGitNoteArray;
+begin
+  // covers notes add/get/list/exists/remove against git CLI interop
+  MakeTwoCommitRepo('nextpas_git_notes', Work, GitDir);
+  try
+    Target := GitResolveHead(GitDir);
+    CheckFalse(GitNotesExists(GitDir, Target), 'no note initially');
+    NoteOid := GitNotesAdd(GitDir, Target, 'reviewed'#10);
+    CheckFalse(GitOidIsZero(NoteOid), 'add returns non-zero note oid');
+    CheckTrue(GitNotesExists(GitDir, Target), 'note exists after add');
+    CheckEqual('reviewed'#10, GitNotesGetStr(GitDir, Target), 'note content');
+    Notes := GitNotesList(GitDir);
+    CheckEqual(1, Length(Notes), 'one note listed');
+    CliOut := Trim(MustCaptureIn('git', ['notes', '--ref=commits', 'show', GitOidToHex(Target)], Work));
+    CheckEqual('reviewed', CliOut, 'git CLI reads our note');
+    CheckTrue(GitNotesRemove(GitDir, Target), 'remove reports true');
+    CheckFalse(GitNotesExists(GitDir, Target), 'note gone after remove');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestArchiveFileListMatchesGit;
+var
+  Work, GitDir, OursPath, CliPath, OursList, CliList: string;
+begin
+  // covers archive create: tar member lists match git archive
+  MakeTwoCommitRepo('nextpas_git_archive', Work, GitDir);
+  try
+    OursPath := PathJoin([GetTempDir, 'nextpas_ours_' + IntToStr(GetProcessID) + '.tar']);
+    CliPath := PathJoin([GetTempDir, 'nextpas_cli_' + IntToStr(GetProcessID) + '.tar']);
+    WriteFile(OursPath, GitArchiveRef(GitDir, 'HEAD'));
+    WriteFile(CliPath, BytesOfString(MustCaptureIn('git', ['archive', 'HEAD'], Work)));
+    OursList := Trim(MustCaptureIn('tar', ['-tf', OursPath], Work));
+    CliList := Trim(MustCaptureIn('tar', ['-tf', CliPath], Work));
+    CheckEqual(CliList, OursList, 'tar member list matches git archive');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestDescribeMatchesGit;
+var
+  Work, GitDir, Golden: string;
+begin
+  // covers describe/tags: annotated tag on c1, describe HEAD like git
+  MakeTwoCommitRepo('nextpas_git_describe', Work, GitDir);
+  try
+    RunInChecked('git', ['tag', '-a', 'v1.0', '-m', 'r', 'HEAD~1'], Work);
+    Golden := Trim(MustCaptureIn('git', ['describe', 'HEAD'], Work));
+    CheckEqual(Golden, GitDescribe(GitDir, 'HEAD'), 'describe matches git');
+    CheckTrue(GitTagExists(GitDir, 'v1.0'), 'tag exists');
+    CheckEqual(1, Length(GitTagList(GitDir)), 'one tag listed');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestShowStructure;
+var
+  Work, GitDir, CliOut: string;
+  Sh: TGitShow;
+begin
+  // covers show: message, path and hunk structure on c2
+  MakeTwoCommitRepo('nextpas_git_show', Work, GitDir);
+  try
+    Sh := GitShow(GitDir, 'HEAD');
+    CheckEqual('c2', Sh.Commit.Message, 'show message first line');
+    CheckEqual(1, Length(Sh.Diffs), 'show one file');
+    CheckEqual('f.txt', Sh.Diffs[0].Path, 'show path');
+    CheckTrue(Pos('c2', GitShowText(GitDir, 'HEAD')) > 0, 'show text has message');
+    CheckTrue(Pos('f.txt', GitShowText(GitDir, 'HEAD')) > 0, 'show text has path');
+    CliOut := MustCaptureIn('git', ['show', '--name-only', '--format=', 'HEAD'], Work);
+    CheckTrue(Pos('f.txt', CliOut) > 0, 'git show agrees on path');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestCatFileMatchesGit;
+var
+  Work, GitDir: string;
+  Head: TGitOid;
+  CF: TGitCatFile;
+begin
+  // covers catfile type/size/content against git CLI
+  MakeTwoCommitRepo('nextpas_git_catfile', Work, GitDir);
+  try
+    Head := GitResolveHead(GitDir);
+    CF := GitCatFile(GitDir, Head);
+    CheckEqual('commit', GitCatFileType(GitDir, Head), 'type commit');
+    CheckEqual(Trim(MustCaptureIn('git', ['cat-file', '-s', 'HEAD'], Work)), IntToStr(CF.Size), 'size matches');
+    CheckEqual(MustCaptureIn('git', ['cat-file', '-p', 'HEAD'], Work), CF.Text, 'pretty content matches');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
 procedure SetupFixture;
 begin
   GRepo := PathJoin([GetTempDir,
@@ -4617,6 +4847,8 @@ begin
     T.Test('walk commit/tree/blob', @TestWalkCommitTreeBlob);
     T.Test('repack ofs_delta readable', @TestRepackOfsDelta);
     T.Test('repack ref_delta readable', @TestRepackRefDelta);
+    T.Test('pack delta depth cap pinned', @TestPackDeltaDepthCapPinned);
+    T.Test('pack idx crc not validated', @TestPackIdxCrcNotValidated);
     T.Test('packed refs resolve after gc', @TestPackedRefsAfterGc);
     T.Test('missing object raises', @TestMissingObjectRaises);
     T.Test('truncated loose object raises', @TestTruncatedLooseRaises);
@@ -4635,6 +4867,7 @@ begin
     T.Test('index v4 prefix compression', @TestIndexV4PrefixCompression);
     T.Test('corrupt index raises', @TestIndexCorruptionRaises);
     T.Test('split-index extension refused', @TestIndexSplitIndexRefused);
+    T.Test('index v1 refused', @TestIndexVersion1Refused);
     T.Test('index serialization golden vs ls-files',
       @TestIndexSerializeGoldenLsFiles);
     T.Test('index roundtrip self-consistency',
@@ -4654,6 +4887,7 @@ begin
     T.Test('cache-tree conflict invalidates', @TestCacheTreeConflictInvalidates);
     T.Test('revwalk matches git rev-list', @TestRevWalkMatchesRevList);
     T.Test('revwalk start and max-count', @TestRevWalkStartAndMaxCount);
+    T.Test('revwalk ignores shallow file', @TestRevWalkIgnoresShallowFile);
     T.Test('revwalk topo-order matches git', @TestRevWalkTopoOrderMatchesGit);
     T.Test('revwalk topo-order max-count', @TestRevWalkTopoMaxCount);
     T.Test('revwalk topo-order branch start', @TestRevWalkTopoBranchStart);
@@ -4733,6 +4967,11 @@ begin
     T.Test('blame large-file fallback 3k×3k', @TestBlameLargeFileFallback);
     T.Test('parse cache growth no duplicates', @TestParseCacheGrowthNoDuplicates);
     T.Test('workdir diff apply checkout round-trip', @TestWorkdirDiffApplyCheckoutRoundTrip);
+    T.Test('notes add get remove round-trip', @TestNotesAddGetRemoveRoundTrip);
+    T.Test('archive file list matches git', @TestArchiveFileListMatchesGit);
+    T.Test('describe matches git', @TestDescribeMatchesGit);
+    T.Test('show structure', @TestShowStructure);
+    T.Test('catfile matches git', @TestCatFileMatchesGit);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;
