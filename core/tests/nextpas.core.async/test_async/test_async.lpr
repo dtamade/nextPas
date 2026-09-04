@@ -499,10 +499,13 @@ begin
     'wake;',
     'Post wakes after successful Enqueue');
 
-  CheckSourceOrder(LDrainBody, 'if (not fpendingready) or (fpending = nil) then',
+  { C-30: entry guard became a per-iteration liveness re-check: a callback
+    may Close the loop (queue freed+niled), so the old one-shot guard could
+    not cover self-teardown. }
+  CheckSourceOrder(LDrainBody, 'while (not fclosed) and fpendingready and (fpending <> nil) do',
     'fpending.trydequeue(litem)',
-    'DrainPending guards readiness before single-consumer TryDequeue');
-  CheckSourceOrder(LDrainBody, 'while fpending.trydequeue(litem) do',
+    'DrainPending re-checks liveness every iteration before single-consumer TryDequeue');
+  CheckSourceOrder(LDrainBody, 'if not fpending.trydequeue(litem) then',
     'litem.callback(litem.context)',
     'DrainPending invokes callbacks after successful TryDequeue');
 end;
@@ -1575,6 +1578,37 @@ begin
   Check(True, 'listen+close+free teardown x3 without crash');
 end;
 
+{ C-30: posted callback that Closes the loop must stop the drain, not
+  TryDequeue a freed+niled queue (nil Self AV). The item queued behind the
+  closer is discarded exactly once by Close itself, never fired here. }
+var
+  GCloseVictimFired: Boolean = False;
+
+procedure CloseLoopCallback(AContext: Pointer);
+begin
+  TAsyncLoop(AContext).Close;
+end;
+
+procedure CloseVictimCallback(AContext: Pointer);
+begin
+  GCloseVictimFired := True;
+end;
+
+procedure TestAsyncLoopDrainStopsAfterCloseFromCallback;
+var
+  LLoop: TAsyncLoop;
+begin
+  GCloseVictimFired := False;
+  LLoop := TAsyncLoop.Create(32);
+  Check(LLoop.IsValid, 'loop valid');
+  LLoop.Post(@CloseLoopCallback, LLoop);
+  LLoop.Post(@CloseVictimCallback, nil);
+  LLoop.Run;
+  Check(not GCloseVictimFired, 'post-close item discarded, not fired');
+  Check(not LLoop.IsValid, 'loop closed');
+  LLoop.Free;
+end;
+
 { Three-form PostRef/PostMethod/etc tests deferred: API not on main yet
   (merge 6c12e2d33 landed tests without loop/task implementations). }
 
@@ -1652,5 +1686,7 @@ begin
   T.Test('PollerDirectCreateAndBackend', @TestPollerDirectCreateAndBackend);
   T.Test('AsyncLoopTeardownAfterAsyncListen',
     @TestAsyncLoopTeardownAfterAsyncListen);
+  T.Test('AsyncLoopDrainStopsAfterCloseFromCallback',
+    @TestAsyncLoopDrainStopsAfterCloseFromCallback);
   if not T.Run then Halt(1);
 end.
