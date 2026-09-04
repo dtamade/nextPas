@@ -24,7 +24,7 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.connection.base,
-  nextpas.core.io.stream_adapter,
+  nextpas.core.platform.socket,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.native_handle,
   nextpas.core.tls.mbedtls.api;
@@ -114,9 +114,7 @@ implementation
 uses
   nextpas.core.mem,
   nextpas.core.tls.mbedtls.certificate,
-  nextpas.core.tls.mbedtls.session
-  {$IFDEF UNIX}, sockets {$ENDIF}
-  {$IFDEF WINDOWS}, winsock2 {$ENDIF};
+  nextpas.core.tls.mbedtls.session;
 
 const
   MBEDTLS_SSL_CONTEXT_SIZE = 4096;  // Increased for safety
@@ -192,52 +190,41 @@ begin
     Result[I].SetIssuerCertificate(Result[I + 1]);
 end;
 
-{ Socket BIO callbacks for MbedTLS }
-{$IFDEF UNIX}
+{ Socket BIO callbacks for MbedTLS (platform.socket owner, no FPC Sockets fork) }
+function MbedTLSHandleToSocket(AHandle: THandle): TPlatformSocket; inline;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result.Value := PtrUInt(AHandle);
+  {$ELSE}
+  Result.Value := Int32(AHandle);
+  {$ENDIF}
+end;
+
 function MbedTLSSocketSend(ctx: Pointer; const buf: PByte; len: QWord): Integer; cdecl;
 var
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
+  LSent: Int32;
 begin
-  LSocket := TSocket(PtrUInt(ctx));
-  Result := fpSend(LSocket, buf, len, 0);
-  if Result < 0 then
-    Result := MBEDTLS_ERR_SSL_WANT_WRITE;
+  LSocket := MbedTLSHandleToSocket(THandle(PtrUInt(ctx)));
+  if platform_socket_send(LSocket, buf, Int32(len), 0, LSent) <> 0 then
+    Result := MBEDTLS_ERR_SSL_WANT_WRITE
+  else
+    Result := LSent;
 end;
 
 function MbedTLSSocketRecv(ctx: Pointer; buf: PByte; len: QWord): Integer; cdecl;
 var
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
+  LRecvd: Int32;
 begin
-  LSocket := TSocket(PtrUInt(ctx));
-  Result := fpRecv(LSocket, buf, len, 0);
-  if Result < 0 then
+  LSocket := MbedTLSHandleToSocket(THandle(PtrUInt(ctx)));
+  if platform_socket_recv(LSocket, buf, Int32(len), 0, LRecvd) <> 0 then
     Result := MBEDTLS_ERR_SSL_WANT_READ
-  else if Result = 0 then
-    Result := MBEDTLS_ERR_SSL_CONN_EOF;
+  else if LRecvd = 0 then
+    Result := MBEDTLS_ERR_SSL_CONN_EOF
+  else
+    Result := LRecvd;
 end;
-{$ELSE}
-function MbedTLSSocketSend(ctx: Pointer; const buf: PByte; len: QWord): Integer; cdecl;
-var
-  LSocket: Tsocket;
-begin
-  LSocket := Tsocket(PtrUInt(ctx));
-  Result := send(LSocket, buf, len, 0);
-  if Result = SOCKET_ERROR then
-    Result := MBEDTLS_ERR_SSL_WANT_WRITE;
-end;
-
-function MbedTLSSocketRecv(ctx: Pointer; buf: PByte; len: QWord): Integer; cdecl;
-var
-  LSocket: Tsocket;
-begin
-  LSocket := Tsocket(PtrUInt(ctx));
-  Result := recv(LSocket, buf, len, 0);
-  if Result = SOCKET_ERROR then
-    Result := MBEDTLS_ERR_SSL_WANT_READ
-  else if Result = 0 then
-    Result := MBEDTLS_ERR_SSL_CONN_EOF;
-end;
-{$ENDIF}
 
 { Stream BIO callbacks for MbedTLS }
 function MbedTLSStreamSend(ctx: Pointer; const buf: PByte; len: QWord): Integer; cdecl;

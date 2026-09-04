@@ -112,6 +112,25 @@ procedure SetLastError(dwErrCode: DWORD); stdcall; external 'kernel32' name 'Set
     @param lpSystemInfo 输出系统信息 *}
 procedure GetSystemInfo(var lpSystemInfo: SYSTEM_INFO); stdcall; external 'kernel32' name 'GetSystemInfo';
 
+{ Version }
+
+{** @desc Windows 版本信息（GetVersionEx 输入输出；字段布局与 Win32 API 一致） *}
+type
+  POSVERSIONINFO = ^OSVERSIONINFO;
+  OSVERSIONINFO = record
+    dwOSVersionInfoSize: DWORD;
+    dwMajorVersion: DWORD;
+    dwMinorVersion: DWORD;
+    dwBuildNumber: DWORD;
+    dwPlatformId: DWORD;
+    szCSDVersion: array[0..127] of AnsiChar;
+  end;
+
+{** @desc 获取 Windows 版本信息（kernel32）
+    @param lpVersionInformation 版本信息（调用前置 dwOSVersionInfoSize）
+    @return 非零成功 *}
+function GetVersionEx(var lpVersionInformation: OSVERSIONINFO): BOOL; stdcall; external 'kernel32' name 'GetVersionExA';
+
 { TLS (Thread Local Storage) }
 
 {** @desc 分配 TLS 索引
@@ -749,6 +768,9 @@ function FileTimeToSystemTime(lpFileTime: Pointer; lpSystemTime: LPSYSTEMTIME): 
     @param lpCriticalSection 临界区
     @param dwSpinCount 自旋计数
     @return TRUE 成功 *}
+{** @desc 初始化临界区（与 Delete/Enter/Leave 配对）
+    @param lpCriticalSection 临界区 *}
+procedure InitializeCriticalSection(lpCriticalSection: LPCRITICAL_SECTION); stdcall; external 'kernel32' name 'InitializeCriticalSection';
 function InitializeCriticalSectionAndSpinCount(lpCriticalSection: LPCRITICAL_SECTION; dwSpinCount: DWORD): WINBOOL; stdcall; external 'kernel32' name 'InitializeCriticalSectionAndSpinCount';
 
 {** @desc 删除临界区
@@ -939,6 +961,18 @@ function GetConsoleScreenBufferInfo(hConsoleOutput: HANDLE; lpConsoleScreenBuffe
     @param Arguments 参数
     @return 写入长度 *}
 function FormatMessageA(dwFlags: DWORD; lpSource: Pointer; dwMessageId: DWORD; dwLanguageId: DWORD; lpBuffer: LPSTR; nSize: DWORD; Arguments: Pointer): DWORD; stdcall; external 'kernel32' name 'FormatMessageA';
+
+const
+  FORMAT_MESSAGE_FROM_SYSTEM = $1000;
+  FORMAT_MESSAGE_IGNORE_INSERTS = $200;
+  LANG_NEUTRAL = 0;
+  SUBLANG_DEFAULT = 1;
+
+{** @desc 构造语言 ID（Win32 MAKELANGID 宏单源：子语言左移 10 位或主语言） *}
+function MAKELANGID(const APrimary, ASub: WORD): DWORD; inline;
+
+{** @desc 格式化消息（ANSI 别名，与 FormatMessageA 同签名，供存量调用点使用） *}
+function FormatMessage(dwFlags: DWORD; lpSource: Pointer; dwMessageId: DWORD; dwLanguageId: DWORD; lpBuffer: LPSTR; nSize: DWORD; Arguments: Pointer): DWORD; stdcall; external 'kernel32' name 'FormatMessageA';
 
 {** @desc 释放本地内存
     @param hMem 内存句柄
@@ -1179,53 +1213,11 @@ function SetClipboardData(uFormat: UINT; hMem: HANDLE): HANDLE; stdcall; externa
     @return 内存句柄,nil 无此格式 *}
 function GetClipboardData(uFormat: UINT): HANDLE; stdcall; external 'user32' name 'GetClipboardData';
 
-{ NUMA — host-owned raw truth for L2 numa (platform owns Windows ABI) }
-
-{** @desc 获取最高 NUMA 节点号
-    @param HighestNodeNumber 输出最高节点号
-    @return TRUE 成功 *}
-function GetNumaHighestNodeNumber(var HighestNodeNumber: DWORD): BOOL; stdcall; external 'kernel32' name 'GetNumaHighestNodeNumber';
-
-{** @desc 获取处理器所在 NUMA 节点
-    @param Processor 处理器编号
-    @param NodeNumber 输出节点号
-    @return TRUE 成功 *}
-function GetNumaProcessorNode(Processor: BYTE; var NodeNumber: BYTE): BOOL; stdcall; external 'kernel32' name 'GetNumaProcessorNode';
-
-{** @desc 获取 NUMA 节点处理器掩码
-    @param Node 节点号
-    @param ProcessorMask 输出掩码
-    @return TRUE 成功 *}
-function GetNumaNodeProcessorMask(Node: DWORD; var ProcessorMask: UInt64): BOOL; stdcall; external 'kernel32' name 'GetNumaNodeProcessorMask';
-
-{** @desc 在指定 NUMA 节点分配内存
-    @param hProcess 进程句柄
-    @param lpAddress 地址
-    @param dwSize 大小
-    @param flAllocationType 分配类型
-    @param flProtect 保护
-    @param nndPreferred 首选节点
-    @return 分配地址 *}
-function VirtualAllocExNuma(hProcess: HANDLE; lpAddress: Pointer; dwSize: PtrUInt; flAllocationType: DWORD; flProtect: DWORD; nndPreferred: DWORD): Pointer; stdcall; external 'kernel32' name 'VirtualAllocExNuma';
-
-{** @desc 释放 NUMA 内存
-    @param hProcess 进程句柄
-    @param lpAddress 地址
-    @param dwSize 大小
-    @param dwFreeType 释放类型
-    @return TRUE 成功 *}
-function VirtualFreeEx(hProcess: HANDLE; lpAddress: Pointer; dwSize: PtrUInt; dwFreeType: DWORD): BOOL; stdcall; external 'kernel32' name 'VirtualFreeEx';
-
-{** @desc 获取当前处理器编号
-    @return 处理器编号 *}
-function GetCurrentProcessorNumber: DWORD; stdcall; external 'kernel32' name 'GetCurrentProcessorNumber';
-
-{** @desc 设置线程亲和性
-    @param hThread 线程句柄
-    @param dwThreadAffinityMask 掩码
-    @return 旧掩码 *}
-function SetThreadAffinityMask(hThread: HANDLE; dwThreadAffinityMask: UInt64): UInt64; stdcall; external 'kernel32' name 'SetThreadAffinityMask';
-
 implementation
+
+function MAKELANGID(const APrimary, ASub: WORD): DWORD; inline;
+begin
+  Result := (DWORD(ASub) shl 10) or DWORD(APrimary);
+end;
 
 end.

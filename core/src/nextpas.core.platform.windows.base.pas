@@ -69,6 +69,7 @@ type
     dwLowDateTime: DWORD;
     dwHighDateTime: DWORD;
   end;
+  PFileTime = ^FILETIME;
 
   {** @desc 64 位整数结构（高低双字或四字） *}
   LARGE_INTEGER = record

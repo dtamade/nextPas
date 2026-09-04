@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.lib;
 interface
 
 uses
-  Windows,
+  nextpas.core.platform.windows.ffi,
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.format,
@@ -174,7 +174,7 @@ begin
   FillChar(FStatistics, SizeOf(FStatistics), 0);
 
   // Phase 3.3: 初始化统计锁
-  InitializeCriticalSection(FStatisticsLock);
+  InitializeCriticalSection(@FStatisticsLock);
 
   // 初始化 Windows 版本信息
   FillChar(FWindowsVersion, SizeOf(FWindowsVersion), 0);
@@ -191,7 +191,7 @@ begin
     Finalize;
 
   // Phase 3.3: 清理统计锁
-  DeleteCriticalSection(FStatisticsLock);
+  DeleteCriticalSection(@FStatisticsLock);
 
   inherited Destroy;
 end;
@@ -682,13 +682,13 @@ end;
 procedure TWinSSLLibrary.ResetStatistics;
 begin
   // Phase 3.3: 线程安全的统计重置
-  EnterCriticalSection(FStatisticsLock);
+  EnterCriticalSection(@FStatisticsLock);
   try
     FillChar(FStatistics, SizeOf(FStatistics), 0);
     // 初始化最小握手时间为最大值
     FStatistics.HandshakeTimeMin := High(Integer);
   finally
-    LeaveCriticalSection(FStatisticsLock);
+    LeaveCriticalSection(@FStatisticsLock);
   end;
   InternalLog(sslLogInfo, 'Statistics reset');
 end;
@@ -699,7 +699,7 @@ end;
 
 procedure TWinSSLLibrary.UpdateHandshakeStatistics(AHandshakeDuration: Integer; ASuccess: Boolean);
 begin
-  EnterCriticalSection(FStatisticsLock);
+  EnterCriticalSection(@FStatisticsLock);
   try
     if ASuccess then
     begin
@@ -723,13 +723,13 @@ begin
     else
       Inc(FStatistics.HandshakesFailed);
   finally
-    LeaveCriticalSection(FStatisticsLock);
+    LeaveCriticalSection(@FStatisticsLock);
   end;
 end;
 
 procedure TWinSSLLibrary.UpdateSessionStatistics(ASessionReused: Boolean);
 begin
-  EnterCriticalSection(FStatisticsLock);
+  EnterCriticalSection(@FStatisticsLock);
   try
     if ASessionReused then
     begin
@@ -748,7 +748,7 @@ begin
     else
       FStatistics.SessionReuseRate := 0.0;
   finally
-    LeaveCriticalSection(FStatisticsLock);
+    LeaveCriticalSection(@FStatisticsLock);
   end;
 end;
 

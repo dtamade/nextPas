@@ -19,9 +19,7 @@ interface
 
 uses
   nextpas.core.base,
-  {$IFDEF WINDOWS}
   nextpas.core.platform.windows.base,
-  {$ENDIF}
   nextpas.core.platform.windows.ffi,
   nextpas.core.platform.windows.utf16,
   nextpas.core.bytes.ops,
@@ -120,7 +118,6 @@ implementation
 
 uses
   nextpas.core.mem,
-  nextpas.core.text.conv,
   nextpas.core.text.format,
   nextpas.core.text.strings,
   nextpas.core.tls.asn1,
