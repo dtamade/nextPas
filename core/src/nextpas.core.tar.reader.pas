@@ -63,6 +63,8 @@ type
     FSparseRealSize: Int64;
     FSparseBuf: TBytes;
     FSparseValid: Boolean;
+    // hot-path gate: per-entry ext state cleared only when dirtied
+    FExtDirty: Boolean;
     FMaxEntry: SizeUInt;
     FMaxTotal: UInt64;
     FCumTotal: UInt64;
@@ -1022,16 +1024,21 @@ begin
   LUsedGlobalPath := False;
   LIsSparse := False;
   LSegs := nil;
-  FPendingLongName := '';
-  FPendingLongLink := '';
-  FPaxPath := '';
-  FPaxLinkPath := '';
-  FPaxExt := Default(TPaxExtSet);
-  FSparsePending := False;
-  FSparseValid := False;
-  FSparseBuf := nil;
-  FSparseRealName := '';
-  FSparseRealSize := 0;
+  // clean dense entries skip managed resets; class zero-init covers first call
+  if FExtDirty then
+  begin
+    FPendingLongName := '';
+    FPendingLongLink := '';
+    FPaxPath := '';
+    FPaxLinkPath := '';
+    FPaxExt := Default(TPaxExtSet);
+    FSparsePending := False;
+    FSparseValid := False;
+    FSparseBuf := nil;
+    FSparseRealName := '';
+    FSparseRealSize := 0;
+    FExtDirty := False;
+  end;
   while True do
   begin
     if FPos >= FCount then
@@ -1074,6 +1081,7 @@ begin
         FPendingLongName := SliceToString(PayloadPtr, PayloadLen)
       else
         FPendingLongName := '';
+      FExtDirty := True;
     end
     else if Flag = Ord('K') then
     begin
@@ -1089,6 +1097,7 @@ begin
         FPendingLongLink := SliceToString(PayloadPtr, PayloadLen)
       else
         FPendingLongLink := '';
+      FExtDirty := True;
     end
     else if (Flag = Ord('x')) or (Flag = Ord('g')) then
     begin
@@ -1101,6 +1110,7 @@ begin
       end;
       if PayloadLen > 0 then
       begin
+        FExtDirty := True;
         if ParsePaxRecordsSlice(PayloadPtr, PayloadLen) then
         begin
           if Flag = Ord('x') then
@@ -1164,6 +1174,7 @@ begin
       FCumTotal := FCumTotal + UInt64(LReal);
       LHdr.PaxRecords := nil;
       ReconstructSparse(LSegs, LReal, @FData[FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE))], 0, SizeUInt(Size));
+      FExtDirty := True;
       FEntrySize := LReal;
       FEntryDataOfs := FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE));
       FPos := FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE)) + SizeUInt(Size) + SizeUInt(TarPadToBlock(Size));
@@ -1174,12 +1185,18 @@ begin
     else
     begin
       AHeader := Default(TTarHeader);
-      // 1.0 稀疏：pending map 仅与占位名配对，否则配对腐坏即 EIOError，当次消费
-      LUstarName := UstarEntryName;
-      LIsSparse := FSparsePending and IsGnuSparseDataName(LUstarName);
-      if FSparsePending and not LIsSparse then
-        raise EIOError.Create('tar: sparse map without sparse data');
-      FSparsePending := False;
+      // 1.0 稀疏：pending 占位名配对才消费，否则配对腐坏即 EIOError，当次消费；
+      // dense 热路径跳过名物化，回退分支内按需物化
+      if FSparsePending then
+      begin
+        LUstarName := UstarEntryName;
+        LIsSparse := IsGnuSparseDataName(LUstarName);
+        if not LIsSparse then
+          raise EIOError.Create('tar: sparse map without sparse data');
+        FSparsePending := False;
+      end
+      else
+        LIsSparse := False;
       // re-check IsSafe, Warn on reject (parity with auto-clear), auto-clear single-use if no guard
       if (FGlobalPaxPath <> '') and not IsSafeTarEntryName(FGlobalPaxPath) then
       begin
@@ -1208,7 +1225,7 @@ begin
         end;
       end
       else
-        AHeader.Name := LUstarName;
+        AHeader.Name := UstarEntryName;
       GuardTarNameForRead(AHeader.Name);
       if FPendingLongLink <> '' then
         AHeader.LinkName := FPendingLongLink
@@ -1234,11 +1251,6 @@ begin
         AHeader.Size := FSparseRealSize
       else
         AHeader.Size := Size;
-      AHeader.MTimeUnix := NumericField(FPos + C_TAR_LAYOUT.MTime.Off, C_TAR_LAYOUT.MTime.Len);
-      AHeader.UName := CachedField(FPos + C_TAR_LAYOUT.UName.Off, C_TAR_LAYOUT.UName.Len, FLastUName);
-      AHeader.GName := CachedField(FPos + C_TAR_LAYOUT.GName.Off, C_TAR_LAYOUT.GName.Len, FLastGName);
-      AHeader.DevMajor := NumericField(FPos + C_TAR_LAYOUT.DevMajor.Off, C_TAR_LAYOUT.DevMajor.Len);
-      AHeader.DevMinor := NumericField(FPos + C_TAR_LAYOUT.DevMinor.Off, C_TAR_LAYOUT.DevMinor.Len);
       // pax typed overrides: x wins, else guard-scoped g, else single-use g
       if FPaxExt.HasMTime then
         AHeader.MTimeUnix := FPaxExt.MTimeUnix
@@ -1291,6 +1303,7 @@ begin
       begin
         ParseSparseMapText(@FData[FEntryDataOfs], SizeUInt(Size), FSparseRealSize, LSegs, LMapLen);
         ReconstructSparse(LSegs, FSparseRealSize, @FData[FEntryDataOfs], SizeUInt(AlignUp(LMapLen, SizeUInt(C_TAR_BLOCK_SIZE))), SizeUInt(Size));
+        FExtDirty := True;
       end;
       FPos := FPos + C_TAR_BLOCK_SIZE + SizeUInt(Size) + SizeUInt(TarPadToBlock(Size));
       Result := True;
