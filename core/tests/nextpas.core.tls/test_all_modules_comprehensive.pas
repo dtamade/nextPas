@@ -3,7 +3,6 @@ program test_all_modules_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  Classes,
   nextpas.core.text.conv;
 
 type
@@ -131,20 +130,42 @@ end;
 
 procedure PrintModuleList;
 var
-  i: Integer;
-  Categories: TStringList;
-  Cat: string;
+  i, j: Integer;
+  Categories: array of string;
+  Cat, Tmp: string;
   Count: Integer;
+  Found: Boolean;
 begin
-  Categories := TStringList.Create;
-  Categories.Sorted := True;
-  Categories.Duplicates := dupIgnore;
+  SetLength(Categories, 0);
+  for i := 0 to High(Modules) do
+  begin
+    Found := False;
+    for j := 0 to High(Categories) do
+      if Categories[j] = Modules[i].Category then
+      begin
+        Found := True;
+        Break;
+      end;
+    if not Found then
+    begin
+      SetLength(Categories, Length(Categories) + 1);
+      Categories[High(Categories)] := Modules[i].Category;
+    end;
+  end;
+  for i := 1 to High(Categories) do
+    for j := i downto 1 do
+    begin
+      if Categories[j] < Categories[j - 1] then
+      begin
+        Tmp := Categories[j];
+        Categories[j] := Categories[j - 1];
+        Categories[j - 1] := Tmp;
+      end
+      else
+        Break;
+    end;
 
   try
-    // Collect unique categories
-    for i := 0 to High(Modules) do
-      Categories.Add(Modules[i].Category);
-
     WriteLn('========================================');
     WriteLn('  All OpenSSL Modules');
     WriteLn('========================================');
@@ -176,7 +197,6 @@ begin
     end;
 
   finally
-    Categories.Free;
   end;
 end;
 

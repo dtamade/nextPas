@@ -24,7 +24,7 @@
 | io.pipe | 管道 Pipe |
 | io.scanner | IScanner 扫描器 |
 | io.util | Copy/CopyN/ReadAll 等工具 |
-| io.stream_adapter | Classes 流适配 |
+| io.stream_adapter | ~~Classes 流适配~~（G7 已删除，见 IStream-ectomy） |
 | io.poller | 统一轮询器 TPoller |
 | io.reactor | io_uring Reactor (Linux) |
 | io.reactor.epoll | epoll Reactor (Linux) |

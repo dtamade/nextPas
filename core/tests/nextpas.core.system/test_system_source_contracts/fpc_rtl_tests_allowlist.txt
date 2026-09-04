@@ -5,6 +5,23 @@
 # resolution) are acknowledged debt: removing the uses would destroy the test intent.
 # socket/process/sync/json remnants are BLOCKED on missing owners (platform.socket covers
 # only part of the surface; TProcess/Crt/fpjson have no owner yet).
+# G7c (istream-only, 2026-09-04): pruned 63 stale entries verified with the gate's own
+# uses parser (62 migrated by this/other lanes + test_stream_adapter.lpr deleted in G7a);
+# both ratchets re-verified zero-unlisted after prune. test_all_modules_comprehensive.pas
+# migrated off Classes instead of allowlisting. Retained entries and honest reasons:
+# - tests/harness/runner.pas (baseunix/process/classes/sysutils): shared orchestration
+#   layer, cross-harness blast radius; owner: toolchain/harness lane.
+# - test_freepascal_tls13_early_data.pas (baseunix/process/unix): probe tests raw
+#   behavior itself (TFileStream sharing modes); removing uses kills probe intent.
+# - winssl test_winssl_performance/session_resumption/session_reuse_benchmark
+#   (windows/winsock2): Windows-native segments inside {$IFDEF WINDOWS} uses;
+#   Windows-only truth, owner: tls lane.
+# - shared/tls_test_sockets.pas + test_ssl_client_connection.pas (sockets/ssockets/
+#   baseunix/unix/winsock2): shared raw-socket helpers; owner: tls lane.
+# - winssl/test_session_manager_logic.pas (syncobjs): TCriticalSection truth;
+#   owner: tls lane.
+# - fixtures/red/raw_ffi bad.pas (windows): intentional negative fixture.
+# - ssh/zip/compiler-tests/examples/benchmarks remnants: other lanes' scope, kept.
 #
 baseunix|core/tests/nextpas.core.platform/test_platform_crash/test_platform_crash.lpr
 baseunix|core/tests/nextpas.core.thread/test_thread/test_thread.lpr
@@ -15,7 +32,6 @@ classes|core/benchmarks/nextpas.core.respack/bench_embed_startup/bench_embed_sta
 classes|core/benchmarks/nextpas.core.respack/bench_servevfs/bench_servevfs.lpr
 classes|core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump/bench_ssh_proxyjump.lpr
 classes|core/benchmarks/nextpas.core.system/bench_system/bench_system.lpr
-classes|core/tests/nextpas.core.io/test_stream_adapter/test_stream_adapter.lpr
 classes|core/tests/nextpas.core.net.server/test_net_server/test_net_server.lpr
 classes|core/tests/nextpas.core.net/test_net/test_net.lpr
 classes|core/tests/nextpas.core.ssh/bench_ssh_proxyjump/bench_ssh_proxyjump.lpr
@@ -29,18 +45,6 @@ classes|core/tests/nextpas.core.tar/test_tar_contract/test_tar_contract.lpr
 classes|core/tests/nextpas.core.thread/test_thread/test_thread.lpr
 classes|core/tests/nextpas.core.thread/test_worksteal/test_worksteal.lpr
 classes|core/tests/nextpas.core.tls/openssl/test_openssl_server_ocsp_stapling_runtime.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_client_cert_verify_flags_runtime.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_client_certificate_flight_requirements.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_client_certificateverify_runtime.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_client_chain_trust_runtime.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_client_ct_sct_surface.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_client_ocsp_stapling_runtime.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_client_online_ocsp_runtime.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_client_peer_certificate_surface.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_client_session_resumption.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_resumed_session_hostname_binding.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_server_ocsp_stapling_runtime.pas
-classes|core/tests/nextpas.core.tls/test_freepascal_server_session_resumption.pas
 classes|core/tests/nextpas.core.tls/test_freepascal_tls13_early_data.pas
 classes|core/tests/nextpas.core.tls/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas
 classes|core/tests/nextpas.core.websocket/test_blazor/test_blazor.lpr
@@ -55,14 +59,6 @@ classes|examples/nextpas.core.tls/09_freepascal_tls13_client.pas
 classes|examples/nextpas.core.tls/11_freepascal_security_features.pas
 classes|tests/compiler/pass/sysutils_pass.pas
 classes|tests/harness/runner.pas
-classes|tests/hir/test_hir_dynarray_release_runtime_smoke.pas
-classes|tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas
-classes|tests/hir/test_hir_large_alloc_runtime_smoke.pas
-classes|tests/hir/test_hir_string_call_argument_ownership_runtime_smoke.pas
-classes|tests/hir/test_hir_string_length_ownership_runtime_smoke.pas
-classes|tests/hir/test_hir_string_ownership_runtime_smoke.pas
-classes|tests/hir/test_hir_string_return_ownership_runtime_smoke.pas
-classes|tests/rtl/test_critical_rtl.pas
 cthreads|core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump/bench_ssh_proxyjump.lpr
 cthreads|core/tests/nextpas.core.ssh/bench_ssh_proxyjump/bench_ssh_proxyjump.lpr
 cthreads|core/tests/nextpas.core.ssh/e2e_ssh_live/test_ssh_e2e_async.lpr
@@ -75,9 +71,6 @@ ctypes|core/tests/nextpas.core.tls/benchmarks/test_manual_socket.pas
 ctypes|core/tests/nextpas.core.tls/openssl/test_ocsp_connection_verification_regression.pas
 ctypes|core/tests/nextpas.core.tls/openssl/test_openssl_server_ocsp_stapling_callback_contract.pas
 ctypes|core/tests/nextpas.core.tls/openssl/test_openssl_server_ocsp_stapling_runtime.pas
-ctypes|core/tests/nextpas.core.tls/test_cert_utils_dertopem_export_delayed_loss_family_contract.pas
-ctypes|core/tests/nextpas.core.tls/test_wolfssl_connection_session_reused_contract.pas
-ctypes|core/tests/nextpas.core.tls/test_wolfssl_framework.pas
 ctypes|core/tests/nextpas.core.tls/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas
 dateutils|examples/nextpas.core.tls/02_generate_certificate.pas
 dynlibs|compiler/tests/test_dynlibs_contract.pas
@@ -90,7 +83,6 @@ generics.collections|compiler/src/nextpas.compiler.ir.hir.verifier.pas
 math|core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump/bench_ssh_proxyjump.lpr
 math|core/tests/nextpas.core.ssh/bench_ssh_proxyjump/bench_ssh_proxyjump.lpr
 math|core/tests/nextpas.core.tls/fuzz/fuzz_framework.pas
-math|core/tests/nextpas.core.tls/test_buffer_pool.pas
 math|core/tests/nextpas.core.tls/winssl/test_winssl_performance.pas
 math|core/tests/nextpas.core.tls/winssl/test_winssl_session_reuse_benchmark.pas
 netdb|core/tests/shared/tls_test_sockets.pas
@@ -98,20 +90,10 @@ process|core/tests/nextpas.core.tls/test_freepascal_tls13_early_data.pas
 process|core/tests/nextpas.core.tls/winssl/test_winssl_session_resumption.pas
 process|tests/harness/runner.pas
 sockets|core/tests/nextpas.core.tls/connection/test_ssl_client_connection.pas
-sockets|core/tests/nextpas.core.tls/unit/test_tls12_resume_reject_fallback.pas
 sockets|core/tests/shared/tls_test_sockets.pas
 ssockets|core/tests/nextpas.core.tls/connection/test_ssl_client_connection.pas
-ssockets|core/tests/nextpas.core.tls/unit/test_tls12_resume_reject_fallback.pas
 strutils|core/tests/nextpas.core.net.server/test_net_server/test_net_server.lpr
 strutils|core/tests/nextpas.core.net/test_net/test_net.lpr
-strutils|core/tests/nextpas.core.tls/benchmarks/benchmark_framework.pas
-strutils|core/tests/nextpas.core.tls/integration/test_backend_comparison.pas
-strutils|examples/nextpas.core.tls/01_tls_client.pas
-syncobjs|core/tests/nextpas.core.tls/integration/test_concurrent_connections.pas
-syncobjs|core/tests/nextpas.core.tls/test_buffer_pool.pas
-syncobjs|core/tests/nextpas.core.tls/test_concurrent_connections.pas
-syncobjs|core/tests/nextpas.core.tls/test_factory_concurrent_initialization_contract.pas
-syncobjs|core/tests/nextpas.core.tls/test_sharded_session_cache.pas
 syncobjs|core/tests/nextpas.core.tls/winssl/test_session_manager_logic.pas
 syscall|core/tests/nextpas.core.thread/test_thread/test_thread.lpr
 system|tests/compiler/fail/explicit_system_missing_unit_fail.pas
@@ -137,23 +119,7 @@ sysutils|compiler/src/nextpas.compiler.sema.analyzer.pas
 sysutils|compiler/src/nextpas.compiler.sema.overload.pas
 sysutils|compiler/src/nextpas.compiler.sema.runtime_vars.pas
 sysutils|compiler/src/np_llvm_utils.pas
-sysutils|compiler/tests/test_green_tree_child_adjacency.pas
 sysutils|compiler/tests/test_incremental_cache_entry_identity.pas
-sysutils|compiler/tests/test_incremental_cache_framing.pas
-sysutils|compiler/tests/test_mir_constfold.pas
-sysutils|compiler/tests/test_mir_cse.pas
-sysutils|compiler/tests/test_mir_dce.pas
-sysutils|compiler/tests/test_mir_deadarg.pas
-sysutils|compiler/tests/test_mir_inline.pas
-sysutils|compiler/tests/test_mir_strength_red.pas
-sysutils|compiler/tests/test_semantic_constructor_type_infer.pas
-sysutils|compiler/tests/test_semantic_error_recovery.pas
-sysutils|compiler/tests/test_semantic_expr_type_infer.pas
-sysutils|compiler/tests/test_semantic_hir_lowering.pas
-sysutils|compiler/tests/test_semantic_overload_resolve.pas
-sysutils|compiler/tests/test_semantic_phase1_type_entry.pas
-sysutils|compiler/tests/test_semantic_type_compat.pas
-sysutils|compiler/tests/test_system_intrinsic_self_aliases.pas
 sysutils|core/benchmarks/nextpas.core.respack/bench_embed_startup/bench_embed_startup.lpr
 sysutils|core/benchmarks/nextpas.core.respack/bench_servevfs/bench_servevfs.lpr
 sysutils|core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump/bench_ssh_proxyjump.lpr
@@ -171,16 +137,12 @@ sysutils|core/tests/nextpas.core.ssh/test_ssh_sftp_async_via_jump/test_ssh_sftp_
 sysutils|core/tests/nextpas.core.tar/test_tar_contract/test_tar_contract.lpr
 sysutils|core/tests/nextpas.core.thread/test_thread/test_thread.lpr
 sysutils|core/tests/nextpas.core.thread/test_worksteal/test_worksteal.lpr
-sysutils|core/tests/nextpas.core.tls/benchmarks/benchmark_framework.pas
 sysutils|core/tests/nextpas.core.tls/test_freepascal_tls13_early_data.pas
-sysutils|core/tests/nextpas.core.tls/test_openssl_connection_stream_cleanup_ssl_free_contract.pas
-sysutils|core/tests/nextpas.core.tls/test_openssl_connection_stream_constructor_contract.pas
 sysutils|core/tests/nextpas.core.websocket/test_blazor/test_blazor.lpr
 sysutils|core/tests/nextpas.core.webview/test_webview_fake_invoke/test_webview_fake_invoke.lpr
 sysutils|core/tests/nextpas.core.zip/test_zip_contract/test_zip_contract.lpr
 sysutils|core/tests/nextpas.core.zip/test_zip_go_parity/test_zip_go_parity.lpr
 sysutils|core/tests/nextpas.core.zip/test_zip_perf/test_zip_perf.lpr
-sysutils|examples/nextpas.core.tls/01_tls_client.pas
 sysutils|examples/nextpas.core.tls/02_generate_certificate.pas
 sysutils|examples/nextpas.core.tls/04_https_rest_client.pas
 sysutils|examples/nextpas.core.tls/05_https_server.pas
@@ -199,14 +161,6 @@ sysutils|tests/compiler/pass/string_concat_owned_pass.pas
 sysutils|tests/compiler/pass/strings_pass.pas
 sysutils|tests/compiler/pass/sysutils_pass.pas
 sysutils|tests/harness/runner.pas
-sysutils|tests/hir/test_hir_dynarray_release_runtime_smoke.pas
-sysutils|tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas
-sysutils|tests/hir/test_hir_large_alloc_runtime_smoke.pas
-sysutils|tests/hir/test_hir_string_call_argument_ownership_runtime_smoke.pas
-sysutils|tests/hir/test_hir_string_length_ownership_runtime_smoke.pas
-sysutils|tests/hir/test_hir_string_ownership_runtime_smoke.pas
-sysutils|tests/hir/test_hir_string_return_ownership_runtime_smoke.pas
-sysutils|tests/rtl/test_critical_rtl.pas
 typinfo|core/examples/nextpas.core.config/config_bind_patterns/config_bind_patterns.lpr
 typinfo|core/tests/nextpas.core.tls/mbedtls/test_mbedtls_connection_final.pas
 typinfo|core/tests/nextpas.core.tls/mbedtls/test_mbedtls_correct_order.pas

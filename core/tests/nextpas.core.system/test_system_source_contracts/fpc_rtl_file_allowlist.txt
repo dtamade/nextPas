@@ -3,15 +3,22 @@
 # <Unit>|<relative-path> to keep the gate's grep lookup stable).
 # Only live src truth remains:
 # KEEP: no owner exists (exception) / system self-zone (typinfo).
-# DEFERRED: owned by sibling lanes (winssl.connection -> istream-only IStream-ectomy,
-#   winssl.enterprise -> tls lane; touch only with lane-owner sign-off).
+# DEFERRED: owned by sibling lanes (winssl.enterprise -> tls lane;
+#   touch only with lane-owner sign-off).
+# G7c notes (istream-only): winssl.connection.pas no longer uses any monitored
+# FPC unit (Windows/Sockets/winsock2 pruned 2026-09-04: uses clause is
+# owner-only since socket IStream-ectomy; Windows appears only in comments and
+# {$IFDEF WINDOWS} code, never in a uses clause).
 # INFRA: deliberate bootstrap bindings, documented in-unit (thread.init cthreads,
 #   compress zlib FFI).
+# G7c registry decision (istream-only, 2026-09-04, BLOCKED, owner tls lane):
+# Registry|nextpas.core.tls.winssl.enterprise.pas is a behavior decision, not
+# fixable here. The unit IS Windows-enterprise truth (FIPS/group-policy/
+# enterprise-CA via 5x TRegistry sites); platform.windows exposes only raw
+# advapi32 FFI bindings, no TRegistry-equivalent owner. Migrating needs Windows
+# runtime validation (FPC Registry compiles-but-stubbed on Linux) + tls sign-off.
 SysUtils|nextpas.core.exception.pas
 TypInfo|nextpas.core.system.typinfo.pas
-Windows|nextpas.core.tls.winssl.connection.pas
-Sockets|nextpas.core.tls.winssl.connection.pas
-winsock2|nextpas.core.tls.winssl.connection.pas
 Registry|nextpas.core.tls.winssl.enterprise.pas
 cthreads|nextpas.core.thread.init.pas
 zlib|nextpas.core.compress.deflate.pas
