@@ -263,52 +263,19 @@ func saveJSON(suite benchSuite) {
 	if err != nil {
 		panic(err)
 	}
-	candidates := []string{
-		"build/bench-tar-compare-go.json",
-		"compare_go/build/bench-tar-compare-go.json",
-		"../../../build/bench-tar-compare-go.json",
-		"../../build/bench-tar-compare-go.json",
+	// two anchored outputs: harness build dir + repo build dir (no CWD scattershot)
+	_, srcFile, _, _ := runtime.Caller(0)
+	harnessDir := filepath.Dir(srcFile)
+	all := []string{
+		filepath.Join(harnessDir, "build/bench-tar-compare-go.json"),
+		filepath.Join(harnessDir, "..", "..", "..", "build/bench-tar-compare-go.json"),
 	}
-	// also try absolute relative to this file
-	exeDirCandidates := []string{}
-	if wd, err := os.Getwd(); err == nil {
-		exeDirCandidates = append(exeDirCandidates, filepath.Join(wd, "build/bench-tar-compare-go.json"))
-		exeDirCandidates = append(exeDirCandidates, filepath.Join(wd, "compare_go/build/bench-tar-compare-go.json"))
-		exeDirCandidates = append(exeDirCandidates, filepath.Join(wd, "../../../build/bench-tar-compare-go.json"))
-	}
-	all := append(candidates, exeDirCandidates...)
-	// always ensure at least one path succeeds: bench_tar/build and repo build
-	// Determine repo build path by walking up to find core dir
-	wd, _ := os.Getwd()
 	for _, p := range all {
-		dir := filepath.Dir(p)
-		if dir != "." && dir != "" {
-			_ = os.MkdirAll(dir, 0755)
-		}
-		// resolve relative to wd if needed
-		outPath := p
-		if !filepath.IsAbs(p) && wd != "" {
-			// try both relative to wd and relative to bench_tar dir
-			abs := filepath.Join(wd, p)
-			if _, err := os.Stat(filepath.Dir(abs)); err == nil {
-				outPath = abs
-			}
-		}
-		if err := os.WriteFile(outPath, data, 0644); err == nil {
-			fmt.Printf("saved %s\n", outPath)
+		_ = os.MkdirAll(filepath.Dir(p), 0755)
+		if err := os.WriteFile(p, data, 0644); err == nil {
+			fmt.Printf("saved %s\n", p)
 		}
 	}
-	// Ensure at least the primary expected by check_regression.py is written
-	primary := "build/bench-tar-compare-go.json"
-	_ = os.MkdirAll(filepath.Dir(primary), 0755)
-	_ = os.WriteFile(primary, data, 0644)
-	// Also write to repo build if exists
-	repoBuild := "../../../build/bench-tar-compare-go.json"
-	_ = os.MkdirAll(filepath.Dir(repoBuild), 0755)
-	_ = os.WriteFile(repoBuild, data, 0644)
-	compareDirBuild := "compare_go/build/bench-tar-compare-go.json"
-	_ = os.MkdirAll(filepath.Dir(compareDirBuild), 0755)
-	_ = os.WriteFile(compareDirBuild, data, 0644)
 	fmt.Println(string(data))
 }
 

@@ -170,13 +170,12 @@ fn main() {
         "benchmarks": benches
     });
 
-    // Try to write to multiple candidate paths expected by check_regression.py
+    // two anchored outputs: harness build dir + repo build dir (no CWD scattershot)
     let data = serde_json::to_string_pretty(&suite).unwrap();
+    let manifest = env!("CARGO_MANIFEST_DIR");
     let candidates = [
-        "build/bench-tar-compare-rust.json",
-        "compare_rust/build/bench-tar-compare-rust.json",
-        "../../../build/bench-tar-compare-rust.json",
-        "../../build/bench-tar-compare-rust.json",
+        format!("{}/build/bench-tar-compare-rust.json", manifest),
+        format!("{}/../../../build/bench-tar-compare-rust.json", manifest),
     ];
     for p in &candidates {
         if let Some(dir) = std::path::Path::new(p).parent() {
@@ -186,13 +185,6 @@ fn main() {
             eprintln!("saved {}", p);
         }
     }
-    // Ensure primary paths
-    let _ = std::fs::create_dir_all("build");
-    let _ = std::fs::write("build/bench-tar-compare-rust.json", &data);
-    let _ = std::fs::create_dir_all("compare_rust/build");
-    let _ = std::fs::write("compare_rust/build/bench-tar-compare-rust.json", &data);
-    let _ = std::fs::create_dir_all("../../../build");
-    let _ = std::fs::write("../../../build/bench-tar-compare-rust.json", &data);
     println!("{}", data);
     eprintln!("Rust tar compare done (tar 0.4)");
 }
