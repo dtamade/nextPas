@@ -394,6 +394,11 @@ Lane owner 可以自主把 landing 候选分支合入 `main`，不再需要总�
 2. 满足上节"任何分支进入主线前必须满足"的 7 条（含 worktree clean、behind 为 0）。
 3. 受控跨模块修改已在提交信息里写清设计理由和验证证据。
 
+注意：编译器单元改名/搬家必须同 slice 更新 `tests/` 与 `scripts/` 引用
+（教训：`backend.plan` 收敛进 `compiler/src` 后 host 三组全红；
+`runner.pas` 的 host 搜索路径已收敛为 `HOST_UNIT_SEARCH_FLAGS` 单源，
+改布局只改这一处）。host 组红即视为条件 1 未满足。
+
 合入操作仍用 ff-only（先同步再合再推）：
 
 ```bash
