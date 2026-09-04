@@ -94,9 +94,11 @@ run: build
 	@if [ -n "$(HEAPTRC_ENABLED)" ]; then \
 		rm -f $(HEAPTRC_DUMP); \
 		HEAPTRC='haltonnotreleased,log=$(HEAPTRC_DUMP)' $(RUN_ENV) $(BUILD_DIR)/$(PROGRAM); \
+		LRC=$$?; \
 		grep -q '^Heap dump by heaptrc unit' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: no heap dump written ($(HEAPTRC_DUMP))"; exit 1; }; \
 		grep -q '^0 unfreed memory blocks : 0$$' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: unfreed blocks reported"; cat $(HEAPTRC_DUMP); exit 1; }; \
 		echo "[HEAPTRC] OK"; \
+		exit $$LRC; \
 	else \
 		$(RUN_ENV) $(BUILD_DIR)/$(PROGRAM); \
 	fi

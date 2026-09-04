@@ -684,6 +684,7 @@ var
   LRaised: Boolean;
   LPff: TGitPullFastForwardResult;
   LErr: string;
+  LOut: TProcessOutput;
 begin
   LBase := MkTempDir('pure_fetch');
   try
@@ -710,7 +711,18 @@ begin
     LRem := LRepo.Remote('origin');
     CheckFalse(LRem.Fetch, 'IGitRemote.Fetch mirrors repository fetch (False when current)');
     LPff := (LRepo as IGitRepositoryExt).PullFastForward('origin', LErr);
-    Check(LPff <> gpffError, 'PullFastForward after fetch should not error, got "' + LErr + '"');
+    Check(LPff = gpffFastForwarded, 'PullFastForward advances local branch, got "' + LErr + '"');
+    Check(FileExists(PathJoin([LDst, 'second.txt'])), 'fast-forward materializes upstream file in worktree');
+    LOut := RunIn('/usr/bin/git', ['rev-parse', 'main'], LDst);
+    Check(LOut.ExitCode = 0, 'git rev-parse works in ff target');
+    CheckEqual(Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', 'main'], LSrc)), Trim(LOut.StdOut), 'ff matches git golden branch tip');
+    LPff := (LRepo as IGitRepositoryExt).PullFastForward('origin', LErr);
+    Check(LPff = gpffUpToDate, 'second PullFastForward is up-to-date, got "' + LErr + '"');
+    LPff := (LRepo as IGitRepositoryExt).PullFastForward('does-not-exist', LErr);
+    Check(LPff = gpffNoRemote, 'unknown remote reports NoRemote');
+    WriteFile(PathJoin([LDst, 'dirty.txt']), BytesOfString('dirty'), PermDefault);
+    LPff := (LRepo as IGitRepositoryExt).PullFastForward('origin', LErr);
+    Check(LPff = gpffDirty, 'dirty worktree refuses fast-forward');
     LRaised := False;
     try
       LRepo.Fetch('does-not-exist');

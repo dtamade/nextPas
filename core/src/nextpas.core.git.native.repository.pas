@@ -82,6 +82,7 @@ uses
   nextpas.core.git.native.index,
   nextpas.core.git.native.checkout,
   nextpas.core.git.native.clone,
+  nextpas.core.git.native.mergebase,
   nextpas.core.git.native.revwalk,
   nextpas.core.git.native.repository.diff,
   nextpas.core.git.native.repository.worktree,
@@ -399,7 +400,7 @@ function TNativeRepositoryAdapter.PullFastForward(const RemoteName: string; out 
 var
   RName, Branch, LocalRef, RemoteRef: string;
   HasDirty: Boolean;
-  Rem: TGitRemote;
+  LocalOid, RemoteOid, Base: TGitOid;
 begin
   EnsureOpen;
   Error:='';
@@ -410,19 +411,51 @@ begin
   if HasDirty then begin Error:='dirty worktree'; Exit(gpffDirty); end;
   Branch:=CurrentBranch;
   if Branch='' then begin Error:='detached HEAD'; Exit(gpffDetachedHead); end;
-  if not GitRemoteFind(FGitDir,RName,Rem) then begin Error:='no remote "'+RName+'"'; Exit(gpffNoRemote); end;
+  try
+    GitFetch(FGitDir, RName);
+  except
+    on E: EGitError do
+    begin
+      Error:=E.Message;
+      if Pos('remote "' + LowerCase(RName) + '" not found', LowerCase(Error)) > 0 then
+        Exit(gpffNoRemote);
+      Exit(gpffError);
+    end;
+    on E: Exception do
+    begin
+      Error:=E.Message;
+      Exit(gpffError);
+    end;
+  end;
   LocalRef:='refs/heads/'+Branch;
   RemoteRef:='refs/remotes/'+RName+'/'+Branch;
   try
-    if not GitOidSame(GitResolveRef(FGitDir,LocalRef),GitResolveRef(FGitDir,RemoteRef)) then
-    begin
-      Error:='needs merge (pure backend, no fetch)';
-      Exit(gpffNeedsMerge);
-    end;
+    LocalOid:=GitResolveRef(FGitDir,LocalRef);
+    RemoteOid:=GitResolveRef(FGitDir,RemoteRef);
   except
     on EGitError do begin Error:=CurrentExceptionMessage; Exit(gpffError); end;
   end;
-  Result:=gpffUpToDate;
+  if GitOidSame(LocalOid,RemoteOid) then
+    Exit(gpffUpToDate);
+  try
+    Base:=GitMergeBase(FGitDir,LocalOid,RemoteOid);
+  except
+    on EGitError do begin Error:=CurrentExceptionMessage; Exit(gpffError); end;
+  end;
+  if not GitOidSame(Base,LocalOid) then
+  begin
+    Error:='needs merge';
+    Exit(gpffNeedsMerge);
+  end;
+  try
+    WriteFileText(PathJoin([FGitDir,LocalRef]),GitOidToHex(RemoteOid)+#10);
+    if FWorkTree <> '' then
+      GitCheckoutRef(FGitDir,FWorkTree,LocalRef);
+  except
+    on EGitError do begin Error:=CurrentExceptionMessage; Exit(gpffError); end;
+    on E: Exception do begin Error:=E.Message; Exit(gpffError); end;
+  end;
+  Result:=gpffFastForwarded;
 end;
 
 function TNativeRepositoryAdapter.Diff(const AOldRef, ANewRef: string): TGitDiff;
