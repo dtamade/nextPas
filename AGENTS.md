@@ -46,7 +46,7 @@
 
 - 先运行 `git status --short --branch`，确认当前分支和脏文件范围。
 - 先运行 `git worktree list --porcelain` 或 `scripts/worktree-audit.sh`，确认自己在哪个 worktree。
-- 不要在 `main` 上做普通模块开发。`main` 只用于总控 landing、仓库治理和明确授权的小修。
+- 不要在 `main` 上做普通模块开发。`main` 只用于 landing（各 lane 按 `docs/worktrees.md` 自主合入）、仓库治理和明确授权的小修。
 - 模块开发必须在项目根目录 `.worktrees/<module>` 下的专属 worktree 进行。
 - 每个模块默认只有一个长期 lane 分支，例如 `codex/core-http`、`codex/core-math`、`codex/compiler`。
 - 新建模块 worktree 使用 `scripts/worktree-add.sh <branch> [base]`，不要手写随机路径。
