@@ -11,7 +11,9 @@ program performance_regression_suite;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
+  nextpas.core.exception,
+  nextpas.core.base,
+  nextpas.core.fs,
   nextpas.core.system.classes,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
@@ -63,12 +65,12 @@ begin
   Rewrite(F);
   try
     WriteLn(F, '# Performance Benchmark Results');
-    WriteLn(F, '# Generated: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+    WriteLn(F, '# Generated: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
     WriteLn(F, 'Name,Duration(ms),Throughput(ops/s),Success');
 
     for I := 0 to High(FResults) do
       with FResults[I] do
-        WriteLn(F, Format('%s,%d,%.2f,%s', [Name, Duration, Throughput, BoolToStr(Success, True)]));
+        WriteLn(F, Format('%s,%d,%.2f,%s', [Name, Duration, Throughput, BoolToStr(Success)]));
   finally
     CloseFile(F);
   end;

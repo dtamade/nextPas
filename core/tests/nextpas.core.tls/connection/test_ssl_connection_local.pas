@@ -3,7 +3,10 @@ program test_ssl_connection_local;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.tls.openssl.backed,
 
   nextpas.core.tls.base;
@@ -14,7 +17,7 @@ var
   SSLLib: ISSLLibrary;
   ClientContext, ServerContext: ISSLContext;
   ClientConnection, ServerConnection: ISSLConnection;
-  ClientStream, ServerStream: TMemoryStream;
+  ClientStream, ServerStream: IStream;
 
 procedure TestResult(const TestName: string; Passed: Boolean; const Reason: string = '');
 begin
@@ -111,8 +114,8 @@ begin
     end;
 
     // Create streams
-    ClientStream := TMemoryStream.Create;
-    ServerStream := TMemoryStream.Create;
+    ClientStream := CreateBytesStream;
+    ServerStream := CreateBytesStream;
     TestResult('Create memory streams', True);
 
     // Create client connection
@@ -373,17 +376,17 @@ begin
       end;
     end;
 
-    // Free streams
+    // Release streams (interface-refcounted, freed automatically)
     if ClientStream <> nil then
     begin
-      ClientStream.Free;
-      TestResult('Free client stream', True);
+      ClientStream := nil;
+      TestResult('Release client stream', True);
     end;
 
     if ServerStream <> nil then
     begin
-      ServerStream.Free;
-      TestResult('Free server stream', True);
+      ServerStream := nil;
+      TestResult('Release server stream', True);
     end;
 
   except

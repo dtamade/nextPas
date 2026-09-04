@@ -16,8 +16,10 @@ program test_real_websites_comprehensive;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.tls,

@@ -3,7 +3,11 @@ program test_wolfssl_client_peer_certificate_surface;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.base,
+  nextpas.core.fs,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.utils,
@@ -51,22 +55,8 @@ begin
 end;
 
 function ReadTextFile(const AFileName: string): string;
-var
-  LStream: TFileStream;
-  LBytes: TBytes;
 begin
-  Result := '';
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LBytes, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(LBytes[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
-
-  if Length(LBytes) > 0 then
-    SetString(Result, PAnsiChar(@LBytes[0]), Length(LBytes));
+  Result := ReadFileText(AFileName);
 end;
 
 procedure LoadFixtureDER;
@@ -168,7 +158,7 @@ procedure TestPeerChainMaterialization;
 var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TWolfSSLConnection;
   LPeerCert: ISSLCertificate;
   LIssuerFromPeerCert: ISSLCertificate;
@@ -206,7 +196,7 @@ begin
   LCtx := LLib.CreateContext(sslCtxClient);
   AssertTrue(LCtx <> nil, 'WolfSSL client context should be created');
 
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   OverrideChainAPIs;
   try
@@ -256,7 +246,7 @@ begin
     RestoreChainAPIs;
     if LConn <> nil then
       LConn.Free;
-    LStream.Free;
+    LStream := nil;
     LLib.Finalize;
   end;
 end;

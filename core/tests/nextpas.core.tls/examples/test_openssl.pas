@@ -5,7 +5,9 @@ program test_openssl;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
+  nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   tls_test_sockets;

@@ -10,7 +10,11 @@ program test_e2e_scenarios;
 uses
   nextpas.core.thread.init, // Must be first: threading is used before other units' initialization
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.fs,
   nextpas.core.system.classes,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
@@ -233,7 +237,7 @@ begin
       begin
         Runner.Check('Session Resumption - Handshake 2', True);
         Runner.Check('Session Resumption - Reused', Resumption2.IsSessionReused,
-          Format('Was reused: %s', [BoolToStr(Resumption2.IsSessionReused, True)]));
+          Format('Was reused: %s', [BoolToStr(Resumption2.IsSessionReused)]));
       end
       else
         Runner.Check('Session Resumption - Handshake 2', False, GLib.GetLastErrorString);
