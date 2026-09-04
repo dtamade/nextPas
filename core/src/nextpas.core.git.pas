@@ -40,6 +40,7 @@ type
   IGitRepositoryExt = nextpas.core.git.intf.IGitRepositoryExt;
   IGitWorktree = nextpas.core.git.intf.IGitWorktree;
   IGitWorktreeExt = nextpas.core.git.intf.IGitWorktreeExt;
+  IGitWorkflowOps = nextpas.core.git.intf.IGitWorkflowOps;
   IGitManager = nextpas.core.git.intf.IGitManager;
   EGitError = nextpas.core.git.base.EGitError;
 

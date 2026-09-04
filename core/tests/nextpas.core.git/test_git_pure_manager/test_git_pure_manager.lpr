@@ -954,6 +954,157 @@ begin
   end;
 end;
 
+// Workflow ops: every IGitWorkflowOps method driven against a CLI-built
+// fixture with git-CLI golden cross-checks (branch/tag/stash/notes/reset/push).
+procedure TestWorkflowOps;
+var
+  LBase, LDir, LRemoteDir: string;
+  LMgr: IGitManager;
+  LRepo: IGitRepository;
+  LOps: IGitWorkflowOps;
+  LRaised: Boolean;
+  LOid, LTip, LHead: string;
+  LTags, LList: TStringArray;
+begin
+  LBase := MkTempDir('pure_workflow');
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+    LDir := PathJoin([LBase, 'repo']);
+    LRepo := LMgr.InitRepository(LDir, False);
+    if LRepo.QueryInterface(IGitWorkflowOps, LOps) <> 0 then
+      raise Exception.Create('native repository must support IGitWorkflowOps');
+    GitRun(LDir, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LDir, ['config', 'user.email', 'pure@example.invalid']);
+    WriteFile(PathJoin([LDir, 'a.txt']), BytesOfString('v1' + #10), PermDefault);
+    GitRun(LDir, ['add', 'a.txt']);
+    GitRun(LDir, ['commit', '-m', 'first']);
+    WriteFile(PathJoin([LDir, 'b.txt']), BytesOfString('b' + #10), PermDefault);
+    GitRun(LDir, ['add', 'b.txt']);
+    GitRun(LDir, ['commit', '-m', 'second']);
+    LHead := Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', 'HEAD'], LDir));
+
+    CheckEqual(0, Length(LOps.ListTags), 'no tags initially');
+    LOid := LOps.CreateBranch('feature', 'HEAD', False);
+    CheckEqual(LHead, LowerCase(LOid), 'created branch points at HEAD');
+    Check(Pos('feature', MustCaptureIn('/usr/bin/git', ['branch', '--list'], LDir)) > 0, 'git sees feature');
+    LRaised := False;
+    try LOps.CreateBranch('feature', 'HEAD', False); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'duplicate branch without force raises');
+    LOid := LOps.CreateBranch('feature', 'HEAD~1', True);
+    CheckEqual(Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', 'HEAD~1'], LDir)), LowerCase(LOid), 'force recreates at new tip');
+    LTip := LOps.RenameBranch('feature', 'renamed', False);
+    CheckEqual(LowerCase(LOid), LowerCase(LTip), 'rename preserves tip');
+    CheckEqual(LTip, LowerCase(Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', 'renamed'], LDir))), 'git resolves renamed ref');
+    LOps.CreateBranch('other', 'HEAD', False);
+    LRaised := False;
+    try LOps.RenameBranch('renamed', 'other', False); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'rename onto existing without force raises');
+    LOps.RenameBranch('renamed', 'other', True);
+    LOps.DeleteBranch('other');
+    LRaised := False;
+    try LOps.DeleteBranch('no-such-branch'); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'delete missing branch raises');
+    LRaised := False;
+    try LOps.DeleteBranch(LRepo.CurrentBranch); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'delete current branch raises');
+
+    LOid := LOps.CreateLightweightTag('v1', 'HEAD', False);
+    CheckEqual(LHead, LowerCase(LOid), 'lightweight tag points at HEAD');
+    LTags := LOps.ListTags;
+    Check(ContainsStr(LTags, 'v1'), 'ListTags contains v1');
+    CheckEqual(Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', 'v1'], LDir)), LowerCase(LOid), 'git resolves v1');
+    LRaised := False;
+    try LOps.CreateLightweightTag('v1', 'HEAD', False); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'duplicate tag without force raises');
+    LOid := LOps.CreateAnnotatedTag('v2', 'HEAD', 'release two', 'Pure Tester', 'pure@example.invalid', False);
+    CheckEqual('tag', Trim(MustCaptureIn('/usr/bin/git', ['cat-file', '-t', 'v2'], LDir)), 'annotated tag object type');
+    LTags := LOps.ListTags;
+    Check(ContainsStr(LTags, 'v2'), 'ListTags contains v2');
+    LRaised := False;
+    try LOps.CreateAnnotatedTag('v3', 'HEAD', '', 'A', 'a@b.c', False); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'annotated tag without message raises');
+    LOps.DeleteTag('v2');
+    LTags := LOps.ListTags;
+    CheckFalse(ContainsStr(LTags, 'v2'), 'v2 gone after delete');
+    LRaised := False;
+    try LOps.DeleteTag('no-such-tag'); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'delete missing tag raises');
+
+    CheckEqual(0, LOps.StashCount, 'no stashes initially');
+    WriteFile(PathJoin([LDir, 'a.txt']), BytesOfString('modified' + #10), PermDefault);
+    LOid := LOps.StashPush('wip work');
+    Check(Is40Hex(LOid), 'stash push returns 40-hex');
+    CheckEqual(1, LOps.StashCount, 'one stash after push');
+    LList := LOps.StashList;
+    CheckEqual(1, Length(LList), 'stash list has one entry');
+    Check(Pos('wip work', LList[0]) > 0, 'stash entry carries message');
+    Check(Pos('wip work', MustCaptureIn('/usr/bin/git', ['stash', 'list'], LDir)) > 0, 'git sees the stash');
+    CheckEqual('v1' + #10, BytesToText(ReadFile(PathJoin([LDir, 'a.txt']))), 'worktree restored after push');
+    LOps.StashApply(0);
+    CheckEqual('modified' + #10, BytesToText(ReadFile(PathJoin([LDir, 'a.txt']))), 'apply restores changes');
+    LOps.StashDrop(0);
+    CheckEqual(0, LOps.StashCount, 'empty after drop');
+    LOid := LOps.StashPush('second stash');
+    CheckEqual(1, LOps.StashCount, 'one stash again');
+    LOps.StashPop(0);
+    CheckEqual(0, LOps.StashCount, 'empty after pop');
+    CheckEqual('modified' + #10, BytesToText(ReadFile(PathJoin([LDir, 'a.txt']))), 'pop restores changes');
+    LRaised := False;
+    try LOps.StashApply(7); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'apply out-of-range index raises');
+    LOps.StashPush('x');
+    LOps.StashClear;
+    CheckEqual(0, LOps.StashCount, 'empty after clear');
+    GitRun(LDir, ['checkout', '--', 'a.txt']);
+
+    WriteFile(PathJoin([LDir, 'c.txt']), BytesOfString('c' + #10), PermDefault);
+    GitRun(LDir, ['add', 'c.txt']);
+    GitRun(LDir, ['commit', '-m', 'third']);
+    LOps.ResetHard('HEAD~1');
+    CheckEqual(LHead, LowerCase(Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', 'HEAD'], LDir))), 'reset moves HEAD back');
+    CheckFalse(FileExists(PathJoin([LDir, 'c.txt'])), 'reset removes newer file from worktree');
+    LRaised := False;
+    try LOps.ResetHard(''); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'reset empty target raises');
+
+    LRemoteDir := PathJoin([LBase, 'remote.git']);
+    LMgr.InitRepository(LRemoteDir, True);
+    GitRun(LDir, ['remote', 'add', 'origin', LRemoteDir]);
+    Check(LOps.PushBranch('origin', LRepo.CurrentBranch), 'first push moves remote');
+    CheckEqual(LowerCase(Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', LRepo.CurrentBranch], LDir))),
+      LowerCase(Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', LRepo.CurrentBranch], LRemoteDir))),
+      'remote tip matches after push');
+    CheckFalse(LOps.PushBranch('origin', LRepo.CurrentBranch), 'second push is no-op');
+    LRaised := False;
+    try LOps.PushBranch('no-such-remote', 'main'); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'push unknown remote raises');
+    LRaised := False;
+    try LOps.PushBranch('origin', ''); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'push empty branch raises');
+
+    LHead := LowerCase(Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', 'HEAD'], LDir)));
+    CheckEqual('', LOps.NotesForTarget(LHead), 'no note initially');
+    CheckEqual(0, Length(LOps.NotesList), 'notes list empty');
+    LOps.NotesAdd(LHead, 'looks good');
+    CheckEqual('looks good', Trim(LOps.NotesForTarget(LHead)), 'note reads back');
+    LList := LOps.NotesList;
+    Check(ContainsStr(LList, LHead), 'notes list carries target');
+    Check(Pos(LHead, MustCaptureIn('/usr/bin/git', ['notes', 'list'], LDir)) > 0, 'git sees the note');
+    Check(LOps.NotesRemove(LHead), 'remove reports True');
+    CheckEqual('', LOps.NotesForTarget(LHead), 'note gone after remove');
+    CheckFalse(LOps.NotesRemove(LHead), 'second remove reports False');
+    LRaised := False;
+    try LOps.NotesAdd(LHead, '   '); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'empty note raises');
+    LRaised := False;
+    try LOps.NotesForTarget('not-hex'); except on E: EGitError do LRaised := True; end;
+    Check(LRaised, 'non-hex target raises');
+  finally
+    RemoveAll(LBase);
+  end;
+end;
+
 begin
   Suite := TTestSuite.Create('pure_manager');
   Suite.Test('TestInitAndIsRepository', @TestInitAndIsRepository);
@@ -967,6 +1118,7 @@ begin
   Suite.Test('TestFetchLocalTransport', @TestFetchLocalTransport);
   Suite.Test('TestSetGlobalConfigRoundtrip', @TestSetGlobalConfigRoundtrip);
   Suite.Test('TestRepositoryInterfaceFullClosure', @TestRepositoryInterfaceFullClosure);
+  Suite.Test('TestWorkflowOps', @TestWorkflowOps);
   Suite.Test('TestCommitOnHeadInvariants', @TestCommitOnHeadInvariants);
   Suite.Test('TestAddWorktreeInvariants', @TestAddWorktreeInvariants);
   Suite.Test('TestSetVerifySSLInvariants', @TestSetVerifySSLInvariants);

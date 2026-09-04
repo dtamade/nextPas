@@ -26,6 +26,10 @@ function GitPush(const ALocalGitDir, ARemoteGitDir: string;
   const AUpdates: array of TGitPushUpdate): Boolean; overload;
 function GitPushBranch(const ALocalGitDir, ARemoteGitDir,
   ABranchName: string): Boolean;
+{ Push ABranchName to the remote registered as ARemoteName in ALocalGitDir
+  (local transport; network URLs raise the transport EGitError).
+  Returns True when the remote ref moved, False when already up-to-date. }
+function GitPushRemote(const ALocalGitDir, ARemoteName, ABranchName: string): Boolean;
 
 implementation
 
@@ -37,6 +41,7 @@ uses
   nextpas.core.hash.sha1,
   nextpas.core.git.native.pktline,
   nextpas.core.git.native.refs,
+  nextpas.core.git.native.remote,
   nextpas.core.git.native.util;
 
 function GitOidZero: TGitOid; inline;
@@ -228,6 +233,84 @@ begin
   end;
   if not HasOld then OldOid := GitOidZero;
   Result := GitPush(ALocalGitDir, ARemoteGitDir, RefName, OldOid, NewOid);
+end;
+
+function PushIsNetworkUrl(const AUrl: string): Boolean; inline;
+var
+  L: string;
+begin
+  L := LowerCase(Trim(AUrl));
+  Result := (Copy(L, 1, 7) = 'http://') or (Copy(L, 1, 8) = 'https://') or
+    (Copy(L, 1, 6) = 'ssh://') or (Copy(L, 1, 10) = 'git+ssh://') or
+    (Copy(L, 1, 6) = 'git://') or (Copy(L, 1, 6) = 'ftp://') or
+    (Copy(L, 1, 7) = 'ftps://') or
+    (Pos('@', L) > 0) and (Pos(':', L) > Pos('@', L));
+end;
+
+function PushStripFileScheme(const AUrl: string): string; inline;
+var
+  L: string;
+begin
+  L := Trim(AUrl);
+  if Copy(LowerCase(L), 1, 7) = 'file://' then
+    Result := Copy(L, 8, MaxInt)
+  else
+    Result := L;
+end;
+
+function PushShortDisplay(const AUrl: string): string; inline;
+begin
+  if Length(AUrl) > 120 then
+    Result := Copy(AUrl, 1, 120) + '...'
+  else
+    Result := AUrl;
+end;
+
+function GitPushRemote(const ALocalGitDir, ARemoteName, ABranchName: string): Boolean;
+var
+  RName: string;
+  Rem: TGitRemote;
+  Url, Clean, RemoteGitDir, Resolved, RefName: string;
+  LocalOid, RemoteOid: TGitOid;
+  HasRemote: Boolean;
+begin
+  RName := Trim(ARemoteName);
+  if RName = '' then
+    RName := 'origin';
+  if Trim(ABranchName) = '' then
+    raise EGitError.Create('push: branch empty');
+  if not GitRemoteFind(ALocalGitDir, RName, Rem) then
+    raise EGitError.CreateFmt('push: remote "%s" not found', [RName]);
+  Url := Trim(Rem.Url);
+  if Url = '' then
+    raise EGitError.CreateFmt('push: remote "%s" has no url', [RName]);
+  if PushIsNetworkUrl(Url) then
+    raise EGitError.CreateFmt('push: network transport not supported in native backend: %s (use libgit2 backend or git CLI)', [PushShortDisplay(Url)]);
+  Clean := PathClean(PushStripFileScheme(Url));
+  RemoteGitDir := '';
+  if IsGitDirShape(Clean) then
+    RemoteGitDir := Clean
+  else if DirectoryExists(PathJoin2(Clean, '.git')) then
+    RemoteGitDir := PathJoin2(Clean, '.git')
+  else if GitTryDiscoverGitDir(Clean, Resolved) then
+    RemoteGitDir := Resolved
+  else
+    raise EGitError.CreateFmt('push: remote not found %s', [PushShortDisplay(Url)]);
+  RefName := Trim(ABranchName);
+  if Copy(RefName, 1, 11) <> 'refs/heads/' then
+    RefName := 'refs/heads/' + RefName;
+  LocalOid := GitResolveRef(ALocalGitDir, RefName);
+  HasRemote := False;
+  try
+    RemoteOid := GitResolveRef(RemoteGitDir, RefName);
+    HasRemote := True;
+  except
+    on E: EGitError do
+      HasRemote := False;
+  end;
+  if HasRemote and GitOidSame(LocalOid, RemoteOid) then
+    Exit(False);
+  Result := GitPushBranch(ALocalGitDir, RemoteGitDir, RefName);
 end;
 
 end.

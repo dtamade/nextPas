@@ -12,7 +12,7 @@ uses
   nextpas.core.text.conv;
 
 type
-  TNativeRepositoryAdapter = class(TInterfacedObject, IGitRepository, IGitRepositoryExt, IGitWorktreeExt)
+  TNativeRepositoryAdapter = class(TInterfacedObject, IGitRepository, IGitRepositoryExt, IGitWorktreeExt, IGitWorkflowOps)
   private
     FGitDir: string;
     FWorkTree: string;
@@ -56,6 +56,27 @@ type
     function ListWorktrees: nextpas.core.base.TStringArray;
     function PruneWorktree(const AName: string): Boolean;
     function CommitOnHead(const AMessage: string; const AAuthorName, AAuthorEmail: string): string;
+    // IGitWorkflowOps
+    function ListTags: nextpas.core.base.TStringArray;
+    function CreateBranch(const AName, AStartRef: string; AForce: Boolean = False): string;
+    procedure DeleteBranch(const AName: string);
+    function RenameBranch(const AOldName, ANewName: string; AForce: Boolean = False): string;
+    function CreateLightweightTag(const AName, ATarget: string; AForce: Boolean = False): string;
+    function CreateAnnotatedTag(const AName, ATarget, AMessage, AAuthorName, AAuthorEmail: string; AForce: Boolean = False): string;
+    procedure DeleteTag(const AName: string);
+    function StashCount: Integer;
+    function StashList: nextpas.core.base.TStringArray;
+    function StashPush(const AMessage: string): string;
+    procedure StashApply(AIndex: Integer);
+    procedure StashPop(AIndex: Integer);
+    procedure StashDrop(AIndex: Integer);
+    procedure StashClear;
+    procedure ResetHard(const ATarget: string);
+    function PushBranch(const ARemoteName, ABranch: string): Boolean;
+    function NotesForTarget(const ATargetOid: string): string;
+    procedure NotesAdd(const ATargetOid, ANote: string);
+    function NotesRemove(const ATargetOid: string): Boolean;
+    function NotesList: nextpas.core.base.TStringArray;
   end;
 
 implementation
@@ -69,6 +90,11 @@ uses
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.status,
   nextpas.core.git.native.branch,
+  nextpas.core.git.native.tag,
+  nextpas.core.git.native.stash,
+  nextpas.core.git.native.notes,
+  nextpas.core.git.native.push,
+  nextpas.core.git.native.reset,
   nextpas.core.git.native.revparse,
   nextpas.core.git.native.common,
   nextpas.core.git.native.diff,
@@ -689,6 +715,333 @@ function TNativeRepositoryAdapter.CommitOnHead(const AMessage: string; const AAu
 begin
   EnsureOpen;
   Result := RepositoryCommitOnHead(FGitDir, FWorkTree, AMessage, AAuthorName, AAuthorEmail);
+end;
+
+{ IGitWorkflowOps }
+
+function TNativeRepositoryAdapter.ListTags: nextpas.core.base.TStringArray;
+var
+  List: TGitTagArray;
+  I: Integer;
+begin
+  EnsureOpen;
+  try
+    List := GitTagList(FGitDir);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+  SetLength(Result, Length(List));
+  for I := 0 to High(List) do
+    Result[I] := List[I].Name;
+end;
+
+function TNativeRepositoryAdapter.CreateBranch(const AName, AStartRef: string; AForce: Boolean): string;
+var
+  StartOid: TGitOid;
+  Ref: string;
+begin
+  EnsureOpen;
+  Ref := TrimInline(AStartRef);
+  if Ref = '' then
+    Ref := 'HEAD';
+  try
+    StartOid := GitRevParse(FGitDir, Ref);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+  try
+    if AForce and GitBranchExists(FGitDir, AName) then
+      GitBranchDelete(FGitDir, AName);
+    Result := GitOidToHex(GitBranchCreate(FGitDir, AName, StartOid));
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+procedure TNativeRepositoryAdapter.DeleteBranch(const AName: string);
+begin
+  EnsureOpen;
+  try
+    GitBranchDelete(FGitDir, AName);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+function TNativeRepositoryAdapter.RenameBranch(const AOldName, ANewName: string; AForce: Boolean): string;
+begin
+  EnsureOpen;
+  try
+    if AForce and GitBranchExists(FGitDir, ANewName) then
+      GitBranchDelete(FGitDir, ANewName);
+    Result := GitOidToHex(GitBranchRename(FGitDir, AOldName, ANewName));
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+function TNativeRepositoryAdapter.CreateLightweightTag(const AName, ATarget: string; AForce: Boolean): string;
+var
+  TargetOid: TGitOid;
+  Ref: string;
+begin
+  EnsureOpen;
+  Ref := TrimInline(ATarget);
+  if Ref = '' then
+    Ref := 'HEAD';
+  try
+    TargetOid := GitRevParse(FGitDir, Ref);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+  try
+    if AForce and GitTagExists(FGitDir, AName) then
+      GitTagDelete(FGitDir, AName);
+    Result := GitOidToHex(GitTagCreateLightweight(FGitDir, AName, TargetOid));
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+function TNativeRepositoryAdapter.CreateAnnotatedTag(const AName, ATarget, AMessage, AAuthorName, AAuthorEmail: string; AForce: Boolean): string;
+var
+  TargetOid: TGitOid;
+  Ref: string;
+begin
+  EnsureOpen;
+  Ref := TrimInline(ATarget);
+  if Ref = '' then
+    Ref := 'HEAD';
+  if TrimInline(AMessage) = '' then
+    raise EGitError.Create('tag: message required for annotated tag');
+  try
+    TargetOid := GitRevParse(FGitDir, Ref);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+  try
+    if AForce and GitTagExists(FGitDir, AName) then
+      GitTagDelete(FGitDir, AName);
+    Result := GitOidToHex(GitTagCreateAnnotated(FGitDir, AName, TargetOid, AMessage, AAuthorName, AAuthorEmail));
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+procedure TNativeRepositoryAdapter.DeleteTag(const AName: string);
+begin
+  EnsureOpen;
+  try
+    GitTagDelete(FGitDir, AName);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+function TNativeRepositoryAdapter.StashCount: Integer;
+begin
+  EnsureOpen;
+  try
+    Result := GitStashCount(FGitDir);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+function TNativeRepositoryAdapter.StashList: nextpas.core.base.TStringArray;
+var
+  List: TGitStashArray;
+  I: Integer;
+begin
+  EnsureOpen;
+  try
+    List := GitStashList(FGitDir);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+  SetLength(Result, Length(List));
+  for I := 0 to High(List) do
+    Result[I] := List[I].Message;
+end;
+
+function TNativeRepositoryAdapter.StashPush(const AMessage: string): string;
+begin
+  EnsureOpen;
+  if FWorkTree = '' then
+    raise EGitError.Create('stash: cannot stash in bare repository');
+  try
+    Result := GitOidToHex(GitStashPush(FGitDir, FWorkTree, AMessage));
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+procedure TNativeRepositoryAdapter.StashApply(AIndex: Integer);
+begin
+  EnsureOpen;
+  if FWorkTree = '' then
+    raise EGitError.Create('stash: cannot apply in bare repository');
+  try
+    GitStashApply(FGitDir, FWorkTree, AIndex);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+procedure TNativeRepositoryAdapter.StashPop(AIndex: Integer);
+begin
+  EnsureOpen;
+  if FWorkTree = '' then
+    raise EGitError.Create('stash: cannot pop in bare repository');
+  try
+    GitStashPop(FGitDir, FWorkTree, AIndex);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+procedure TNativeRepositoryAdapter.StashDrop(AIndex: Integer);
+begin
+  EnsureOpen;
+  try
+    GitStashDrop(FGitDir, AIndex);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+procedure TNativeRepositoryAdapter.StashClear;
+begin
+  EnsureOpen;
+  try
+    GitStashClear(FGitDir);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+procedure TNativeRepositoryAdapter.ResetHard(const ATarget: string);
+var
+  Ref: string;
+begin
+  EnsureOpen;
+  Ref := TrimInline(ATarget);
+  if Ref = '' then
+    raise EGitError.Create('reset: target required');
+  if FWorkTree = '' then
+    raise EGitError.Create('reset: cannot reset in bare repository');
+  try
+    GitResetHard(FGitDir, FWorkTree, Ref);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+function TNativeRepositoryAdapter.PushBranch(const ARemoteName, ABranch: string): Boolean;
+var
+  RName, BName: string;
+begin
+  EnsureOpen;
+  RName := TrimInline(ARemoteName);
+  if RName = '' then
+    RName := 'origin';
+  BName := TrimInline(ABranch);
+  if BName = '' then
+    raise EGitError.Create('push: branch required');
+  try
+    Result := nextpas.core.git.native.push.GitPushRemote(FGitDir, RName, BName);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+function TNativeRepositoryAdapter.NotesForTarget(const ATargetOid: string): string;
+var
+  Oid: TGitOid;
+begin
+  EnsureOpen;
+  Result := '';
+  if not GitOidIsValidHex(TrimInline(ATargetOid)) then
+    raise EGitError.CreateFmt('notes: invalid target "%s"', [ATargetOid]);
+  Oid := GitOidFromHex(LowerCase(TrimInline(ATargetOid)));
+  try
+    if not GitNotesExists(FGitDir, Oid) then
+      Exit('');
+    Result := GitNotesGetStr(FGitDir, Oid);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+procedure TNativeRepositoryAdapter.NotesAdd(const ATargetOid, ANote: string);
+var
+  Oid: TGitOid;
+begin
+  EnsureOpen;
+  if not GitOidIsValidHex(TrimInline(ATargetOid)) then
+    raise EGitError.CreateFmt('notes: invalid target "%s"', [ATargetOid]);
+  if TrimInline(ANote) = '' then
+    raise EGitError.Create('notes: note text required');
+  Oid := GitOidFromHex(LowerCase(TrimInline(ATargetOid)));
+  try
+    GitNotesAdd(FGitDir, Oid, ANote);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+function TNativeRepositoryAdapter.NotesRemove(const ATargetOid: string): Boolean;
+var
+  Oid: TGitOid;
+begin
+  EnsureOpen;
+  if not GitOidIsValidHex(TrimInline(ATargetOid)) then
+    raise EGitError.CreateFmt('notes: invalid target "%s"', [ATargetOid]);
+  Oid := GitOidFromHex(LowerCase(TrimInline(ATargetOid)));
+  try
+    Result := GitNotesRemove(FGitDir, Oid);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+end;
+
+function TNativeRepositoryAdapter.NotesList: nextpas.core.base.TStringArray;
+var
+  List: TGitNoteArray;
+  I: Integer;
+begin
+  EnsureOpen;
+  try
+    List := GitNotesList(FGitDir);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
+  end;
+  SetLength(Result, Length(List));
+  for I := 0 to High(List) do
+    Result[I] := GitOidToHex(List[I].Target);
 end;
 
 end.
