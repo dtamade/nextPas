@@ -45,9 +45,9 @@
 | git.native.objmodel | commit/tree/tag 文本格式解析 |
 | git.native.repo | TNativeRepository：loose + packs 聚合只读访问 |
 | git.native.write | 写路径：blob 写入、tree 规范排序/序列化、commit/tag 构造 |
-| git.native.index | .git/index 读写（DIRC v2/v3/v4，TREE 扩展解析/再生成/构建器，SHA-1 校验） |
+| git.native.index | .git/index 读写薄门面 + 3 域分片（`index.base` 条目/文件类型与格式常量 / `parse` DIRC v2/v3/v4 解析+校验+读取 / `serialize` 规范排序+发射+原子落盘 / `cachetree` 条目派生全量 cache-tree+全记录序列化/落盘，各 <400 行；原 885 行单文件已按域拆分，门面 inline 转发，调用方零改动） |
 | git.native.cachetree | TREE 扩展纯格式单元：记录解析（名字 NUL 前缀、计数哨兵 -1）与两遍精确尺寸序列化 |
-| git.native.status | worktree status 聚合（HEAD↔index 暂存态 / index↔worktree 工作树态 / untracked 扫描 + rename/copy 检测：oid 100 快路径 + hashsig 行哈希 0..100、阈值 50 配对、porcelain 分组序） |
+| git.native.status | worktree status 聚合薄门面 + 4 域分片（`status.base` 状态码/条目类型与模式类常量 / `scan` 树扁平化+工作树比对 / `untracked` 忽略栈+未跟踪扫描+全局排除 / `match` 结果行追加+路径序输出，各 <650 行；原 1043 行单文件已按域拆分，门面 inline 转发，调用方零改动；`similarity` 重命名相似度分片直连复用）（HEAD↔index 暂存态 / index↔worktree 工作树态 / untracked 扫描 + rename/copy 检测：oid 100 快路径 + hashsig 行哈希 0..100、阈值 50 配对、porcelain 分组序） |
 | git.native.ignore | .gitignore 引擎：模式编译（负规则/锚定/仅目录/字符类/**）、分组栈（深目录优先、文件内后者胜）、纯逻辑无 IO |
 | git.native.revwalk | 提交遍历薄门面 + 6 域分片（`revwalk.base` 纯数据类型 / `intf` 契约接缝 / `hashset` 集合映射 / `parsecache` 恰一次缓存 / `fetch` 单次交付 / `walker` 堆游标 / `collect` 日期序收集 / `topo` 拓扑序，各 <650 行；原 1985 行单文件已按域拆分，门面 inline 转发，调用方零改动；分片 `TGitOidArray` 单源于 `git.native.base`，`revwalk.base/commitgraph.base` 均为别名） |
 | git.native.commitgraph | commit-graph v1 薄门面 + 4 域分片（`commitgraph.base` 类型单源 / `cache` 16-cap LRU+mmap / `reader` 解析查找+TryLoad / `writer` 排序构建落盘 / `collect` 全量收集+WriteAll，各 <600 行；原 1541 行单文件已按域拆分，门面 inline 转发，调用方零改动） |
@@ -75,6 +75,7 @@
 | git.native.log | 日志（`log` 列表/oneline/查找，`Head/branch/tag/~` 起点经 `rev-parse` 剥离，`revwalk` date 序聚合 + `commit` 解析，对齐 `git log --oneline`） |
 | git.native.describe | 描述（`describe` 最近标签距离，BFS 最短路径 `Head→parents`，`tag` 剥离后 `tag-距离-gShort`，`--tags` 含轻量，对齐 `git describe`/`--tags`） |
 | git.native.diff | 差异（`diff` 树对比/名称状态/统计，扁平化递归 + 字典排序 + 归并，Added/Modified/Deleted/TypeChanged，对齐 `git diff --name-status`，零重命名，peel 16 层） |
+| git.native.repository.diff | 仓级 diff 写路径薄门面 + 3 域分片（`repository.diff.read` 内容行化+修订树解析 / `hunks` Myers opcodes+合并 hunk 构建 / `query` 修订间·工作树 diff+补丁文本 / `mutate` 补丁应用+路径检出，各 <450 行；原 1069 行单文件已按域拆分，门面 inline 转发，调用方零改动） |
 | git.native.blame | 归因（`blame` 行级归因，LCS 行 diff + head-vs-each 最老匹配，线性历史，对齐 `git blame --porcelain`，`ShortOid(7)`/author/time） |
 | git.native.mergebase | 合并基（`merge-base` 最近公共祖先，A 祖先集 + B BFS 最短命中，多提交归并，对齐 `git merge-base`） |
 | git.native.show | 展示（`show` 提交展示，`log` 聚合 + `parent→tree diff` + `name-status/stat`，根空树/首父，对齐 `git show --name-status`） |
@@ -96,7 +97,7 @@
 | git.native.wildmatch | **已移除**（owner 已收敛至 L1 `text.wildmatch` 单源，`*`/`?`/`**`/`[]` 含转义/字符类，零 SysUtils；`ignore`/`attributes` 直连 `text.wildmatch.WildSegment*` inline 零拷贝 via `bytes.ops` 单源，原 thin shim 已删除） |
 | git.factory | TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator 选择层（静态仅 native.manager，注册注入 libgit2，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
-| git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
+| git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')；值对象三小类 + 适配器支撑 helpers 已抽 `repository.objects` 分片，本体 934→640 行，接口零改动） |
 | git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，唯一 inline 零拷贝网关，<400 行；native 为已折叠空 BC shim 零类型/常量/函数转发 `@deprecated`，唯一门面为 objects） |
 | git.native.staging | 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops） |
 | git.native.history.traversal | 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元 <210 行，inline 零拷贝 via bytes.ops） |
