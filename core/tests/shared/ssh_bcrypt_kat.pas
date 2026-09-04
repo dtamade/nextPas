@@ -45,7 +45,7 @@ function BytesToHexLower(const AData: TBytes): string;
 implementation
 
 uses
-  nextpas.core.system.sysutils;
+  nextpas.core.exception, nextpas.core.text.conv;
 
 function HexVal(C: Char): Byte;
 begin

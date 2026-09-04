@@ -9,7 +9,7 @@ unit ssh_rsa_kat;
 interface
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.exception,
   nextpas.core.base;
 
 const
