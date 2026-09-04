@@ -4796,6 +4796,178 @@ begin
   end;
 end;
 
+procedure TestLogMatchesGit;
+var
+  Work, GitDir, CliOut: string;
+  Entries: TGitLogArray;
+  Lines: TStringArray;
+  Found: TGitLogEntry;
+begin
+  // covers log list/oneline/find/firstline against git CLI
+  MakeTwoCommitRepo('nextpas_git_log', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    CheckEqual(2, Length(Entries), 'two log entries');
+    CheckEqual('c2', Entries[0].Message, 'newest first');
+    CheckEqual('c1', Entries[1].Message, 'oldest last');
+    CheckEqual(7, Length(Entries[0].ShortOid), 'short oid 7 chars');
+    CheckTrue(Pos(Entries[0].ShortOid, GitOidToHex(Entries[0].Oid)) = 1, 'short is prefix');
+    Entries := GitLogList(GitDir, 'HEAD', 10);
+    CheckEqual(2, Length(Entries), 'ref overload same count');
+    Lines := GitLogOneline(GitDir, 10);
+    CheckEqual(2, Length(Lines), 'oneline count');
+    CheckTrue(Pos('c2', Lines[0]) > 0, 'oneline newest message');
+    CheckTrue(Pos('c1', Lines[1]) > 0, 'oneline oldest message');
+    CliOut := MustCaptureIn('git', ['log', '--format=%s', 'HEAD'], Work);
+    CheckTrue(Pos('c2', CliOut) > 0, 'git log agrees on c2');
+    CheckTrue(Pos('c1', CliOut) > 0, 'git log agrees on c1');
+    Found := GitLogFind(GitDir, Entries[0].Oid);
+    CheckEqual('c2', Found.Message, 'find by oid');
+    CheckEqual('c2', GitLogFirstLine('c2'#10'body'#10), 'firstline strips body');
+    CheckEqual('', GitLogFirstLine(''), 'firstline empty');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestShortlogMatchesGit;
+var
+  Work, GitDir, Txt, CliOut: string;
+  Entries: TGitShortlogArray;
+begin
+  // covers shortlog aggregation: two commits, one author
+  MakeTwoCommitRepo('nextpas_git_shortlog', Work, GitDir);
+  try
+    Entries := GitShortlog(GitDir, 10);
+    CheckEqual(1, Length(Entries), 'one author entry');
+    CheckEqual(2, Entries[0].Count, 'two commits counted');
+    CheckEqual('Test Er', Entries[0].AuthorName, 'author name');
+    Entries := GitShortlog(GitDir, 'HEAD', 10);
+    CheckEqual(1, Length(Entries), 'ref overload same');
+    Txt := GitShortlogText(GitDir, 10);
+    CheckTrue(Pos('Test Er', Txt) > 0, 'text has author');
+    CheckTrue(Pos('2', Txt) > 0, 'text has count');
+    CliOut := MustCaptureIn('git', ['shortlog', '-s', '-n', 'HEAD'], Work);
+    CheckTrue(Pos('Test Er', CliOut) > 0, 'git shortlog agrees on author');
+    CheckTrue(Pos('2', CliOut) > 0, 'git shortlog agrees on count');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestMergeBaseMatchesGit;
+var
+  Work, GitDir, Golden: string;
+  BaseByRef, BaseByOid, BaseMany: TGitOid;
+  Head, Parent: TGitOid;
+  Entries: TGitLogArray;
+begin
+  // covers merge-base ref/oid/many overloads against git CLI
+  MakeTwoCommitRepo('nextpas_git_mergebase', Work, GitDir);
+  try
+    Golden := Trim(MustCaptureIn('git', ['merge-base', 'HEAD', 'HEAD~1'], Work));
+    BaseByRef := GitMergeBase(GitDir, 'HEAD', 'HEAD~1');
+    CheckEqual(Golden, GitOidToHex(BaseByRef), 'ref overload matches git');
+    Entries := GitLogList(GitDir, 10);
+    Head := Entries[0].Oid;
+    Parent := Entries[1].Oid;
+    BaseByOid := GitMergeBase(GitDir, Head, Parent);
+    CheckEqual(GitOidToHex(BaseByRef), GitOidToHex(BaseByOid), 'oid overload agrees');
+    CheckEqual(GitOidToHex(Parent), GitOidToHex(BaseByOid), 'linear base is parent');
+    BaseMany := GitMergeBaseMany(GitDir, [Head, Parent]);
+    CheckEqual(GitOidToHex(BaseByOid), GitOidToHex(BaseMany), 'many overload agrees');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestCherryPickRoundTrip;
+var
+  Work, GitDir: string;
+  OidC2, NewOid, Head: TGitOid;
+  Entries: TGitLogArray;
+begin
+  // covers cherry-pick: reset to c1, pick c2, worktree + HEAD move
+  MakeTwoCommitRepo('nextpas_git_pick', Work, GitDir);
+  try
+    OidC2 := GitOidFromHex(Trim(MustCaptureIn('git', ['rev-parse', 'HEAD'], Work)));
+    RunInChecked('git', ['reset', '--hard', '--quiet', 'HEAD~1'], Work);
+    CheckEqual('c1'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'reset to c1');
+    NewOid := GitCherryPick(GitDir, Work, OidC2);
+    CheckFalse(GitOidIsZero(NewOid), 'pick returns non-zero oid');
+    Head := GitResolveHead(GitDir);
+    CheckEqual(GitOidToHex(NewOid), GitOidToHex(Head), 'HEAD moves to pick');
+    CheckEqual('c2'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'worktree has picked content');
+    Entries := GitLogList(GitDir, 10);
+    CheckEqual(2, Length(Entries), 'two commits after pick');
+    CheckTrue(Pos('cherry picked', Entries[0].FullMessage) > 0, 'pick trailer recorded');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestRevertRoundTrip;
+var
+  Work, GitDir: string;
+  NewOid: TGitOid;
+  Entries: TGitLogArray;
+  CliMsg: string;
+begin
+  // covers revert: revert HEAD on c2, worktree restored to c1
+  MakeTwoCommitRepo('nextpas_git_revert', Work, GitDir);
+  try
+    NewOid := GitRevert(GitDir, Work, 'HEAD');
+    CheckFalse(GitOidIsZero(NewOid), 'revert returns non-zero oid');
+    CheckEqual(GitOidToHex(NewOid), GitOidToHex(GitResolveHead(GitDir)), 'HEAD moves to revert');
+    CheckEqual('c1'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'worktree restored');
+    Entries := GitLogList(GitDir, 10);
+    CheckEqual(3, Length(Entries), 'three commits after revert');
+    CheckEqual('Revert "c2"', Entries[0].Message, 'revert subject line');
+    CliMsg := Trim(MustCaptureIn('git', ['log', '--format=%s', '-1', 'HEAD'], Work));
+    CheckEqual('Revert "c2"', CliMsg, 'git CLI agrees on revert message');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestDiffFamilyMatchesGit;
+var
+  Work, GitDir, CliOut: string;
+  Entries: TGitLogArray;
+  Head, Parent, HeadTree, ParentTree: TGitOid;
+  D: TGitDiffArray;
+  Names: TStringArray;
+  Stat: string;
+begin
+  // covers diff trees/commits/refs/namestatus/stat on c1..c2
+  MakeTwoCommitRepo('nextpas_git_diff', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    Head := Entries[0].Oid;
+    Parent := Entries[1].Oid;
+    HeadTree := Entries[0].Tree;
+    ParentTree := Entries[1].Tree;
+    D := GitDiffTrees(GitDir, ParentTree, HeadTree);
+    CheckEqual(1, Length(D), 'trees diff one file');
+    CheckEqual('f.txt', D[0].Path, 'trees diff path');
+    D := GitDiffCommits(GitDir, Parent, Head);
+    CheckEqual(1, Length(D), 'commits diff one file');
+    CheckEqual('f.txt', D[0].Path, 'commits diff path');
+    D := GitDiffRefs(GitDir, 'HEAD~1', 'HEAD');
+    CheckEqual(1, Length(D), 'refs diff one file');
+    Names := GitDiffNameStatus(GitDir, ParentTree, HeadTree);
+    CheckEqual(1, Length(Names), 'namestatus one line');
+    CheckTrue(Pos('f.txt', Names[0]) > 0, 'namestatus has path');
+    Stat := GitDiffStatSummary(GitDir, ParentTree, HeadTree);
+    CheckTrue(Pos('1 files changed', Stat) > 0, 'stat has file count');
+    CheckTrue(Pos('modified', Stat) > 0, 'stat has modified kind');
+    CliOut := Trim(MustCaptureIn('git', ['diff', '--name-only', 'HEAD~1', 'HEAD'], Work));
+    CheckEqual('f.txt', CliOut, 'git diff agrees on path');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
 procedure SetupFixture;
 begin
   GRepo := PathJoin([GetTempDir,
@@ -4972,6 +5144,12 @@ begin
     T.Test('describe matches git', @TestDescribeMatchesGit);
     T.Test('show structure', @TestShowStructure);
     T.Test('catfile matches git', @TestCatFileMatchesGit);
+    T.Test('log matches git', @TestLogMatchesGit);
+    T.Test('shortlog matches git', @TestShortlogMatchesGit);
+    T.Test('merge-base matches git', @TestMergeBaseMatchesGit);
+    T.Test('cherry-pick round-trip', @TestCherryPickRoundTrip);
+    T.Test('revert round-trip', @TestRevertRoundTrip);
+    T.Test('diff family matches git', @TestDiffFamilyMatchesGit);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;
