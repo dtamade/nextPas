@@ -15,10 +15,13 @@ uses
   nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.base.utils,
-  nextpas.core.time, nextpas.core.system.classes, SyncObjs,
+  nextpas.core.time,
+  nextpas.core.sync,
+  nextpas.core.thread.base,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.crypto.utils,
@@ -42,7 +45,7 @@ type
   end;
 
   { 基础测试线程 }
-  TBaseTestThread = class(TThread)
+  TBaseTestThread = class(TWorkerThread)
   protected
     FTestID: Integer;
     FSuccess: Boolean;
@@ -85,12 +88,12 @@ var
   Results: array of TTestResultRec;
   TotalTests: Integer = 0;
   PassedTests: Integer = 0;
-  GlobalLock: TCriticalSection;
+  GlobalLock: IMutex;
 
 procedure AddResult(const ATestName: string; APassed: Boolean;
   const AErrorMsg: string = ''; ADuration: Double = 0);
 begin
-  GlobalLock.Enter;
+  GlobalLock.Acquire;
   try
     SetLength(Results, Length(Results) + 1);
     Results[High(Results)].TestName := ATestName;
@@ -101,7 +104,7 @@ begin
     if APassed then
       Inc(PassedTests);
   finally
-    GlobalLock.Leave;
+    GlobalLock.Release;
   end;
 end;
 
@@ -148,12 +151,11 @@ end;
 
 constructor TBaseTestThread.Create(ATestID: Integer);
 begin
-  inherited Create(True);
+  inherited Create;
   FTestID := ATestID;
   FSuccess := False;
   FErrorMsg := '';
   FOperationCount := 0;
-  FreeOnTerminate := False;
 end;
 
 { TContextCreationThread }
@@ -180,7 +182,7 @@ begin
 
     FSuccess := (FOperationCount = 10);
     if not FSuccess then
-      FErrorMsg := Format('Only %d/10 contexts created', [FOperationCount]);
+      FErrorMsg := TextFormat('Only %d/10 contexts created', [FOperationCount]);
   except
     on E: Exception do
     begin
@@ -229,7 +231,7 @@ begin
 
     FSuccess := (FOperationCount >= NUM_OPS_PER_THREAD * 80 div 100);  // 80% 成功率
     if not FSuccess then
-      FErrorMsg := Format('%d/%d operations succeeded', [FOperationCount, NUM_OPS_PER_THREAD]);
+      FErrorMsg := TextFormat('%d/%d operations succeeded', [FOperationCount, NUM_OPS_PER_THREAD]);
   except
     on E: Exception do
     begin
@@ -276,7 +278,7 @@ begin
 
     FSuccess := (FOperationCount >= 5 * CONNECTION_POOL_SIZE * 80 div 100);
     if not FSuccess then
-      FErrorMsg := Format('%d/%d resources managed successfully',
+      FErrorMsg := TextFormat('%d/%d resources managed successfully',
         [FOperationCount, 5 * CONNECTION_POOL_SIZE]);
   except
     on E: Exception do
@@ -320,7 +322,7 @@ begin
 
     FSuccess := (FOperationCount >= 16);  // 80% 成功率
     if not FSuccess then
-      FErrorMsg := Format('%d/20 mixed operations succeeded', [FOperationCount]);
+      FErrorMsg := TextFormat('%d/20 mixed operations succeeded', [FOperationCount]);
   except
     on E: Exception do
     begin
@@ -376,11 +378,11 @@ begin
     EndTime := DateTimeNow;
 
     if AllSuccess then
-      AddResult(Format('Multithreaded context creation (%d threads)', [NUM_STRESS_THREADS]),
+      AddResult(TextFormat('Multithreaded context creation (%d threads)', [NUM_STRESS_THREADS]),
         True, '', (EndTime - StartTime) * 86400000)
     else
-      AddResult(Format('Multithreaded context creation (%d threads)', [NUM_STRESS_THREADS]),
-        False, Format('%d threads failed: %s', [FailedCount, ErrorMsg]),
+      AddResult(TextFormat('Multithreaded context creation (%d threads)', [NUM_STRESS_THREADS]),
+        False, TextFormat('%d threads failed: %s', [FailedCount, ErrorMsg]),
         (EndTime - StartTime) * 86400000);
 
   except
@@ -435,7 +437,7 @@ begin
     EndTime := DateTimeNow;
 
     if AllSuccess then
-      AddResult(Format('Connection pool thread safety (%d total ops)', [TotalOps]),
+      AddResult(TextFormat('Connection pool thread safety (%d total ops)', [TotalOps]),
         True, '', (EndTime - StartTime) * 86400000)
     else
       AddResult('Connection pool thread safety', False, ErrorMsg,
@@ -496,10 +498,10 @@ begin
     EndTime := DateTimeNow;
 
     if AllSuccess then
-      AddResult(Format('High concurrency crypto ops (%d threads, %d ops)', [NUM_STRESS_THREADS, TotalOps]),
+      AddResult(TextFormat('High concurrency crypto ops (%d threads, %d ops)', [NUM_STRESS_THREADS, TotalOps]),
         True, '', (EndTime - StartTime) * 86400000)
     else
-      AddResult(Format('High concurrency crypto ops (%d/%d threads failed)', [FailedThreads, NUM_STRESS_THREADS]),
+      AddResult(TextFormat('High concurrency crypto ops (%d/%d threads failed)', [FailedThreads, NUM_STRESS_THREADS]),
         False, ErrorMsg, (EndTime - StartTime) * 86400000);
 
   except
@@ -554,7 +556,7 @@ begin
     EndTime := DateTimeNow;
 
     if AllSuccess then
-      AddResult(Format('Mixed operations concurrency (%d ops)', [TotalOps]),
+      AddResult(TextFormat('Mixed operations concurrency (%d ops)', [TotalOps]),
         True, '', (EndTime - StartTime) * 86400000)
     else
       AddResult('Mixed operations concurrency', False, ErrorMsg,
@@ -601,10 +603,10 @@ begin
       Contexts[i] := nil;
 
     if SuccessCount = NUM_CONCURRENT_CONTEXTS then
-      AddResult(Format('Mass context creation (%d contexts)', [NUM_CONCURRENT_CONTEXTS]),
+      AddResult(TextFormat('Mass context creation (%d contexts)', [NUM_CONCURRENT_CONTEXTS]),
         True, '', (EndTime - StartTime) * 86400000)
     else
-      AddResult(Format('Mass context creation (%d/%d succeeded)',
+      AddResult(TextFormat('Mass context creation (%d/%d succeeded)',
         [SuccessCount, NUM_CONCURRENT_CONTEXTS]), False, '',
         (EndTime - StartTime) * 86400000);
 
@@ -617,7 +619,6 @@ end;
 { Test 6: 随机数生成器并发测试 }
 procedure Test_RandomGeneratorConcurrency;
 var
-  Threads: array of TThread;
   Results: array of TBytes;
   AllUnique: Boolean;
   i, j: Integer;
@@ -718,7 +719,7 @@ begin
   WriteLn('Purpose: Test thread safety and concurrent access');
   WriteLn;
 
-  GlobalLock := TCriticalSection.Create;
+  GlobalLock := Mutex();
 
   try
     // 运行所有测试
@@ -734,7 +735,7 @@ begin
     PrintResults;
 
   finally
-    GlobalLock.Free;
+    GlobalLock := nil;
   end;
 
   // 设置退出码

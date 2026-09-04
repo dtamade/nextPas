@@ -6,7 +6,13 @@ uses
   nextpas.core.thread.init,
   nextpas.core.exception,
   nextpas.core.base,
-  nextpas.core.base.utils, nextpas.core.system.classes, nextpas.core.thread.base, Sockets, ssockets,
+  nextpas.core.base.utils,
+  nextpas.core.thread.base,
+  nextpas.core.platform.socket,
+  nextpas.core.platform.socket.base,
+  nextpas.core.io.intf,
+  nextpas.core.fs,
+  nextpas.core.tls.socket_stream,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.server,
   nextpas.core.tls.x509,
@@ -15,7 +21,7 @@ uses
 type
   TTLS12ServerThread = class(TWorkerThread)
   private
-    FListenSocket: Longint;
+    FListenSocket: TPlatformSocket;
     FPort: Word;
     FConfig: TTLS12ServerConfig;
     FState: TTLS12ServerState;
@@ -53,17 +59,8 @@ begin
 end;
 
 function LoadFileBytes(const APath: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(APath);
 end;
 
 function LoadCertificateDER(const APath: string): TBytes;
@@ -86,7 +83,7 @@ end;
 constructor TTLS12ServerThread.Create;
 begin
   inherited Create;
-  FListenSocket := -1;
+  FListenSocket := PLATFORM_INVALID_SOCKET;
   FillChar(FState, SizeOf(FState), 0);
   FillChar(FConfig, SizeOf(FConfig), 0);
   LoadConfig;
@@ -96,8 +93,8 @@ end;
 
 destructor TTLS12ServerThread.Destroy;
 begin
-  if FListenSocket >= 0 then
-    CloseSocket(FListenSocket);
+  if FListenSocket.IsValid then
+    platform_socket_close(FListenSocket);
   if Assigned(FConfig.Certificate) then
     FConfig.Certificate.Free;
   inherited Destroy;
@@ -122,54 +119,104 @@ end;
 
 procedure TTLS12ServerThread.BindAndListen;
 var
-  LAddr: TInetSockAddr;
-  LOne: Longint;
-  LAddrLen: TSockLen;
+  LAddr: TPlatformSockAddr;
+  LBound: TPlatformSockAddr;
+  LBoundLen: Int32;
+  LAddrIP: UInt32;
+  LPort: UInt16;
 begin
-  FListenSocket := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if FListenSocket < 0 then
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    FListenSocket) <> 0 then
     raise Exception.Create('socket() failed');
 
-  LOne := 1;
-  fpSetSockOpt(FListenSocket, SOL_SOCKET, SO_REUSEADDR, @LOne, SizeOf(LOne));
+  if platform_socket_set_reuseaddr(FListenSocket, True) <> 0 then
+  begin
+    platform_socket_close(FListenSocket);
+    raise Exception.Create('setsockopt(SO_REUSEADDR) failed');
+  end;
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(0);
-  LAddr.sin_addr.s_addr := HostToNet(Cardinal($7F000001));
-
-  if fpBind(FListenSocket, @LAddr, SizeOf(LAddr)) <> 0 then
+  platform_sockaddr_loopback4(0, LAddr);
+  if platform_socket_bind(FListenSocket, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(FListenSocket);
     raise Exception.Create('bind() failed');
-  if fpListen(FListenSocket, 1) <> 0 then
+  end;
+  if platform_socket_listen(FListenSocket, 1) <> 0 then
+  begin
+    platform_socket_close(FListenSocket);
     raise Exception.Create('listen() failed');
+  end;
 
-  LAddrLen := SizeOf(LAddr);
-  if fpGetSockName(FListenSocket, @LAddr, @LAddrLen) <> 0 then
+  LBound.Clear;
+  LBoundLen := SizeOf(LBound.Storage);
+  if platform_socket_getsockname(FListenSocket, @LBound.Storage[0],
+    @LBoundLen) <> 0 then
+  begin
+    platform_socket_close(FListenSocket);
     raise Exception.Create('getsockname() failed');
-  FPort := ntohs(LAddr.sin_port);
+  end;
+  LBound.Len := LBoundLen;
+  platform_sockaddr_ipv4_extract(LBound, LAddrIP, LPort);
+  if LPort = 0 then
+  begin
+    platform_socket_close(FListenSocket);
+    raise Exception.Create('getsockname() returned empty port');
+  end;
+  FPort := LPort;
 end;
 
 procedure TTLS12ServerThread.Execute;
 var
-  LClientHandle: Longint;
-  LAddr: TInetSockAddr;
-  LAddrLen: TSockLen;
-  LStream: TSocketStream;
+  LClient: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  LAddrLen: Int32;
+  LStream: IStream;
 begin
-  LAddrLen := SizeOf(LAddr);
-  LClientHandle := fpAccept(FListenSocket, @LAddr, @LAddrLen);
-  if LClientHandle < 0 then
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  LClient := PLATFORM_INVALID_SOCKET;
+  if platform_socket_accept(FListenSocket, @LAddr.Storage[0], @LAddrLen,
+    LClient) <> 0 then
   begin
     FError := 'accept() failed';
     Exit;
   end;
 
-  LStream := TSocketStream.Create(LClientHandle);
+  LStream := SocketHandleAsIStream(THandle(LClient.Value));
   try
     FHandshakeOk := TryTLS12ServerHandshake(LStream, FConfig, FState, FError);
   finally
-    LStream.Free;
+    LStream := nil;
+    platform_socket_close(LClient);
   end;
+end;
+
+function ConnectLoopback(APort: Word; out ASock: TPlatformSocket;
+  out AStream: IStream): Boolean;
+var
+  LAddr: TPlatformSockAddr;
+begin
+  ASock := PLATFORM_INVALID_SOCKET;
+  AStream := nil;
+  Result := False;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    ASock) <> 0 then
+    Exit;
+  platform_sockaddr_loopback4(APort, LAddr);
+  if platform_socket_connect(ASock, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(ASock);
+    Exit;
+  end;
+  AStream := SocketHandleAsIStream(THandle(ASock.Value));
+  Result := True;
+end;
+
+procedure CloseLoopback(var ASock: TPlatformSocket; var AStream: IStream);
+begin
+  AStream := nil;
+  if ASock.IsValid then
+    platform_socket_close(ASock);
 end;
 
 procedure WaitForServer(AThread: TTLS12ServerThread; const AStep: string);
@@ -181,7 +228,8 @@ end;
 procedure TestResumeRejectFallsBackToFullHandshake;
 var
   LServer1, LServer2: TTLS12ServerThread;
-  LSocket: TInetSocket;
+  LSock: TPlatformSocket;
+  LStream: IStream;
   LState1, LState2: TTLS12ClientState;
   LError: string;
   LProtos: array of string;
@@ -193,16 +241,17 @@ begin
 
   LServer1 := TTLS12ServerThread.Create;
   try
-    LSocket := TInetSocket.Create('127.0.0.1', LServer1.Port);
+    Check(ConnectLoopback(LServer1.Port, LSock, LStream),
+      'TCP connect to initial server succeeds');
     try
-      Check(TryTLS12ClientHandshake(LSocket, 'localhost', LProtos, LState1, LError),
+      Check(TryTLS12ClientHandshake(LStream, 'localhost', LProtos, LState1, LError),
         'Initial full handshake succeeds: ' + LError);
       Check(not LState1.Resumed, 'Initial handshake is not resumed');
       Check(Length(LState1.SessionID) > 0, 'Initial handshake receives session ID');
       Check(Length(LState1.PeerCertificatesDER) > 0, 'Initial handshake receives certificate chain');
       LInitialSessionID := Copy(LState1.SessionID);
     finally
-      LSocket.Free;
+      CloseLoopback(LSock, LStream);
     end;
 
     WaitForServer(LServer1, 'Initial');
@@ -217,9 +266,10 @@ begin
 
   LServer2 := TTLS12ServerThread.Create;
   try
-    LSocket := TInetSocket.Create('127.0.0.1', LServer2.Port);
+    Check(ConnectLoopback(LServer2.Port, LSock, LStream),
+      'TCP connect to fallback server succeeds');
     try
-      Check(TryTLS12ClientHandshakeWithResume(LSocket, 'localhost', LProtos, LCache, LState2, LError),
+      Check(TryTLS12ClientHandshakeWithResume(LStream, 'localhost', LProtos, LCache, LState2, LError),
         'Rejected resumption falls back to full handshake: ' + LError);
       Check(not LState2.Resumed, 'Fallback handshake is marked non-resumed');
       Check(Length(LState2.PeerCertificatesDER) > 0, 'Fallback handshake still reads certificate chain');
@@ -229,7 +279,7 @@ begin
         (not CompareMem(@LInitialSessionID[0], @LState2.SessionID[0], Length(LState2.SessionID))),
         'Fallback handshake accepts a new session ID');
     finally
-      LSocket.Free;
+      CloseLoopback(LSock, LStream);
     end;
 
     WaitForServer(LServer2, 'Fallback');

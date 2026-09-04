@@ -22,11 +22,22 @@ unit benchmark_framework;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.time, StrUtils, SysUtils;
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.time,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.fs;
 
 type
   { Benchmark test procedure type }
   TBenchmarkProc = procedure;
+
+  { Single registered benchmark (sorted by name, dupError on dup) }
+  TBenchmarkEntry = record
+    Name: string;
+    Proc: TBenchmarkProc;
+  end;
 
   { Statistical results for a benchmark }
   TBenchmarkStats = record
@@ -58,7 +69,7 @@ type
   { Main benchmark class }
   TBenchmark = class
   private
-    FTests: TStringList;
+    FTests: array of TBenchmarkEntry;
     FResults: array of TBenchmarkStats;
     FWarmupIterations: Integer;
     FRegressionThreshold: Double;  // Percentage (e.g., 0.10 = 10%)
@@ -99,13 +110,10 @@ function GetHighResolutionTime: Double;  // Returns time in milliseconds
 implementation
 
 var
-  GTimerFrequency: Int64 = 0;
-  GStartTime: Int64 = 0;
+  GStartTime: UInt64 = 0;
 
 function GetHighResolutionTime: Double;
 begin
-  // Use GetTickCount64 which is available in SysUtils for all platforms
-  // Returns milliseconds since system boot
   Result := GetTickCount64 - GStartTime;
 end;
 
@@ -114,26 +122,25 @@ end;
 constructor TBenchmark.Create;
 begin
   inherited Create;
-  FTests := TStringList.Create;
-  FTests.Sorted := True;
-  FTests.Duplicates := dupError;
+  SetLength(FTests, 0);
   FWarmupIterations := 100;
   FRegressionThreshold := 0.10;  // 10% threshold
-
-  {$IFDEF WINDOWS}
-  QueryPerformanceFrequency(GTimerFrequency);
-  {$ENDIF}
 end;
 
 destructor TBenchmark.Destroy;
 begin
-  FTests.Free;
+  SetLength(FTests, 0);
   inherited Destroy;
 end;
 
 function TBenchmark.GetTestIndex(const AName: string): Integer;
+var
+  I: Integer;
 begin
-  Result := FTests.IndexOf(AName);
+  for I := 0 to High(FTests) do
+    if FTests[I].Name = AName then
+      Exit(I);
+  Result := -1;
 end;
 
 procedure TBenchmark.QuickSort(var A: array of Double; Lo, Hi: Integer);
@@ -220,8 +227,23 @@ begin
 end;
 
 procedure TBenchmark.RegisterTest(const AName: string; AProc: TBenchmarkProc);
+var
+  I, LPos: Integer;
 begin
-  FTests.AddObject(AName, TObject(AProc));
+  if GetTestIndex(AName) >= 0 then
+    raise EInvalidArgument.Create('Duplicate benchmark: ' + AName);
+  LPos := Length(FTests);
+  for I := 0 to High(FTests) do
+    if FTests[I].Name > AName then
+    begin
+      LPos := I;
+      Break;
+    end;
+  SetLength(FTests, Length(FTests) + 1);
+  for I := High(FTests) downto LPos + 1 do
+    FTests[I] := FTests[I - 1];
+  FTests[LPos].Name := AName;
+  FTests[LPos].Proc := AProc;
 end;
 
 procedure TBenchmark.RunTest(const ATestName: string; AIterations: Integer);
@@ -239,7 +261,7 @@ begin
     Exit;
   end;
 
-  Proc := TBenchmarkProc(FTests.Objects[Idx]);
+  Proc := FTests[Idx].Proc;
 
   // Warmup phase
   for I := 1 to FWarmupIterations do
@@ -278,8 +300,8 @@ begin
 
   SetLength(FResults, 0);  // Clear previous results
 
-  for I := 0 to FTests.Count - 1 do
-    RunTest(FTests[I], AIterations);
+  for I := 0 to High(FTests) do
+    RunTest(FTests[I].Name, AIterations);
 
   WriteLn;
 end;
@@ -300,21 +322,23 @@ end;
 procedure TBenchmark.PrintResults;
 var
   I: Integer;
+  LStatus: string;
 begin
   WriteLn('=== Benchmark Results ===');
   WriteLn;
-  WriteLn(Format('%-25s %12s %12s %12s %12s', ['Test', 'Mean (ms)', 'P95 (ms)', 'P99 (ms)', 'Ops/s']));
-  WriteLn(StringOfChar('-', 75));
+  WriteLn(TextFormat('%-25s %12s %12s %12s %12s', ['Test', 'Mean (ms)', 'P95 (ms)', 'P99 (ms)', 'Ops/s']));
+  WriteLn(TextOfChar('-', 75));
 
   for I := 0 to High(FResults) do
   begin
-    WriteLn(Format('%-25s %12.3f %12.3f %12.3f %12.1f', [
+    LStatus := TextFormat('%-25s %12.3f %12.3f %12.3f %12.1f', [
       FResults[I].TestName,
       FResults[I].MeanTimeMs,
       FResults[I].P95Ms,
       FResults[I].P99Ms,
       FResults[I].OpsPerSecond
-    ]));
+    ]);
+    WriteLn(LStatus);
   end;
   WriteLn;
 end;
@@ -323,22 +347,27 @@ procedure TBenchmark.PrintComparison(const ABaseline: array of TBenchmarkStats);
 var
   Comparisons: TBaselineComparisonArray;
   I: Integer;
+  LMark: string;
 begin
   Comparisons := CompareWithBaseline(ABaseline);
 
   WriteLn('=== Baseline Comparison ===');
   WriteLn;
-  WriteLn(Format('%-25s %12s %12s %12s %8s', ['Test', 'Baseline', 'Current', 'Delta', 'Status']));
-  WriteLn(StringOfChar('-', 75));
+  WriteLn(TextFormat('%-25s %12s %12s %12s %8s', ['Test', 'Baseline', 'Current', 'Delta', 'Status']));
+  WriteLn(TextOfChar('-', 75));
 
   for I := 0 to High(Comparisons) do
   begin
-    WriteLn(Format('%-25s %12.3f %12.3f %11.1f%% %8s', [
+    if Comparisons[I].IsRegression then
+      LMark := 'REGRESS'
+    else
+      LMark := 'OK';
+    WriteLn(TextFormat('%-25s %12.3f %12.3f %11.1f%% %8s', [
       Comparisons[I].TestName,
       Comparisons[I].BaselineMs,
       Comparisons[I].CurrentMs,
       Comparisons[I].DeltaPercent * 100,
-      IfThen(Comparisons[I].IsRegression, 'REGRESS', 'OK')
+      LMark
     ]));
   end;
   WriteLn;
@@ -346,67 +375,59 @@ end;
 
 procedure TBenchmark.SaveBaseline(const AFileName: string);
 var
-  F: TextFile;
   I: Integer;
+  LDoc: string;
+  LItem: string;
 begin
-  AssignFile(F, AFileName);
-  Rewrite(F);
-  try
-    WriteLn(F, '{');
-    WriteLn(F, '  "generated": "', DateTimeToStr(Now), '",');
-    WriteLn(F, '  "tests": [');
+  LDoc := '{' + LineEnding;
+  LDoc := LDoc + '  "generated": "' + DateTimeToStr(DateTimeNow) + '",' + LineEnding;
+  LDoc := LDoc + '  "tests": [' + LineEnding;
 
-    for I := 0 to High(FResults) do
-    begin
-      WriteLn(F, '    {');
-      WriteLn(F, '      "name": "', FResults[I].TestName, '",');
-      WriteLn(F, '      "mean_ms": ', FResults[I].MeanTimeMs:0:6, ',');
-      WriteLn(F, '      "stddev_ms": ', FResults[I].StdDevMs:0:6, ',');
-      WriteLn(F, '      "min_ms": ', FResults[I].MinTimeMs:0:6, ',');
-      WriteLn(F, '      "max_ms": ', FResults[I].MaxTimeMs:0:6, ',');
-      WriteLn(F, '      "p50_ms": ', FResults[I].P50Ms:0:6, ',');
-      WriteLn(F, '      "p95_ms": ', FResults[I].P95Ms:0:6, ',');
-      WriteLn(F, '      "p99_ms": ', FResults[I].P99Ms:0:6, ',');
-      WriteLn(F, '      "iterations": ', FResults[I].Iterations);
-      if I < High(FResults) then
-        WriteLn(F, '    },')
-      else
-        WriteLn(F, '    }');
-    end;
-
-    WriteLn(F, '  ]');
-    WriteLn(F, '}');
-  finally
-    CloseFile(F);
+  for I := 0 to High(FResults) do
+  begin
+    LItem := '    {' + LineEnding +
+      '      "name": "' + FResults[I].TestName + '",' + LineEnding +
+      '      "mean_ms": ' + FloatToStrF(FResults[I].MeanTimeMs, 6) + ',' + LineEnding +
+      '      "stddev_ms": ' + FloatToStrF(FResults[I].StdDevMs, 6) + ',' + LineEnding +
+      '      "min_ms": ' + FloatToStrF(FResults[I].MinTimeMs, 6) + ',' + LineEnding +
+      '      "max_ms": ' + FloatToStrF(FResults[I].MaxTimeMs, 6) + ',' + LineEnding +
+      '      "p50_ms": ' + FloatToStrF(FResults[I].P50Ms, 6) + ',' + LineEnding +
+      '      "p95_ms": ' + FloatToStrF(FResults[I].P95Ms, 6) + ',' + LineEnding +
+      '      "p99_ms": ' + FloatToStrF(FResults[I].P99Ms, 6) + ',' + LineEnding +
+      '      "iterations": ' + IntToStr(FResults[I].Iterations) + LineEnding;
+    if I < High(FResults) then
+      LItem := LItem + '    },' + LineEnding
+    else
+      LItem := LItem + '    }' + LineEnding;
+    LDoc := LDoc + LItem;
   end;
+
+  LDoc := LDoc + '  ]' + LineEnding + '}' + LineEnding;
+  WriteFileText(AFileName, LDoc);
 end;
 
 function TBenchmark.LoadBaseline(const AFileName: string): Boolean;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LLine, LToken, LValue: string;
   LPosColon, LPosFirstQuote, LPosSecondQuote: Integer;
   LEntryCount: Integer;
   LLineIdx: Integer;
   LHasName, LHasMean: Boolean;
   LMeanValue: Double;
-  LFormatSettings: TFormatSettings;
 begin
   Result := False;
 
   if not FileExists(AFileName) then
     Exit;
 
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(AFileName);
+  LLines := ReadFileLines(AFileName);
+  begin
     LEntryCount := 0;
     LHasName := False;
     LHasMean := False;
-    LFormatSettings := DefaultFormatSettings;
-    LFormatSettings.DecimalSeparator := '.';
 
-    for LLineIdx := 0 to LLines.Count - 1 do
+    for LLineIdx := 0 to High(LLines) do
     begin
       LLine := LLines[LLineIdx];
       LToken := Trim(LLine);
@@ -441,7 +462,7 @@ begin
         if (LValue <> '') and (LValue[Length(LValue)] = ',') then
           Delete(LValue, Length(LValue), 1);
 
-        if not TryStrToFloat(LValue, LMeanValue, LFormatSettings) then
+        if not TryStrToFloat(LValue, LMeanValue) then
           Exit;
 
         LHasMean := True;
@@ -463,8 +484,6 @@ begin
       Exit;
 
     Result := LEntryCount > 0;
-  finally
-    LLines.Free;
   end;
 end;
 

@@ -6,11 +6,13 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  Classes, SyncObjs,
   nextpas.core.base.utils,
   nextpas.core.exception,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.time,
+  nextpas.core.sync,
+  nextpas.core.thread.base,
   nextpas.core.tls.base,
   nextpas.core.tls.factory;
 
@@ -68,7 +70,7 @@ type
 
   TFactoryCallKind = (fckGetLibrary, fckIsLibraryAvailable);
 
-  TFactoryCallThread = class(TThread)
+  TFactoryCallThread = class(TWorkerThread)
   private
     FCallKind: TFactoryCallKind;
     FLibType: TSSLLibraryType;
@@ -91,8 +93,8 @@ var
   GTestsPassed: Integer = 0;
   GTestsFailed: Integer = 0;
   GInitializeCalls: Integer = 0;
-  GInitializeEnteredEvent: TEvent = nil;
-  GAllowInitializeFinishEvent: TEvent = nil;
+  GInitializeEnteredEvent: IEvent = nil;
+  GAllowInitializeFinishEvent: IEvent = nil;
 
 procedure Fail(const AMessage: string);
 begin
@@ -117,16 +119,16 @@ end;
 procedure CheckEqualsInt(AExpected, AActual: Integer; const AMessage: string);
 begin
   Check(AExpected = AActual,
-    Format('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
+    TextFormat('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
 end;
 
 procedure ResetBlockingState;
 begin
   GInitializeCalls := 0;
-  FreeAndNil(GInitializeEnteredEvent);
-  FreeAndNil(GAllowInitializeFinishEvent);
-  GInitializeEnteredEvent := TEvent.Create(nil, True, False, '');
-  GAllowInitializeFinishEvent := TEvent.Create(nil, True, False, '');
+  GInitializeEnteredEvent := nil;
+  GAllowInitializeFinishEvent := nil;
+  GInitializeEnteredEvent := Event(True);
+  GAllowInitializeFinishEvent := Event(True);
 end;
 
 procedure CleanupBackend(ALibType: TSSLLibraryType);
@@ -156,7 +158,7 @@ begin
   InterlockedIncrement(GInitializeCalls);
   GInitializeEnteredEvent.SetEvent;
 
-  if GAllowInitializeFinishEvent.WaitFor(5000) <> wrSignaled then
+  if not GAllowInitializeFinishEvent.WaitTimeout(Int64(5000) * 1000000) then
     Exit(False);
 
   FInitialized := True;
@@ -300,8 +302,7 @@ end;
 
 constructor TFactoryCallThread.Create(ACallKind: TFactoryCallKind; ALibType: TSSLLibraryType);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FCallKind := ACallKind;
   FLibType := ALibType;
   FSuccess := False;
@@ -321,7 +322,7 @@ begin
       begin
         LLib := TSSLFactory.GetLibrary(FLibType);
         FAvailable := Assigned(LLib);
-        if Supports(LLib, IInspectableFactoryMock, LInspectable) then
+        if nextpas.core.base.utils.Supports(LLib, IInspectableFactoryMock, LInspectable) then
           FInstanceId := LInspectable.GetInstanceId;
       end;
       fckIsLibraryAvailable:
@@ -349,7 +350,7 @@ begin
   LThread2 := TFactoryCallThread.Create(fckGetLibrary, sslMbedTLS);
   try
     LThread1.Start;
-    Check(GInitializeEnteredEvent.WaitFor(2000) = wrSignaled,
+    Check(GInitializeEnteredEvent.WaitTimeout(Int64(2000) * 1000000),
       'First GetLibrary call entered Initialize');
 
     LThread2.Start;
@@ -387,7 +388,7 @@ begin
   LThread2 := TFactoryCallThread.Create(fckIsLibraryAvailable, sslWolfSSL);
   try
     LThread1.Start;
-    Check(GInitializeEnteredEvent.WaitFor(2000) = wrSignaled,
+    Check(GInitializeEnteredEvent.WaitTimeout(Int64(2000) * 1000000),
       'First IsLibraryAvailable call entered Initialize');
 
     LThread2.Start;
@@ -413,8 +414,8 @@ begin
     TestConcurrentGetLibraryInitializesOnlyOnce;
     TestConcurrentIsLibraryAvailableInitializesOnlyOnce;
 
-    FreeAndNil(GInitializeEnteredEvent);
-    FreeAndNil(GAllowInitializeFinishEvent);
+    GInitializeEnteredEvent := nil;
+    GAllowInitializeFinishEvent := nil;
 
     WriteLn;
     WriteLn('Tests Passed: ', GTestsPassed);
