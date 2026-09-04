@@ -327,7 +327,7 @@ func main() {
 	results := []benchResult{
 		measure("tar/pack/200x512B", benchPackMany, 102400),
 		measure("tar/builder-pack/200x512B", benchBuilderPack, 102400),
-		measure("tar/open/parse", benchOpenParse, 5536),
+		measure("tar/open/parse", benchOpenParse, 205824),
 		measure("tar/extract-all/200x512B", benchExtractAll, 102400),
 		measure("tar/extract-slice/200x512B", benchExtractSlice, 102400),
 		measure("tar/write/1MB", benchWrite1M, 1048576),

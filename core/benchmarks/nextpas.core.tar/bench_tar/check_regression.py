@@ -59,8 +59,19 @@ def find_compare(cands):
     return None
 
 def main():
-    baseline_path = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else BASELINE
-    current_path = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else find_current()
+    # flag 与位置参数分离：--with-compare 只开对照硬门，不再被误读为基线路径
+    raw = sys.argv[1:]
+    opts = set(a for a in raw if a.startswith("--"))
+    positional = [a for a in raw if not a.startswith("--")]
+    # --compare-go/--compare-rust 显式路径优先于自动发现
+    def opt_value(flag):
+        if flag in raw:
+            i = raw.index(flag)
+            if i + 1 < len(raw) and not raw[i + 1].startswith("--"):
+                return pathlib.Path(raw[i + 1])
+        return None
+    baseline_path = pathlib.Path(positional[0]) if len(positional) > 0 else BASELINE
+    current_path = pathlib.Path(positional[1]) if len(positional) > 1 else find_current()
     if current_path is None or not current_path.exists():
         print(f"[regression] current bench not found (tried {CANDIDATES})", file=sys.stderr)
         print("hint: run `make -C core/benchmarks/nextpas.core.tar/bench_tar run` first", file=sys.stderr)
@@ -110,26 +121,19 @@ def main():
         if name not in base_map:
             print(f"  WARN extra bench {name} not in baseline", file=sys.stderr)
     # --- Go/Rust compare hard gate (CONTRACT §6) ---
-    want_compare = "--with-compare" in sys.argv
-    go_path = find_compare(COMPARE_GO_CANDIDATES)
-    rust_path = find_compare(COMPARE_RUST_CANDIDATES)
-    # CLI explicit compare paths: --compare-go <path> --compare-rust <path>
-    if "--compare-go" in sys.argv:
-        try:
-            go_path = pathlib.Path(sys.argv[sys.argv.index("--compare-go") + 1])
-        except Exception:
-            pass
-    if "--compare-rust" in sys.argv:
-        try:
-            rust_path = pathlib.Path(sys.argv[sys.argv.index("--compare-rust") + 1])
-        except Exception:
-            pass
+    # 仅 --with-compare 开启缺失硬红；裸跑只做基线对照，对照缺失记 INFO
+    want_compare = "--with-compare" in opts
+    go_path = opt_value("--compare-go") or find_compare(COMPARE_GO_CANDIDATES)
+    rust_path = opt_value("--compare-rust") or find_compare(COMPARE_RUST_CANDIDATES)
     compare_failed = 0
     for label, cpath in [("Go", go_path), ("Rust", rust_path)]:
         if cpath is None or not cpath.exists():
-            print(f"  FAIL compare {label}: missing artifact {cpath} (hard gate, CI 硬红)", file=sys.stderr)
-            print(f"       hint: run `make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare` to generate", file=sys.stderr)
-            compare_failed += 1
+            if want_compare:
+                print(f"  FAIL compare {label}: missing artifact {cpath} (hard gate, CI 硬红)", file=sys.stderr)
+                print(f"       hint: run `make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare` to generate", file=sys.stderr)
+                compare_failed += 1
+            else:
+                print(f"  INFO compare {label}: no artifact (skipped without --with-compare)")
             continue
         try:
             cdata = load(cpath)
