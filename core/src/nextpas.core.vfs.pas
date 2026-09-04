@@ -19,13 +19,15 @@ uses
   nextpas.core.vfs.util;
 
 type
-  { re-export 8 别名：base/intf/errors/memtree/util/decorator/mount }
+  { re-export：base/intf/errors/backends/util/decorator/mount/vfs 各族类型与错误类 }
+  TBytes = nextpas.core.base.TBytes;
   TEntryInfo = nextpas.core.vfs.base.TEntryInfo;
   TEntryArray = nextpas.core.vfs.base.TEntryArray;
   TStatInfo = nextpas.core.vfs.base.TStatInfo;
   IVfs = nextpas.core.vfs.intf.IVfs;
   IVfsETag = nextpas.core.vfs.intf.IVfsETag;
   IVfsServeMeta = nextpas.core.vfs.intf.IVfsServeMeta;
+  IVfsView = nextpas.core.vfs.intf.IVfsView;
   TVfsMemEntry = nextpas.core.vfs.backends.TVfsMemEntry;
   TVfsTreeBuilder = nextpas.core.vfs.backends.TVfsTreeBuilder;
   TVfsVisitProc = nextpas.core.vfs.util.TVfsVisitProc;
@@ -40,9 +42,21 @@ type
   TVfsTransformFunc = nextpas.core.vfs.decorator.TVfsTransformFunc;
   TVfsShouldTransformFunc = nextpas.core.vfs.decorator.TVfsShouldTransformFunc;
   TVfsHeaderPredicateFunc = nextpas.core.vfs.decorator.TVfsHeaderPredicateFunc;
+  TDecompressAlgo = nextpas.core.vfs.decorator.TDecompressAlgo;
   TVfsMountEntry = nextpas.core.vfs.mount.TVfsMountEntry;
+  TVfsMountArray = nextpas.core.vfs.mount.TVfsMountArray;
 
-{ 工厂/视图/装饰器/辅助 15 inline 薄转发，零拷贝复用 bytes.ops 单源 }
+const
+  { 单源别名：复用 decorator 32MiB（canonical 为 compress.base GZIP_MAX），无字面量漂移 }
+  VFS_DECOMPRESS_MAX_BYTES = nextpas.core.vfs.decorator.VFS_DECOMPRESS_MAX_BYTES;
+
+  { 枚举值单源直通：daAuto/daGzip 唯一声明于 vfs.base，此处同名常量影子别名
+    使纯门面消费者可直接命名（单元内遮蔽 imported 标识符合法，与 backends
+    重导出 RESPACK_* 同模式）；已同时 uses 原声明单元的作用域内引用须加限定。 }
+  daAuto: TDecompressAlgo = nextpas.core.vfs.base.daAuto;
+  daGzip: TDecompressAlgo = nextpas.core.vfs.base.daGzip;
+
+{ 工厂/视图/装饰器/辅助 inline 薄转发，零拷贝复用 bytes.ops 单源 }
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs; inline;
 function CreateOsVfs(const ARoot: string): IVfs; inline;
 function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs; inline;
@@ -55,7 +69,9 @@ function CreateTransformingVfs(const AInner: IVfs;
   const ATransform: TVfsTransformFunc;
   const AShould: TVfsShouldTransformFunc;
   const AHeaderPred: TVfsHeaderPredicateFunc): IVfs; inline; overload;
-function CreateDecompressingVfs(const AInner: IVfs): IVfs; inline;
+function CreateDecompressingVfs(const AInner: IVfs): IVfs; inline; overload;
+function CreateDecompressingVfs(const AInner: IVfs;
+  const AAlgo: TDecompressAlgo): IVfs; inline; overload;
 function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry; inline;
 function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs; inline;
 function CreateOverlayVfs(const AList: array of IVfs): IVfs; inline;
@@ -119,6 +135,12 @@ end;
 function CreateDecompressingVfs(const AInner: IVfs): IVfs;
 begin
   Result := nextpas.core.vfs.decorator.CreateDecompressingVfs(AInner);
+end;
+
+function CreateDecompressingVfs(const AInner: IVfs;
+  const AAlgo: TDecompressAlgo): IVfs;
+begin
+  Result := nextpas.core.vfs.decorator.CreateDecompressingVfs(AInner, AAlgo);
 end;
 
 function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry;
