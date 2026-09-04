@@ -3,7 +3,14 @@ program test_freepascal_client_cert_verify_flags_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
@@ -20,8 +27,6 @@ uses
   nextpas.core.tls.tls13.servercertverify,
   nextpas.core.crypto.hash,
   nextpas.core.tls.freepascal.context.material,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 type
   TServerMaterial = record
@@ -93,18 +98,8 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  Result := nil;
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function BytesToAnsiString(const AData: TBytes): AnsiString;
@@ -167,13 +162,13 @@ begin
   LOptions.CommonName := ACommonName;
   LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
-  LOptions.NotBefore := Now - 2;
+  LOptions.NotBefore := DateTimeNow - 2;
   if ASerialNumber > 0 then
     LOptions.SerialNumber := ASerialNumber;
   if AExpired then
-    LOptions.NotAfter := Now - 1
+    LOptions.NotAfter := DateTimeNow - 1
   else
-    LOptions.NotAfter := Now + 30;
+    LOptions.NotAfter := DateTimeNow + 30;
   SetLength(LOptions.SubjectAltNames, 0);
   try
     for I := Low(ASANs) to High(ASANs) do
@@ -196,7 +191,7 @@ begin
 end;
 
 type
-  TScriptedVerifyFlagsServerStream = class(TStream)
+  TScriptedVerifyFlagsServerStream = class(TInterfacedObject, IStream)
   private
     FCipherSuite: Word;
     FReadBuffer: TBytes;
@@ -215,9 +210,13 @@ type
   public
     constructor Create(const ACertificateBlob, APrivateKeyBlob: TBytes);
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
   end;
 
 constructor TScriptedVerifyFlagsServerStream.Create(const ACertificateBlob, APrivateKeyBlob: TBytes);
@@ -409,34 +408,34 @@ begin
   FWriteStage := 2;
 end;
 
-function TScriptedVerifyFlagsServerStream.Read(var Buffer; Count: Longint): Longint;
+function TScriptedVerifyFlagsServerStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TScriptedVerifyFlagsServerStream.Write(const Buffer; Count: Longint): Longint;
+function TScriptedVerifyFlagsServerStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
   LOffset, LRecLen: Integer;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   case FWriteStage of
     0: HandleClientHello(LData);
@@ -456,17 +455,36 @@ begin
       end;
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TScriptedVerifyFlagsServerStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TScriptedVerifyFlagsServerStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TScriptedVerifyFlagsServerStream.Close;
+begin
+end;
+
+function TScriptedVerifyFlagsServerStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TScriptedVerifyFlagsServerStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TScriptedVerifyFlagsServerStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 function NewClientContext(const AVerifyFlags: TSSLCertVerifyFlags): ISSLContext;
@@ -490,7 +508,7 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedVerifyFlagsServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateServerMaterial(
     'cn-only.example.com',
@@ -500,22 +518,18 @@ begin
 
   LCtx := NewClientContext([sslCertVerifyDefault]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Hostname mismatch connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Hostname mismatch connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Hostname mismatch should fail when ignore-hostname flag is absent');
-    AssertEqualsInt(Ord(sslErrHostnameMismatch), GetCertificateVerifyResult(LConn),
-      'Hostname mismatch should surface sslErrHostnameMismatch');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'hostname'),
-      'Hostname mismatch should mention hostname in verify-result string'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Hostname mismatch should fail when ignore-hostname flag is absent');
+  AssertEqualsInt(Ord(sslErrHostnameMismatch), GetCertificateVerifyResult(LConn),
+    'Hostname mismatch should surface sslErrHostnameMismatch');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'hostname'),
+    'Hostname mismatch should mention hostname in verify-result string'
+  );
 end;
 
 procedure TestHostnameMismatchCanBeIgnored;
@@ -523,7 +537,7 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedVerifyFlagsServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateServerMaterial(
     'cn-only.example.com',
@@ -533,16 +547,12 @@ begin
 
   LCtx := NewClientContext([sslCertVerifyIgnoreHostname]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Ignore-hostname connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Ignore-hostname connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Ignore-hostname flag should allow scripted mismatch certificate to connect');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Ignore-hostname flag should allow scripted mismatch certificate to connect');
 end;
 
 procedure TestExpiredCertificateFailsWithoutIgnoreFlag;
@@ -550,7 +560,7 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedVerifyFlagsServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateServerMaterial(
     'example.com',
@@ -560,22 +570,18 @@ begin
 
   LCtx := NewClientContext([sslCertVerifyDefault]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Expired-certificate connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Expired-certificate connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Expired certificate should fail when ignore-expiry flag is absent');
-    AssertEqualsInt(Ord(sslErrCertificateExpired), GetCertificateVerifyResult(LConn),
-      'Expired certificate should surface sslErrCertificateExpired');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'expired'),
-      'Expired certificate should mention expiry in verify-result string'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Expired certificate should fail when ignore-expiry flag is absent');
+  AssertEqualsInt(Ord(sslErrCertificateExpired), GetCertificateVerifyResult(LConn),
+    'Expired certificate should surface sslErrCertificateExpired');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'expired'),
+    'Expired certificate should mention expiry in verify-result string'
+  );
 end;
 
 procedure TestExpiredCertificateCanBeIgnored;
@@ -583,7 +589,7 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedVerifyFlagsServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateServerMaterial(
     'example.com',
@@ -593,16 +599,12 @@ begin
 
   LCtx := NewClientContext([sslCertVerifyIgnoreExpiry]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Ignore-expiry connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Ignore-expiry connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Ignore-expiry flag should allow scripted expired certificate to connect');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Ignore-expiry flag should allow scripted expired certificate to connect');
 end;
 
 procedure TestStrictChainFailsWhenLeafLacksServerAuthExtendedKeyUsage;
@@ -610,7 +612,7 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedVerifyFlagsServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateServerMaterial(
     'example.com',
@@ -620,22 +622,18 @@ begin
 
   LCtx := NewClientContext([sslCertVerifyStrictChain]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Strict-chain connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Strict-chain connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Strict-chain flag should fail when the leaf certificate lacks serverAuth EKU');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'strict') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'serverauth') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'extended key usage'),
-      'Strict-chain failure should mention strict-chain or serverAuth extended key usage'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Strict-chain flag should fail when the leaf certificate lacks serverAuth EKU');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'strict') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'serverauth') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'extended key usage'),
+    'Strict-chain failure should mention strict-chain or serverAuth extended key usage'
+  );
 end;
 
 procedure TestRevocationCheckFailsClosedWhenRevocationStatusIsUnavailable;
@@ -643,7 +641,7 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedVerifyFlagsServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateServerMaterial(
     'example.com',
@@ -653,21 +651,17 @@ begin
 
   LCtx := NewClientContext([sslCertVerifyCheckRevocation]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Revocation-check connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Revocation-check connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Revocation-check flag should fail-closed when revocation status is unavailable');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'revocation') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'unavailable'),
-      'Revocation-check failure should mention revocation status unavailability'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Revocation-check flag should fail-closed when revocation status is unavailable');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'revocation') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'unavailable'),
+    'Revocation-check failure should mention revocation status unavailability'
+  );
 end;
 
 procedure TestCRLCheckFailsClosedWhenCRLStatusIsUnavailable;
@@ -675,7 +669,7 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedVerifyFlagsServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateServerMaterial(
     'example.com',
@@ -685,21 +679,17 @@ begin
 
   LCtx := NewClientContext([sslCertVerifyCheckCRL]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'CRL-check connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'CRL-check connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'CRL-check flag should fail-closed when CRL status is unavailable');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'crl') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'revocation'),
-      'CRL-check failure should mention CRL or revocation'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'CRL-check flag should fail-closed when CRL status is unavailable');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'crl') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'revocation'),
+    'CRL-check failure should mention CRL or revocation'
+  );
 end;
 
 procedure TestRevocationMaterialAllowsNonRevokedCertificate;
@@ -707,7 +697,7 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedVerifyFlagsServerStream;
+  LStream: IStream;
   LRevocationMaterial: IFreePascalContextRevocationMaterial;
 begin
   LMaterial := GenerateServerMaterial(
@@ -721,16 +711,12 @@ begin
   LRevocationMaterial := RequireRevocationMaterialSupport(LCtx);
   LRevocationMaterial.AddCRLFile('certificate/test_certs/revocation_nonmatching_crl.pem');
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Revocation-material connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Revocation-material connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Revocation-check flag should allow the connection when caller-provided CRL material does not revoke the peer cert');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Revocation-check flag should allow the connection when caller-provided CRL material does not revoke the peer cert');
 end;
 
 procedure TestCRLMaterialFailsClosedWhenCertificateIsRevoked;
@@ -738,7 +724,7 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedVerifyFlagsServerStream;
+  LStream: IStream;
   LRevocationMaterial: IFreePascalContextRevocationMaterial;
 begin
   LMaterial := GenerateServerMaterial(
@@ -752,23 +738,19 @@ begin
   LRevocationMaterial := RequireRevocationMaterialSupport(LCtx);
   LRevocationMaterial.AddCRLFile('certificate/test_certs/revocation_revoked_crl.pem');
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'CRL-material connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'CRL-material connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'CRL-check flag should fail-closed when caller-provided CRL material revokes the peer cert');
-    AssertEqualsInt(Ord(sslErrCertificateRevoked), GetCertificateVerifyResult(LConn),
-      'Revoked CRL material should surface sslErrCertificateRevoked');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'revoked') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'crl'),
-      'Revoked CRL material failure should mention revoked or CRL'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'CRL-check flag should fail-closed when caller-provided CRL material revokes the peer cert');
+  AssertEqualsInt(Ord(sslErrCertificateRevoked), GetCertificateVerifyResult(LConn),
+    'Revoked CRL material should surface sslErrCertificateRevoked');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'revoked') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'crl'),
+    'Revoked CRL material failure should mention revoked or CRL'
+  );
 end;
 
 begin

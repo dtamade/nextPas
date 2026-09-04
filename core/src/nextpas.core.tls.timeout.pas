@@ -44,7 +44,6 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.errors,
-  nextpas.core.io.stream_adapter,
   nextpas.core.net.intf,
   nextpas.core.time.base,
   nextpas.core.time.deadline;

@@ -24,7 +24,6 @@ uses
   nextpas.core.encoding.base64,
   nextpas.core.io.intf,
   nextpas.core.io.util,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,

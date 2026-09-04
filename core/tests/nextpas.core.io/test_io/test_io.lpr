@@ -1576,6 +1576,93 @@ begin
   CheckEqual(Byte($FE), LBuf[1]);
 end;
 
+procedure TestReadAllLimitedUnder;
+var
+  LS: IStream;
+  LData: array[0..9] of Byte;
+  LI: Integer;
+  LResult: TBytes;
+begin
+  LS := BytesStream(64);
+  for LI := 0 to 9 do LData[LI] := Byte(LI + 1);
+  LS.Write(LData[0], 10);
+  LS.Seek(0, soBeginning);
+  LResult := nextpas.core.io.ReadAllLimited(LS, 100);
+  CheckEqual(10, Length(LResult), 'len');
+  CheckEqual(Byte(1), LResult[0]);
+  CheckEqual(Byte(10), LResult[9]);
+end;
+
+procedure TestReadAllLimitedExact;
+var
+  LS: IStream;
+  LData: array[0..9] of Byte;
+  LI: Integer;
+  LResult: TBytes;
+begin
+  LS := BytesStream(64);
+  for LI := 0 to 9 do LData[LI] := Byte(LI + 1);
+  LS.Write(LData[0], 10);
+  LS.Seek(0, soBeginning);
+  LResult := nextpas.core.io.ReadAllLimited(LS, 10);
+  CheckEqual(10, Length(LResult), 'exact limit ok');
+end;
+
+procedure TestReadAllLimitedOverRaises;
+var
+  LS: IStream;
+  LData: array[0..9] of Byte;
+  LI: Integer;
+  LRaised: Boolean;
+begin
+  LS := BytesStream(64);
+  for LI := 0 to 9 do LData[LI] := Byte(LI + 1);
+  LS.Write(LData[0], 10);
+  LS.Seek(0, soBeginning);
+  LRaised := False;
+  try
+    nextpas.core.io.ReadAllLimited(LS, 5);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'over limit raises EIOError');
+end;
+
+procedure TestReadAllLimitedNil;
+var
+  LResult: TBytes;
+begin
+  LResult := nextpas.core.io.ReadAllLimited(nil, 100);
+  CheckEqual(0, Length(LResult), 'nil src');
+end;
+
+procedure TestReadAllLimitedNegativeRaises;
+var
+  LS: IStream;
+  LRaised: Boolean;
+begin
+  LS := BytesStream(16);
+  LRaised := False;
+  try
+    nextpas.core.io.ReadAllLimited(LS, -1);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'negative max raises EArgumentError');
+end;
+
+procedure TestReadAllLimitedEmpty;
+var
+  LS: IStream;
+  LResult: TBytes;
+begin
+  LS := BytesStream(16);
+  LResult := nextpas.core.io.ReadAllLimited(LS, 100);
+  CheckEqual(0, Length(LResult), 'empty src');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.io');
 
@@ -1600,6 +1687,12 @@ begin
   T.Test('CopyN', @TestCopyN);
   T.Test('CopyN short source raises', @TestCopyNShortSourceRaises);
   T.Test('ReadAll', @TestReadAll);
+  T.Test('ReadAllLimited under', @TestReadAllLimitedUnder);
+  T.Test('ReadAllLimited exact', @TestReadAllLimitedExact);
+  T.Test('ReadAllLimited over raises', @TestReadAllLimitedOverRaises);
+  T.Test('ReadAllLimited nil', @TestReadAllLimitedNil);
+  T.Test('ReadAllLimited negative raises', @TestReadAllLimitedNegativeRaises);
+  T.Test('ReadAllLimited empty', @TestReadAllLimitedEmpty);
   T.Test('ReadFull', @TestReadFull);
   T.Test('ReadFull short', @TestReadFullShort);
   T.Test('LimitReader', @TestLimitReader);

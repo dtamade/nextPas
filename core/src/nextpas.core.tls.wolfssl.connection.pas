@@ -21,7 +21,6 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.text.conv, nextpas.core.io.intf,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,

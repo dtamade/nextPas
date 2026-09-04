@@ -23,7 +23,6 @@ uses
   nextpas.core.sync,
   nextpas.core.base.utils,
   nextpas.core.io.intf,
-  nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.text.conv,
   nextpas.core.text.strings,

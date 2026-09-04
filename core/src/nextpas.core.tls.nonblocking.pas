@@ -55,7 +55,6 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.io.stream_adapter,
   nextpas.core.net.intf,
   nextpas.core.platform.socket;
 

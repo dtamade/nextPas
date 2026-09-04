@@ -4,12 +4,13 @@ program test_connection_basic;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.io.stream_adapter;
+  nextpas.core.io.intf,
+  nextpas.core.io.memory;
 
 var
   LContext: ISSLContext;
@@ -97,7 +98,7 @@ end;
 
 procedure Test3_ConnectionCreation;
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   WriteLn('Test 3: Connection Creation');
   try
@@ -107,18 +108,12 @@ begin
       Exit;
     end;
 
-    // Create a memory stream for the connection
-    LStream := TMemoryStream.Create;
-    try
-      LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, True));
-      if LConnection <> nil then
-        TestPassed('Connection creation')
-      else
-        TestFailed('Connection creation', 'Connection is nil');
-    finally
-      // Don't free stream - it's owned by the connection
-      // LStream.Free;
-    end;
+    LStream := CreateBytesStream;
+    LConnection := LContext.CreateConnection(LStream);
+    if LConnection <> nil then
+      TestPassed('Connection creation')
+    else
+      TestFailed('Connection creation', 'Connection is nil');
   except
     on E: Exception do
       TestFailed('Connection creation', E.Message);

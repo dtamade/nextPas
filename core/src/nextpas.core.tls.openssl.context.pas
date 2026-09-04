@@ -22,7 +22,6 @@ uses
   nextpas.core.base, nextpas.core.io.intf, nextpas.core.fs.stream, nextpas.core.sync,
   nextpas.core.base.utils,
   nextpas.core.fs,
-  nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,

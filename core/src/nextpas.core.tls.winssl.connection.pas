@@ -20,7 +20,7 @@ unit nextpas.core.tls.winssl.connection;
 interface
 
 uses
-  nextpas.core.base, nextpas.core.system.classes,
+  nextpas.core.base,
   nextpas.core.base.utils,
   {$IFDEF WINDOWS}
   Windows, winsock2,
@@ -29,7 +29,6 @@ uses
   {$ENDIF}
   nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.sync, nextpas.core.time,
   nextpas.core.io.intf,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.collections,
@@ -216,7 +215,6 @@ type
 
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
-    constructor Create(AContext: ISSLContext; AStream: TStream); overload;
     constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
@@ -613,11 +611,6 @@ begin
   FHandshakeEndCounter := 0;
 
   InitSecHandle(FCtxtHandle);
-end;
-
-constructor TWinSSLConnection.Create(AContext: ISSLContext; AStream: TStream);
-begin
-  Create(AContext, WrapTStream(AStream, False));
 end;
 
 constructor TWinSSLConnection.Create(AContext: ISSLContext; AStream: IStream);

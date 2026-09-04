@@ -23,7 +23,6 @@ uses
   nextpas.core.encoding.base64,
   nextpas.core.fs,
   nextpas.core.text.conv,
-  nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,

@@ -13,6 +13,7 @@ uses
 function IoCopy(const ADst: IWriter; const ASrc: IReader): Int64;
 function IoCopyN(const ADst: IWriter; const ASrc: IReader; const AN: Int64): Int64;
 function IoReadAll(const ASrc: IReader): TBytes;
+function IoReadAllLimited(const ASrc: IReader; const AMaxSize: Int64): TBytes;
 procedure IoReadFull(const ASrc: IReader; var ABuf; const ACount: SizeUInt);
 procedure IoWriteAll(const ADst: IWriter; const ABuf; const ACount: SizeUInt); overload;
 procedure IoWriteAll(const ADst: IStream; const ABuf; const ACount: SizeUInt); overload;
@@ -224,6 +225,58 @@ begin
     Move(LBuf[0], Result[LSize], LRead);
     Inc(LSize, LRead);
   until False;
+  SetLength(Result, LSize);
+end;
+
+{ IoReadAllLimited }
+
+function IoReadAllLimited(const ASrc: IReader; const AMaxSize: Int64): TBytes;
+var
+  LBuf: array[0..COPY_BUF_SIZE - 1] of Byte;
+  LRead, LToRead: SizeUInt;
+  LCap: SizeUInt;
+  LSize: Int64;
+  LRemaining: Int64;
+begin
+  if ASrc = nil then
+    Exit(nil);
+  if AMaxSize < 0 then
+    raise EArgumentError.Create('IoReadAllLimited: negative max size');
+
+  Result := nil;
+  LCap := 0;
+  LSize := 0;
+  while True do
+  begin
+    LRemaining := AMaxSize - LSize;
+    if LRemaining > COPY_BUF_SIZE then
+      LToRead := COPY_BUF_SIZE
+    else if LRemaining > 0 then
+      LToRead := SizeUInt(LRemaining)
+    else
+      LToRead := 1;
+
+    LRead := ASrc.Read(LBuf[0], LToRead);
+    if LRead = 0 then
+      Break;
+    if LSize + Int64(LRead) > AMaxSize then
+      raise EIOError.Create('IoReadAllLimited: size limit exceeded');
+
+    if Int64(LCap) < LSize + Int64(LRead) then
+    begin
+      if LCap = 0 then
+        LCap := COPY_BUF_SIZE
+      else
+        LCap := LCap * 2;
+      if Int64(LCap) < LSize + Int64(LRead) then
+        LCap := SizeUInt(LSize + Int64(LRead));
+      SetLength(Result, LCap);
+    end;
+
+    Move(LBuf[0], Result[LSize], LRead);
+    Inc(LSize, Int64(LRead));
+  end;
+
   SetLength(Result, LSize);
 end;
 

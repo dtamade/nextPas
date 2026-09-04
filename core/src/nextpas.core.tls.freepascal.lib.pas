@@ -74,11 +74,9 @@ procedure UnregisterFreePascalBackend;
 implementation
 
 uses
-  nextpas.core.system.classes,
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.fs.glob,
-  nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.time,
   nextpas.core.tls.context.config,
@@ -176,8 +174,9 @@ type
 
   TFreePascalCertificateStore = class(TInterfacedObject, ISSLCertificateStore)
   private
-    FCertificates: TInterfaceList;
+    FCertificates: array of ISSLCertificate;
     function NormalizeFingerprint(const AFingerprint: string): string;
+    function IndexOfCert(const ACert: ISSLCertificate): Integer;
   public
     constructor Create;
     destructor Destroy; override;
@@ -495,7 +494,6 @@ end;
 
 function TFreePascalCertificate.SaveToFile(const AFileName: string): Boolean;
 var
-  LStream: TFileStream;
   LBytes: TBytes;
 begin
   Result := False;
@@ -513,12 +511,12 @@ begin
   if Length(LBytes) = 0 then
     Exit;
 
-  LStream := TFileStream.Create(AFileName, Word(fmCreate));
   try
-    LStream.WriteBuffer(LBytes[0], Length(LBytes));
+    WriteFile(AFileName, LBytes);
     Result := True;
-  finally
-    LStream.Free;
+  except
+    on E: Exception do
+      Result := False;
   end;
 end;
 
@@ -1034,13 +1032,11 @@ end;
 constructor TFreePascalCertificateStore.Create;
 begin
   inherited Create;
-  FCertificates := TInterfaceList.Create;
 end;
 
 destructor TFreePascalCertificateStore.Destroy;
 begin
-  FCertificates.Clear;
-  FCertificates.Free;
+  FCertificates := nil;
   inherited Destroy;
 end;
 
@@ -1050,6 +1046,16 @@ begin
   Result := StringReplace(Result, ':', '', True);
   Result := StringReplace(Result, '-', '', True);
   Result := StringReplace(Result, ' ', '', True);
+end;
+
+function TFreePascalCertificateStore.IndexOfCert(const ACert: ISSLCertificate): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FCertificates) do
+    if FCertificates[I] = ACert then
+      Exit(I);
+  Result := -1;
 end;
 
 function TFreePascalCertificateStore.AddCertificate(ACert: ISSLCertificate): Boolean;
@@ -1067,7 +1073,8 @@ begin
   if (LFingerprint <> '') and (FindByFingerprint(LFingerprint) <> nil) then
     Exit;
 
-  FCertificates.Add(ACert);
+  SetLength(FCertificates, Length(FCertificates) + 1);
+  FCertificates[High(FCertificates)] := ACert;
   Result := True;
 end;
 
@@ -1081,7 +1088,7 @@ begin
   if ACert = nil then
     Exit;
 
-  LIdx := FCertificates.IndexOf(ACert);
+  LIdx := IndexOfCert(ACert);
   if LIdx < 0 then
   begin
     LFingerprint := NormalizeFingerprint(ACert.GetFingerprintSHA256);
@@ -1089,13 +1096,13 @@ begin
     begin
       LMatch := FindByFingerprint(LFingerprint);
       if LMatch <> nil then
-        LIdx := FCertificates.IndexOf(LMatch);
+        LIdx := IndexOfCert(LMatch);
     end;
   end;
 
   if LIdx >= 0 then
   begin
-    FCertificates.Delete(LIdx);
+    System.Delete(FCertificates, LIdx, 1);
     Result := True;
   end;
 end;
@@ -1108,7 +1115,7 @@ begin
   if ACert = nil then
     Exit;
 
-  if FCertificates.IndexOf(ACert) >= 0 then
+  if IndexOfCert(ACert) >= 0 then
     Exit(True);
 
   LFingerprint := NormalizeFingerprint(ACert.GetFingerprintSHA256);
@@ -1120,19 +1127,19 @@ end;
 
 procedure TFreePascalCertificateStore.Clear;
 begin
-  FCertificates.Clear;
+  FCertificates := nil;
 end;
 
 function TFreePascalCertificateStore.GetCount: Integer;
 begin
-  Result := FCertificates.Count;
+  Result := Length(FCertificates);
 end;
 
 function TFreePascalCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
   Result := nil;
-  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
-    Result := FCertificates[AIndex] as ISSLCertificate;
+  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
+    Result := FCertificates[AIndex];
 end;
 
 function TFreePascalCertificateStore.LoadFromFile(const AFileName: string): Boolean;
@@ -1236,17 +1243,17 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to High(FCertificates) do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates[I];
     LCandidate := NormalizeCertificateStoreDN(LCert.GetSubject);
     if LCandidate = LTarget then
       Exit(LCert);
   end;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to High(FCertificates) do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates[I];
     LCandidate := NormalizeCertificateStoreDN(LCert.GetSubject);
     if Pos(LTarget, LCandidate) > 0 then
       Exit(LCert);
@@ -1265,17 +1272,17 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to High(FCertificates) do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates[I];
     LCandidate := NormalizeCertificateStoreDN(LCert.GetIssuer);
     if LCandidate = LTarget then
       Exit(LCert);
   end;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to High(FCertificates) do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates[I];
     LCandidate := NormalizeCertificateStoreDN(LCert.GetIssuer);
     if Pos(LTarget, LCandidate) > 0 then
       Exit(LCert);
@@ -1306,9 +1313,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to High(FCertificates) do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates[I];
     if NormalizeSerial(LCert.GetSerialNumber) = LTarget then
       Exit(LCert);
   end;
@@ -1325,9 +1332,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to High(FCertificates) do
   begin
-    LCert := FCertificates[I] as ISSLCertificate;
+    LCert := FCertificates[I];
     if NormalizeFingerprint(LCert.GetFingerprintSHA256) = LTarget then
       Exit(LCert);
   end;

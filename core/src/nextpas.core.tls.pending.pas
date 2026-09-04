@@ -36,7 +36,6 @@ type
 implementation
 
 uses
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.tls;
 
 constructor TSSLPendingClientConnect.Create(AConnection: ISSLConnection);

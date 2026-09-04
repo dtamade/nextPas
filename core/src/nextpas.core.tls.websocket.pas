@@ -47,7 +47,6 @@ type
 implementation
 
 uses
-  nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.text.conv,
   nextpas.core.tls.base64,

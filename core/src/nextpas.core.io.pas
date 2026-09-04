@@ -54,6 +54,7 @@ function BufferedWriter(const AInner: IWriter; const ABufSize: SizeUInt = DEFAUL
 function Copy(const ADst: IWriter; const ASrc: IReader): Int64; inline;
 function CopyN(const ADst: IWriter; const ASrc: IReader; const AN: Int64): Int64; inline;
 function ReadAll(const ASrc: IReader): TBytes; inline;
+function ReadAllLimited(const ASrc: IReader; const AMaxSize: Int64): TBytes; inline;
 procedure ReadFull(const ASrc: IReader; var ABuf; const ACount: SizeUInt); inline;
 function LimitReader(const AInner: IReader; const ALimit: Int64): IReader; inline;
 function TeeReader(const AInner: IReader; const AWriter: IWriter): IReader; inline;
@@ -118,6 +119,11 @@ end;
 function ReadAll(const ASrc: IReader): TBytes;
 begin
   Result := nextpas.core.io.util.IoReadAll(ASrc);
+end;
+
+function ReadAllLimited(const ASrc: IReader; const AMaxSize: Int64): TBytes;
+begin
+  Result := nextpas.core.io.util.IoReadAllLimited(ASrc, AMaxSize);
 end;
 
 procedure ReadFull(const ASrc: IReader; var ABuf; const ACount: SizeUInt);

@@ -24,10 +24,9 @@ unit nextpas.core.tls.freepascal.connection;
 interface
 
 uses
-  nextpas.core.system.classes,
   nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.strings, nextpas.core.base.utils,
+  nextpas.core.io.base,
   nextpas.core.io.intf,
-  nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.time,
   nextpas.core.tls.base,
@@ -225,7 +224,6 @@ type
     function DoGetCertificateTransparencyValidationStatus: string; override;
   public
     constructor Create(AContext: ISSLContext; ASocket: THandle); overload;
-    constructor Create(AContext: ISSLContext; AStream: TStream); overload;
     constructor Create(AContext: ISSLContext; AStream: IStream); overload;
     destructor Destroy; override;
 
@@ -279,48 +277,104 @@ uses
   nextpas.core.tls.net.hooks;
 
 type
-  TConcatStream = class(TStream)
+  TPrefixedSocketStream = class(TInterfacedObject, IStream)
   private
-    FFirst: TStream;
-    FSecond: TStream;
-    FFirstDone: Boolean;
+    FPrefix: TBytes;
+    FPrefixPos: SizeUInt;
+    FSocket: IStream;
+    FPos: Int64;
   public
-    constructor Create(AFirst, ASecond: TStream);
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    constructor Create(const APrefix: TBytes; const ASocket: IStream);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
   end;
 
-constructor TConcatStream.Create(AFirst, ASecond: TStream);
+constructor TPrefixedSocketStream.Create(const APrefix: TBytes; const ASocket: IStream);
 begin
   inherited Create;
-  FFirst := AFirst;
-  FSecond := ASecond;
-  FFirstDone := False;
+  FPrefix := Copy(APrefix);
+  FPrefixPos := 0;
+  FSocket := ASocket;
+  FPos := 0;
 end;
 
-function TConcatStream.Read(var Buffer; Count: Longint): Longint;
+function TPrefixedSocketStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
-  LRead: Longint;
-begin
-  if not FFirstDone then
-  begin
-    LRead := FFirst.Read(Buffer, Count);
-    if LRead > 0 then
-      Exit(LRead);
-    FFirstDone := True;
-  end;
-  Result := FSecond.Read(Buffer, Count);
-end;
-
-function TConcatStream.Write(const Buffer; Count: Longint): Longint;
-begin
-  Result := FSecond.Write(Buffer, Count);
-end;
-
-function TConcatStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+  LRem, LCopy: SizeUInt;
+  LDst: PByte;
 begin
   Result := 0;
+  if ACount = 0 then
+    Exit;
+  LDst := @ABuf;
+  if FPrefixPos < SizeUInt(Length(FPrefix)) then
+  begin
+    LRem := SizeUInt(Length(FPrefix)) - FPrefixPos;
+    LCopy := ACount;
+    if LCopy > LRem then
+      LCopy := LRem;
+    Move(FPrefix[FPrefixPos], LDst^, LCopy);
+    Inc(FPrefixPos, LCopy);
+    Inc(FPos, Int64(LCopy));
+    Inc(Result, LCopy);
+    Inc(LDst, LCopy);
+    if Result = ACount then
+      Exit;
+  end;
+  if FSocket = nil then
+    Exit;
+  LCopy := FSocket.Read(LDst^, ACount - Result);
+  Inc(FPos, Int64(LCopy));
+  Inc(Result, LCopy);
+end;
+
+function TPrefixedSocketStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  if FSocket = nil then
+    Exit(0);
+  Result := FSocket.Write(ABuf, ACount);
+  Inc(FPos, Int64(Result));
+end;
+
+function TPrefixedSocketStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+begin
+  case AOrigin of
+    soBeginning: FPos := AOffset;
+    soCurrent: Inc(FPos, AOffset);
+    soEnd: raise ENotSupportedError.Create('TPrefixedSocketStream.Seek: soEnd over socket');
+  else
+    raise ENotSupportedError.Create('TPrefixedSocketStream.Seek: unknown origin');
+  end;
+  if FPos < 0 then
+    FPos := 0;
+  Result := FPos;
+end;
+
+procedure TPrefixedSocketStream.Close;
+begin
+  FPrefix := nil;
+  FPrefixPos := 0;
+  FSocket := nil;
+end;
+
+function TPrefixedSocketStream.GetSize: Int64;
+begin
+  raise ENotSupportedError.Create('TPrefixedSocketStream.GetSize: size unknown over socket');
+end;
+
+function TPrefixedSocketStream.GetPosition: Int64;
+begin
+  Result := FPos;
+end;
+
+procedure TPrefixedSocketStream.SetPosition(const AValue: Int64);
+begin
+  Seek(AValue, soBeginning);
 end;
 
 const
@@ -898,11 +952,6 @@ begin
   if FSocket >= 0 then
     platform_socket_set_nonblocking(FreePascalHandleToSocket(FSocket), False);
   InitializeState(AContext);
-end;
-
-constructor TFreePascalConnection.Create(AContext: ISSLContext; AStream: TStream);
-begin
-  Create(AContext, WrapTStream(AStream, False));
 end;
 
 constructor TFreePascalConnection.Create(AContext: ISSLContext; AStream: IStream);
@@ -1511,7 +1560,7 @@ begin
 
   if FStream = nil then
   begin
-    MarkUnsupported('TLS 1.2 renegotiation requires TStream transport');
+    MarkUnsupported('TLS 1.2 renegotiation requires stream transport');
     Exit;
   end;
 
@@ -3105,13 +3154,10 @@ var
   LContextMaterial: IFreePascalContextMaterial;
   LContextCipherSuites: IFreePascalContextCipherSuites;
   LResumptionCache: IFreePascalResumptionCache;
-  LSocketStream: TStream;
-  LPrefixStream: TMemoryStream;
-  LCombined: TStream;
+  LSocketStream: IStream;
+  LCombined: IStream;
   LSuiteInfo: TTLS12CipherSuiteInfo;
   LNewSession: TFreePascalSession;
-  LPrefixBuf: TBytes;
-  LPrefixPos: Integer;
 begin
   Result := False;
 
@@ -3143,65 +3189,51 @@ begin
   except
   end;
 
-  LSocketStream := WrapIStream(SocketHandleAsIStream(FSocket));
+  LSocketStream := SocketHandleAsIStream(FSocket);
+  // Prepend already-read ClientHello record, then read rest from socket.
+  // TLS12ServerHandshake reads records and writes flight responses
+  // through the same stream; writes pass through to the socket.
+  LCombined := TPrefixedSocketStream.Create(AClientHelloRecord, LSocketStream);
   try
-    // Prepend already-read ClientHello record, then read rest from socket
-    LPrefixStream := TMemoryStream.Create;
-    try
-      LPrefixStream.Write(AClientHelloRecord[0], Length(AClientHelloRecord));
-      LPrefixStream.Position := 0;
-
-      // Use a two-phase approach: first read from prefix, then from socket
-      // TLS12ServerHandshake uses TLS12ReadRecord which calls AStream.Read
-      // We create a combined stream that reads prefix first, then socket
-      LCombined := TConcatStream.Create(LPrefixStream, LSocketStream);
-      try
-        if not TryTLS12ServerHandshake(WrapTStream(LCombined, False), LConfig, LState, LError) then
-        begin
-          SetHandshakeError(sslErrHandshake, 'TLS 1.2 server handshake failed: ' + LError);
-          Exit;
-        end;
-
-        FTLS12State.ClientWriteKey := LState.ClientWriteKey;
-        FTLS12State.ServerWriteKey := LState.ServerWriteKey;
-        FTLS12State.ClientWriteIV := LState.ClientWriteIV;
-        FTLS12State.ServerWriteIV := LState.ServerWriteIV;
-        FTLS12State.CipherSuite := LState.CipherSuite;
-        FTLS12State.ClientSeqNum := 0;
-        FTLS12State.ServerSeqNum := 0;
-        FTLS12State.MasterSecret := LState.MasterSecret;
-        FProtocolVersion := sslProtocolTLS12;
-        FIsServerMode := True;
-        FSelectedALPNProtocol := LState.ALPNProtocol;
-        if TLS12GetCipherSuiteInfo(LState.CipherSuite, LSuiteInfo) then
-          FCipherName := LSuiteInfo.Name
-        else
-          FCipherName := TextFormat('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
-        if FStream = nil then
-          FStream := SocketHandleAsIStream(FSocket);
-
-        if (Length(LState.SessionID) > 0) and (not LState.Resumed) then
-        begin
-          LNewSession := TFreePascalSession.Create;
-          LNewSession.ConfigureTLS12Resumption(
-            LState.CipherSuite, FCipherName,
-            LState.SessionID, LState.MasterSecret,
-            DateTimeNow, SSL_DEFAULT_SESSION_TIMEOUT);
-          LNewSession.BoundServerName := FServerName;
-          FCurrentSession := LNewSession;
-          if Supports(FContext, IFreePascalResumptionCache, LResumptionCache) then
-            LResumptionCache.StoreResumptionSession(LNewSession);
-        end;
-
-        Result := True;
-      finally
-        LCombined.Free;
-      end;
-    finally
-      LPrefixStream.Free;
+    if not TryTLS12ServerHandshake(LCombined, LConfig, LState, LError) then
+    begin
+      SetHandshakeError(sslErrHandshake, 'TLS 1.2 server handshake failed: ' + LError);
+      Exit;
     end;
+
+    FTLS12State.ClientWriteKey := LState.ClientWriteKey;
+    FTLS12State.ServerWriteKey := LState.ServerWriteKey;
+    FTLS12State.ClientWriteIV := LState.ClientWriteIV;
+    FTLS12State.ServerWriteIV := LState.ServerWriteIV;
+    FTLS12State.CipherSuite := LState.CipherSuite;
+    FTLS12State.ClientSeqNum := 0;
+    FTLS12State.ServerSeqNum := 0;
+    FTLS12State.MasterSecret := LState.MasterSecret;
+    FProtocolVersion := sslProtocolTLS12;
+    FIsServerMode := True;
+    FSelectedALPNProtocol := LState.ALPNProtocol;
+    if TLS12GetCipherSuiteInfo(LState.CipherSuite, LSuiteInfo) then
+      FCipherName := LSuiteInfo.Name
+    else
+      FCipherName := TextFormat('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
+    if FStream = nil then
+      FStream := SocketHandleAsIStream(FSocket);
+
+    if (Length(LState.SessionID) > 0) and (not LState.Resumed) then
+    begin
+      LNewSession := TFreePascalSession.Create;
+      LNewSession.ConfigureTLS12Resumption(
+        LState.CipherSuite, FCipherName,
+        LState.SessionID, LState.MasterSecret,
+        DateTimeNow, SSL_DEFAULT_SESSION_TIMEOUT);
+      LNewSession.BoundServerName := FServerName;
+      FCurrentSession := LNewSession;
+      if Supports(FContext, IFreePascalResumptionCache, LResumptionCache) then
+        LResumptionCache.StoreResumptionSession(LNewSession);
+    end;
+
+    Result := True;
   finally
-    LSocketStream.Free;
     LConfig.Certificate.Free;
     SecureZeroBytes(LConfig.PrivateKeyDER);
   end;
@@ -3214,10 +3246,9 @@ var
   LState: TTLS12ClientState;
   LError: string;
   LClientRandom: TBytes;
-  LSocketStream: TStream;
+  LSocketStream: IStream;
   LSuiteInfo: TTLS12CipherSuiteInfo;
-  LPrefixStream: TMemoryStream;
-  LCombined: TStream;
+  LCombined: IStream;
   LNewSession: TFreePascalSession;
 begin
   Result := False;
@@ -3242,74 +3273,64 @@ begin
   // Extract ClientRandom from the TLS 1.3 ClientHello handshake (offset 6, 32 bytes)
   LClientRandom := Copy(AClientHelloHandshake, 6, 32);
 
-  LSocketStream := WrapIStream(SocketHandleAsIStream(FSocket));
+  LSocketStream := SocketHandleAsIStream(FSocket);
+  // Prepend already-read ServerHello record, then read rest from socket.
+  LCombined := TPrefixedSocketStream.Create(AServerHelloRecord, LSocketStream);
   try
-    LPrefixStream := TMemoryStream.Create;
-    try
-      LPrefixStream.Write(AServerHelloRecord[0], Length(AServerHelloRecord));
-      LPrefixStream.Position := 0;
-
-      LCombined := TConcatStream.Create(LPrefixStream, LSocketStream);
-      try
-        if not TryTLS12ClientHandshakeFromFallback(
-          WrapTStream(LCombined, False),
-          AClientHelloHandshake,
-          LClientRandom,
-          FServerName,
-          LState,
-          LError
-        ) then
-        begin
-          SetHandshakeError(sslErrHandshake, 'TLS 1.2 fallback handshake failed: ' + LError);
-          { 失败路径同样回收局部握手状态中的对端证书——Certificate 消息
-            解析阶段即已创建（成功路径下方 FreeAndNil 同款）；否则每次
-            「收到证书后握手失败」都孤儿化一整张证书及其解析字段 }
-          FreeAndNil(LState.PeerCertificate);
-          Exit;
-        end;
-
-        FTLS12State.ClientWriteKey := LState.ClientWriteKey;
-        FTLS12State.ServerWriteKey := LState.ServerWriteKey;
-        FTLS12State.ClientWriteIV := LState.ClientWriteIV;
-        FTLS12State.ServerWriteIV := LState.ServerWriteIV;
-        FTLS12State.CipherSuite := LState.CipherSuite;
-        FTLS12State.ClientSeqNum := LState.ClientSeqNum;
-        FTLS12State.ServerSeqNum := LState.ServerSeqNum;
-        FTLS12State.MasterSecret := LState.MasterSecret;
-        FProtocolVersion := sslProtocolTLS12;
-        FIsServerMode := False;
-        FSelectedALPNProtocol := LState.ALPNProtocol;
-        FreeAndNil(LState.PeerCertificate);
-        LState.PeerCertificatesDER := nil;
-        if TLS12GetCipherSuiteInfo(LState.CipherSuite, LSuiteInfo) then
-          FCipherName := LSuiteInfo.Name
-        else
-          FCipherName := TextFormat('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
-        FStream := SocketHandleAsIStream(FSocket);
-
-        if LState.Resumed then
-          FSessionReused := True;
-
-        if Length(LState.SessionID) > 0 then
-        begin
-          LNewSession := TFreePascalSession.Create;
-          LNewSession.ConfigureTLS12Resumption(
-            LState.CipherSuite, FCipherName,
-            LState.SessionID, LState.MasterSecret,
-            DateTimeNow, SSL_DEFAULT_SESSION_TIMEOUT);
-          LNewSession.BoundServerName := FServerName;
-          FCurrentSession := LNewSession;
-        end;
-
-        Result := True;
-      finally
-        LCombined.Free;
-      end;
-    finally
-      LPrefixStream.Free;
+    if not TryTLS12ClientHandshakeFromFallback(
+      LCombined,
+      AClientHelloHandshake,
+      LClientRandom,
+      FServerName,
+      LState,
+      LError
+    ) then
+    begin
+      SetHandshakeError(sslErrHandshake, 'TLS 1.2 fallback handshake failed: ' + LError);
+      { 失败路径同样回收局部握手状态中的对端证书——Certificate 消息
+        解析阶段即已创建（成功路径下方 FreeAndNil 同款）；否则每次
+        「收到证书后握手失败」都孤儿化一整张证书及其解析字段 }
+      FreeAndNil(LState.PeerCertificate);
+      Exit;
     end;
+
+    FTLS12State.ClientWriteKey := LState.ClientWriteKey;
+    FTLS12State.ServerWriteKey := LState.ServerWriteKey;
+    FTLS12State.ClientWriteIV := LState.ClientWriteIV;
+    FTLS12State.ServerWriteIV := LState.ServerWriteIV;
+    FTLS12State.CipherSuite := LState.CipherSuite;
+    FTLS12State.ClientSeqNum := LState.ClientSeqNum;
+    FTLS12State.ServerSeqNum := LState.ServerSeqNum;
+    FTLS12State.MasterSecret := LState.MasterSecret;
+    FProtocolVersion := sslProtocolTLS12;
+    FIsServerMode := False;
+    FSelectedALPNProtocol := LState.ALPNProtocol;
+    FreeAndNil(LState.PeerCertificate);
+    LState.PeerCertificatesDER := nil;
+    if TLS12GetCipherSuiteInfo(LState.CipherSuite, LSuiteInfo) then
+      FCipherName := LSuiteInfo.Name
+    else
+      FCipherName := TextFormat('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
+    FStream := SocketHandleAsIStream(FSocket);
+
+    if LState.Resumed then
+      FSessionReused := True;
+
+    if Length(LState.SessionID) > 0 then
+    begin
+      LNewSession := TFreePascalSession.Create;
+      LNewSession.ConfigureTLS12Resumption(
+        LState.CipherSuite, FCipherName,
+        LState.SessionID, LState.MasterSecret,
+        DateTimeNow, SSL_DEFAULT_SESSION_TIMEOUT);
+      LNewSession.BoundServerName := FServerName;
+      FCurrentSession := LNewSession;
+    end;
+
+    Result := True;
   finally
-    LSocketStream.Free;
+    LCombined := nil;
+    LSocketStream := nil;
   end;
 end;
 

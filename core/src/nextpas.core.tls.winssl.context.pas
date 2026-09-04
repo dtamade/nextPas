@@ -25,7 +25,6 @@ uses
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.text.format,
-  nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,      // 添加：RaiseInvalidParameter

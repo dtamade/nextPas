@@ -16,7 +16,6 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
-  nextpas.core.system.classes,
   nextpas.core.tls.base, nextpas.core.tls.crl, nextpas.core.tls.x509, nextpas.core.tls.x509verify,
   nextpas.core.text.format;
 
@@ -700,9 +699,7 @@ function TSSLCertificateChainVerifier.BuildChain(ALeafCert: ISSLCertificate;
   out AChain: TSSLCertificateArray): Boolean;
 var
   CurrentCert, IssuerCert: ISSLCertificate;
-  ChainList: TInterfaceList;
   MaxDepth: Integer;
-  LIndex: Integer;
 begin
   Result := False;
   SetLength(AChain, 0);
@@ -710,41 +707,33 @@ begin
   if ALeafCert = nil then
     Exit;
 
-  ChainList := TInterfaceList.Create;
-  try
-    CurrentCert := ALeafCert;
-    ChainList.Add(CurrentCert);
-    MaxDepth := 10; // 防止无限循环
+  CurrentCert := ALeafCert;
+  SetLength(AChain, 1);
+  AChain[0] := CurrentCert;
+  MaxDepth := 10; // 防止无限循环
 
-    // 构建证书链
-    while (not IsSelfSigned(CurrentCert)) and
-          (not IsRootCertificate(CurrentCert)) and
-          (ChainList.Count < MaxDepth) do
+  // 构建证书链
+  while (not IsSelfSigned(CurrentCert)) and
+        (not IsRootCertificate(CurrentCert)) and
+        (Length(AChain) < MaxDepth) do
+  begin
+    IssuerCert := FindIssuer(CurrentCert);
+    if IssuerCert = nil then
     begin
-      IssuerCert := FindIssuer(CurrentCert);
-      if IssuerCert = nil then
-      begin
-        // 无法找到颁发者，链断裂
-        if cvoAllowPartialChain in FOptions then
-          Result := True  // 允许部分链
-        else
-          Exit;
-        Break;
-      end;
-
-      ChainList.Add(IssuerCert);
-      CurrentCert := IssuerCert;
+      // 无法找到颁发者，链断裂
+      if cvoAllowPartialChain in FOptions then
+        Result := True  // 允许部分链
+      else
+        Exit;
+      Break;
     end;
 
-    // 转换为数组
-    SetLength(AChain, ChainList.Count);
-    for LIndex := 0 to ChainList.Count - 1 do
-      AChain[LIndex] := ISSLCertificate(ChainList[LIndex]);
-
-    Result := True;
-  finally
-    ChainList.Free;
+    SetLength(AChain, Length(AChain) + 1);
+    AChain[High(AChain)] := IssuerCert;
+    CurrentCert := IssuerCert;
   end;
+
+  Result := True;
 end;
 
 function TSSLCertificateChainVerifier.VerifyCertificate(ACert: ISSLCertificate;
