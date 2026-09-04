@@ -8,9 +8,9 @@ program bench_servevfs;
     满足不低于 FPC、接近 Go/Rust（详见 benchmarks/nextpas.core.respack/RESULTS.md）。
     零拷贝证据：embedded 经 TResPack.ContentPtr inline + bytes.ops.Move 单源零拷贝窗口。 }
 uses
+  nextpas.core.thread.init,
   Classes,
   SysUtils,
-  nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.fs,
@@ -293,7 +293,7 @@ begin
     LEntries[LI + 1].ModTime := 1700000000;
   end;
   LBlob := ResPackBuild(LEntries, ResPackDefaultOptions);
-  GEmbedded := CreateEmbeddedVfs(LBlob.Data, LBlob.Size, True);
+  GEmbedded := CreateEmbeddedVfsOwned(LBlob.Data, LBlob.Size);
 
   { os：同一棵树落到真实盘 }
   GOsDir := GetTempDir + '/rp-bench-servevfs';

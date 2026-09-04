@@ -170,7 +170,7 @@ writer 产出的 blob 如何进入程序，由构建侧选择：
 端到端 HTTP 服务（respack → .inc → embedded → ServeVfs，自检 200/304/206/404，
 另含 `--serve` 长驻与 `--dev` os 后端切换）：`core/examples/nextpas.core.http/http_static_vfs_demo/`
 —— 同一 consumer 代码在 `CreateOsVfs('wwwroot')` 与
-`CreateEmbeddedVfs(@DEMO_ASSETS[0], …)` 两后端上跑通。
+`CreateEmbeddedVfsBorrowed(@DEMO_ASSETS[0], …)` 两后端上跑通。
 
 ## 测试计划（12 门闭环：respack 6 + vfs 6）
 

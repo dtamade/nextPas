@@ -206,7 +206,10 @@ begin
   WriteStrTo(AW, #10'  );'#10);
 end;
 
-function CalcIncCapacity(const AName, ANStr: string; const APerLine: Integer; const AN: SizeUInt): SizeUInt; inline;
+{ Not inline: FPC trunk -O2 REGVAR keeps a stale register for Cap across the
+  nested inline var-param chain (CapAdd/CheckedAdd); stale 0 yields empty
+  buffer and nil write cursor. Called once per file, call cost negligible. }
+function CalcIncCapacity(const AName, ANStr: string; const APerLine: Integer; const AN: SizeUInt): SizeUInt;
 var
   Cap, BodyLen, LTmp, Lines: SizeUInt;
 begin

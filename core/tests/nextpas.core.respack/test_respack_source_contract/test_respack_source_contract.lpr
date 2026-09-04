@@ -131,6 +131,12 @@ begin
   // design-conventions §2 inline redline 2: loop body must not be inline — ValidIdent contains for loop, must NOT be inline
   Check(Pos('function ResPackValidIdent(const AName: string): Boolean; inline', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
     'embed ResPackValidIdent must NOT be inline (loop body, I-Cache)');
+  // capacity sizing must not be inline: nested inline var-param chain miscompiles
+  // under FPC trunk -O2 REGVAR (stale Cap yields empty buffer and nil cursor)
+  Check(Pos('CalcIncCapacity', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed declares CalcIncCapacity capacity single source');
+  Check(Pos('CalcIncCapacity(const AName, ANStr: string; const APerLine: Integer; const AN: SizeUInt): SizeUInt; inline', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
+    'embed CalcIncCapacity must NOT be inline (nested inline var-param REGVAR hazard)');
   Check(Pos('nextpas.core.bytes.ops', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
     'embed declares bytes.ops single source');
   Check(Pos('nextpas.core.embed.limits', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,

@@ -3,7 +3,7 @@ program demo_asset_embed;
 {** @desc S4 示例：前端资源嵌入的最小 consumer。
   构建期：wwwroot/ 经 rp_pack 打包并生成 assets_respack.inc（typed const）编入本程序；
   运行期：同一份 consumer 代码在两种后端上跑——
-    --prod（默认）：CreateEmbeddedVfs，零拷贝读 const 数组里的 pack blob；
+    --prod（默认）：CreateEmbeddedVfsBorrowed，零拷贝读 const 数组里的 pack blob；
     --dev        ：CreateOsVfs('wwwroot')，直接读磁盘目录，改完刷新即生效。
   这就是"开发态/发布态切换"：差异被收在装配一行，下游只认 IVfs。 }
 uses
@@ -51,7 +51,7 @@ begin
       ServeAssets(CreateOsVfs(DevRoot), 'os (dev, reads ' + DevRoot + '/)')
     else
       ServeAssets(
-        CreateEmbeddedVfs(@DEMO_ASSETS[0], SizeUInt(DEMO_ASSETS_SIZE), False),
+        CreateEmbeddedVfsBorrowed(@DEMO_ASSETS[0], SizeUInt(DEMO_ASSETS_SIZE)),
         'embedded (prod, serves in-blob pack)');
   except
     on E: Exception do
