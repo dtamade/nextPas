@@ -105,6 +105,7 @@ procedure TestDocs;
 var C,R,M: string;
 begin
   C:=ReadText('docs/tar/CONTRACT.md'); Check(Pos('[INV-1]', C)>0, 'INV-1'); Check(Pos('[INV-5]', C)>0, 'INV-5'); Check(Pos('test_tar_contract', C)>0, 'gate listed'); Check(Pos('IsSafeTarEntryName', C)>0, 'IsSafe documented');
+  Check(Pos('test_tar_interop', C)>0, 'interop gate listed'); Check(Pos('PaxRecords', C)>0, 'passthrough documented'); Check(Pos('[INV-8]', C)>0, 'sparse INV');
   R:=ReadText('docs/tar/README.md'); Check(Pos('C_TAR_BLOCK_SIZE', R)>0, 'readme block size'); Check(Pos('TarPackDir', R)>0, 'readme fs');
   M:=ReadText('docs/module-registry.md'); Check(Pos('| `tar` |', M)>0, 'registry has tar');
   C:=ReadText('docs/core-module-registry.md'); Check(Pos('| `tar` |', C)>0, 'core registry has tar');

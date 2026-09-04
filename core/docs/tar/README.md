@@ -30,6 +30,8 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | GNU base-256 numeric | Yes (overflow) | Yes | 超 octal 容量自动 `$80` + big-endian |
 | GNU longname `L/K` | — | Yes | 读端 `FPendingLongName/Link` 覆盖 |
 | PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`TarAppendPaxRecord` builder 零拷贝 `Reserve+AppendBytes` 最优路径单源，经 `archive.pax ArchivePaxFormatRecord` 单源 `SpanToString` 单次 Move），读端 per-entry 优于 global，`g` 在 `AcquireGlobalPaxGuard` 作用域内持久至下一 `g` 覆盖、无 guard 时单次消费自动清理并 `ILogger.Warn`、恶意由 `IsSafeTarEntryName` 自动过滤置空并同步 `Warn`（与自动清理 `Warn` 对齐防静默篡改）、`ClearGlobalPax` 显式或 `AcquireGlobalPaxGuard` RAII 自动隔离；通用 `TarParsePaxKVRecords`/`ArchivePaxParseRecords` 零拷贝迭代 `atime/mtime/size` 等扩展键，长度前缀缺空格/非数字/越界/缺换行即抛 `EIOError` 禁回退截断名 |
+| PAX 类型化键 `size/mtime/uid/gid/uname/gname` | —（ustar/base-256 已承载） | Yes（覆盖） | 与 path 同规则（x 优先/g 同持久语义），`mtime` 小数截断，越界即 `EIOError`；未知键保序透传 `TTarHeader.PaxRecords` |
+| GNU sparse 只读（old 0.0/0.1 + pax 1.0） | —（dense 零块输出，标准兼容） | Yes（重建） | `S`（386 区 map + 扩展链）/ 1.0（`GNU.sparse.*` + 数据段首块文本 map + 占位名）；重建前 stored/realsize 双计 bomb，未分配先守卫；见 CONTRACT INV-8 |
 | Block alignment | Yes | Yes | 512 对齐 + 两零块收尾 |
 | Zero-copy slice/stream | — | Yes | `TrySlice` 单一规范 `TByteSpan` 零拷贝视图 + `EntryDataSlice` 薄转发(`PByte`) + `OpenEntryStream`（`FBuf` 时 `CreateSliceReaderWithHold` 零拷贝持有型、`Reader` 释放后仍可读；外部 `PByte` 时 `CreateSliceReader` 零拷贝直视、生命周期绑外部 PByte/Reader，零分配 inline，按需 `TrySlice+SpanClone` 自包含） |
 

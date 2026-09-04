@@ -23,6 +23,8 @@ uses
 type
   TTarEntryKind = nextpas.core.tar.base.TTarEntryKind;
   TTarHeader = nextpas.core.tar.base.TTarHeader;
+  TPaxRecord = nextpas.core.tar.base.TPaxRecord;
+  TPaxRecordArray = nextpas.core.tar.base.TPaxRecordArray;
   TTarAddOptions = nextpas.core.tar.base.TTarAddOptions;
   TTarReadOptions = nextpas.core.tar.base.TTarReadOptions;
   TTarExtractOptions = nextpas.core.tar.base.TTarExtractOptions;

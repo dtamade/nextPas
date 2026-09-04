@@ -13,6 +13,19 @@ uses
 type
   TTarReader = class;
 
+  {** @desc pax 数值/文本覆盖集（x 单条目与 g 全局各一份；Extra 保序透传未知键） *}
+  TPaxExtSet = record
+    HasSize, HasMTime, HasUID, HasGID, HasUName, HasGName: Boolean;
+    Size, MTimeUnix: Int64;
+    UID, GID: Cardinal;
+    UName, GName: string;
+    Extra: TPaxRecordArray;
+  end;
+
+  {** @desc 稀疏段（文件内偏移/长度，均为真实字节） *}
+  TSparseSeg = record Off, Len: Int64; end;
+  TSparseSegArray = array of TSparseSeg;
+
   {** @desc RAII guard for global pax: clears global pax on scope exit. *}
   TTarGlobalPaxGuard = class(TInterfacedObject)
   private
@@ -41,6 +54,15 @@ type
     // g pax: guard-scoped persistence, else single-use auto-clear, IsSafe filtered
     FGlobalPaxPath: string;
     FGlobalPaxLinkPath: string;
+    // pax typed overrides: per-entry x wins, else guard-scoped g, else single-use g
+    FPaxExt: TPaxExtSet;
+    FGlobalPaxExt: TPaxExtSet;
+    // sparse: x(GNU.sparse.*) sets pending, placeholder data entry consumes; S parses inline
+    FSparsePending: Boolean;
+    FSparseRealName: string;
+    FSparseRealSize: Int64;
+    FSparseBuf: TBytes;
+    FSparseValid: Boolean;
     FMaxEntry: SizeUInt;
     FMaxTotal: UInt64;
     FCumTotal: UInt64;
@@ -76,6 +98,17 @@ type
     function SliceToString(ABase: PByte; ALen: SizeUInt): string; // out-of-line via MaterializeSpan
     function CombinePrefixName(const APrefix, AName: TByteSpan): string; // out-of-line
     function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; // out-of-line, SpanEqual reuse via MaterializeSpan
+    procedure ParsePaxExtValue(const AKey, AValue: TByteSpan); // out-of-line: SpanToString 物化 + decimal 解析 + EIOError 路径
+    procedure MovePaxExtToGlobal; // out-of-line: map-merge 语义 + Extra 追加循环
+    procedure ClearPaxExt; inline;
+    procedure ClearGlobalPaxExt; inline;
+    function UstarEntryName: string; // out-of-line: prefix/name 归一
+    procedure FillHeaderScalars(var AHeader: TTarHeader); // out-of-line: mode/uid/gid/mtime/uname/gname/devmajor/devminor
+    function FindPaxValue(const AKey: string; out AValue: string): Boolean; // out-of-line: Extra 线性 last-wins
+    procedure NoteSparsePending; // out-of-line: x 中 GNU.sparse.* 建 pending，畸形即 EIOError
+    procedure ParseSparseOldHeader(out ASegs: TSparseSegArray; out AReal: Int64; out AExtBlocks: Integer); // out-of-line: S 头 map+扩展链
+    procedure ParseSparseMapText(AStored: PByte; AStoredLen: SizeUInt; AReal: Int64; out ASegs: TSparseSegArray; out AMapLen: SizeUInt); // out-of-line: 1.0 文本 map
+    procedure ReconstructSparse(const ASegs: TSparseSegArray; AReal: Int64; ABase: PByte; ADataOff, AStoredLen: SizeUInt); // out-of-line: bomb 后分配+回填
   public
     procedure ClearGlobalPax; inline;
     {** @desc Acquires guard that clears global pax on scope exit. *}
@@ -105,7 +138,37 @@ uses
   nextpas.core.exception,
   nextpas.core.io.slice,
   nextpas.core.tar.common,
-  nextpas.core.tar.log;
+  nextpas.core.tar.log,
+  nextpas.core.text.number;
+
+type
+  PPaxFullCtx = ^TPaxFullCtx;
+  TPaxFullCtx = record R: TTarReader; end;
+
+procedure TarPaxFullHandler(const AKey, AValue: TByteSpan; AUserData: Pointer);
+begin
+  // plain procedural + UserData，无闭包；数值畸形即抛 EIOError，调用栈直达 x/g 归属
+  PPaxFullCtx(AUserData)^.R.ParsePaxExtValue(AKey, AValue);
+end;
+
+procedure AppendPaxRecords(var ADst: TPaxRecordArray; const ASrc: TPaxRecordArray);
+var
+  I, Old: Integer;
+begin
+  // 外联：真实循环体禁 inline，保序追加
+  if Length(ASrc) = 0 then
+    Exit;
+  Old := Length(ADst);
+  SetLength(ADst, Old + Length(ASrc));
+  for I := 0 to High(ASrc) do
+    ADst[Old + I] := ASrc[I];
+end;
+
+function IsGnuSparseDataName(const AName: string): Boolean;
+begin
+  // 1.0 占位名 ./GNUSparseFile.PID/name：前缀匹配，PID 无关；普通名必含 flow 斜杠语义由 IsSafe 另行保障
+  Result := (Length(AName) > 16) and (Copy(AName, 1, 16) = './GNUSparseFile.');
+end;
 
 function TypeFlagToKind(AFlag: Byte): TTarEntryKind;
 begin
@@ -435,6 +498,7 @@ procedure TTarReader.ClearGlobalPax; inline;
 begin
   FGlobalPaxPath := '';
   FGlobalPaxLinkPath := '';
+  ClearGlobalPaxExt;
 end;
 
 procedure TTarReader.SetLogger(const ALogger: ILogger); inline;
@@ -571,22 +635,362 @@ begin
   Result := True;
 end;
 
+procedure TTarReader.ParsePaxExtValue(const AKey, AValue: TByteSpan);
+var
+  LUInt: UInt64;
+  LInt: Int64;
+  LDot: SizeInt;
+  LIntLen: SizeUInt;
+  LRec: TPaxRecord;
+begin
+  // 全记录原文先保序透传（含已应用的类型化键），再按关键字应用
+  LRec.Key := MaterializeSpan(AKey);
+  LRec.Value := MaterializeSpan(AValue);
+  AppendPaxRecords(FPaxExt.Extra, [LRec]);
+  if (AKey.Len = 4) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
+  begin
+    if AValue.Len > 0 then FPaxPath := SpanToString(AValue) else FPaxPath := '';
+  end
+  else if (AKey.Len = 8) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('linkpath')), 8)) then
+  begin
+    if AValue.Len > 0 then FPaxLinkPath := SpanToString(AValue) else FPaxLinkPath := '';
+  end
+  else if (AKey.Len = 4) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('size')), 4)) then
+  begin
+    if (AValue.Len = 0) or not ParseUInt64(PAnsiChar(AValue.Data), AValue.Len, LUInt) then
+      raise EIOError.Create('pax: bad size value');
+    if LUInt > UInt64(High(Int64)) then
+      raise EIOError.Create('pax: size out of range');
+    FPaxExt.Size := Int64(LUInt);
+    FPaxExt.HasSize := True;
+  end
+  else if (AKey.Len = 5) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('mtime')), 5)) then
+  begin
+    if AValue.Len = 0 then
+      raise EIOError.Create('pax: bad mtime value');
+    LDot := SpanIndexOf(AValue, Ord('.'));
+    if LDot < 0 then
+      LIntLen := AValue.Len
+    else
+      LIntLen := SizeUInt(LDot);
+    if (LIntLen = 0) or not ParseInt64(PAnsiChar(AValue.Data), LIntLen, LInt) then
+      raise EIOError.Create('pax: bad mtime value');
+    FPaxExt.MTimeUnix := LInt;
+    FPaxExt.HasMTime := True;
+  end
+  else if (AKey.Len = 3) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('uid')), 3)) then
+  begin
+    if (AValue.Len = 0) or not ParseUInt64(PAnsiChar(AValue.Data), AValue.Len, LUInt) then
+      raise EIOError.Create('pax: bad uid value');
+    if LUInt > UInt64(High(Cardinal)) then
+      raise EIOError.Create('pax: uid out of range');
+    FPaxExt.UID := Cardinal(LUInt);
+    FPaxExt.HasUID := True;
+  end
+  else if (AKey.Len = 3) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('gid')), 3)) then
+  begin
+    if (AValue.Len = 0) or not ParseUInt64(PAnsiChar(AValue.Data), AValue.Len, LUInt) then
+      raise EIOError.Create('pax: bad gid value');
+    if LUInt > UInt64(High(Cardinal)) then
+      raise EIOError.Create('pax: gid out of range');
+    FPaxExt.GID := Cardinal(LUInt);
+    FPaxExt.HasGID := True;
+  end
+  else if (AKey.Len = 5) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('uname')), 5)) then
+  begin
+    FPaxExt.UName := MaterializeSpan(AValue);
+    FPaxExt.HasUName := True;
+  end
+  else if (AKey.Len = 5) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('gname')), 5)) then
+  begin
+    FPaxExt.GName := MaterializeSpan(AValue);
+    FPaxExt.HasGName := True;
+  end;
+end;
+
+procedure TTarReader.MovePaxExtToGlobal;
+begin
+  // g 语义即 KV map 合并：仅搬运 Has 字段，Extra 追加，调用后清单条目侧
+  if FPaxExt.HasSize then
+  begin FGlobalPaxExt.HasSize := True; FGlobalPaxExt.Size := FPaxExt.Size; end;
+  if FPaxExt.HasMTime then
+  begin FGlobalPaxExt.HasMTime := True; FGlobalPaxExt.MTimeUnix := FPaxExt.MTimeUnix; end;
+  if FPaxExt.HasUID then
+  begin FGlobalPaxExt.HasUID := True; FGlobalPaxExt.UID := FPaxExt.UID; end;
+  if FPaxExt.HasGID then
+  begin FGlobalPaxExt.HasGID := True; FGlobalPaxExt.GID := FPaxExt.GID; end;
+  if FPaxExt.HasUName then
+  begin FGlobalPaxExt.HasUName := True; FGlobalPaxExt.UName := FPaxExt.UName; end;
+  if FPaxExt.HasGName then
+  begin FGlobalPaxExt.HasGName := True; FGlobalPaxExt.GName := FPaxExt.GName; end;
+  AppendPaxRecords(FGlobalPaxExt.Extra, FPaxExt.Extra);
+  FPaxExt := Default(TPaxExtSet);
+end;
+
+procedure TTarReader.ClearPaxExt; inline;
+begin
+  FPaxExt := Default(TPaxExtSet);
+end;
+
+procedure TTarReader.ClearGlobalPaxExt; inline;
+begin
+  FGlobalPaxExt := Default(TPaxExtSet);
+end;
+
+function TTarReader.UstarEntryName: string;
+var
+  LNameSpan, LPrefixSpan: TByteSpan;
+begin
+  // ustar 名归一单源：prefix/name 合并，无 magic 回退裸名
+  if MagicHasUStar then
+  begin
+    LNameSpan := FieldSlice(FPos + C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len);
+    LPrefixSpan := FieldSlice(FPos + C_TAR_LAYOUT.Prefix.Off, C_TAR_LAYOUT.Prefix.Len);
+    if (LPrefixSpan.Len > 0) and (LNameSpan.Len > 0) then
+      Result := CombinePrefixName(LPrefixSpan, LNameSpan)
+    else if LPrefixSpan.Len > 0 then
+      Result := SpanToString(LPrefixSpan)
+    else if LNameSpan.Len > 0 then
+      Result := SpanToString(LNameSpan)
+    else
+      Result := '';
+  end
+  else
+    Result := StringField(FPos + C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len);
+end;
+
+procedure TTarReader.FillHeaderScalars(var AHeader: TTarHeader);
+begin
+  // 数值/用户字段读取单源：final-else 与稀疏 S 共用，pax 覆盖由调用方后续应用
+  AHeader.Mode := Cardinal(NumericField(FPos + C_TAR_LAYOUT.Mode.Off, C_TAR_LAYOUT.Mode.Len)) and $FFFF;
+  AHeader.UID := Cardinal(NumericField(FPos + C_TAR_LAYOUT.UID.Off, C_TAR_LAYOUT.UID.Len));
+  AHeader.GID := Cardinal(NumericField(FPos + C_TAR_LAYOUT.GID.Off, C_TAR_LAYOUT.GID.Len));
+  AHeader.MTimeUnix := NumericField(FPos + C_TAR_LAYOUT.MTime.Off, C_TAR_LAYOUT.MTime.Len);
+  AHeader.UName := CachedField(FPos + C_TAR_LAYOUT.UName.Off, C_TAR_LAYOUT.UName.Len, FLastUName);
+  AHeader.GName := CachedField(FPos + C_TAR_LAYOUT.GName.Off, C_TAR_LAYOUT.GName.Len, FLastGName);
+  AHeader.DevMajor := NumericField(FPos + C_TAR_LAYOUT.DevMajor.Off, C_TAR_LAYOUT.DevMajor.Len);
+  AHeader.DevMinor := NumericField(FPos + C_TAR_LAYOUT.DevMinor.Off, C_TAR_LAYOUT.DevMinor.Len);
+end;
+
+function TTarReader.FindPaxValue(const AKey: string; out AValue: string): Boolean;
+var
+  I: Integer;
+begin
+  // Extra 内线性 last-wins；调用方限定小记录集，外联
+  Result := False;
+  AValue := '';
+  for I := 0 to High(FPaxExt.Extra) do
+    if FPaxExt.Extra[I].Key = AKey then
+    begin
+      AValue := FPaxExt.Extra[I].Value;
+      Result := True;
+    end;
+end;
+
+procedure TTarReader.NoteSparsePending;
+var
+  LMajor, LMinor, LReal, LName: string;
+  LUInt: UInt64;
+begin
+  // 仅 x 分支调用：GNU.sparse.* 成组出现才建 pending，缺项/错版即 EIOError
+  FSparsePending := False;
+  if not FindPaxValue('GNU.sparse.major', LMajor) then
+    Exit;
+  if not FindPaxValue('GNU.sparse.minor', LMinor) then
+    raise EIOError.Create('tar: sparse minor missing');
+  if (LMajor <> '1') or (LMinor <> '0') then
+    raise EIOError.Create('tar: unsupported sparse version ' + LMajor + '.' + LMinor);
+  if not FindPaxValue('GNU.sparse.realsize', LReal) then
+    raise EIOError.Create('tar: sparse realsize missing');
+  if (LReal = '') or not ParseUInt64(PAnsiChar(LReal), SizeUInt(Length(LReal)), LUInt) then
+    raise EIOError.Create('tar: bad sparse realsize');
+  if LUInt > UInt64(High(Int64)) then
+    raise EIOError.Create('tar: sparse realsize out of range');
+  if not FindPaxValue('GNU.sparse.name', LName) then
+    raise EIOError.Create('tar: sparse name missing');
+  if LName = '' then
+    raise EIOError.Create('tar: sparse name missing');
+  FSparseRealName := LName;
+  FSparseRealSize := Int64(LUInt);
+  FSparsePending := True;
+end;
+
+function ParseDecLine(var P: PByte; AEnd: PByte; out AValue: Int64): Boolean;
+var
+  V: UInt64;
+  LStart: PByte;
+begin
+  // 1.0 map 文本行：digits + LF，溢出/缺换行即 False，外联
+  Result := False;
+  AValue := 0;
+  if (P = nil) or (P >= AEnd) then
+    Exit;
+  LStart := P;
+  V := 0;
+  while (P < AEnd) and (P^ >= Ord('0')) and (P^ <= Ord('9')) do
+  begin
+    if V > (UInt64(High(Int64)) - UInt64(P^ - Ord('0'))) div 10 then
+      Exit;
+    V := V * 10 + UInt64(P^ - Ord('0'));
+    Inc(P);
+  end;
+  if P = LStart then
+    Exit;
+  if (P >= AEnd) or (P^ <> 10) then
+    Exit;
+  Inc(P);
+  AValue := Int64(V);
+  Result := True;
+end;
+
+procedure TTarReader.ParseSparseOldHeader(out ASegs: TSparseSegArray; out AReal: Int64; out AExtBlocks: Integer);
+var
+  I: Integer;
+  LOff, LLen: Int64;
+  LExtPos: SizeUInt;
+  LMore, LDone: Boolean;
+  LMaxEnd: Int64;
+
+  procedure TakeSeg(AOff, ALen: Int64);
+  begin
+    if ALen = 0 then
+      Exit;
+    if (AOff < 0) or (ALen < 0) then
+      raise EIOError.Create('tar: negative sparse segment');
+    SetLength(ASegs, Length(ASegs) + 1);
+    ASegs[High(ASegs)].Off := AOff;
+    ASegs[High(ASegs)].Len := ALen;
+    if ALen > High(Int64) - AOff then
+      raise EIOError.Create('tar: sparse segment out of range');
+    if AOff + ALen > LMaxEnd then
+      LMaxEnd := AOff + ALen;
+  end;
+
+begin
+  // 调用方已保证 FPos+512 落镜像内；扩展块逐块守总量，终结符 (任意 off, 0) 停
+  ASegs := nil;
+  AReal := 0;
+  AExtBlocks := 0;
+  LMaxEnd := 0;
+  for I := 0 to 3 do
+  begin
+    LOff := TarParseNumericField(@FData[FPos + 386 + SizeUInt(I) * 24], 12, FPos + 386 + SizeUInt(I) * 24);
+    LLen := TarParseNumericField(@FData[FPos + 386 + SizeUInt(I) * 24 + 12], 12, FPos + 386 + SizeUInt(I) * 24 + 12);
+    if LLen = 0 then
+      Break;
+    TakeSeg(LOff, LLen);
+  end;
+  LMore := (Length(ASegs) = 4) and (FData[FPos + 482] <> 0);
+  LDone := Length(ASegs) < 4;
+  while LMore and not LDone do
+  begin
+    Inc(AExtBlocks);
+    LExtPos := FPos + SizeUInt(AExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE);
+    if LExtPos + SizeUInt(C_TAR_BLOCK_SIZE) > FCount then
+      raise EIOError.CreateFmt('tar: truncated sparse extension at offset %d', [LExtPos]);
+    GuardTarTotalSize(FCumTotal, 512, FMaxTotal);
+    FCumTotal := FCumTotal + 512;
+    for I := 0 to 20 do
+    begin
+      LOff := TarParseNumericField(@FData[LExtPos + SizeUInt(I) * 24], 12, LExtPos + SizeUInt(I) * 24);
+      LLen := TarParseNumericField(@FData[LExtPos + SizeUInt(I) * 24 + 12], 12, LExtPos + SizeUInt(I) * 24 + 12);
+      if LLen = 0 then
+      begin
+        LDone := True;
+        Break;
+      end;
+      TakeSeg(LOff, LLen);
+    end;
+    if not LDone then
+      LMore := FData[LExtPos + 504] <> 0
+    else
+      LMore := False;
+  end;
+  AReal := TarParseNumericField(@FData[FPos + 483], 12, FPos + 483);
+  if AReal < 0 then
+    raise EIOError.Create('tar: negative sparse realsize');
+  if AReal = 0 then
+    AReal := LMaxEnd
+  else
+  begin
+    if LMaxEnd > AReal then
+      raise EIOError.Create('tar: sparse segment out of range');
+    if (Length(ASegs) = 0) and (AReal > 0) then
+    begin
+      // 全洞文件：零段 + 非零 realsize 合法（零填充即可），空 map + 零 realsize 视为退化拒绝由调用方守卫覆盖
+    end;
+  end;
+  if (Length(ASegs) = 0) and (AReal = 0) then
+    raise EIOError.Create('tar: empty sparse map');
+end;
+
+procedure TTarReader.ParseSparseMapText(AStored: PByte; AStoredLen: SizeUInt; AReal: Int64; out ASegs: TSparseSegArray; out AMapLen: SizeUInt);
+var
+  P, LEnd: PByte;
+  N, I: Int64;
+  LOff, LLen: Int64;
+begin
+  // 1.0 map：count + 2N 十进制行，终结符必须为 (realsize, 0)；段数受 stored/real 双界
+  ASegs := nil;
+  AMapLen := 0;
+  if (AStoredLen > 0) and (AStored = nil) then
+    raise EIOError.Create('tar: sparse map unreadable');
+  P := AStored;
+  LEnd := AStored + AStoredLen;
+  if not ParseDecLine(P, LEnd, N) then
+    raise EIOError.Create('tar: bad sparse map count');
+  if (N < 1) or (N > Int64(AStoredLen) div 4) or (N > AReal + 1) then
+    raise EIOError.Create('tar: bad sparse map count');
+  SetLength(ASegs, N);
+  for I := 0 to N - 1 do
+  begin
+    if not ParseDecLine(P, LEnd, LOff) then
+      raise EIOError.Create('tar: bad sparse map offset');
+    if not ParseDecLine(P, LEnd, LLen) then
+      raise EIOError.Create('tar: bad sparse map length');
+    if (LOff < 0) or (LLen < 0) then
+      raise EIOError.Create('tar: negative sparse segment');
+    if (LLen > 0) and ((LOff > AReal) or (LLen > AReal - LOff)) then
+      raise EIOError.Create('tar: sparse segment out of range');
+    ASegs[I].Off := LOff;
+    ASegs[I].Len := LLen;
+  end;
+  if (ASegs[N - 1].Off <> AReal) or (ASegs[N - 1].Len <> 0) then
+    raise EIOError.Create('tar: sparse map missing terminator');
+  AMapLen := SizeUInt(PtrUInt(P) - PtrUInt(AStored));
+end;
+
+procedure TTarReader.ReconstructSparse(const ASegs: TSparseSegArray; AReal: Int64; ABase: PByte; ADataOff, AStoredLen: SizeUInt);
+var
+  LBuf: TBytes;
+  I: Integer;
+  LRun: UInt64;
+begin
+  // 调用方已对 stored 与 real 做 entry/total 双守卫；此处精确装配，run 对账不平即 EIOError
+  SetLength(LBuf, AReal);
+  LRun := 0;
+  for I := 0 to High(ASegs) do
+  begin
+    if ASegs[I].Len = 0 then
+      Continue;
+    if LRun + UInt64(ASegs[I].Len) > UInt64(AStoredLen) - UInt64(ADataOff) then
+      raise EIOError.Create('tar: sparse data overrun');
+    CopyMemory(ABase + ADataOff + SizeUInt(LRun), @LBuf[SizeInt(ASegs[I].Off)], SizeUInt(ASegs[I].Len));
+    LRun := LRun + UInt64(ASegs[I].Len);
+  end;
+  if LRun + UInt64(ADataOff) <> UInt64(AStoredLen) then
+    raise EIOError.Create('tar: sparse stored size mismatch');
+  FSparseBuf := LBuf;
+  FSparseValid := True;
+end;
+
 function TTarReader.ParsePaxRecordsSlice(ABase: PByte; ALen: SizeUInt): Boolean;
 var
-  LPath, LLink: string;
+  LCtx: TPaxFullCtx;
 begin
-  // 单点：pax 解析委托 common，零拷贝 PByte 切片，复用 bytes.ops 视图语义
-  Result := TarParsePaxRecords(ABase, ALen, LPath, LLink);
-  if LPath <> '' then
-  begin
-    FPaxPath := LPath;
-    Result := True;
-  end;
-  if LLink <> '' then
-  begin
-    FPaxLinkPath := LLink;
-    Result := True;
-  end;
+  // 单点：pax 解析经 archive.pax 零拷贝 KV 分发，全关键字应用 + 原文透传由 handler 完成
+  LCtx.R := Self;
+  Result := TarParsePaxKVRecords(ABase, ALen, @TarPaxFullHandler, @LCtx);
 end;
 
 function TTarReader.ParsePaxRecords(const AData: TBytes): Boolean;
@@ -603,13 +1007,31 @@ var
   Pad: Int64;
   PayloadPtr: PByte;
   PayloadLen: SizeUInt;
-  LNameSpan, LPrefixSpan: TByteSpan;
+  LUsedGlobalNums: Boolean;
+  LUsedGlobalPath: Boolean;
+  LIsSparse: Boolean;
+  LUstarName: string;
+  LSegs: TSparseSegArray;
+  LMapLen: SizeUInt;
+  LReal: Int64;
+  LExtBlocks: Integer;
+  LHdr: TTarHeader;
 begin
   Result := False;
+  LUsedGlobalNums := False;
+  LUsedGlobalPath := False;
+  LIsSparse := False;
+  LSegs := nil;
   FPendingLongName := '';
   FPendingLongLink := '';
   FPaxPath := '';
   FPaxLinkPath := '';
+  FPaxExt := Default(TPaxExtSet);
+  FSparsePending := False;
+  FSparseValid := False;
+  FSparseBuf := nil;
+  FSparseRealName := '';
+  FSparseRealSize := 0;
   while True do
   begin
     if FPos >= FCount then
@@ -627,11 +1049,20 @@ begin
       Exit(False);
     end;
     Size := NumericField(FPos + C_TAR_LAYOUT.Size.Off, C_TAR_LAYOUT.Size.Len);
+    // pax size 覆盖 ustar（x 单条目优先，无则 guard 内 g，否则单次 g）
+    if FPaxExt.HasSize then
+      Size := FPaxExt.Size
+    else if FGlobalPaxExt.HasSize then
+    begin
+      Size := FGlobalPaxExt.Size;
+      LUsedGlobalNums := True;
+    end;
     if Size < 0 then
       raise EIOError.CreateFmt('tar: negative entry size %d at offset %d', [Size, FPos]);
     Flag := ByteAt(FPos + C_TAR_LAYOUT.TypeFlag.Off);
     if Flag = Ord('L') then
     begin
+      FSparsePending := False;
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
       // bomb: extended payload counted toward total (prevents large L/K/x/g DoS), single source GuardTarTotalSize
       if PayloadLen > 0 then
@@ -646,6 +1077,7 @@ begin
     end
     else if Flag = Ord('K') then
     begin
+      FSparsePending := False;
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
       // bomb: extended payload counted toward total
       if PayloadLen > 0 then
@@ -671,8 +1103,12 @@ begin
       begin
         if ParsePaxRecordsSlice(PayloadPtr, PayloadLen) then
         begin
+          if Flag = Ord('x') then
+            NoteSparsePending;
           if Flag = Ord('g') then
           begin
+            FSparsePending := False;
+            MovePaxExtToGlobal;
             if FPaxPath <> '' then
             begin
               // IsSafe filter before storing global, Warn on reject (observability parity with auto-clear)
@@ -703,9 +1139,47 @@ begin
       begin
       end;
     end
+    else if Flag = Ord('S') then
+    begin
+      // oldgnu 稀疏：map 在头扩展区（+ 扩展链），数据段 dense 拼接，x/pax 不参与
+      FSparsePending := False;
+      if FPos + C_TAR_BLOCK_SIZE > FCount then
+        raise EIOError.CreateFmt('tar: truncated stream at offset %d (need %d, have %d)', [FPos, C_TAR_BLOCK_SIZE, FCount - FPos]);
+      ParseSparseOldHeader(LSegs, LReal, LExtBlocks);
+      if UInt64(Size) > UInt64(FMaxEntry) then
+        raise EIOError.CreateFmt('tar: entry size %d exceeds limit %d at offset %d', [Size, Int64(FMaxEntry), FPos]);
+      if FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE)) + SizeUInt(Size) > FCount then
+        raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FPos + C_TAR_BLOCK_SIZE, Size, Int64(FCount) - Int64(FPos + C_TAR_BLOCK_SIZE)]);
+      LHdr := Default(TTarHeader);
+      LHdr.Name := UstarEntryName;
+      GuardTarNameForRead(LHdr.Name);
+      LHdr.Kind := tekRegular;
+      LHdr.LinkName := '';
+      FillHeaderScalars(LHdr);
+      LHdr.Size := LReal;
+      GuardTarEntrySize(LHdr, FMaxEntry);
+      GuardTarTotalSize(FCumTotal, UInt64(Size), FMaxTotal);
+      FCumTotal := FCumTotal + UInt64(Size);
+      GuardTarTotalSize(FCumTotal, UInt64(LReal), FMaxTotal);
+      FCumTotal := FCumTotal + UInt64(LReal);
+      LHdr.PaxRecords := nil;
+      ReconstructSparse(LSegs, LReal, @FData[FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE))], 0, SizeUInt(Size));
+      FEntrySize := LReal;
+      FEntryDataOfs := FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE));
+      FPos := FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE)) + SizeUInt(Size) + SizeUInt(TarPadToBlock(Size));
+      AHeader := LHdr;
+      Result := True;
+      Exit;
+    end
     else
     begin
       AHeader := Default(TTarHeader);
+      // 1.0 稀疏：pending map 仅与占位名配对，否则配对腐坏即 EIOError，当次消费
+      LUstarName := UstarEntryName;
+      LIsSparse := FSparsePending and IsGnuSparseDataName(LUstarName);
+      if FSparsePending and not LIsSparse then
+        raise EIOError.Create('tar: sparse map without sparse data');
+      FSparsePending := False;
       // re-check IsSafe, Warn on reject (parity with auto-clear), auto-clear single-use if no guard
       if (FGlobalPaxPath <> '') and not IsSafeTarEntryName(FGlobalPaxPath) then
       begin
@@ -719,11 +1193,14 @@ begin
       end;
       if FPendingLongName <> '' then
         AHeader.Name := FPendingLongName
+      else if LIsSparse then
+        AHeader.Name := FSparseRealName
       else if FPaxPath <> '' then
         AHeader.Name := FPaxPath
       else if FGlobalPaxPath <> '' then
       begin
         AHeader.Name := FGlobalPaxPath;
+        LUsedGlobalPath := True;
         if not HasGuards then
         begin
           LogGlobalPaxAutoClear;
@@ -731,23 +1208,7 @@ begin
         end;
       end
       else
-      begin
-        if MagicHasUStar then
-        begin
-          LNameSpan := FieldSlice(FPos + C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len);
-          LPrefixSpan := FieldSlice(FPos + C_TAR_LAYOUT.Prefix.Off, C_TAR_LAYOUT.Prefix.Len);
-          if (LPrefixSpan.Len > 0) and (LNameSpan.Len > 0) then
-            AHeader.Name := CombinePrefixName(LPrefixSpan, LNameSpan)
-          else if LPrefixSpan.Len > 0 then
-            AHeader.Name := SpanToString(LPrefixSpan)
-          else if LNameSpan.Len > 0 then
-            AHeader.Name := SpanToString(LNameSpan)
-          else
-            AHeader.Name := '';
-        end
-        else
-          AHeader.Name := StringField(FPos + C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len);
-      end;
+        AHeader.Name := LUstarName;
       GuardTarNameForRead(AHeader.Name);
       if FPendingLongLink <> '' then
         AHeader.LinkName := FPendingLongLink
@@ -756,6 +1217,7 @@ begin
       else if FGlobalPaxLinkPath <> '' then
       begin
         AHeader.LinkName := FGlobalPaxLinkPath;
+        LUsedGlobalPath := True;
         if not HasGuards then
         begin
           LogGlobalPaxAutoClear;
@@ -765,11 +1227,11 @@ begin
       else
         AHeader.LinkName := CachedField(FPos + C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, FLastLinkName);
       AHeader.Kind := TypeFlagToKind(Flag);
-      AHeader.Mode := Cardinal(NumericField(FPos + C_TAR_LAYOUT.Mode.Off, C_TAR_LAYOUT.Mode.Len)) and $FFFF;
-      AHeader.UID := Cardinal(NumericField(FPos + C_TAR_LAYOUT.UID.Off, C_TAR_LAYOUT.UID.Len));
-      AHeader.GID := Cardinal(NumericField(FPos + C_TAR_LAYOUT.GID.Off, C_TAR_LAYOUT.GID.Len));
+      FillHeaderScalars(AHeader);
       if AHeader.Kind = tekDirectory then
         AHeader.Size := 0
+      else if LIsSparse then
+        AHeader.Size := FSparseRealSize
       else
         AHeader.Size := Size;
       AHeader.MTimeUnix := NumericField(FPos + C_TAR_LAYOUT.MTime.Off, C_TAR_LAYOUT.MTime.Len);
@@ -777,18 +1239,59 @@ begin
       AHeader.GName := CachedField(FPos + C_TAR_LAYOUT.GName.Off, C_TAR_LAYOUT.GName.Len, FLastGName);
       AHeader.DevMajor := NumericField(FPos + C_TAR_LAYOUT.DevMajor.Off, C_TAR_LAYOUT.DevMajor.Len);
       AHeader.DevMinor := NumericField(FPos + C_TAR_LAYOUT.DevMinor.Off, C_TAR_LAYOUT.DevMinor.Len);
+      // pax typed overrides: x wins, else guard-scoped g, else single-use g
+      if FPaxExt.HasMTime then
+        AHeader.MTimeUnix := FPaxExt.MTimeUnix
+      else if FGlobalPaxExt.HasMTime then
+      begin AHeader.MTimeUnix := FGlobalPaxExt.MTimeUnix; LUsedGlobalNums := True; end;
+      if FPaxExt.HasUID then
+        AHeader.UID := FPaxExt.UID
+      else if FGlobalPaxExt.HasUID then
+      begin AHeader.UID := FGlobalPaxExt.UID; LUsedGlobalNums := True; end;
+      if FPaxExt.HasGID then
+        AHeader.GID := FPaxExt.GID
+      else if FGlobalPaxExt.HasGID then
+      begin AHeader.GID := FGlobalPaxExt.GID; LUsedGlobalNums := True; end;
+      if FPaxExt.HasUName then
+        AHeader.UName := FPaxExt.UName
+      else if FGlobalPaxExt.HasUName then
+      begin AHeader.UName := FGlobalPaxExt.UName; LUsedGlobalNums := True; end;
+      if FPaxExt.HasGName then
+        AHeader.GName := FPaxExt.GName
+      else if FGlobalPaxExt.HasGName then
+      begin AHeader.GName := FGlobalPaxExt.GName; LUsedGlobalNums := True; end;
+      // passthrough: consumed globals first, then per-entry x, both encounter order
+      AHeader.PaxRecords := nil;
+      if LUsedGlobalPath or LUsedGlobalNums then
+        AppendPaxRecords(AHeader.PaxRecords, FGlobalPaxExt.Extra);
+      AppendPaxRecords(AHeader.PaxRecords, FPaxExt.Extra);
+      if LUsedGlobalNums and not HasGuards then
+      begin
+        LogGlobalPaxAutoClear;
+        ClearGlobalPaxExt;
+      end;
       GuardTarEntrySize(AHeader, FMaxEntry);
+      if LIsSparse then
+      begin
+        GuardTarTotalSize(FCumTotal, UInt64(Size), FMaxTotal);
+        FCumTotal := FCumTotal + UInt64(Size);
+      end;
       if AHeader.Kind = tekRegular then
       begin
         GuardTarTotalSize(FCumTotal, UInt64(AHeader.Size), FMaxTotal);
         FCumTotal := FCumTotal + UInt64(AHeader.Size);
-        FEntrySize := Size;
+        FEntrySize := AHeader.Size;
       end
       else
         FEntrySize := 0;
       FEntryDataOfs := FPos + C_TAR_BLOCK_SIZE;
       if FEntryDataOfs + SizeUInt(Size) > FCount then
         raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FEntryDataOfs, Size, Int64(FCount) - Int64(FEntryDataOfs)]);
+      if LIsSparse then
+      begin
+        ParseSparseMapText(@FData[FEntryDataOfs], SizeUInt(Size), FSparseRealSize, LSegs, LMapLen);
+        ReconstructSparse(LSegs, FSparseRealSize, @FData[FEntryDataOfs], SizeUInt(AlignUp(LMapLen, SizeUInt(C_TAR_BLOCK_SIZE))), SizeUInt(Size));
+      end;
       FPos := FPos + C_TAR_BLOCK_SIZE + SizeUInt(Size) + SizeUInt(TarPadToBlock(Size));
       Result := True;
       Exit;
@@ -805,6 +1308,17 @@ end;
 
 function TTarReader.TrySlice(out ASlice: TByteSpan): Boolean; inline;
 begin
+  // 稀疏重建缓冲优先：生命周期同条目视图，Next 后失效
+  if FSparseValid then
+  begin
+    if Length(FSparseBuf) = 0 then
+    begin
+      ASlice := TByteSpan.Empty;
+      Exit(False);
+    end;
+    ASlice := TByteSpan.Create(@FSparseBuf[0], SizeUInt(Length(FSparseBuf)));
+    Exit(True);
+  end;
   if (FEntryDataOfs = 0) or (FEntrySize <= 0) then
   begin
     ASlice := TByteSpan.Empty;
@@ -842,6 +1356,9 @@ begin
   // 单源零拷贝流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory/SpanClone 单源，FHold 防悬垂；inline 薄转发（证据：inline 单一规范零拷贝视图 TrySlice + CreateSliceReaderWithHold 持有，bytes.ops SpanClone 单次 Move）
   // 性能：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝，零分配）；外部 PByte 已在 CreateWithOptions 单次 SpanClone 高水位持有 FBuf（200 条目批量 1 次 vs 200 次，单次 Move bytes.ops 单源，防 UAF/高频 allocs，高水位池复用零每条目堆分配，FBuf 快路径零额外分配）
   // 稳定：FBuf 零拷贝持有 try..finally 必释；外部 PByte 已持有 FBuf 防悬垂 UAF（Next/FieldSlice 直读已安全），fallback 分支仍按需 SpanClone 自包含持有防 nil/空悬垂；inline 薄转发避 I-Cache 膨胀
+  // 稀疏持有流：重建缓冲自包含，Reader 释放后仍可读，与 FBuf 路径同语义
+  if FSparseValid then
+    Exit(CreateSliceReaderWithHold(FSparseBuf, 0, SizeUInt(Length(FSparseBuf))));
   if not EntryDataSlice(P, C) then
   begin
     P := nil;

@@ -23,6 +23,13 @@ type
     tekFifo
   );
 
+  {** @desc pax 单条记录原文（key=value，保序，含已应用的类型化键与未知键） *}
+  TPaxRecord = record
+    Key: string;
+    Value: string;
+  end;
+  TPaxRecordArray = array of TPaxRecord;
+
   {** @desc 单条目头元数据（ustar/pax 归一后） *}
   TTarHeader = record
     Name: string;
@@ -37,6 +44,7 @@ type
     GName: string;
     DevMajor: Int64;
     DevMinor: Int64;
+    PaxRecords: TPaxRecordArray;
   end;
 
   {** @desc 写入选项（按条目覆盖 header 字段） *}
