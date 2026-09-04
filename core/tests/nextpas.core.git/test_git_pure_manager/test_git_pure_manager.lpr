@@ -574,6 +574,8 @@ procedure TestNativeCredentialHandlersPinned;
 var
   LMgr: IGitManager;
   LDummy: TDummyCredHandler;
+  LAcq: TCredentialAcquireEvent;
+  LCert: TCertificateCheckEvent;
   LRaised: Boolean;
 begin
   LMgr := NewGitManager(gbNative);
@@ -583,9 +585,11 @@ begin
   Check(True, 'nil credential handlers accepted');
   LDummy := TDummyCredHandler.Create;
   try
+    LAcq := @LDummy.Acquire;
+    LCert := @LDummy.CheckCert;
     LRaised := False;
     try
-      LMgr.SetCredentialAcquireHandler(LDummy.Acquire);
+      LMgr.SetCredentialAcquireHandler(LAcq);
     except
       on E: EGitError do
         LRaised := True;
@@ -593,7 +597,7 @@ begin
     Check(LRaised, 'non-nil credential handler raises explicit EGitError');
     LRaised := False;
     try
-      LMgr.SetCertificateCheckHandler(LDummy.CheckCert);
+      LMgr.SetCertificateCheckHandler(LCert);
     except
       on E: EGitError do
         LRaised := True;
