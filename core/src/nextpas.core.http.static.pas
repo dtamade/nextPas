@@ -117,7 +117,7 @@ uses
   nextpas.core.http.mime,
   nextpas.core.time.httpdate,
   nextpas.core.platform.sendfile,
-  nextpas.core.platform.sendfile.base;
+  nextpas.core.platform.files.base;
 
 type
   TResponseWriterAdapter = class(TInterfacedObject, IWriter, nextpas.core.platform.sendfile.base.ISendfileSocketHandle)
@@ -757,7 +757,7 @@ begin
       Exit;
     end;
     LInfo := nextpas.core.fs.Stat(AFilePath);
-    if LInfo.FileType <> ftRegular then
+    if LInfo.FileType <> nextpas.core.fs.base.ftRegular then
     begin
       WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
       Exit;
