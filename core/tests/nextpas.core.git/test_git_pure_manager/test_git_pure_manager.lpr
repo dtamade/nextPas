@@ -236,11 +236,16 @@ end;
 procedure TestDiscoverRepositoryInvariants;
 var
   LBase, LRoot, LNest, LMain, LWt, LWtNest: string;
+  LSavedDir: string;
   LMgr: IGitManager;
   LRepo: IGitRepository;
   LWtExt: IGitWorktreeExt;
 begin
   LBase := MkTempDir('pure_discover');
+  // hermetic empty-path assertions: DiscoverRepository('') resolves the
+  // process CWD, so pin CWD to the fresh temp dir (never a repo)
+  LSavedDir := GetCurrentDir;
+  ChDir(LBase);
   try
     LMgr := NewGitManager(gbNative);
     Check(LMgr.Initialize, 'init');
@@ -291,6 +296,7 @@ begin
     Check(LRepo.IsBare, 'bare repo');
     CheckEqual(PathClean(LRoot), PathClean(LMgr.DiscoverRepository(LRoot)), 'Discover bare returns gitdir');
   finally
+    ChDir(LSavedDir);
     RemoveAll(LBase);
   end;
 end;
