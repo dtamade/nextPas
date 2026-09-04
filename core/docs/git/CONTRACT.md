@@ -49,7 +49,7 @@
 | git.native.cachetree | TREE 扩展纯格式单元：记录解析（名字 NUL 前缀、计数哨兵 -1）与两遍精确尺寸序列化 |
 | git.native.status | worktree status 聚合（HEAD↔index 暂存态 / index↔worktree 工作树态 / untracked 扫描 + rename/copy 检测：oid 100 快路径 + hashsig 行哈希 0..100、阈值 50 配对、porcelain 分组序） |
 | git.native.ignore | .gitignore 引擎：模式编译（负规则/锚定/仅目录/字符类/**）、分组栈（深目录优先、文件内后者胜）、纯逻辑无 IO |
-| git.native.revwalk | 提交遍历薄门面 + 6 域分片（`revwalk.base` 纯数据类型 / `intf` 契约接缝 / `hashset` 集合映射 / `parsecache` 恰一次缓存 / `fetch` 单次交付 / `walker` 堆游标 / `collect` 日期序收集 / `topo` 拓扑序，各 <650 行；原 1985 行单文件已按域拆分，门面 inline 转发，调用方零改动；分片 `TGitOidArray` 经 `revwalk.base` 别名单源，`commitgraph.base` 同名副本待收敛） |
+| git.native.revwalk | 提交遍历薄门面 + 6 域分片（`revwalk.base` 纯数据类型 / `intf` 契约接缝 / `hashset` 集合映射 / `parsecache` 恰一次缓存 / `fetch` 单次交付 / `walker` 堆游标 / `collect` 日期序收集 / `topo` 拓扑序，各 <650 行；原 1985 行单文件已按域拆分，门面 inline 转发，调用方零改动；分片 `TGitOidArray` 单源于 `git.native.base`，`revwalk.base/commitgraph.base` 均为别名） |
 | git.native.commitgraph | commit-graph v1 薄门面 + 4 域分片（`commitgraph.base` 类型单源 / `cache` 16-cap LRU+mmap / `reader` 解析查找+TryLoad / `writer` 排序构建落盘 / `collect` 全量收集+WriteAll，各 <600 行；原 1541 行单文件已按域拆分，门面 inline 转发，调用方零改动） |
 | git.native.reflog | reflog 读取（`logs/<ref>` 文本解析，`old new sig TAB msg`，签名复用 `GitParseSignature`，空文件与缺失回空数组） |
 | git.native.stash | stash 栈（`logs/refs/stash` reflog 列表反序 + `GitStashPush/Apply/Pop/Drop/Clear` 原生栈操作：push 为 index/working 树落盘→index/stash 提交→reflog append→refs/stash→检出回 HEAD；apply 为 `checkout` 目标树；pop=apply+drop；drop/clear 精确重写 reflog 与 refs，对齐 `git stash push/pop/apply/drop/clear`） |
