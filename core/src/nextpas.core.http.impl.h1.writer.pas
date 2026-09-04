@@ -14,6 +14,7 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.server.intf,
   nextpas.core.platform.socket.base,
+  nextpas.core.platform.sendfile.base,
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
@@ -89,9 +90,6 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.errors,
-  nextpas.core.net.intf,
-  nextpas.core.platform.socket.base,
-  nextpas.core.platform.sendfile.base,
   nextpas.core.text.builder,
   nextpas.core.text.conv,
   nextpas.core.time.base,
@@ -624,14 +622,15 @@ end;
 function TH1ResponseWriter.GetSocketHandle: TPlatformSocket;
 var
   LSock: nextpas.core.platform.sendfile.base.ISendfileSocketHandle;
+  LRuntime: ITcpSocketRuntime;
 begin
   Result := PLATFORM_INVALID_SOCKET;
   if (FConn = nil) or FHijacked then
     Exit;
   if Supports(FConn, nextpas.core.platform.sendfile.base.ISendfileSocketHandle, LSock) then
     Result := LSock.GetSocketHandle
-  else if Supports(FConn, ITcpSocketRuntime) then
-    Result.Value := PtrUInt((FConn as ITcpSocketRuntime).NativeSocketHandle);
+  else if Supports(FConn, ITcpSocketRuntime, LRuntime) then
+    Result.Value := PtrUInt(LRuntime.NativeSocketHandle);
 end;
 
 end.
