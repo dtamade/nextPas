@@ -4,9 +4,11 @@ uses
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
+  nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.fs,
   nextpas.core.respack,
+  nextpas.core.compress,
   nextpas.core.vfs;
 
 { 门面层契约：consumer 只经门面函数消费任意后端。
@@ -291,6 +293,249 @@ begin
   Check(VfsNameCompare('b', 'aZ') > 0, 'name compare byte order');
 end;
 
+{ ── 门面全入口覆盖：视图/装饰器/错误类（仅经门面 API 装配） ── }
+
+function MakeTinyTree(const AName, AContent: string): IVfs;
+var
+  B: TVfsTreeBuilder;
+begin
+  B := TVfsTreeBuilder.Create;
+  try
+    B.AddFile(AName, StrToBytes(AContent), 7);
+    Result := B.Freeze;
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TestSubViewViaFacade;
+var
+  Fs, Sub: IVfs;
+  SI: TStatInfo;
+  L: TEntryArray;
+begin
+  Fs := MakeMemtreeVfs;
+  Sub := CreateSubVfs(Fs, 'assets');
+  SI := VfsStat(Sub, '.');
+  Check(SI.Info.IsDir, 'facade sub root is dir');
+  SI := VfsStat(Sub, 'app.js');
+  Check((not SI.Info.IsDir) and (SI.Info.Size = 15),
+    'facade sub stat remapped');
+  L := VfsList(Sub, '.');
+  Check((Length(L) = 2) and (L[0].Name = 'app.js') and (L[1].Name = 'lib'),
+    'facade sub list remapped+sorted');
+  Check(VfsReadAllText(Sub, 'app.js') = 'console.log(1);',
+    'facade sub read');
+  Check(not Sub.Exists('index.html'), 'facade sub cannot see outside');
+  try
+    VfsStat(Sub, 'index.html');
+    Check(False, 'facade sub missing must raise');
+  except
+    on E: EVfsNotFound do
+      Check(E.Path = 'index.html', 'facade sub error path in sub view');
+  end;
+end;
+
+procedure TestMountViaFacade;
+var
+  A, B, C, M: IVfs;
+  BB, BC: TVfsTreeBuilder;
+  L: TEntryArray;
+begin
+  A := MakeTinyTree('inner.txt', 'in-a');
+  BB := TVfsTreeBuilder.Create;
+  try
+    BB.AddFile('inner.txt', StrToBytes('in-b'), 2);
+    BB.AddFile('root.txt', StrToBytes('r'), 3);
+    B := BB.Freeze;
+  finally
+    BB.Free;
+  end;
+  M := CreateMountedVfs([VfsMountEntry('a', A), VfsMountEntry('.', B)]);
+  Check(VfsReadAllText(M, 'a/inner.txt') = 'in-a', 'facade mount prefix hit');
+  Check(VfsReadAllText(M, 'root.txt') = 'r', 'facade mount root fallback');
+  L := VfsList(M, '.');
+  Check((Length(L) = 3) and (L[0].Name = 'a')
+    and (L[1].Name = 'inner.txt') and (L[2].Name = 'root.txt'),
+    'facade mount root merged+sorted');
+  BC := TVfsTreeBuilder.Create;
+  try
+    BC.AddFile('deep.txt', StrToBytes('deep'), 4);
+    C := BC.Freeze;
+  finally
+    BC.Free;
+  end;
+  M := CreateMountedVfs([VfsMountEntry('a', A), VfsMountEntry('a/sub', C)]);
+  Check(VfsReadAllText(M, 'a/sub/deep.txt') = 'deep',
+    'facade mount longest prefix wins');
+  Check(VfsReadAllText(M, 'a/inner.txt') = 'in-a',
+    'facade mount shorter prefix kept');
+end;
+
+procedure TestOverlayViaFacade;
+var
+  Base, Patch, O: IVfs;
+  BB, BP: TVfsTreeBuilder;
+  L: TEntryArray;
+begin
+  BB := TVfsTreeBuilder.Create;
+  try
+    BB.AddFile('cfg.txt', StrToBytes('base'), 1);
+    BB.AddFile('only-base.txt', StrToBytes('b'), 2);
+    Base := BB.Freeze;
+  finally
+    BB.Free;
+  end;
+  BP := TVfsTreeBuilder.Create;
+  try
+    BP.AddFile('cfg.txt', StrToBytes('patch'), 3);
+    Patch := BP.Freeze;
+  finally
+    BP.Free;
+  end;
+  O := CreateOverlayVfs([Patch, Base]);
+  Check(VfsReadAllText(O, 'cfg.txt') = 'patch',
+    'facade overlay first wins');
+  Check(VfsReadAllText(O, 'only-base.txt') = 'b',
+    'facade overlay fallthrough');
+  L := VfsList(O, '.');
+  Check((Length(L) = 2) and (L[0].Name = 'cfg.txt')
+    and (L[1].Name = 'only-base.txt'),
+    'facade overlay list dedup+sorted');
+end;
+
+function UpperTransform(const AData: TBytes): TBytes;
+var
+  I: Integer;
+begin
+  Result := Copy(AData);
+  for I := 0 to High(Result) do
+    if (Result[I] >= Ord('a')) and (Result[I] <= Ord('z')) then
+      Result[I] := Result[I] - 32;
+end;
+
+function HtmlHeaderPred(const AHeader: TBytes;
+  const ATotalSize: Int64): Boolean;
+begin
+  Result := (ATotalSize <> 0) and (Length(AHeader) > 0)
+    and (AHeader[0] = Ord('<'));
+end;
+
+procedure TestTransformViaFacade;
+var
+  Inner, Tr: IVfs;
+  SI: TStatInfo;
+  Tag: string;
+begin
+  Inner := MakeMemtreeVfs;
+  Tr := CreateTransformingVfs(Inner, @UpperTransform, nil);
+  Check(VfsReadAllText(Tr, 'index.html') = '<HTML>OK</HTML>',
+    'facade transform open');
+  SI := VfsStat(Tr, 'index.html');
+  Check(SI.Info.Size = 15, 'facade transform stat size');
+  Check(not (Tr as IVfsETag).TryGetETag('index.html', Tag),
+    'facade transform etag disabled');
+  Tr := CreateTransformingVfs(Inner, @UpperTransform, nil, @HtmlHeaderPred);
+  Check(VfsReadAllText(Tr, 'index.html') = '<HTML>OK</HTML>',
+    'facade transform headerpred hit');
+  Check(VfsReadAllText(Tr, 'assets/app.js') = 'console.log(1);',
+    'facade transform headerpred miss passthrough');
+end;
+
+procedure TestDecompressViaFacade;
+var
+  Inner, D: IVfs;
+  B: TVfsTreeBuilder;
+  Raw, Gz: TBytes;
+  SI: TStatInfo;
+  Got: Boolean;
+begin
+  Raw := StrToBytes('<html>facade gzip roundtrip 0123456789</html>');
+  Gz := GzipCompress(Raw);
+  B := TVfsTreeBuilder.Create;
+  try
+    B.AddFile('gz.txt', Gz, 30);
+    B.AddFile('plain.txt', StrToBytes('plain stays'), 31);
+    Inner := B.Freeze;
+  finally
+    B.Free;
+  end;
+  Check(VFS_DECOMPRESS_MAX_BYTES > 0, 'facade decompress limit re-exported');
+  { 序数 tripwire：门面枚举常量与 vfs.base 声明顺序 `(daAuto, daGzip)` 锁定一致
+    （源契约门文本断言声明顺序）；分支行为由下述 daGzip 强制/daAuto 自动
+    用例端到端锁定，序数漂移必致其红。 }
+  Check((Ord(daAuto) = 0) and (Ord(daGzip) = 1),
+    'facade enum ordinals stable');
+  D := CreateDecompressingVfs(Inner);
+  SI := D.Stat('gz.txt');
+  Check(SI.Info.Size = Int64(Length(Raw)), 'facade decompress stat size');
+  Check(VfsReadAllText(D, 'gz.txt') = '<html>facade gzip roundtrip 0123456789</html>',
+    'facade decompress content');
+  D := CreateDecompressingVfs(Inner, daAuto);
+  Check(VfsReadAllText(D, 'plain.txt') = 'plain stays',
+    'facade decompress auto plain passthrough');
+  D := CreateDecompressingVfs(Inner, daGzip);
+  Check(VfsReadAllText(D, 'gz.txt')
+    = '<html>facade gzip roundtrip 0123456789</html>',
+    'facade decompress forced gzip');
+  Got := False;
+  try
+    VfsReadAllText(D, 'plain.txt');
+  except
+    on E: EVfsError do Got := True;
+  end;
+  Check(Got, 'facade decompress forced plain must fail');
+end;
+
+procedure TestErrorClassesViaFacade;
+var
+  Fs: IVfs;
+  S: IStream;
+  LDummy: Int64;
+begin
+  Fs := MakeMemtreeVfs;
+  try
+    VfsStat(Fs, 'nope.txt');
+    Check(False, 'facade notfound must raise');
+  except
+    on E: EVfsNotFound do
+      Check((E.Op = 'stat') and (E.Path = 'nope.txt'),
+        'facade notfound op/path context');
+  end;
+  try
+    Fs.OpenRead('assets');
+    Check(False, 'facade isadir must raise');
+  except
+    on E: EVfsIsADirectory do
+      Check(E.Op = 'open', 'facade isadir op context');
+  end;
+  try
+    VfsList(Fs, 'index.html');
+    Check(False, 'facade notadir must raise');
+  except
+    on E: EVfsNotADirectory do
+      Check(E.Op = 'list', 'facade notadir op context');
+  end;
+  try
+    VfsStat(Fs, '/abs');
+    Check(False, 'facade invalid must raise');
+  except
+    on E: EVfsInvalidPath do
+      Check(True, 'facade invalid path class');
+  end;
+  Check((not Fs.Exists('nope.txt')) and (not Fs.Exists('/abs')),
+    'facade exists false on missing+invalid');
+  S := Fs.OpenRead('empty.txt');
+  S.Close;
+  try
+    LDummy := S.Seek(0, soBeginning);
+    Check(LDummy <> -1, 'facade closed must raise');
+  except
+    on E: EVfsClosed do
+      Check(True, 'facade closed class after close');
+  end;
+end;
+
 { ── 注册与执行 ── }
 
 begin
@@ -303,6 +548,12 @@ begin
   T.Test('stat/list wrappers', @TestStatListWrappers);
   T.Test('walk early stop', @TestWalkEarlyStop);
   T.Test('sort helper via facade', @TestSortHelperViaFacade);
+  T.Test('sub view via facade', @TestSubViewViaFacade);
+  T.Test('mount via facade', @TestMountViaFacade);
+  T.Test('overlay via facade', @TestOverlayViaFacade);
+  T.Test('transform via facade', @TestTransformViaFacade);
+  T.Test('decompress via facade', @TestDecompressViaFacade);
+  T.Test('error classes via facade', @TestErrorClassesViaFacade);
 
   if not T.Run then Halt(1);
 end.

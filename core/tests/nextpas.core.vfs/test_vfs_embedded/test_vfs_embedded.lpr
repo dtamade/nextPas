@@ -317,6 +317,44 @@ begin
   end;
 end;
 
+{ ── ETag/ServeMeta：首击惰性生成 + 缓存一致 ── }
+
+procedure TestETagServeMeta;
+var
+  Inputs: TResPackInputArray;
+  B: TResPackBlob;
+  Fs: IVfs;
+  ET: IVfsETag;
+  SM: IVfsServeMeta;
+  Tag1, Tag2, LM1, LM2, LM3: string;
+begin
+  MakeInputs(Inputs);
+  B := ResPackBuild(Inputs, ResPackDefaultOptions);
+  Fs := CreateEmbeddedVfsOwned(B.Data, B.Size);
+  try
+    Check(Fs.QueryInterface(IVfsETag, ET) = 0, 'etag: exposes IVfsETag');
+    Check(ET.TryGetETag('small.txt', Tag1) and (Tag1 <> ''),
+      'etag: file tag non-empty');
+    Check(ET.TryGetETag('small.txt', Tag2) and (Tag2 = Tag1),
+      'etag: cached tag stable');
+    Check(not ET.TryGetETag('missing.txt', Tag2), 'etag: missing false');
+    Check(not ET.TryGetETag('.', Tag2), 'etag: dir false');
+    Check(ET.TryGetLastModified('small.txt', LM1) and (LM1 <> ''),
+      'etag: lastmod non-empty (modtime 222)');
+    Check(ET.TryGetLastModified('small.txt', LM2) and (LM2 = LM1),
+      'etag: lastmod cached stable');
+    Check(Fs.QueryInterface(IVfsServeMeta, SM) = 0,
+      'etag: exposes IVfsServeMeta');
+    Check(SM.TryGetServeMeta('small.txt', Tag2, LM3)
+      and (Tag2 = Tag1) and (LM3 = LM1),
+      'etag: servemeta single-shot consistent');
+    Check(not SM.TryGetServeMeta('missing.txt', Tag2, LM3),
+      'etag: servemeta missing false');
+  finally
+    Fs := nil;
+  end;
+end;
+
 { ── VfsDeriveChildNames 纯函数直驱：零分配语义固化 ── }
 
 procedure TestDeriveChildNamesPure;
@@ -357,5 +395,6 @@ begin
   T.Test('deduped entries listable', @TestDedupedEntriesListable);
   T.Test('perf 10k embedded zero-decode', @TestPerf10kEmbedded);
   T.Test('derive child names pure', @TestDeriveChildNamesPure);
+  T.Test('etag servemeta direct', @TestETagServeMeta);
   if not T.Run then Halt(1);
 end.
