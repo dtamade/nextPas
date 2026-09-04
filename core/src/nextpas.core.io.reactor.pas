@@ -173,6 +173,17 @@ var
   LReleaseCount: UInt32;
   LReleases: array of TIoReactorPendingRelease;
 begin
+  { Empty state (e.g. second Close after a full drain set FEntryCount=0):
+    nothing to release. Guard first: LI/FEntryCount are UInt32, so
+    `0 to FEntryCount - 1` underflows to MaxUInt32 when FEntryCount=0
+    (C-29: clean listen+close+free teardown crashed here). Siblings
+    (epoll/kqueue ReleasePendingOps) use the same early-exit discipline. }
+  if FEntryCount = 0 then
+  begin
+    FPendingCount := 0;
+    FFreeHead := -1;
+    Exit;
+  end;
   if FPendingCount = 0 then
   begin
     // stability: clear stale actives even when count 0 (idempotent Close)
@@ -436,6 +447,11 @@ begin
         LTargets[LCount] := UInt64(LI);
         Inc(LCount);
       end;
+    { LCount/LJ are UInt32: skip the loop when nothing matched, otherwise
+      `0 to LCount - 1` underflows on the empty match set (same C-29 class). }
+    if LCount = 0 then
+      SetLength(LTargets, 0)
+    else
     for LJ := 0 to LCount - 1 do
     begin
       LCancelSqe := FRing.GetSqe;
