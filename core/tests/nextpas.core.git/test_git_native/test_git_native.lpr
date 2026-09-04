@@ -4796,6 +4796,109 @@ begin
   end;
 end;
 
+procedure TestStashPushPopRoundTrip;
+var
+  Work, GitDir: string;
+  PushOid, PopOid: TGitOid;
+begin
+  // covers stash push/apply/drop/pop/clear against git CLI
+  MakeTwoCommitRepo('nextpas_git_stash', Work, GitDir);
+  try
+    WriteFileText(PathJoin([Work, 'f.txt']), 'stashed'#10);
+    PushOid := GitStashPush(GitDir, Work, 'my stash');
+    CheckFalse(GitOidIsZero(PushOid), 'push returns oid');
+    CheckEqual(1, GitStashCount(GitDir), 'one stash after push');
+    CheckTrue(GitStashExists(GitDir), 'stash exists');
+    CheckEqual('c2'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'worktree restored');
+    PopOid := GitStashPop(GitDir, Work);
+    CheckFalse(GitOidIsZero(PopOid), 'pop returns oid');
+    CheckEqual(0, GitStashCount(GitDir), 'empty after pop');
+    CheckEqual('stashed'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'pop restores change');
+    // apply keeps the entry, drop removes it, clear empties
+    WriteFileText(PathJoin([Work, 'f.txt']), 'stashed2'#10);
+    CheckFalse(GitOidIsZero(GitStashPush(GitDir, Work, 'second', True)), 'untracked overload push');
+    CheckFalse(GitOidIsZero(GitStashApply(GitDir, Work, 0)), 'apply by index');
+    CheckEqual(1, GitStashCount(GitDir), 'apply keeps entry');
+    CheckEqual('stashed2'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'apply restores change');
+    GitStashDrop(GitDir, 0);
+    CheckEqual(0, GitStashCount(GitDir), 'drop removes entry');
+    WriteFileText(PathJoin([Work, 'f.txt']), 'stashed3'#10);
+    CheckFalse(GitOidIsZero(GitStashPush(GitDir, Work, 'third')), 'push again');
+    GitStashClear(GitDir);
+    CheckFalse(GitStashExists(GitDir), 'clear empties stash');
+    CheckEqual('', Trim(MustCaptureIn('git', ['stash', 'list'], Work)), 'git agrees empty');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestTagCreateDeleteRename;
+var
+  Work, GitDir, Golden: string;
+  Head: TGitOid;
+  Tags: TGitTagArray;
+begin
+  // covers tag lightweight/annotated/create/rename/delete against git CLI
+  MakeTwoCommitRepo('nextpas_git_tag', Work, GitDir);
+  try
+    Head := GitResolveHead(GitDir);
+    CheckFalse(GitOidIsZero(GitTagCreateLightweight(GitDir, 'v-lite', Head)), 'lightweight created');
+    CheckFalse(GitOidIsZero(GitTagCreateAnnotated(GitDir, 'v-ann', Head, 'release')), 'annotated created');
+    CheckFalse(GitOidIsZero(GitTagCreateAnnotated(GitDir, 'v-full', Head,
+      'release', 'Tagger', 't@x')), 'full-tagger overload created');
+    CheckTrue(GitTagExists(GitDir, 'v-lite'), 'lite exists');
+    CheckEqual(GitOidToHex(Head), GitOidToHex(GitTagGetOid(GitDir, 'v-lite')), 'lite points at HEAD');
+    CheckEqual(GitOidToHex(Head), GitOidToHex(GitTagGetPeeled(GitDir, 'v-ann')), 'annotated peels to HEAD');
+    Tags := GitTagList(GitDir);
+    CheckEqual(3, Length(Tags), 'three tags listed');
+    Golden := MustCaptureIn('git', ['tag', '--list'], Work);
+    CheckTrue(Pos('v-lite', Golden) > 0, 'git agrees lite');
+    CheckTrue(Pos('v-ann', Golden) > 0, 'git agrees annotated');
+    CheckFalse(GitOidIsZero(GitTagRename(GitDir, 'v-lite', 'v-renamed')), 'rename returns oid');
+    CheckFalse(GitTagExists(GitDir, 'v-lite'), 'old name gone');
+    CheckTrue(GitTagExists(GitDir, 'v-renamed'), 'new name present');
+    GitTagDelete(GitDir, 'v-renamed');
+    GitTagDelete(GitDir, 'v-ann');
+    GitTagDelete(GitDir, 'v-full');
+    CheckEqual(0, Length(GitTagList(GitDir)), 'all tags deleted');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestBranchCreateDeleteRename;
+var
+  Work, GitDir, Golden: string;
+  Head: TGitOid;
+  Branches: TGitBranchArray;
+begin
+  // covers branch create/fromref/rename/delete against git CLI
+  MakeTwoCommitRepo('nextpas_git_branch', Work, GitDir);
+  try
+    Head := GitResolveHead(GitDir);
+    CheckEqual('main', GitBranchCurrent(GitDir), 'current is main');
+    CheckFalse(GitBranchIsDetached(GitDir), 'not detached');
+    CheckFalse(GitOidIsZero(GitBranchCreate(GitDir, 'feature', Head)), 'branch created');
+    CheckFalse(GitOidIsZero(GitBranchCreateFromRef(GitDir, 'fromref', 'HEAD')), 'fromref created');
+    CheckTrue(GitBranchExists(GitDir, 'feature'), 'feature exists');
+    CheckEqual(GitOidToHex(Head), GitOidToHex(GitBranchGetOid(GitDir, 'feature')), 'points at HEAD');
+    Branches := GitBranchList(GitDir);
+    CheckEqual(3, Length(Branches), 'three branches listed');
+    Golden := MustCaptureIn('git', ['branch', '--list'], Work);
+    CheckTrue(Pos('feature', Golden) > 0, 'git agrees feature');
+    CheckFalse(GitOidIsZero(GitBranchRename(GitDir, 'feature', 'renamed')), 'rename returns oid');
+    CheckFalse(GitBranchExists(GitDir, 'feature'), 'old gone');
+    CheckTrue(GitBranchExists(GitDir, 'renamed'), 'new present');
+    GitBranchDelete(GitDir, 'renamed');
+    GitBranchDelete(GitDir, 'fromref');
+    Branches := GitBranchList(GitDir);
+    CheckEqual(1, Length(Branches), 'only main remains');
+    CheckEqual('main', Branches[0].Name, 'remaining is main');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
 procedure TestLsFilesMatchesGit;
 var
   Work, GitDir, CliOut: string;
@@ -5262,6 +5365,9 @@ begin
     T.Test('trailer round-trip', @TestTrailerRoundTrip);
     T.Test('mailmap resolve', @TestMailmapResolve);
     T.Test('attributes match git', @TestAttributesMatchGit);
+    T.Test('stash push pop round-trip', @TestStashPushPopRoundTrip);
+    T.Test('tag create delete rename', @TestTagCreateDeleteRename);
+    T.Test('branch create delete rename', @TestBranchCreateDeleteRename);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;
