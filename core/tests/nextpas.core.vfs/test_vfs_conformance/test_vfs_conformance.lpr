@@ -1,6 +1,7 @@
 program test_vfs_conformance;
 {$I nextpas.core.settings.inc}
 uses
+  nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
@@ -486,6 +487,116 @@ begin
   end;
 end;
 
+{ ── 并发读压测：8 线程共享同一 IVfs 快照混合 Exists/Stat/List/OpenRead。
+  目标是锁路径（embedded 切片池/元分片锁、overlay 首命中索引+List 缓存、
+  mount 前缀哈希+List 缓存）在争用下无崩溃、无错结果、无泄漏（heaptrc 终扫）。
+  IVfs 发布后不可变，只读并发是契约承诺（INV-V2）。 ── }
+
+const
+  STRESS_THREADS = 8;
+  STRESS_ITERS = 200;
+
+type
+  PStressArgs = ^TStressArgs;
+  TStressArgs = record
+    Fs: IVfs;
+    Prefix: string;   { 挂载目标用 'm/'，其余 '' }
+    Index: Integer;
+  end;
+
+var
+  G_StressErr: array[0..STRESS_THREADS - 1] of string;
+
+function StressWorker(AData: Pointer): PtrInt;
+var
+  A: PStressArgs;
+  I: Integer;
+  SI: TStatInfo;
+  L: TEntryArray;
+  S: IStream;
+  Buf: array[0..31] of Byte;
+  Got: SizeUInt;
+begin
+  Result := 0;
+  A := PStressArgs(AData);
+  try
+    for I := 1 to STRESS_ITERS do
+    begin
+      if not A^.Fs.Exists(A^.Prefix + 'assets/app.js') then
+        raise EVfsError.CreateCtx('stress', A^.Prefix + 'assets/app.js', 'exists false');
+      SI := A^.Fs.Stat(A^.Prefix + 'index.html');
+      if SI.Info.Size <> 15 then
+        raise EVfsError.CreateCtx('stress', A^.Prefix + 'index.html', 'stat size drift');
+      L := A^.Fs.List(A^.Prefix + 'assets');
+      if Length(L) <> 2 then
+        raise EVfsError.CreateCtx('stress', A^.Prefix + 'assets', 'list count drift');
+      S := A^.Fs.OpenRead(A^.Prefix + 'docs/指南.md');
+      try
+        Got := S.Read(Buf[0], SizeOf(Buf));
+        if Got = 0 then
+          raise EVfsError.CreateCtx('stress', A^.Prefix + 'docs/指南.md', 'empty read');
+      finally
+        S.Close;
+      end;
+    end;
+  except
+    on E: Exception do
+      G_StressErr[A^.Index] := E.ClassName + ': ' + E.Message;
+  end;
+end;
+
+function DecS(AValue: Integer): string;
+var
+  D: string;
+begin
+  D := '';
+  repeat
+    D := Char(Ord('0') + AValue mod 10) + D;
+    AValue := AValue div 10;
+  until AValue = 0;
+  Result := D;
+end;
+
+procedure StressTarget(const ALabel: string; const AFs: IVfs; const APrefix: string);
+var
+  Threads: array[0..STRESS_THREADS - 1] of TThreadID;
+  Args: array[0..STRESS_THREADS - 1] of TStressArgs;
+  I: Integer;
+begin
+  for I := 0 to STRESS_THREADS - 1 do
+  begin
+    G_StressErr[I] := '';
+    Args[I].Fs := AFs;
+    Args[I].Prefix := APrefix;
+    Args[I].Index := I;
+    Threads[I] := BeginThread(@StressWorker, @Args[I]);
+  end;
+  for I := 0 to STRESS_THREADS - 1 do
+  begin
+    WaitForThreadTerminate(Threads[I], 60000);
+    Check(G_StressErr[I] = '', ALabel + ' worker[' + DecS(I) + '] clean: ' + G_StressErr[I]);
+  end;
+end;
+
+procedure RunConcurrentReads;
+var
+  Mounted: IVfs;
+begin
+  { os 树由 sub-os 用例末尾清理，此处自建自清 }
+  BuildOsTree;
+  try
+    StressTarget('stress/memtree', MakeMemtreeVfs, '');
+    StressTarget('stress/embedded', MakeEmbeddedVfs, '');
+    StressTarget('stress/os', CreateOsVfs(G_TmpDir), '');
+    StressTarget('stress/overlay',
+      CreateOverlayVfs([MakeMemtreeVfs, MakeEmbeddedVfs]), '');
+    Mounted := CreateMountedVfs([VfsMountEntry('m', MakeMemtreeVfs)]);
+    StressTarget('stress/mount', Mounted, 'm/');
+  finally
+    RemoveOsTree;
+  end;
+end;
+
 { ── 注册与执行 ── }
 
 begin
@@ -500,6 +611,7 @@ begin
   T.Test('sub memtree battery', @RunSubMemtree);
   T.Test('sub embedded battery', @RunSubEmbedded);
   T.Test('sub os battery', @RunSubOs);
+  T.Test('concurrent reads stress', @RunConcurrentReads);
 
   if not T.Run then
   begin

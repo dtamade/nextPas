@@ -9,6 +9,7 @@ uses
   nextpas.core.fs,
   nextpas.core.respack,
   nextpas.core.compress,
+  nextpas.core.text.view,
   nextpas.core.vfs;
 
 { 门面层契约：consumer 只经门面函数消费任意后端。
@@ -536,6 +537,70 @@ begin
   end;
 end;
 
+{ ── 视图零拷贝透传：复合视图实现 IVfsView，视图路径与字符串路径同字节 ── }
+
+procedure CheckViewParity(const ALabel: string; const AFs: IVfs;
+  const APath, AExpect: string);
+var
+  V: TStringView;
+begin
+  V := TStringView.FromStr(APath);
+  Check(VfsExistsView(AFs, V) = AFs.Exists(APath),
+    ALabel + ' exists parity: ' + APath);
+  Check(VfsReadAllTextView(AFs, V) = AExpect,
+    ALabel + ' read parity: ' + APath);
+end;
+
+procedure TestViewsViaFacade;
+var
+  Base, Sub, M, O, Tr, Dec: IVfs;
+  V: IVfsView;
+  VV: TStringView;
+  Got: Boolean;
+begin
+  Base := MakeMemtreeVfs;
+  { 结构断言：as 转换失败即红，证明非回退而是真实实现 }
+  Sub := CreateSubVfs(Base, 'assets');
+  V := Sub as IVfsView;
+  Check(V <> nil, 'facade view: sub exposes IVfsView');
+  M := CreateMountedVfs([VfsMountEntry('m', Base)]);
+  V := M as IVfsView;
+  Check(V <> nil, 'facade view: mount exposes IVfsView');
+  O := CreateOverlayVfs([Base]);
+  V := O as IVfsView;
+  Check(V <> nil, 'facade view: overlay exposes IVfsView');
+  Tr := CreateTransformingVfs(Base, @UpperTransform, nil);
+  V := Tr as IVfsView;
+  Check(V <> nil, 'facade view: transform exposes IVfsView');
+  Dec := CreateDecompressingVfs(Base);
+  V := Dec as IVfsView;
+  Check(V <> nil, 'facade view: decompress exposes IVfsView');
+  { 行为等价：视图路径与字符串路径同字节 }
+  CheckViewParity('sub', Sub, 'app.js', 'console.log(1);');
+  CheckViewParity('mount', M, 'm/index.html', '<html>ok</html>');
+  CheckViewParity('overlay', O, 'index.html', '<html>ok</html>');
+  CheckViewParity('transform', Tr, 'index.html', '<HTML>OK</HTML>');
+  CheckViewParity('decompress', Dec, 'index.html', '<html>ok</html>');
+  { 错误等价：缺失与非法视图路径 }
+  VV := TStringView.FromStr('nope.txt');
+  Check(not VfsExistsView(Sub, VV), 'facade view: sub missing false');
+  Got := False;
+  try
+    VfsReadAllTextView(Sub, VV);
+  except
+    on E: EVfsNotFound do Got := E.Path = 'nope.txt';
+  end;
+  Check(Got, 'facade view: sub missing NotFound with sub path');
+  VV := TStringView.FromStr('/abs');
+  Got := False;
+  try
+    VfsReadAllTextView(O, VV);
+  except
+    on E: EVfsInvalidPath do Got := True;
+  end;
+  Check(Got, 'facade view: invalid path class');
+end;
+
 { ── 注册与执行 ── }
 
 begin
@@ -554,6 +619,7 @@ begin
   T.Test('transform via facade', @TestTransformViaFacade);
   T.Test('decompress via facade', @TestDecompressViaFacade);
   T.Test('error classes via facade', @TestErrorClassesViaFacade);
+  T.Test('views via facade', @TestViewsViaFacade);
 
   if not T.Run then Halt(1);
 end.
