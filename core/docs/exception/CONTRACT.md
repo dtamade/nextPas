@@ -49,6 +49,8 @@ end;
 - `ResolveCategory(ACategory)`: ACategory=ecNone 时使用 DefaultCategory
 - `Destroy` 释放 `FInner`（仅当 FOwnsInner=True）
 
+与 `nextpas.core.base.ECore` 的关系：两者平行、无继承，互不 catch-compatible；`ECore` 家族（`EInvariantViolation` 等）是 core 内部自有层级，不属于本契约 §1.4，详见 `core/docs/base/CONTRACT.md`。
+
 ### 1.3 TErrorCategory 枚举
 
 18 个值：`ecNone`, `ecInvalidArgument`, `ecNullReference`, `ecInvalidOperation`, `ecNotImplemented`, `ecNotSupported`, `ecTimeout`, `ecCancelled`, `ecInterrupted`, `ecWouldBlock`, `ecPermission`, `ecNotFound`, `ecAlreadyExists`, `ecResourceExhausted`, `ecIO`, `ecNetwork`, `ecParse`, `ecInternal`

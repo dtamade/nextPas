@@ -12,6 +12,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.intf,
+  nextpas.core.text.view,
   nextpas.core.vfs.base,
   nextpas.core.vfs.cache,
   nextpas.core.vfs.errors,
@@ -40,7 +41,7 @@ uses
 
 type
   TStrVfsMap = specialize TSwissTableStr<IVfs>;
-  TMountedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
+  TMountedVfs = class(TInterfacedObject, IVfs, IVfsView, IVfsETag, IVfsServeMeta)
   private
     FMounts: TVfsMountArray;
     FMountMap: TStrVfsMap; { O(1) exact-hit 索引：IsMountPoint/FindMount 热路径单源哈希，零线性扫描 }
@@ -55,9 +56,11 @@ type
     constructor Create(const AMounts: array of TVfsMountEntry);
     destructor Destroy; override;
     function Exists(const APath: string): Boolean;
+    function ExistsView(const APath: TStringView): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
+    function OpenReadView(const AView: TStringView): IStream;
     function CaseSensitive: Boolean;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
@@ -292,11 +295,23 @@ begin
   Result := False;
 end;
 
+{ 视图版存在探测：单次物化后复用字符串版路由单源（挂载前缀路由需完整路径，
+  与 os 后端单次物化策略一致）；根/挂载点零 I/O 短路 }
+function TMountedVfs.ExistsView(const APath: TStringView): Boolean; inline;
+var
+  LStr: string;
+begin
+  if VfsIsRootView(APath) then Exit(True);
+  if not VfsValidPathView(APath, True) then Exit(False);
+  LStr := APath.ToString;
+  if IsMountPoint(LStr) then Exit(True);
+  Result := Exists(LStr);
+end;
+
 function TMountedVfs.Stat(const APath: string): TStatInfo;
 var
   Rem: string;
   Fs: IVfs;
-  I: Integer;
 begin
   if not VfsValidPath(APath, True) then
     raise EVfsInvalidPath.CreateCtx('stat', APath, 'invalid virtual path');
@@ -438,6 +453,13 @@ begin
   if FindMount(APath, Rem, Fs) then
     Exit(Fs.OpenRead(Rem));
   raise EVfsNotFound.CreateCtx('open', APath, 'not found');
+end;
+
+{ 视图版打开：单次物化后复用字符串版路由单源（校验/挂载点判定/错误类与坐标
+  皆由字符串版承载，行为逐字一致） }
+function TMountedVfs.OpenReadView(const AView: TStringView): IStream;
+begin
+  Result := OpenRead(AView.ToString);
 end;
 
 function TMountedVfs.CaseSensitive: Boolean;

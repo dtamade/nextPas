@@ -65,6 +65,8 @@ ECore (self-owned, Category+Inner, DefaultCategory virtual, TErrorCategory)
 
 所有具体异常类实现 `Create(const AMessage: string)` + `DefaultCategory`；`ECore` 提供 `CreateFmt`（`FormatStr` 单源 `bytes.ops.BytesGrowCapacityInt` + `Move` 零拷贝，`not inline` per red-line 2，`try-finally` 资源释放不丢）与 `ErrorCategoryToString` 单源。
 
+与 `nextpas.core.exception.ENextPasError` 的关系：两者平行、无继承，互不 catch-compatible；框架级异常用 `ENextPasError`，core 内部用 `ECore` 家族。测试涉及 `ECore` 类时静态类型必须用 `ECore`（误写 `ENextPasError` 会导致编译失败）。
+
 ### 1.5 泛型回调
 
 ```pascal

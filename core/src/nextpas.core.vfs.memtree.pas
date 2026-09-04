@@ -195,6 +195,9 @@ end;
 
 { ── TMemVfs ── }
 
+{ 前向声明：LowerBound 单源委托需早于定义点引用 MemtreeGetter（定义在后） }
+function MemtreeGetter(AIdx: SizeInt; AUserData: Pointer): TByteSpan; forward;
+
 constructor TMemVfs.Create(AItems: array of TVfsMemEntry);
 var
   I: SizeUInt;
@@ -213,38 +216,21 @@ begin
 end;
 
 function TMemVfs.LowerBound(const AName: string): SizeUInt;
-var
-  Lo, Hi, Mid: SizeUInt;
 begin
-  Lo := 0;
-  Hi := SizeUInt(Length(FFiles));
-  while Lo < Hi do
-  begin
-    Mid := Lo + (Hi - Lo) div 2;
-    if VfsNameCompare(FFiles[Mid].Name, AName) < 0 then
-      Lo := Mid + 1
-    else
-      Hi := Mid;
-  end;
-  Result := Lo;
+  { 单源委托：vfs.base VfsLowerBoundSpan（VfsSpanFromString 零拷贝视图单源，bytes.ops 比较单源） }
+  Result := SizeUInt(VfsLowerBoundSpan(SizeInt(Length(FFiles)), @MemtreeGetter, Self, VfsSpanFromString(AName)));
 end;
 
 function TMemVfs.LowerBoundView(const AView: TStringView): SizeUInt; inline;
 var
-  Lo, Hi, Mid: SizeUInt;
+  Key: TByteSpan;
 begin
-  { perf: inline + VfsNameCompareView 零拷贝视图比较，复用 bytes.ops CompareBytesOrdered 单源，零堆分配，O(log n) }
-  Lo := 0;
-  Hi := SizeUInt(Length(FFiles));
-  while Lo < Hi do
-  begin
-    Mid := Lo + (Hi - Lo) div 2;
-    if VfsNameCompareView(AView, FFiles[Mid].Name) > 0 then
-      Lo := Mid + 1
-    else
-      Hi := Mid;
-  end;
-  Result := Lo;
+  { perf: 单源委托 + 零拷贝视图键，复用 bytes.ops CompareBytesOrdered 单源，零堆分配，O(log n) }
+  if AView.Len = 0 then
+    Key := TByteSpan.Empty
+  else
+    Key := TByteSpan.Create(PByte(AView.Data), AView.Len);
+  Result := SizeUInt(VfsLowerBoundSpan(SizeInt(Length(FFiles)), @MemtreeGetter, Self, Key));
 end;
 
 function TMemVfs.FindExact(const AName: string): SizeUInt;

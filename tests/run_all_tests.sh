@@ -70,6 +70,9 @@ ensure_runner() {
 
     mkdir -p "$RUNNER_BUILD_DIR"
     rm -f "$runner_stderr_file"
+    # Same half-stale-cache crash class as stage0 (EListError in fpc itself):
+    # clean before (re)build so a rotten .ppu can never crash the compile.
+    rm -f "$RUNNER_BUILD_DIR"/*.ppu "$RUNNER_BUILD_DIR"/*.o "$RUNNER_BUILD_DIR"/*.a "$RUNNER_BUILD_DIR"/*.res
     if ! (
       cd "$REPO_ROOT" &&
       fpc -Fucore/src -Ficore/src -FE"$RUNNER_BUILD_DIR" -FU"$RUNNER_BUILD_DIR" tests/harness/runner.pas \

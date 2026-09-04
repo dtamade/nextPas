@@ -9,7 +9,7 @@
 **层级**：L2（依赖 L0-L1；L2 双缝过渡白名单——`os→fs/path` 与 `embedded→respack.reader` 双缝并存，source-contract gated，L7 聚合为 `nextpas.core.vfs.backends` 后端独立族后收敛至单缝；`mount/overlay` 纯复合；L3 装饰器经 `vfs.decorator` 单点聚合）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-09-02
-**版本**：1.16（枚举单源：`TDecompressAlgo` 唯一声明于 `vfs.base`，compressed 经别名复用，门面经同名常量直通 `daAuto`/`daGzip`，纯门面消费者可调双参重载；compressed/facade/bench 三处用例收敛至门面作用域）
+**版本**：1.17（六维打磨：警告清零 + 全族 IVfsView 透传 + LowerBound 单源 + overlay List 缓存约 150× + 5 目标并发压测；facade 13 例、conformance 8 例）
 
 ---
 
@@ -121,6 +121,7 @@ end;
 | Exists/Stat（embedded） | 二分查找，无分配 | LowerBound + bytes.ops inline 零拷贝 |
 | OpenRead（embedded） | O(1) 切片，零复制 | TEmbeddedSlice 落 blob 区间，池化复用 |
 | List（embedded/memtree） | 有序区间扫描 O(k) | VfsEnumerateChildSpans 单源，SwissTable 扇出限界 |
+| List（mount/overlay 重复） | 热点缓存 O(1) 命中 | TVfsListCache 单源（SwissTable+RWLock）；overlay 重复 List 实测 ~150×（29.8µs→0.2µs/次，3 层 ×200 文件） |
 | OpenRead（memtree） | O(1) 防御拷贝 + IReaderAt | Move 零拷贝 |
 | OpenRead（os） | 经 fs.Open，句柄开销 | fs 单缝 |
 | Sub/Walk | O(1) 包装 / O(n) 遍历 | 无树复制；Walk 批量 List |
@@ -137,8 +138,8 @@ end;
 |----------|--------|------|
 | test_vfs_memtree | 16 | Builder/Freeze/错误/`.` 根/IReaderAt |
 | test_vfs_embedded | 9 | 切片/双态生命期/ETag 直测 |
-| test_vfs_conformance | 7 | P1–P8 × {3 后端} × {整树,Sub} |
-| test_vfs_facade | 12 | 便利函数 + 切换 + 视图/装饰器/错误类全入口 |
+| test_vfs_conformance | 8 | P1–P8 × {3 后端} × {整树,Sub} + 并发读压测 |
+| test_vfs_facade | 13 | 便利函数 + 切换 + 视图/装饰器/错误类全入口 |
 | test_vfs_mount | 10 | 挂载+叠加双视图 |
 | test_vfs_transform | 6 | 通用变换装饰器 |
 | test_vfs_compressed | 7 | 解压薄门面 |
@@ -174,3 +175,4 @@ end;
 | 2026-09-02 | 1.14 | 门面双族单缝收敛落地：`vfs.pas` 经 backends+decorator 双聚合，扇出 12→10，src 16 闭环补齐 | AI |
 | 2026-09-05 | 1.15 | 门面完备：`TDecompressAlgo`/`TBytes`/`IVfsView`/`TVfsMountArray`/`VFS_DECOMPRESS_MAX_BYTES` 重导出 + `CreateDecompressingVfs` 双参重载；embedded 单缝收敛经 backends（source-contract 5 门全绿）；facade 门 12 例、embedded 门 9 例 | AI |
 | 2026-09-05 | 1.16 | 枚举单源：`TDecompressAlgo` 唯一声明于 `vfs.base`，compressed 经别名复用，门面经同名常量直通 `daAuto`/`daGzip`（纯门面双参重载可调）；compressed/facade/bench 用例收敛至门面作用域，源契约锁声明顺序 | AI |
+| 2026-09-05 | 1.17 | 六维打磨：警告清零（恒假比较/不可达 else/死常量/未用变量）+ 全族 IVfsView 透传 + LowerBound 二分单源 + overlay List 缓存约 150× + 5 目标 ×8 线程并发压测；facade 门 13 例、conformance 门 8 例 | AI |

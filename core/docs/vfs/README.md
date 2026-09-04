@@ -42,7 +42,7 @@ Tauri 把前端资源编译期嵌进可执行文件，运行时经内存映射�
 ## 目标使用形态（已实现，签名即门面导出）
 
 ```pascal
-uses nextpas.core.vfs;
+uses nextpas.core.vfs, nextpas.core.text.view;   { 后者仅零拷贝视图助手需要 }
 
 // consumer 视角 —— 不关心后端
 var Fs := GetAppAssets;                 // 返回 IVfs（embedded 或 os）
@@ -51,6 +51,10 @@ if Fs.Exists('index.html') then
 
 // 便利函数（门面层，基于 OpenRead 组合）
 Bytes := VfsReadAllBytes(Fs, 'assets/app.js');
+
+// 零拷贝路径视图（热点：TStringView 免字符串物化；三后端 + Sub/mount/overlay/transform/compressed 全族实现 IVfsView）
+if VfsExistsView(Fs, TStringView.FromStr('assets/app.js')) then
+  Text := VfsReadAllTextView(Fs, TStringView.FromStr('assets/app.js'));
 
 // 重定根视图（Go fs.Sub 对等物）
 var Web := CreateSubVfs(Fs, 'wwwroot');
@@ -265,10 +269,10 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_embed
 # vfs 视图层
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_memtree
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded            # 双态生命期 + 损坏透传
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance         # 属性电池 P1-P8+V12 × 后端矩阵
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade              # 便利函数 + 开发/发布态切换
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_mount               # 挂载+叠加双视图 10例（P2完整性+游戏热更）
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded            # 双态生命期 + 损坏透传 + ETag/ServeMeta 直测
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance         # 属性电池 P1–P8+V12 × 后端矩阵 + 并发读压测
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade              # 便利函数 + 开发/发布态切换 + 视图/装饰器/错误类全入口
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_mount               # 挂载+叠加双视图（P2完整性+游戏热更）
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_transform           # 通用变换装饰器
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_compressed          # 解压薄门面
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # uses 白名单门禁
@@ -279,7 +283,7 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # us
   行为断言（P1-P8、Sub、CaseSensitive、错误映射）在电池里以真实目录夹具覆盖，
   独立门只会复制同一套夹具。os 实现细节（如 ns→s 时间换算）由 conformance 的
   modTime 一致性属性间接锁定
-- `test_vfs_source_contract`：源码契约检查，锁定依赖白名单（`vfs.*` 中除 `os`(fs seam) 与 `embedded`(respack.reader second seam, Registry line 106 extra whitelist beyond single-seam ideal, 14→ respack.reader, source-contract 强门禁, bytes.ops inline 零拷贝) 外禁止出现对 `fs`/`respack` 的 uses；全模块禁止 OS 单元），照 system 模块 source-contract 先例
+- `test_vfs_source_contract`：源码契约检查，锁定依赖白名单（跨模块 L2 依赖仅 `vfs.backends` 持有：`os→fs/path` 与 respack 侧经 backends 单缝收口，`embedded` 复用 backends 单缝；`transform/compressed` 经 `vfs.decorator` 单点聚合；门面仅经 backends+decorator 双族收敛；全模块禁止 OS 单元与裸 FPC RTL），照 system 模块 source-contract 先例
 - 全部 gate 要求 heaptrc 零泄漏
 
 ## 基准（`bench_transform` + `bench_hotspots` 双阈值固化）
