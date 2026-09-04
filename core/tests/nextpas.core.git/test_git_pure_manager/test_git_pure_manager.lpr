@@ -8,6 +8,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.exception,
   nextpas.core.fs,
+  nextpas.core.os.env,
+  nextpas.core.bytes.ops,
   nextpas.core.test,
   nextpas.core.process,
   nextpas.core.git.factory,
@@ -21,9 +23,32 @@ var
 
 function BytesOfString(const AText: string): TBytes; inline;
 begin
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(AText[1], Result[0], Length(AText));
+  { single-source: bytes.ops.StringToBytes (hand-rolled Move into an inline
+    Result miscompiles on this FPC trunk: copies the string pointer, not the
+    characters — observed as binary garbage via git diff --numstat) }
+  Result := StringToBytes(AText);
+end;
+
+function BytesToText(const AData: TBytes): string; inline;
+begin
+  { single-source: bytes.ops.BytesToString }
+  Result := BytesToString(AData);
+end;
+
+type
+  TDummyCredHandler = class
+    function Acquire(const Url, UserFromURL: string; AllowedTypes: Cardinal): Boolean;
+    function CheckCert(const Host: string; Valid: Boolean): Boolean;
+  end;
+
+function TDummyCredHandler.Acquire(const Url, UserFromURL: string; AllowedTypes: Cardinal): Boolean;
+begin
+  Result := False;
+end;
+
+function TDummyCredHandler.CheckCert(const Host: string; Valid: Boolean): Boolean;
+begin
+  Result := False;
 end;
 
 function MkTempDir(const APrefix: string): string;
@@ -205,41 +230,50 @@ end;
 
 procedure TestFactoryGbAutoCompat;
 var
-  LMgr: IGitManager;
+  LMgr, LLibMgr: IGitManager;
   LRaised: Boolean;
 begin
+  LMgr := NewGitManager(gbAuto);
+  Check(LMgr <> nil, 'NewGitManager(gbAuto) should return native manager by default');
+  Check(LMgr.Initialize, 'gbAuto Initialize should succeed');
+  Check(LMgr.Initialized, 'gbAuto should report Initialized');
+  LMgr.Finalize;
+  CheckFalse(LMgr.Initialized, 'gbAuto Finalize should clear Initialized');
   LRaised := False;
   try
-    LMgr := NewGitManager(gbAuto);
-    Check(LMgr <> nil, 'NewGitManager(gbAuto) should not be nil when backend registered');
-    Check(LMgr.Initialize, 'gbAuto Initialize should succeed');
-    Check(LMgr.Initialized, 'gbAuto should report Initialized');
-    LMgr.Finalize;
-    CheckFalse(LMgr.Initialized, 'gbAuto Finalize should clear Initialized');
+    LLibMgr := NewGitManager(gbLibGit2);
   except
     on E: EGitError do
     begin
       LRaised := True;
-      Check(Pos('not registered', LowerCase(E.Message)) > 0, 'gbAuto fail-closed EGitError must mention not registered');
+      Check(Pos('not registered', LowerCase(E.Message)) > 0, 'gbLibGit2 fail-closed EGitError must mention not registered');
     end;
     on E: Exception do
       LRaised := True;
   end;
   if LRaised then
-    Check(True, 'gbAuto fail-closed when backend not registered (pure triple-zero)')
+    Check(True, 'gbLibGit2 fail-closed when backend not registered (pure triple-zero)')
   else
-    Check(True, 'gbAuto succeeded via registered backend');
+  begin
+    Check(LLibMgr.Initialize, 'registered gbLibGit2 manager initializes');
+    LLibMgr.Finalize;
+  end;
 end;
 
 // CONTRACT INV-O4/E2/M4: DiscoverRepository pure query, no throw, PathClean absolute
 procedure TestDiscoverRepositoryInvariants;
 var
   LBase, LRoot, LNest, LMain, LWt, LWtNest: string;
+  LSavedDir: string;
   LMgr: IGitManager;
   LRepo: IGitRepository;
   LWtExt: IGitWorktreeExt;
 begin
   LBase := MkTempDir('pure_discover');
+  // hermetic empty-path assertions: DiscoverRepository('') resolves the
+  // process CWD, so pin CWD to the fresh temp dir (never a repo)
+  LSavedDir := GetCurrentDir;
+  ChDir(LBase);
   try
     LMgr := NewGitManager(gbNative);
     Check(LMgr.Initialize, 'init');
@@ -290,15 +324,17 @@ begin
     Check(LRepo.IsBare, 'bare repo');
     CheckEqual(PathClean(LRoot), PathClean(LMgr.DiscoverRepository(LRoot)), 'Discover bare returns gitdir');
   finally
+    ChDir(LSavedDir);
     RemoveAll(LBase);
   end;
 end;
 
-// CONTRACT INV-O4/E2/M4: CloneRepository failure not leak, raises EGitError native not implemented
+// CONTRACT INV-O4/E2/M4: CloneRepository network raises transport EGitError, local clone succeeds
 procedure TestCloneRepositoryInvariants;
 var
-  LBase, LClone: string;
+  LBase, LClone, LSrc, LLocal: string;
   LMgr: IGitManager;
+  LRepo, LCloned: IGitRepository;
   LRaised: Boolean;
 begin
   LBase := MkTempDir('pure_clone');
@@ -313,19 +349,101 @@ begin
       on E: EGitError do
       begin
         LRaised := True;
-        // native backend message must contain not implemented, EGitError not lost (INV-E2)
-        Check(Pos('not implemented', LowerCase(E.Message)) > 0, 'Clone EGitError should mention not implemented');
+        Check(Pos('transport', LowerCase(E.Message)) > 0, 'Clone network EGitError should mention transport');
       end;
       on E: Exception do
         LRaised := True;
     end;
-    Check(LRaised, 'CloneRepository native must raise EGitError');
-    // no half repo left (INV-M4)
+    Check(LRaised, 'CloneRepository network must raise EGitError');
     CheckFalse(FileExists(PathJoin([LClone, 'HEAD'])), 'Clone failure must not leave HEAD');
     CheckFalse(DirectoryExists(PathJoin([LClone, 'objects'])), 'Clone failure must not leave objects');
-    // manager still usable after failure (INV-M4: exception not corrupt manager state)
     Check(LMgr.Initialized, 'Manager still initialized after clone failure');
     CheckEqual('', LMgr.DiscoverRepository(PathJoin([LClone, 'nested'])), 'Manager usable after clone failure');
+    LSrc := PathJoin([LBase, 'src']);
+    LRepo := LMgr.InitRepository(LSrc, False);
+    Check(LRepo <> nil, 'src init');
+    GitRun(LSrc, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LSrc, ['config', 'user.email', 'pure@example.invalid']);
+    WriteFile(PathJoin([LSrc, 'seed.txt']), BytesOfString('seed'), PermDefault);
+    GitRun(LSrc, ['add', 'seed.txt']);
+    GitRun(LSrc, ['commit', '-m', 'seed']);
+    LLocal := PathJoin([LBase, 'local_clone']);
+    LCloned := LMgr.CloneRepository(LSrc, LLocal);
+    Check(LCloned <> nil, 'local clone should return repo');
+    Check(LMgr.IsRepository(LLocal), 'local clone result is repository');
+    Check(FileExists(PathJoin([LLocal, 'seed.txt'])), 'local clone should checkout seed.txt');
+  finally
+    RemoveAll(LBase);
+  end;
+end;
+
+procedure TestManagerInterfaceClosure;
+var
+  LBase, LDir: string;
+  LMgr: IGitManager;
+  LRepo: IGitRepository;
+  LRem: IGitRemote;
+  LRaised: Boolean;
+  LVal: string;
+begin
+  LBase := MkTempDir('pure_closure');
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+    LDir := PathJoin([LBase, 'repo']);
+    LRepo := LMgr.InitRepository(LDir, False);
+    GitRun(LDir, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LDir, ['config', 'user.email', 'pure@example.invalid']);
+    WriteFile(PathJoin([LDir, 'a.txt']), BytesOfString('a'), PermDefault);
+    GitRun(LDir, ['add', 'a.txt']);
+    GitRun(LDir, ['commit', '-m', 'one']);
+    GitRun(LDir, ['branch', 'feature']);
+    Check(Length(LRepo.ListBranches(gbLocal)) >= 2, 'ListBranches local lists main+feature');
+    Check(Length(LRepo.ListBranches(gbAll)) >= 2, 'ListBranches all includes local');
+    CheckEqual(0, Length(LRepo.ListBranches(gbRemote)), 'ListBranches remote empty without remotes');
+    LRaised := False;
+    try
+      LRem := LRepo.Remote('origin');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Remote missing should raise EGitError');
+    GitRun(LDir, ['remote', 'add', 'origin', 'file:///tmp/pure-closure-origin.git']);
+    LRem := LRepo.Remote('origin');
+    Check(LRem <> nil, 'Remote origin found');
+    CheckEqual('origin', LRem.Name, 'remote name');
+    Check(Pos('pure-closure-origin', LRem.URL) > 0, 'remote url');
+    LRaised := False;
+    try
+      LRepo.Fetch('origin');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'native Fetch of missing local source must raise EGitError');
+    LRaised := False;
+    try
+      LRem.Fetch;
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'IGitRemote.Fetch of missing source must raise EGitError');
+    Check(LRepo.CheckoutBranch('feature'), 'CheckoutBranch feature');
+    CheckEqual('feature', LRepo.CurrentBranch, 'current branch feature');
+    Check(LRepo.CheckoutBranchEx('main', True), 'CheckoutBranchEx main force');
+    CheckEqual('main', LRepo.CurrentBranch, 'current branch main');
+    LVal := LMgr.GetGlobalConfig('user.name');
+    Check(True, 'GetGlobalConfig readable, value="' + LVal + '"');
+    LRaised := False;
+    try
+      LMgr.SetGlobalConfig('', 'x');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'SetGlobalConfig empty key must raise EGitError');
   finally
     RemoveAll(LBase);
   end;
@@ -477,6 +595,46 @@ begin
   end;
 end;
 
+// CONTRACT: native backend owns no network, so credential/certificate
+// hooks accept nil and raise an explicit EGitError for non-nil handlers
+procedure TestNativeCredentialHandlersPinned;
+var
+  LMgr: IGitManager;
+  LDummy: TDummyCredHandler;
+  LAcq: TCredentialAcquireEvent;
+  LCert: TCertificateCheckEvent;
+  LRaised: Boolean;
+begin
+  LMgr := NewGitManager(gbNative);
+  Check(LMgr.Initialize, 'init');
+  LMgr.SetCredentialAcquireHandler(nil);
+  LMgr.SetCertificateCheckHandler(nil);
+  Check(True, 'nil credential handlers accepted');
+  LDummy := TDummyCredHandler.Create;
+  try
+    LAcq := @LDummy.Acquire;
+    LCert := @LDummy.CheckCert;
+    LRaised := False;
+    try
+      LMgr.SetCredentialAcquireHandler(LAcq);
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'non-nil credential handler raises explicit EGitError');
+    LRaised := False;
+    try
+      LMgr.SetCertificateCheckHandler(LCert);
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'non-nil certificate handler raises explicit EGitError');
+  finally
+    LDummy.Free;
+  end;
+end;
+
 // CONTRACT INV-O4: SetVerifySSL/VerifySSL Manager granularity, default True, affects only subsequent network ops
 procedure TestSetVerifySSLInvariants;
 var
@@ -513,6 +671,289 @@ begin
   CheckFalse(LMgr.Initialized, 'Finalize clears Initialized');
 end;
 
+// Local-transport fetch: clone, advance the source, fetch updates tracking
+// refs (True), second fetch is a no-op (False); unknown remote and network
+// URLs raise the documented transport EGitError.
+procedure TestFetchLocalTransport;
+var
+  LBase, LSrc, LDst: string;
+  LMgr: IGitManager;
+  LRepo: IGitRepository;
+  LRem: IGitRemote;
+  LRemotes: TStringArray;
+  LRaised: Boolean;
+  LPff: TGitPullFastForwardResult;
+  LErr: string;
+  LOut: TProcessOutput;
+begin
+  LBase := MkTempDir('pure_fetch');
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+    LSrc := PathJoin([LBase, 'src']);
+    LMgr.InitRepository(LSrc, False);
+    GitRun(LSrc, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LSrc, ['config', 'user.email', 'pure@example.invalid']);
+    WriteFile(PathJoin([LSrc, 'seed.txt']), BytesOfString('seed'), PermDefault);
+    GitRun(LSrc, ['add', 'seed.txt']);
+    GitRun(LSrc, ['commit', '-m', 'seed']);
+    LDst := PathJoin([LBase, 'dst']);
+    LRepo := LMgr.CloneRepository(LSrc, LDst);
+    Check(LRepo <> nil, 'clone for fetch fixture');
+    LRemotes := (LRepo as IGitRepositoryExt).ListRemotes;
+    Check(ContainsStr(LRemotes, 'origin'), 'ListRemotes contains origin after clone');
+    CheckFalse(LRepo.Fetch('origin'), 'fetch with no upstream movement returns False');
+    WriteFile(PathJoin([LSrc, 'second.txt']), BytesOfString('second'), PermDefault);
+    GitRun(LSrc, ['add', 'second.txt']);
+    GitRun(LSrc, ['commit', '-m', 'second']);
+    Check(LRepo.Fetch('origin'), 'fetch after upstream commit returns True');
+    CheckFalse(LRepo.Fetch('origin'), 'second fetch returns False once up-to-date');
+    LRem := LRepo.Remote('origin');
+    CheckFalse(LRem.Fetch, 'IGitRemote.Fetch mirrors repository fetch (False when current)');
+    LPff := (LRepo as IGitRepositoryExt).PullFastForward('origin', LErr);
+    Check(LPff = gpffFastForwarded, 'PullFastForward advances local branch, got "' + LErr + '"');
+    Check(FileExists(PathJoin([LDst, 'second.txt'])), 'fast-forward materializes upstream file in worktree');
+    LOut := RunIn('/usr/bin/git', ['rev-parse', 'main'], LDst);
+    Check(LOut.ExitCode = 0, 'git rev-parse works in ff target');
+    CheckEqual(Trim(MustCaptureIn('/usr/bin/git', ['rev-parse', 'main'], LSrc)), Trim(LOut.StdOut), 'ff matches git golden branch tip');
+    LPff := (LRepo as IGitRepositoryExt).PullFastForward('origin', LErr);
+    Check(LPff = gpffUpToDate, 'second PullFastForward is up-to-date, got "' + LErr + '"');
+    LPff := (LRepo as IGitRepositoryExt).PullFastForward('does-not-exist', LErr);
+    Check(LPff = gpffNoRemote, 'unknown remote reports NoRemote');
+    WriteFile(PathJoin([LDst, 'dirty.txt']), BytesOfString('dirty'), PermDefault);
+    LPff := (LRepo as IGitRepositoryExt).PullFastForward('origin', LErr);
+    Check(LPff = gpffDirty, 'dirty worktree refuses fast-forward');
+    LRaised := False;
+    try
+      LRepo.Fetch('does-not-exist');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Fetch unknown remote must raise EGitError');
+    GitRun(LDst, ['remote', 'add', 'net', 'https://example.invalid/x.git']);
+    LRaised := False;
+    try
+      LRepo.Fetch('net');
+    except
+      on E: EGitError do
+        Check(Pos('transport', LowerCase(E.Message)) > 0, 'network fetch mentions transport');
+    end;
+    LRaised := False;
+    try
+      LRepo.Fetch('net');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Fetch network URL must raise EGitError');
+  finally
+    RemoveAll(LBase);
+  end;
+end;
+
+// Hermetic global-config roundtrip: pin HOME to a temp dir so the real
+// ~/.gitconfig is never touched; write then read back via the same manager.
+procedure TestSetGlobalConfigRoundtrip;
+var
+  LBase, LHome, LOldHome: string;
+  LMgr: IGitManager;
+  LRaised: Boolean;
+begin
+  LBase := MkTempDir('pure_globalcfg');
+  LHome := PathJoin([LBase, 'home']);
+  MkdirAll(LHome);
+  LOldHome := GetEnv('HOME');
+  SetEnv('HOME', LHome);
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+    Check(LMgr.SetGlobalConfig('user.name', 'Pure Tester'), 'SetGlobalConfig writes');
+    CheckEqual('Pure Tester', LMgr.GetGlobalConfig('user.name'), 'GetGlobalConfig reads back');
+    Check(LMgr.SetGlobalConfig('user.email', 'pure@example.invalid'), 'second key writes');
+    CheckEqual('Pure Tester', LMgr.GetGlobalConfig('user.name'), 'first key survives second write');
+    CheckEqual('pure@example.invalid', LMgr.GetGlobalConfig('user.email'), 'second key reads back');
+    Check(LMgr.SetGlobalConfig('core.puretest', 'yes'), 'third section writes');
+    CheckEqual('yes', LMgr.GetGlobalConfig('core.puretest'), 'third key reads back');
+    LRaised := False;
+    try
+      LMgr.SetGlobalConfig('no-dot-key', 'x');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'invalid key without dot must raise EGitError');
+  finally
+    if LOldHome = '' then
+      UnsetEnv('HOME')
+    else
+      SetEnv('HOME', LOldHome);
+    RemoveAll(LBase);
+  end;
+end;
+
+// Full interface closure: every IGitRepository/Commit/Reference/Remote/
+// Worktree accessor is driven against a real repo and asserts sane values.
+procedure TestRepositoryInterfaceFullClosure;
+var
+  LBase, LDir: string;
+  LMgr: IGitManager;
+  LRepo: IGitRepository;
+  LExt: IGitRepositoryExt;
+  LWtExt: IGitWorktreeExt;
+  LHead: IGitReference;
+  LCommit, LHeadCommit: IGitCommit;
+  LRem: IGitRemote;
+  LRemotes: TStringArray;
+  LWork: IGitWorktree;
+  LWorkList: TStringArray;
+  LEntries: TGitConfigEntryArray;
+  LCommits: TGitCommitArray;
+  LDiff: TGitDiff;
+  LBlame: TGitBlame;
+  LFilter: TGitStatusFilter;
+  LStatus: TGitStatusEntryArray;
+  LFound: Boolean;
+  I: Integer;
+  LRaised: Boolean;
+  LBranch, LTagOid: string;
+begin
+  LBase := MkTempDir('pure_fullclosure');
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+    CheckEqual('native-0.1.0', LMgr.Version, 'Version reports native backend');
+    LDir := PathJoin([LBase, 'repo']);
+    LRepo := LMgr.InitRepository(LDir, False);
+    Check(LRepo.IsEmpty, 'fresh init IsEmpty');
+    CheckEqual(PathJoin([LDir, '.git']), PathClean(LRepo.Path), 'Path is gitdir');
+    CheckEqual(PathClean(LDir), PathClean(LRepo.WorkDir), 'WorkDir is worktree');
+    CheckFalse(LRepo.IsBare, 'non-bare');
+    GitRun(LDir, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LDir, ['config', 'user.email', 'pure@example.invalid']);
+    WriteFile(PathJoin([LDir, 'a.txt']), BytesOfString('line1' + #10 + 'line2' + #10), PermDefault);
+    GitRun(LDir, ['add', 'a.txt']);
+    GitRun(LDir, ['commit', '-m', 'first']);
+    GitRun(LDir, ['tag', 'v1']);
+    GitRun(LDir, ['branch', 'feature']);
+    CheckFalse(LRepo.IsEmpty, 'IsEmpty false after commit');
+    LBranch := LRepo.CurrentBranch;
+    Check(LBranch <> '', 'CurrentBranch non-empty');
+    Check(Length(LRepo.ListBranches(gbLocal)) >= 2, 'local branches listed');
+    LHead := LRepo.Head;
+    Check(LHead.Name <> '', 'Head.Name non-empty');
+    Check(LHead.ShortName <> '', 'Head.ShortName non-empty');
+    CheckEqual(40, Length(LHead.TargetOIDString), 'Head target 40 hex');
+    Check(Is40Hex(LHead.TargetOIDString), 'Head target hex');
+    Check(LHead.IsBranch, 'HEAD on branch reports IsBranch');
+    CheckFalse(LHead.IsRemote, 'local HEAD not remote');
+    CheckFalse(LHead.IsTag, 'branch HEAD not tag');
+    LHeadCommit := LRepo.HeadCommit;
+    CheckEqual(LowerCase(LHead.TargetOIDString), LowerCase(LHeadCommit.OIDString), 'HeadCommit matches Head target');
+    LCommit := LRepo.CommitByHash(LHeadCommit.OIDString);
+    CheckEqual('first', LCommit.ShortMessage, 'commit ShortMessage');
+    Check(Pos('first', LCommit.Message) > 0, 'commit Message contains subject');
+    Check(Pos('Pure Tester', LCommit.AuthorString) > 0, 'AuthorString names author');
+    Check(Pos('pure@example.invalid', LCommit.AuthorString) > 0, 'AuthorString carries email');
+    Check(Pos('Pure Tester', LCommit.CommitterString) > 0, 'CommitterString names committer');
+    Check(LCommit.Time > 30000, 'commit Time sane (days since 1899)');
+    CheckEqual(0, LCommit.ParentCount, 'root commit has no parents');
+    CheckEqual('', LCommit.ParentOIDString(0), 'out-of-range parent is empty');
+    CheckEqual('', LCommit.ParentOIDString(-1), 'negative parent index is empty');
+    WriteFile(PathJoin([LDir, 'b.txt']), BytesOfString('b'), PermDefault);
+    GitRun(LDir, ['add', 'b.txt']);
+    GitRun(LDir, ['commit', '-m', 'second']);
+    LCommit := LRepo.HeadCommit;
+    CheckEqual(1, LCommit.ParentCount, 'second commit has one parent');
+    Check(Is40Hex(LCommit.ParentOIDString(0)), 'parent OID is 40 hex');
+    CheckEqual('', LCommit.ParentOIDString(1), 'second parent of non-merge is empty');
+    if LRepo.QueryInterface(IGitRepositoryExt, LExt) <> 0 then
+      raise Exception.Create('repository must support IGitRepositoryExt');
+    LRemotes := LExt.ListRemotes;
+    CheckEqual(0, Length(LRemotes), 'no remotes initially');
+    GitRun(LDir, ['remote', 'add', 'origin', LDir]);
+    LRemotes := LExt.ListRemotes;
+    Check(ContainsStr(LRemotes, 'origin'), 'ListRemotes finds origin');
+    LRem := LRepo.Remote('origin');
+    CheckEqual('origin', LRem.Name, 'remote Name');
+    Check(LRem.URL <> '', 'remote URL non-empty');
+    LEntries := LExt.ConfigEntries;
+    Check(Length(LEntries) > 0, 'ConfigEntries non-empty');
+    LFound := False;
+    for I := 0 to High(LEntries) do
+      if (LEntries[I].Name = 'remote.origin.url') and (LEntries[I].Value <> '') then
+        LFound := True;
+    Check(LFound, 'ConfigEntries carries remote.origin.url');
+    LCommits := LExt.RevWalk('HEAD', 0);
+    Check(Length(LCommits) >= 2, 'RevWalk unlimited covers both commits');
+    LCommits := LExt.RevWalk('HEAD', 1);
+    CheckEqual(1, Length(LCommits), 'RevWalk limit 1 returns one commit');
+    LDiff := LExt.Diff('HEAD~1', 'HEAD');
+    Check(Length(LDiff.Files) >= 1, 'Diff across commits reports files');
+    LDiff := LExt.DiffEx('HEAD~1', 'HEAD', DefaultGitDiffOptions);
+    Check(Length(LDiff.Files) >= 1, 'DiffEx mirrors Diff');
+    LDiff := LExt.DiffWorkingTree('HEAD');
+    Check(True, 'DiffWorkingTree callable, files=' + IntToStr(Length(LDiff.Files)));
+    LDiff := LExt.DiffWorkingTreeEx('HEAD', DefaultGitDiffOptions);
+    Check(True, 'DiffWorkingTreeEx callable');
+    LBlame := LExt.Blame('a.txt');
+    Check(Length(LBlame.Hunks) >= 1, 'Blame finds hunks for tracked file');
+    LBlame := LExt.Blame('missing-nope.txt');
+    CheckEqual(0, Length(LBlame.Hunks), 'Blame of untracked path is empty');
+    LFilter.IncludeUntracked := True;
+    LFilter.IncludeIgnored := False;
+    LFilter.WorkingTreeOnly := False;
+    LFilter.IndexOnly := False;
+    LStatus := LRepo.StatusEntries(LFilter);
+    Check(True, 'StatusEntries callable, entries=' + IntToStr(Length(LStatus)));
+    WriteFile(PathJoin([LDir, 'patch-target.txt']), BytesOfString('v1' + #10), PermDefault);
+    LExt.ApplyPatch('diff --git a/patch-target.txt b/patch-target.txt' + #10 +
+      '--- a/patch-target.txt' + #10 + '+++ b/patch-target.txt' + #10 +
+      '@@ -1 +1 @@' + #10 + '-v1' + #10 + '+v2' + #10);
+    CheckEqual('v2' + #10, BytesToText(ReadFile(PathJoin([LDir, 'patch-target.txt']))), 'ApplyPatch rewrites target');
+    WriteFile(PathJoin([LDir, 'a.txt']), BytesOfString('line1' + #10 + 'line2' + #10 + 'line3' + #10), PermDefault);
+    Check(LExt.WorkdirPatchText('HEAD', [], False) <> '', 'WorkdirPatchText non-empty with tracked modification');
+    LExt.CheckoutPaths('HEAD', []);
+    Check(True, 'CheckoutPaths with empty list callable');
+    if LRepo.QueryInterface(IGitWorktreeExt, LWtExt) <> 0 then
+      raise Exception.Create('repository must support IGitWorktreeExt');
+    LWork := LWtExt.AddWorktree('full-wt', PathJoin([LBase, 'wt-full']), '', False);
+    CheckEqual('full-wt', LWork.Name, 'worktree Name');
+    Check(LWork.Path <> '', 'worktree Path');
+    CheckFalse(LWork.IsLocked, 'fresh worktree unlocked');
+    LWorkList := LWtExt.ListWorktrees;
+    Check(ContainsStr(LWorkList, 'full-wt'), 'ListWorktrees contains new entry');
+    LWork := LWtExt.LookupWorktree('full-wt');
+    CheckEqual('full-wt', LWork.Name, 'LookupWorktree roundtrip');
+    Check(LWtExt.PruneWorktree('full-wt'), 'PruneWorktree succeeds');
+    CheckFalse(LWtExt.PruneWorktree('no-such-wt'), 'PruneWorktree missing returns False');
+    LRaised := False;
+    try
+      LWtExt.LookupWorktree('no-such-wt');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'LookupWorktree missing raises EGitError');
+    LTagOid := '';
+    LCommits := LExt.RevWalk('v1', 1);
+    if Length(LCommits) = 1 then
+      LTagOid := LCommits[0].OIDString;
+    Check(LTagOid <> '', 'tag v1 resolves through history walk');
+    Check(Is40Hex(LTagOid), 'tag v1 walk yields 40-hex commit');
+    LRaised := False;
+    try
+      LRepo.CommitByHash('v1');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'CommitByHash with non-hex rev raises EGitError');
+  finally
+    RemoveAll(LBase);
+  end;
+end;
+
 begin
   Suite := TTestSuite.Create('pure_manager');
   Suite.Test('TestInitAndIsRepository', @TestInitAndIsRepository);
@@ -522,9 +963,14 @@ begin
   Suite.Test('TestFactoryGbAutoCompat', @TestFactoryGbAutoCompat);
   Suite.Test('TestDiscoverRepositoryInvariants', @TestDiscoverRepositoryInvariants);
   Suite.Test('TestCloneRepositoryNotImplemented', @TestCloneRepositoryInvariants);
+  Suite.Test('TestManagerInterfaceClosure', @TestManagerInterfaceClosure);
+  Suite.Test('TestFetchLocalTransport', @TestFetchLocalTransport);
+  Suite.Test('TestSetGlobalConfigRoundtrip', @TestSetGlobalConfigRoundtrip);
+  Suite.Test('TestRepositoryInterfaceFullClosure', @TestRepositoryInterfaceFullClosure);
   Suite.Test('TestCommitOnHeadInvariants', @TestCommitOnHeadInvariants);
   Suite.Test('TestAddWorktreeInvariants', @TestAddWorktreeInvariants);
   Suite.Test('TestSetVerifySSLInvariants', @TestSetVerifySSLInvariants);
+  Suite.Test('TestNativeCredentialHandlersPinned', @TestNativeCredentialHandlersPinned);
 
   if not Suite.Run then
     Halt(1);

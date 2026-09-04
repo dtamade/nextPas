@@ -20,6 +20,9 @@ type
     Bytes: array[0..19] of Byte;
   end;
 
+  { Oid array single source for the git family (revwalk/commitgraph bases alias here) }
+  TGitOidArray = array of TGitOid;
+
   { Single-source re-export: git family error is owned by nextpas.core.git.base (L2) }
   EGitError = nextpas.core.git.base.EGitError;
 

@@ -90,7 +90,7 @@ implementation
 function NewGitManager: IGitManager; inline;
 begin
   { perf: inline value-type TGitBackend dispatch, single interface move zero-copy,
-    no alloc, no dlopen when gbNative; gbAuto/gbLibGit2 fail-closed if not registered }
+    no alloc, no dlopen when gbNative/gbAuto; gbLibGit2 fail-closed if not registered }
   Result := nextpas.core.git.factory.NewGitManager(gbAuto);
 end;
 

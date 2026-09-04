@@ -54,8 +54,8 @@ fi
 # C4.3: 编译产物检查（fpc -va Loading libgit2 + grep 双重）
 PURE_TEST_LPR="$TEST_DIR/test_git_pure_manager/test_git_pure_manager.lpr"
 if [ -f "$PURE_TEST_LPR" ]; then
-  if grep -Rqi "libgit2" "$PURE_TEST_LPR" 2>/dev/null; then
-    fail_check "C4.3 test_git_pure_manager.lpr 含 libgit2 引用"
+  if grep -Rqi "nextpas\.core\.git\.libgit2" "$PURE_TEST_LPR" 2>/dev/null; then
+    fail_check "C4.3 test_git_pure_manager.lpr 含 libgit2 单元引用"
   else
     ok "C4.3 test_git_pure_manager.lpr 零 libgit2（grep 版）"
   fi

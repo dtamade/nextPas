@@ -35,11 +35,16 @@ type
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.fs,
+  nextpas.core.os.env,
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.git.native.base,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.index,
+  nextpas.core.git.native.clone,
+  nextpas.core.git.native.config,
   nextpas.core.git.native.repository;
 
 constructor TNativeGitManager.Create;
@@ -127,10 +132,70 @@ begin
   Result := TNativeRepositoryAdapter.Create(GitDir, WorkTree);
 end;
 
-function TNativeGitManager.CloneRepository(const AURL, ALocalPath: string): IGitRepository;
+function CloneSrcDisplay(const AUrl: string): string; inline;
 begin
-  raise EGitError.Create('not implemented for native backend: CloneRepository');
-  Result := nil;
+  if Length(AUrl) > 120 then
+    Result := Copy(AUrl, 1, 120) + '...'
+  else
+    Result := AUrl;
+end;
+
+function CloneIsNetworkUrl(const AUrl: string): Boolean; inline;
+var
+  L: string;
+begin
+  L := LowerCase(Trim(AUrl));
+  Result := (Copy(L, 1, 7) = 'http://') or (Copy(L, 1, 8) = 'https://') or
+    (Copy(L, 1, 6) = 'ssh://') or (Copy(L, 1, 10) = 'git+ssh://') or
+    (Copy(L, 1, 6) = 'git://') or (Copy(L, 1, 6) = 'ftp://') or
+    (Copy(L, 1, 7) = 'ftps://') or
+    (Pos('@', L) > 0) and (Pos(':', L) > Pos('@', L));
+end;
+
+function CloneStripFileScheme(const AUrl: string): string; inline;
+var
+  L: string;
+begin
+  L := Trim(AUrl);
+  if Copy(LowerCase(L), 1, 7) = 'file://' then
+    Result := Copy(L, 8, MaxInt)
+  else
+    Result := L;
+end;
+
+function TNativeGitManager.CloneRepository(const AURL, ALocalPath: string): IGitRepository;
+var
+  LSrc, LClean, LGitDir, LResolved, LWorkTree: string;
+begin
+  LSrc := Trim(AURL);
+  if LSrc = '' then
+    raise EGitError.Create('clone: source empty');
+  if Trim(ALocalPath) = '' then
+    raise EGitError.Create('clone: local path empty');
+  if CloneIsNetworkUrl(LSrc) then
+    raise EGitError.CreateFmt('clone: network transport not supported in native backend: %s (use libgit2 backend or git CLI)', [CloneSrcDisplay(LSrc)]);
+  LClean := CloneStripFileScheme(LSrc);
+  LClean := PathClean(LClean);
+  LGitDir := '';
+  if IsGitDirShape(LClean) then
+    LGitDir := LClean
+  else if DirectoryExists(PathJoin2(LClean, '.git')) then
+    LGitDir := PathJoin2(LClean, '.git')
+  else if GitTryDiscoverGitDir(LClean, LResolved) then
+    LGitDir := LResolved
+  else
+    raise EGitError.CreateFmt('clone: source is not a git repository: %s', [CloneSrcDisplay(LSrc)]);
+  try
+    GitClone(LGitDir, PathClean(ALocalPath));
+  except
+    on E: EGitError do
+      raise;
+    on E: Exception do
+      raise EGitError.Create('clone: ' + E.Message);
+  end;
+  if not ResolveGitDir(ALocalPath, LGitDir, LWorkTree) then
+    raise EGitError.CreateFmt('clone: result is not a git repository: %s', [ALocalPath]);
+  Result := TNativeRepositoryAdapter.Create(LGitDir, LWorkTree);
 end;
 
 function TNativeGitManager.InitRepository(const APath: string; ABare: Boolean): IGitRepository;
@@ -209,16 +274,178 @@ begin
     Result := '';
 end;
 
+function GlobalConfigValue(const AKey: string): string;
+var
+  LHome, LXdg, LPath: string;
+  LData: TBytes;
+  LCfg: TGitConfig;
+begin
+  Result := '';
+  LHome := PathClean(UserHomeDir);
+  if LHome <> '' then
+  begin
+    LPath := PathJoin2(LHome, '.gitconfig');
+    if FileExists(LPath) then
+    try
+      LData := ReadFile(LPath);
+      LCfg := GitParseConfig(LData);
+      if GitConfigHas(LCfg, AKey) then
+        Result := GitConfigGet(LCfg, AKey);
+    except
+    end;
+    if Result <> '' then
+      Exit;
+    LPath := PathJoin([LHome, '.config', 'git', 'config']);
+    if FileExists(LPath) then
+    try
+      LData := ReadFile(LPath);
+      LCfg := GitParseConfig(LData);
+      if GitConfigHas(LCfg, AKey) then
+        Result := GitConfigGet(LCfg, AKey);
+    except
+    end;
+    if Result <> '' then
+      Exit;
+  end;
+  LXdg := Trim(GetEnv('XDG_CONFIG_HOME'));
+  if (LXdg <> '') and (PathClean(LXdg) <> PathJoin([PathClean(LHome), '.config'])) then
+  begin
+    LPath := PathJoin([PathClean(LXdg), 'git', 'config']);
+    if FileExists(LPath) then
+    try
+      LData := ReadFile(LPath);
+      LCfg := GitParseConfig(LData);
+      if GitConfigHas(LCfg, AKey) then
+        Result := GitConfigGet(LCfg, AKey);
+    except
+    end;
+  end;
+end;
+
 function TNativeGitManager.GetGlobalConfig(const AKey: string): string;
 begin
-  raise EGitError.Create('not implemented for native backend: GetGlobalConfig');
-  Result := '';
+  if Trim(AKey) = '' then
+    Exit('');
+  Result := GlobalConfigValue(AKey);
 end;
 
 function TNativeGitManager.SetGlobalConfig(const AKey, AValue: string): Boolean;
+var
+  LKey, LSection, LSub, LName, LHome, LPath: string;
+  LLines: TStringArray;
+  I, Dot1, Dot2, Eq: Integer;
+  LHeader, LWant, LLine, LTrim, LCur: string;
+  LFound, LPlaced: Boolean;
+  LOut: string;
 begin
-  raise EGitError.Create('not implemented for native backend: SetGlobalConfig');
-  Result := False;
+  LKey := Trim(AKey);
+  if LKey = '' then
+    raise EGitError.Create('set global config: key empty');
+  Dot1 := Pos('.', LKey);
+  if Dot1 <= 1 then
+    raise EGitError.CreateFmt('set global config: invalid key "%s"', [LKey]);
+  Dot2 := 0;
+  for I := Dot1 + 1 to Length(LKey) do
+    if LKey[I] = '.' then
+    begin
+      Dot2 := I;
+      Break;
+    end;
+  if Dot2 = 0 then
+  begin
+    LSection := Copy(LKey, 1, Dot1 - 1);
+    LSub := '';
+    LName := Copy(LKey, Dot1 + 1, MaxInt);
+  end
+  else
+  begin
+    LSection := Copy(LKey, 1, Dot1 - 1);
+    LSub := Copy(LKey, Dot1 + 1, Dot2 - Dot1 - 1);
+    LName := Copy(LKey, Dot2 + 1, MaxInt);
+    for I := Dot2 + 1 to Length(LKey) do
+      if LKey[I] = '.' then
+      begin
+        LSub := Copy(LKey, Dot1 + 1, I - Dot1 - 1);
+        LName := Copy(LKey, I + 1, MaxInt);
+      end;
+  end;
+  if (Trim(LSection) = '') or (Trim(LName) = '') then
+    raise EGitError.CreateFmt('set global config: invalid key "%s"', [LKey]);
+  LHome := PathClean(UserHomeDir);
+  if LHome = '' then
+    raise EGitError.Create('set global config: HOME not set');
+  LPath := PathJoin2(LHome, '.gitconfig');
+  SetLength(LLines, 0);
+  if FileExists(LPath) then
+  try
+    LLines := ReadFileLines(LPath);
+  except
+    on E: Exception do
+      raise EGitError.Create('set global config: ' + E.Message);
+  end;
+  if LSub = '' then
+    LWant := LowerCase('[' + Trim(LSection) + ']')
+  else
+    LWant := LowerCase('[' + Trim(LSection) + ' "' + LSub + '"]');
+  LFound := False;
+  LPlaced := False;
+  LCur := '';
+  LOut := '';
+  for I := 0 to High(LLines) do
+  begin
+    LLine := LLines[I];
+    LTrim := Trim(LLine);
+    if (LTrim <> '') and (LTrim[1] = '[') and (LTrim[Length(LTrim)] = ']') then
+    begin
+      if LFound and not LPlaced then
+      begin
+        LOut := LOut + #9 + Trim(LName) + ' = ' + AValue + #10;
+        LPlaced := True;
+      end;
+      LCur := LowerCase(LTrim);
+      LFound := LCur = LWant;
+      LOut := LOut + LLine + #10;
+      Continue;
+    end;
+    if LFound and not LPlaced then
+    begin
+      Eq := Pos('=', LLine);
+      if Eq > 0 then
+      begin
+        LHeader := Trim(Copy(LLine, 1, Eq - 1));
+        if LowerCase(LHeader) = LowerCase(Trim(LName)) then
+        begin
+          LOut := LOut + #9 + Trim(LName) + ' = ' + AValue + #10;
+          LPlaced := True;
+          Continue;
+        end;
+      end;
+    end;
+    LOut := LOut + LLine + #10;
+  end;
+  if not LFound then
+  begin
+    if LSub = '' then
+      LHeader := '[' + Trim(LSection) + ']'
+    else
+      LHeader := '[' + Trim(LSection) + ' "' + LSub + '"]';
+    if (LOut <> '') and (LOut[Length(LOut)] <> #10) then
+      LOut := LOut + #10;
+    LOut := LOut + LHeader + #10 + #9 + Trim(LName) + ' = ' + AValue + #10;
+  end
+  else if not LPlaced then
+    LOut := LOut + #9 + Trim(LName) + ' = ' + AValue + #10;
+  try
+    if PathDir(LPath) <> '' then
+      MkdirAll(PathDir(LPath), PermDirDefault);
+    WriteFileText(LPath, LOut);
+  except
+    on E: EGitError do
+      raise;
+    on E: Exception do
+      raise EGitError.Create('set global config: ' + E.Message);
+  end;
+  Result := True;
 end;
 
 function TNativeGitManager.Version: string;

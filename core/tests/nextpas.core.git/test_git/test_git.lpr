@@ -7,6 +7,7 @@ uses
   nextpas.core.text.base,
   nextpas.core.text.conv,
   nextpas.core.fs,
+  nextpas.core.bytes.ops,
   nextpas.core.path,
   nextpas.core.test,
   nextpas.core.os.env,
@@ -55,9 +56,10 @@ end;
 
 function BytesOfString(const AText: string): TBytes;
 begin
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(AText[1], Result[0], Length(AText));
+  { single-source: bytes.ops.StringToBytes (a hand-rolled Move into an inline
+    Result miscompiles on this FPC trunk: copies the string pointer, not the
+    characters — observed as binary garbage via git diff --numstat) }
+  Result := nextpas.core.bytes.ops.StringToBytes(AText);
 end;
 
 function ContainsPath(const AItems: TStringArray; const AName: string): Boolean;

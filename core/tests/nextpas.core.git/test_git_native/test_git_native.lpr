@@ -12,6 +12,7 @@ uses
   nextpas.core.os.env,
   nextpas.core.process,
   nextpas.core.hash.sha1,
+  nextpas.core.git.base,
   nextpas.core.git.native.base,
   nextpas.core.git.native,
   nextpas.core.git.native.objects,
@@ -25,7 +26,9 @@ uses
   nextpas.core.git.native.pktline,
   nextpas.core.git.native.negotiate,
   nextpas.core.git.native.sideband,
-  nextpas.core.git.native.blame;
+  nextpas.core.git.native.blame,
+  nextpas.core.git.native.revwalk,
+  nextpas.core.git.native.repository.diff;
 
 const
   // git hash-object of "blob 6\0hello\n"
@@ -98,6 +101,12 @@ begin
   GitOidFromHex('not-a-real-oid-at-all-00000000000');
 end;
 
+procedure RaiseSha256Hex;
+begin
+  // contract: SHA-256 unsupported — only 40-hex SHA-1 oids accepted
+  GitOidFromHex(StringOfChar('a', 64));
+end;
+
 procedure RaiseCorruptTrailer;
 var
   Corrupt: TBytes;
@@ -162,6 +171,7 @@ begin
   CheckEqual(Ord(gokCommit), Ord(GitKindFromMode($E000)), 'gitlink mode');
   CheckEqual(Ord(gokTree), Ord(GitKindFromMode($4000)), 'dir mode');
   CheckEqual(Ord(gokBlob), Ord(GitKindFromMode($81A4)), 'regular mode');
+  CheckTrue(RaisedEGitError(@RaiseSha256Hex), '64-hex SHA-256 rejected');
 end;
 
 procedure TestZlibRoundTripAndCorruption;
@@ -350,6 +360,16 @@ procedure TestRepackRefDelta;
 begin
   RunGit(['-c', 'repack.usedeltabaseoffset=false', 'repack', '-adq']);
   AssertAllObjectsReadableFromPacks('ref-delta');
+end;
+
+procedure TestPackDeltaDepthCapPinned;
+begin
+  // contract: delta chains capped at 64; in-cap chains (repack default
+  // depth 50) keep reading — over-cap chains are unrepresentable in
+  // valid packs (bases strictly precede deltas, so chains terminate)
+  CheckEqual(64, GitMaxDeltaDepth, 'delta chain cap pinned at 64');
+  RunGit(['repack', '-adq']);
+  AssertAllObjectsReadableFromPacks('depth-cap');
 end;
 
 procedure TestPackedRefsAfterGc;
@@ -715,6 +735,7 @@ end;
 
 var
   GRawIdx: TBytes;
+  GRawIdxV1: TBytes;
 
 procedure SplitTextLines(const AText: string; out ALines: TStringArray);
 var
@@ -901,6 +922,36 @@ end;
 procedure RaiseIdxSplitLink;
 begin
   GitParseIndex(GRawIdx);
+end;
+
+procedure RaiseIdxV1;
+begin
+  GitParseIndex(GRawIdxV1);
+end;
+
+procedure TestIndexVersion1Refused;
+var
+  I: Integer;
+  LRaised: Boolean;
+begin
+  // contract: index v1 unsupported — parser refuses with explicit version error
+  SetLength(GRawIdxV1, 32);
+  GRawIdxV1[0] := Ord('D'); GRawIdxV1[1] := Ord('I');
+  GRawIdxV1[2] := Ord('R'); GRawIdxV1[3] := Ord('C');
+  GRawIdxV1[4] := 0; GRawIdxV1[5] := 0; GRawIdxV1[6] := 0; GRawIdxV1[7] := 1;
+  for I := 8 to 31 do
+    GRawIdxV1[I] := 0;
+  LRaised := False;
+  try
+    GitParseIndex(GRawIdxV1);
+  except
+    on E: EGitError do
+    begin
+      LRaised := True;
+      CheckTrue(Pos('version', LowerCase(E.Message)) > 0, 'refusal names the version, got: ' + E.Message);
+    end;
+  end;
+  CheckTrue(LRaised, 'v1 header raises unsupported-version');
 end;
 
 procedure TestIndexSplitIndexRefused;
@@ -1850,6 +1901,50 @@ begin
     CheckEqual(0, Length(Got), 'no starts yields nothing');
   finally
     Repo.Free;
+  end;
+end;
+
+procedure TestRevWalkIgnoresShallowFile;
+var
+  Starts, Got, Baseline: TGitOidArray;
+  Repo: TNativeRepository;
+  Work, GitDir, RootSha, ShallowPath: string;
+begin
+  // contract: shallow/grafts unsupported — walker still traverses full parent chains
+  // isolated fixture: never mutate the shared GRwRepo, a crashed binary must not
+  // leave a .git/shallow behind for other revwalk cases
+  Work := PathJoin([GetTempDir, 'nextpas_git_shallow_' + IntToStr(GetProcessID)]);
+  RemoveAll(Work);
+  MkdirAll(Work, PermDirDefault);
+  RunInChecked('git', ['init', '--quiet', '-b', 'main'], Work);
+  RunInChecked('git', ['config', 'user.email', 'test@example.com'], Work);
+  RunInChecked('git', ['config', 'user.name', 'Test Er'], Work);
+  WriteFileText(PathJoin([Work, 'f.txt']), 'c1'#10);
+  RunInChecked('git', ['add', '.'], Work);
+  RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c1'], Work);
+  WriteFileText(PathJoin([Work, 'f.txt']), 'c2'#10);
+  RunInChecked('git', ['add', '.'], Work);
+  RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c2'], Work);
+  GitDir := PathJoin([Work, '.git']);
+  Repo := TNativeRepository.Create(GitDir);
+  try
+    SetLength(Starts, 1);
+    Starts[0] := GitResolveHead(GitDir);
+    Baseline := GitCollectCommits(Repo, Starts, -1);
+    CheckEqual(2, Length(Baseline), 'fixture has two commits');
+    RootSha := GitOidToHex(Baseline[High(Baseline)]);
+    ShallowPath := PathJoin([GitDir, 'shallow']);
+    WriteFileText(ShallowPath, RootSha + #10);
+    try
+      Got := GitCollectCommits(Repo, Starts, -1);
+      CheckEqual(Length(Baseline), Length(Got), 'shallow file ignored, full chain walked');
+      CheckEqual(RootSha, GitOidToHex(Got[High(Got)]), 'root still reached');
+    finally
+      Remove(ShallowPath);
+    end;
+  finally
+    Repo.Free;
+    RemoveAll(Work);
   end;
 end;
 
@@ -3065,6 +3160,51 @@ begin
     if (not E.IsDir) and (Length(E.Name) > 5)
       and (Copy(E.Name, Length(E.Name)-4, 5) = '.pack') then
       Exit(PathJoin([PackDir, E.Name]));
+end;
+
+procedure TestPackIdxCrcNotValidated;
+var
+  PackPath, IdxPath, BadIdx: string;
+  Raw: TBytes;
+  N: Cardinal;
+  CrcOff: SizeInt;
+  Pack: TPackFile;
+  Repo: TNativeRepository;
+  Oid: TGitOid;
+  Kind: TGitObjectKind;
+  Data: TBytes;
+begin
+  // contract: idx CRC table not validated on read (matches git read path)
+  RunGit(['repack', '-adq']);
+  PackPath := FindPackPath;
+  CheckTrue(PackPath <> '', 'pack exists');
+  IdxPath := GitPackIndexPath(PackPath);
+  Raw := ReadFile(IdxPath);
+  N := (Cardinal(Raw[1028]) shl 24) or (Cardinal(Raw[1029]) shl 16) or
+    (Cardinal(Raw[1030]) shl 8) or Cardinal(Raw[1031]);
+  CheckTrue(N > 0, 'idx non-empty');
+  CrcOff := 8 + 1024 + SizeInt(N) * 20;
+  CheckTrue(CrcOff + 4 <= Length(Raw), 'crc table present');
+  Raw[CrcOff] := Raw[CrcOff] xor $FF;
+  BadIdx := PathJoin([GetTempDir, 'nextpas_git_bad_crc_' + IntToStr(GetProcessID) + '.idx']);
+  WriteFile(BadIdx, Raw);
+  try
+    Pack := TPackFile.Create(BadIdx, PackPath);
+    try
+      Repo := TNativeRepository.Create(GGitDir);
+      try
+        Oid := GitResolveHead(GGitDir);
+        Data := Pack.ReadObject(Oid, Kind);
+        CheckTrue(Length(Data) > 0, 'corrupt-crc idx still reads');
+      finally
+        Repo.Free;
+      end;
+    finally
+      Pack.Free;
+    end;
+  finally
+    Remove(BadIdx);
+  end;
 end;
 
 procedure CheckIndexerGolden(const ATag: string);
@@ -4464,6 +4604,1013 @@ begin
   // synthetic repo large-file blame path is covered via fallback correctness above; integration blob-cache reuse validated via threshold edge
 end;
 
+procedure TestParseCacheGrowthNoDuplicates;
+var
+  Cache: TCommitParseCache;
+  OidSet: TGitOidSet;
+  OidMap: TOidIndexMap;
+  Oids: array[0..99] of TGitOid;
+  I, V: Integer;
+  W: Int64;
+  P: TGitOidArray;
+begin
+  // growth regression: Rehash must rebuild from zeroed tables (SetLength
+  // preserves on grow); 100 puts cross 16->32->64->128 caps without
+  // duplicate slots, lost keys, or access violations
+  for I := 0 to 99 do
+  begin
+    Oids[I] := GitOidFromHex(KBlobHello);
+    Oids[I].Bytes[0] := Byte(I);
+    Oids[I].Bytes[1] := Byte(I shr 8);
+  end;
+  Cache := TCommitParseCache.Create;
+  try
+    for I := 0 to 99 do
+      Cache.Put(Oids[I], Int64(1600000000 + I), nil);
+    for I := 0 to 99 do
+    begin
+      CheckTrue(Cache.TryGet(Oids[I], W, P), 'parse cache retains key ' + IntToStr(I));
+      CheckEqual(Int64(1600000000 + I), W, 'parse cache when matches ' + IntToStr(I));
+    end;
+  finally
+    Cache.Free;
+  end;
+  OidSet := TGitOidSet.Create;
+  try
+    for I := 0 to 99 do
+      OidSet.Add(Oids[I]);
+    for I := 0 to 99 do
+      CheckTrue(OidSet.Contains(Oids[I]), 'oid set retains key ' + IntToStr(I));
+    CheckEqual(100, OidSet.Count, 'oid set count exact after growth');
+  finally
+    OidSet.Free;
+  end;
+  OidMap := TOidIndexMap.Create;
+  try
+    for I := 0 to 99 do
+      OidMap.Add(Oids[I], I);
+    for I := 0 to 99 do
+    begin
+      CheckTrue(OidMap.TryGet(Oids[I], V), 'oid map retains key ' + IntToStr(I));
+      CheckEqual(I, V, 'oid map value matches ' + IntToStr(I));
+    end;
+  finally
+    OidMap.Free;
+  end;
+end;
+
+procedure TestWorkdirDiffApplyCheckoutRoundTrip;
+var
+  LRepo, LGitDir, LPatch, LBefore: string;
+  LPaths: TStringArray;
+  D: TGitDiff;
+begin
+  // covers repository.diff query+mutate shards end to end against git CLI
+  // (worktree diff, patch text, apply, checkout-paths round-trip)
+  LRepo := PathJoin([GetTempDir, 'nextpas_git_diff_' + IntToStr(GetProcessID)]);
+  RemoveAll(LRepo);
+  MkdirAll(LRepo, PermDirDefault);
+  try
+    RunInChecked('git', ['init', '--quiet'], LRepo);
+    RunInChecked('git', ['config', 'user.email', 'test@example.com'], LRepo);
+    RunInChecked('git', ['config', 'user.name', 'Test Er'], LRepo);
+    LGitDir := PathJoin([LRepo, '.git']);
+    WriteFileText(PathJoin([LRepo, 'a.txt']), 'hello'#10);
+    RunInChecked('git', ['add', 'a.txt'], LRepo);
+    RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'one'], LRepo);
+    WriteFileText(PathJoin([LRepo, 'a.txt']), 'hello world'#10);
+    D := RepositoryDiffWorkingTreeEx(LGitDir, LRepo, 'HEAD', DefaultGitDiffOptions);
+    CheckEqual(1, Length(D.Files), 'worktree diff sees tracked modification');
+    CheckEqual('a.txt', D.Files[0].NewPath, 'diff path');
+    CheckTrue(Length(D.Files[0].Hunks) > 0, 'diff hunks produced');
+    LPatch := RepositoryWorkdirPatchText(LGitDir, LRepo, 'HEAD', nil, True);
+    CheckTrue(Pos('diff --git', LPatch) = 1, 'patch text header');
+    CheckTrue(Pos('b/a.txt', LPatch) > 0, 'patch mentions a.txt');
+    D := RepositoryDiffEx(LGitDir, 'HEAD', 'HEAD', DefaultGitDiffOptions);
+    CheckEqual(0, Length(D.Files), 'head-vs-head empty');
+    LBefore := ReadFileText(PathJoin([LRepo, 'a.txt']));
+    RunInChecked('git', ['checkout', '-q', '--', 'a.txt'], LRepo);
+    CheckEqual('hello'#10, ReadFileText(PathJoin([LRepo, 'a.txt'])), 'cli checkout restores');
+    RepositoryApplyPatch(LGitDir, LRepo, LPatch);
+    CheckEqual(LBefore, ReadFileText(PathJoin([LRepo, 'a.txt'])), 'apply patch restores');
+    WriteFileText(PathJoin([LRepo, 'a.txt']), 'zzz'#10);
+    SetLength(LPaths, 1);
+    LPaths[0] := 'a.txt';
+    RepositoryCheckoutPaths(LGitDir, LRepo, 'HEAD', LPaths);
+    CheckEqual('hello'#10, ReadFileText(PathJoin([LRepo, 'a.txt'])), 'checkout paths restores');
+  finally
+    RemoveAll(LRepo);
+  end;
+end;
+
+procedure MakeTwoCommitRepo(const APrefix: string; out AWork, AGit: string);
+begin
+  // minimal two-commit fixture: c1 creates f.txt, c2 modifies it
+  AWork := PathJoin([GetTempDir, APrefix + '_' + IntToStr(GetProcessID)]);
+  RemoveAll(AWork);
+  MkdirAll(AWork, PermDirDefault);
+  RunInChecked('git', ['init', '--quiet', '-b', 'main'], AWork);
+  RunInChecked('git', ['config', 'user.email', 'test@example.com'], AWork);
+  RunInChecked('git', ['config', 'user.name', 'Test Er'], AWork);
+  WriteFileText(PathJoin([AWork, 'f.txt']), 'c1'#10);
+  RunInChecked('git', ['add', '.'], AWork);
+  RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c1'], AWork);
+  WriteFileText(PathJoin([AWork, 'f.txt']), 'c2'#10);
+  RunInChecked('git', ['add', '.'], AWork);
+  RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c2'], AWork);
+  AGit := PathJoin([AWork, '.git']);
+end;
+
+procedure TestNotesAddGetRemoveRoundTrip;
+var
+  Work, GitDir, CliOut: string;
+  Target, NoteOid: TGitOid;
+  Notes: TGitNoteArray;
+begin
+  // covers notes add/get/list/exists/remove against git CLI interop
+  MakeTwoCommitRepo('nextpas_git_notes', Work, GitDir);
+  try
+    Target := GitResolveHead(GitDir);
+    CheckFalse(GitNotesExists(GitDir, Target), 'no note initially');
+    NoteOid := GitNotesAdd(GitDir, Target, 'reviewed'#10);
+    CheckFalse(GitOidIsZero(NoteOid), 'add returns non-zero note oid');
+    CheckTrue(GitNotesExists(GitDir, Target), 'note exists after add');
+    CheckEqual('reviewed'#10, GitNotesGetStr(GitDir, Target), 'note content');
+    Notes := GitNotesList(GitDir);
+    CheckEqual(1, Length(Notes), 'one note listed');
+    CliOut := Trim(MustCaptureIn('git', ['notes', '--ref=commits', 'show', GitOidToHex(Target)], Work));
+    CheckEqual('reviewed', CliOut, 'git CLI reads our note');
+    CheckTrue(GitNotesRemove(GitDir, Target), 'remove reports true');
+    CheckFalse(GitNotesExists(GitDir, Target), 'note gone after remove');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestArchiveFileListMatchesGit;
+var
+  Work, GitDir, OursPath, CliPath, OursList, CliList: string;
+begin
+  // covers archive create: tar member lists match git archive
+  MakeTwoCommitRepo('nextpas_git_archive', Work, GitDir);
+  try
+    OursPath := PathJoin([GetTempDir, 'nextpas_ours_' + IntToStr(GetProcessID) + '.tar']);
+    CliPath := PathJoin([GetTempDir, 'nextpas_cli_' + IntToStr(GetProcessID) + '.tar']);
+    WriteFile(OursPath, GitArchiveRef(GitDir, 'HEAD'));
+    WriteFile(CliPath, BytesOfString(MustCaptureIn('git', ['archive', 'HEAD'], Work)));
+    OursList := Trim(MustCaptureIn('tar', ['-tf', OursPath], Work));
+    CliList := Trim(MustCaptureIn('tar', ['-tf', CliPath], Work));
+    CheckEqual(CliList, OursList, 'tar member list matches git archive');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestDescribeMatchesGit;
+var
+  Work, GitDir, Golden: string;
+begin
+  // covers describe/tags: annotated tag on c1, describe HEAD like git
+  MakeTwoCommitRepo('nextpas_git_describe', Work, GitDir);
+  try
+    RunInChecked('git', ['tag', '-a', 'v1.0', '-m', 'r', 'HEAD~1'], Work);
+    Golden := Trim(MustCaptureIn('git', ['describe', 'HEAD'], Work));
+    CheckEqual(Golden, GitDescribe(GitDir, 'HEAD'), 'describe matches git');
+    CheckTrue(GitTagExists(GitDir, 'v1.0'), 'tag exists');
+    CheckEqual(1, Length(GitTagList(GitDir)), 'one tag listed');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestShowStructure;
+var
+  Work, GitDir, CliOut: string;
+  Sh: TGitShow;
+begin
+  // covers show: message, path and hunk structure on c2
+  MakeTwoCommitRepo('nextpas_git_show', Work, GitDir);
+  try
+    Sh := GitShow(GitDir, 'HEAD');
+    CheckEqual('c2', Sh.Commit.Message, 'show message first line');
+    CheckEqual(1, Length(Sh.Diffs), 'show one file');
+    CheckEqual('f.txt', Sh.Diffs[0].Path, 'show path');
+    CheckTrue(Pos('c2', GitShowText(GitDir, 'HEAD')) > 0, 'show text has message');
+    CheckTrue(Pos('f.txt', GitShowText(GitDir, 'HEAD')) > 0, 'show text has path');
+    CliOut := MustCaptureIn('git', ['show', '--name-only', '--format=', 'HEAD'], Work);
+    CheckTrue(Pos('f.txt', CliOut) > 0, 'git show agrees on path');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestCatFileMatchesGit;
+var
+  Work, GitDir: string;
+  Head: TGitOid;
+  CF: TGitCatFile;
+begin
+  // covers catfile type/size/content against git CLI
+  MakeTwoCommitRepo('nextpas_git_catfile', Work, GitDir);
+  try
+    Head := GitResolveHead(GitDir);
+    CF := GitCatFile(GitDir, Head);
+    CheckEqual('commit', GitCatFileType(GitDir, Head), 'type commit');
+    CheckEqual(Trim(MustCaptureIn('git', ['cat-file', '-s', 'HEAD'], Work)), IntToStr(CF.Size), 'size matches');
+    CheckEqual(MustCaptureIn('git', ['cat-file', '-p', 'HEAD'], Work), CF.Text, 'pretty content matches');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestCommitGraphWriteVerify;
+var
+  Work, GitDir, GraphPath: string;
+  Entries: TGitLogArray;
+  Oids: TGitOidArray;
+  Graph: TCommitGraph;
+  Entry: TCommitGraphEntry;
+  Built: TBytes;
+begin
+  // covers commit-graph build/write/verify/load/invalidate
+  MakeTwoCommitRepo('nextpas_git_cgwrite', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    SetLength(Oids, 2);
+    Oids[0] := Entries[0].Oid;
+    Oids[1] := Entries[1].Oid;
+    Built := GitBuildCommitGraph(GitDir, Oids);
+    CheckTrue(Length(Built) > 0, 'built graph non-empty');
+    GraphPath := GitWriteCommitGraph(GitDir, Oids);
+    CheckTrue(FileExists(GraphPath), 'graph file written');
+    CheckEqual(GitCommitGraphPath(GitDir), GraphPath, 'path helper agrees');
+    CheckTrue(GitVerifyCommitGraph(GitDir), 'graph verifies');
+    CheckTrue(GitTryLoadCommitGraph(GitDir, Graph), 'graph loads');
+    try
+      CheckEqual(2, Integer(Graph.NumCommits), 'two graph commits');
+      CheckTrue(Graph.TryFind(Oids[0], Entry), 'head found in graph');
+    finally
+      Graph.Free;
+    end;
+    InvalidateCommitGraphCache(GitDir);
+    CheckTrue(GitTryLoadCommitGraph(GitDir, Graph), 'graph reloads after invalidate');
+    Graph.Free;
+    Remove(GraphPath);
+    GraphPath := GitWriteCommitGraphAll(GitDir);
+    CheckTrue(GitVerifyCommitGraph(GitDir), 'write-all verifies');
+    MustCaptureIn('git', ['commit-graph', 'verify', '--object-dir',
+      PathJoin([GitDir, 'objects'])], Work);
+    CheckTrue(True, 'git verifies our graph without error');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestWorktreeAddRemove;
+var
+  Work, GitDir, WtPath, CliOut: string;
+begin
+  // covers worktree add/detached/remove against git CLI
+  MakeTwoCommitRepo('nextpas_git_wt', Work, GitDir);
+  try
+    WtPath := Work + '_linked';
+    RemoveAll(WtPath);
+    GitWorktreeAdd(GitDir, WtPath, 'linked-branch');
+    CheckTrue(FileExists(PathJoin([WtPath, 'f.txt'])), 'linked worktree checked out');
+    CheckEqual(2, GitWorktreeCount(GitDir), 'two worktrees listed');
+    CheckTrue(Length(GitWorktreeList(GitDir)) = 2, 'list helper agrees');
+    CliOut := MustCaptureIn('git', ['worktree', 'list', '--porcelain'], Work);
+    CheckTrue(Pos(WtPath, CliOut) > 0, 'git agrees linked path');
+    GitWorktreeRemove(GitDir, WtPath, True);
+    CheckEqual(1, GitWorktreeCount(GitDir), 'one worktree after remove');
+    RemoveAll(WtPath);
+    WtPath := Work + '_detached';
+    RemoveAll(WtPath);
+    GitWorktreeAddDetached(GitDir, WtPath, GitResolveHead(GitDir));
+    CheckTrue(FileExists(PathJoin([WtPath, 'f.txt'])), 'detached worktree checked out');
+    GitWorktreeRemove(GitDir, WtPath);
+    CheckEqual(1, GitWorktreeCount(GitDir), 'one worktree after detached remove');
+    RemoveAll(WtPath);
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestSubmoduleAtRef;
+var
+  Work, GitDir: string;
+  Txt: string;
+  ByHead, ByTree, Listed: TGitSubmoduleArray;
+  Tree: TGitOid;
+begin
+  // covers submodule at-ref/at-tree listing on a real .gitmodules commit
+  Work := PathJoin([GetTempDir, 'nextpas_git_subref_' + IntToStr(GetProcessID)]);
+  RemoveAll(Work);
+  MkdirAll(Work, PermDirDefault);
+  try
+    RunInChecked('git', ['init', '--quiet', '-b', 'main'], Work);
+    RunInChecked('git', ['config', 'user.email', 'test@example.com'], Work);
+    RunInChecked('git', ['config', 'user.name', 'Test Er'], Work);
+    Txt := '[submodule "lib/foo"]'#10'  path = lib/foo'#10'  url = https://example.com/foo.git'#10;
+    WriteFileText(PathJoin([Work, '.gitmodules']), Txt);
+    RunInChecked('git', ['add', '.gitmodules'], Work);
+    RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'sub'], Work);
+    GitDir := PathJoin([Work, '.git']);
+    Listed := GitListSubmodules(GitDir);
+    CheckEqual(1, Length(Listed), 'worktree list one');
+    ByHead := GitListSubmodulesAtRef(GitDir, 'HEAD');
+    CheckEqual(1, Length(ByHead), 'at-ref one');
+    CheckEqual('lib/foo', ByHead[0].Path, 'at-ref path');
+    Tree := GitLogList(GitDir, 1)[0].Tree;
+    ByTree := GitListSubmodulesAtTree(GitDir, Tree);
+    CheckEqual(1, Length(ByTree), 'at-tree one');
+    CheckEqual('lib/foo', ByTree[0].Path, 'at-tree path');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestBundleFromRevsRange;
+var
+  Work, GitDir, P1, P2, CliOut: string;
+  N: Integer;
+  Hdr: TGitBundleHeader;
+begin
+  // covers bundle create-from-revs/range/parse-bytes against git bundle
+  MakeTwoCommitRepo('nextpas_git_bundle2', Work, GitDir);
+  try
+    P1 := PathJoin([GetTempDir, 'nextpas_revs_' + IntToStr(GetProcessID) + '.bundle']);
+    P2 := PathJoin([GetTempDir, 'nextpas_range_' + IntToStr(GetProcessID) + '.bundle']);
+    try Remove(P1) except end;
+    try Remove(P2) except end;
+    N := GitBundleCreateFromRevs(GitDir, ['HEAD'], P1);
+    CheckTrue(N >= 1, 'from-revs writes refs');
+    CheckTrue(GitBundleVerify(P1), 'from-revs verifies');
+    N := GitBundleCreateRange(GitDir, 'HEAD~1', 'HEAD', P2);
+    CheckTrue(N >= 1, 'range writes refs');
+    CheckTrue(GitBundleVerify(P2), 'range verifies');
+    Hdr := GitBundleParseHeaderBytes(ReadFile(P1));
+    CheckTrue(Length(Hdr.Refs) >= 1, 'header bytes parse');
+    CliOut := MustCaptureIn('git', ['bundle', 'list-heads', P1], Work);
+    CheckTrue(Pos('HEAD', CliOut) > 0, 'git reads our bundle');
+    try Remove(P1) except end;
+    try Remove(P2) except end;
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestGrepTreeCommits;
+var
+  Work, GitDir, CliOut: string;
+  Entries: TGitLogArray;
+  Hits: TGitGrepHitArray;
+begin
+  // covers grep-tree/grep-commits against git grep
+  MakeTwoCommitRepo('nextpas_git_greptree', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    Hits := GitGrepTree(GitDir, Entries[0].Tree, 'c2', False);
+    CheckTrue(Length(Hits) >= 1, 'tree grep hits');
+    CheckEqual('f.txt', Hits[0].Path, 'tree hit path');
+    Hits := GitGrep(GitDir, 'HEAD', 'C2', True);
+    CheckTrue(Length(Hits) >= 1, 'case-insensitive rev grep hits');
+    CliOut := Trim(MustCaptureIn('git', ['grep', '-n', 'c2', 'HEAD'], Work));
+    CheckTrue(Pos('f.txt', CliOut) > 0, 'git grep agrees on path');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestSmallSiblingOverloads;
+var
+  Work, GitDir, Golden, Pretty, OutPath, OursList, CliList, OursPath, CliPath: string;
+  Head: TGitOid;
+  CF: TGitCatFile;
+  NoteOid: TGitOid;
+  NoteRaw: TBytes;
+  Notes: TGitNoteArray;
+begin
+  // covers describe-tags/archive/catfile-pretty-size/notes-bytes siblings
+  MakeTwoCommitRepo('nextpas_git_siblings', Work, GitDir);
+  try
+    Head := GitResolveHead(GitDir);
+    RunInChecked('git', ['tag', 'v0.9', 'HEAD~1'], Work);
+    Golden := Trim(MustCaptureIn('git', ['describe', '--tags', 'HEAD'], Work));
+    CheckEqual(Golden, GitDescribeTags(GitDir, 'HEAD'), 'describe-tags matches git');
+    CF := GitCatFile(GitDir, Head);
+    Pretty := GitCatFilePretty(GitDir, Head);
+    CheckEqual(CF.Text, Pretty, 'pretty equals catfile text');
+    CheckEqual(CF.Text, GitCatFilePretty(GitDir, 'HEAD'), 'pretty rev overload');
+    CheckEqual(CF.Size, GitCatFileSize(GitDir, Head), 'size equals catfile size');
+    CheckEqual(CF.Size, GitCatFileSize(GitDir, 'HEAD'), 'size rev overload');
+    CheckTrue(Length(GitArchive(GitDir, GitLogList(GitDir, 1)[0].Tree)) > 0, 'archive by tree');
+    OursPath := PathJoin([GetTempDir, 'nextpas_sib_ours_' + IntToStr(GetProcessID) + '.tar']);
+    CliPath := PathJoin([GetTempDir, 'nextpas_sib_cli_' + IntToStr(GetProcessID) + '.tar']);
+    OutPath := GitArchiveToFile(GitDir, 'HEAD', OursPath);
+    CheckEqual(OursPath, OutPath, 'archive-to-file returns path');
+    WriteFile(CliPath, BytesOfString(MustCaptureIn('git', ['archive', 'HEAD'], Work)));
+    OursList := Trim(MustCaptureIn('tar', ['-tf', OursPath], Work));
+    CliList := Trim(MustCaptureIn('tar', ['-tf', CliPath], Work));
+    CheckEqual(CliList, OursList, 'archive-to-file matches git');
+    NoteOid := GitNotesAddBytes(GitDir, 'commits', Head, BytesOfString('bytes-note'#10));
+    CheckFalse(GitOidIsZero(NoteOid), 'add-bytes returns oid');
+    NoteRaw := GitNotesGet(GitDir, 'commits', Head);
+    CheckTrue(Pos('bytes-note', BytesToString(NoteRaw)) > 0, 'get raw bytes');
+    CheckTrue(GitNotesRefExists(GitDir, 'commits'), 'notes ref exists');
+    Notes := GitNotesList(GitDir, 'commits');
+    CheckEqual(1, Length(Notes), 'ref-scoped list one');
+    try Remove(OursPath) except end;
+    try Remove(CliPath) except end;
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestTopoWithBoundaryDirect;
+var
+  Work, GitDir, CliOut: string;
+  Repo: TNativeRepository;
+  Starts, Hides: TGitOidArray;
+  Opts: TGitRevOptions;
+  Got: TGitRevEntryArray;
+  Entries: TGitLogArray;
+begin
+  // covers topo-with-boundary + default rev options against git rev-list
+  MakeTwoCommitRepo('nextpas_git_topo', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    Repo := TNativeRepository.Create(GitDir);
+    try
+      Opts := DefaultGitRevOptions;
+      SetLength(Starts, 1);
+      Starts[0] := Entries[0].Oid;
+      SetLength(Hides, 0);
+      Got := GitTopoOrderCommitsWithBoundary(Repo, Starts, Hides, Opts, -1);
+      CheckEqual(2, Length(Got), 'two commits without hides');
+      CheckEqual(GitOidToHex(Entries[0].Oid), GitOidToHex(Got[0].Oid), 'newest first');
+      SetLength(Hides, 1);
+      Hides[0] := Entries[1].Oid;
+      Opts.ShowBoundary := True;
+      Got := GitTopoOrderCommitsWithBoundary(Repo, Starts, Hides, Opts, -1);
+      CheckEqual(2, Length(Got), 'head plus boundary');
+      CheckFalse(Got[0].IsBoundary, 'head not boundary');
+      CheckTrue(Got[1].IsBoundary, 'parent is boundary');
+      CliOut := Trim(MustCaptureIn('git', ['rev-list', '--boundary', 'HEAD',
+        '--not', GitOidToHex(Entries[1].Oid)], Work));
+      CheckTrue(Pos(GitOidToHex(Entries[0].Oid), CliOut) > 0, 'git agrees head');
+    finally
+      Repo.Free;
+    end;
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestReflogParse;
+var
+  Work, GitDir, CliOut: string;
+  Raw: TBytes;
+  Log_: TGitReflog;
+  One: TGitReflogEntry;
+  Lines: TStringArray;
+begin
+  // covers reflog whole-file + single-line parse against git log
+  MakeTwoCommitRepo('nextpas_git_reflog', Work, GitDir);
+  try
+    Raw := ReadFile(PathJoin([GitDir, 'logs', 'HEAD']));
+    Log_ := GitParseReflog(Raw);
+    CheckEqual(2, Length(Log_), 'two reflog lines');
+    CheckEqual(GitOidToHex(GitResolveHead(GitDir)), GitOidToHex(Log_[1].NewOid), 'tip matches HEAD');
+    CheckEqual('Test Er', Log_[1].Committer.Name, 'committer name');
+    CheckTrue(Pos('commit', Log_[1].Message) > 0, 'commit message');
+    SplitTextLines(BytesToString(Raw), Lines);
+    One := GitParseReflogLine(Lines[1]);
+    CheckEqual(GitOidToHex(Log_[1].NewOid), GitOidToHex(One.NewOid), 'line parse agrees');
+    CliOut := Trim(MustCaptureIn('git', ['log', '--format=%H', '-1', 'HEAD'], Work));
+    CheckEqual(CliOut, GitOidToHex(Log_[1].NewOid), 'git agrees tip');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestConfigParsePath;
+var
+  Work, GitDir, CliOut: string;
+  Cfg: TGitConfig;
+begin
+  // covers config path/parse/get against git config
+  MakeTwoCommitRepo('nextpas_git_config', Work, GitDir);
+  try
+    CheckEqual(PathJoin([GitDir, 'config']), GitConfigPath(GitDir), 'config path');
+    Cfg := GitParseConfig(ReadFile(GitConfigPath(GitDir)));
+    CheckEqual('test@example.com', GitConfigGet(Cfg, 'user.email'), 'email parsed');
+    CheckEqual('Test Er', GitConfigGet(Cfg, 'USER.NAME'), 'case-insensitive key');
+    CliOut := Trim(MustCaptureIn('git', ['config', 'user.email'], Work));
+    CheckEqual('test@example.com', CliOut, 'git agrees email');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestCacheTreeRoundTrip;
+var
+  Work, GitDir: string;
+  Tree: TGitCacheTree;
+  Back: TGitCacheTree;
+  HeadTree: TGitOid;
+begin
+  // covers cache-tree serialize/parse round-trip on real + empty trees
+  MakeTwoCommitRepo('nextpas_git_cachetree', Work, GitDir);
+  try
+    HeadTree := GitLogList(GitDir, 1)[0].Tree;
+    Tree.Name := '';
+    Tree.EntryCount := 1;
+    Tree.Oid := HeadTree;
+    SetLength(Tree.Children, 0);
+    Back := GitParseCacheTree(GitSerializeCacheTree(Tree));
+    CheckEqual('', Back.Name, 'root name empty');
+    CheckEqual(1, Back.EntryCount, 'entry count preserved');
+    CheckEqual(GitOidToHex(HeadTree), GitOidToHex(Back.Oid), 'oid preserved');
+    Tree.EntryCount := -1;
+    Back := GitParseCacheTree(GitSerializeCacheTree(Tree));
+    CheckEqual(-1, Back.EntryCount, 'invalidated marker preserved');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestProtocolFraming;
+var
+  Work, GitDir: string;
+  Entries: TGitLogArray;
+  Want: TBytes;
+  Stream: TBytes;
+  Refs: TGitAdvertisedRefArray;
+  Chans: TGitSidebandArray;
+  Demuxed: TGitSidebandDemuxed;
+  Raw: TGitSidebandArray;
+begin
+  // covers want-encode/advertise-parse/sideband join-demux round-trips
+  MakeTwoCommitRepo('nextpas_git_proto', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    Want := GitEncodeWantSimple(Entries[0].Oid);
+    CheckTrue(Length(Want) > 40, 'want framed');
+    CheckTrue(Pos(GitOidToHex(Entries[0].Oid), BytesToString(Want)) > 0, 'want carries oid');
+    Stream := BytesConcat(BytesConcat(GitPktEncodeStr(GitOidToHex(Entries[0].Oid) + ' HEAD' + #0 +
+      'multi_ack thin-pack'), GitPktEncodeStr(GitOidToHex(Entries[1].Oid) +
+      ' refs/heads/main')), GitPktEncodeFlush);
+    Refs := GitParseAdvertisedRefs(Stream);
+    CheckEqual(2, Length(Refs), 'two advertised refs');
+    CheckEqual('HEAD', Refs[0].Name, 'first is HEAD');
+    CheckEqual(GitOidToHex(Entries[0].Oid), GitOidToHex(Refs[0].Oid), 'HEAD oid');
+    CheckEqual('refs/heads/main', Refs[1].Name, 'second ref name');
+    SetLength(Chans, 2);
+    Chans[0].Kind := gsbData;
+    Chans[0].Data := BytesOfString('payload');
+    Chans[1].Kind := gsbProgress;
+    Chans[1].Data := BytesOfString('working');
+    Stream := GitSidebandJoin(Chans);
+    GitSidebandDemux(Stream, Demuxed);
+    CheckEqual('payload', BytesToString(Demuxed.DataBytes), 'data channel');
+    CheckEqual(1, Length(Demuxed.Progress), 'one progress line');
+    CheckTrue(Pos('working', Demuxed.Progress[0]) > 0, 'progress text');
+    Raw := GitSidebandDemuxRaw(Stream);
+    CheckEqual(2, Length(Raw), 'two raw packets');
+    CheckTrue(Raw[0].Kind = gsbData, 'first kind data');
+    CheckTrue(Raw[1].Kind = gsbProgress, 'second kind progress');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestCloneAndPackIndex;
+var
+  Work, GitDir, BareDir, CloneWork, PackPath, CliOut: string;
+  HeadHex, CloneHead: string;
+  IdxPath: string;
+  PackEntries: TDirEntryArray;
+  E: TDirEntry;
+begin
+  // covers local clone (worktree + bare) and pack-idx build vs git CLI
+  MakeTwoCommitRepo('nextpas_git_clone', Work, GitDir);
+  try
+    HeadHex := GitOidToHex(GitResolveHead(GitDir));
+    CloneWork := Work + '_clone';
+    RemoveAll(CloneWork);
+    CloneHead := GitCloneHead(GitDir, CloneWork);
+    CheckEqual(HeadHex, CloneHead, 'clone head matches source');
+    CheckTrue(FileExists(PathJoin([CloneWork, 'f.txt'])), 'clone worktree checked out');
+    CheckEqual('', Trim(MustCaptureIn('git', ['status', '--porcelain'], CloneWork)), 'clone status clean');
+    BareDir := Work + '_bare.git';
+    RemoveAll(BareDir);
+    CheckEqual(HeadHex, GitCloneBareHead(GitDir, BareDir), 'bare clone head matches');
+    CliOut := Trim(MustCaptureIn('git', ['--git-dir=' + BareDir, 'rev-parse', 'HEAD'], Work));
+    CheckEqual(HeadHex, CliOut, 'git reads bare clone');
+    RunInChecked('git', ['repack', '-a', '-d'], Work);
+    PackPath := '';
+    PackEntries := ReadDir(PathJoin([GitDir, 'objects', 'pack']));
+    for E in PackEntries do
+      if (not E.IsDir) and (Length(E.Name) > 5)
+        and (Copy(E.Name, Length(E.Name)-4, 5) = '.pack') then
+        PackPath := PathJoin([GitDir, 'objects', 'pack', E.Name]);
+    CheckTrue(PackPath <> '', 'pack produced by repack');
+    try Remove(Copy(PackPath, 1, Length(PackPath) - 5) + '.idx') except end;
+    IdxPath := GitBuildPackIndexFile(PackPath);
+    CheckTrue(FileExists(IdxPath), 'idx built');
+    MustCaptureIn('git', ['verify-pack', '-v', IdxPath], Work);
+    CheckTrue(True, 'git verify-pack accepts built idx');
+    RemoveAll(CloneWork);
+    RemoveAll(BareDir);
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestStashPushPopRoundTrip;
+var
+  Work, GitDir: string;
+  PushOid, PopOid: TGitOid;
+begin
+  // covers stash push/apply/drop/pop/clear against git CLI
+  MakeTwoCommitRepo('nextpas_git_stash', Work, GitDir);
+  try
+    WriteFileText(PathJoin([Work, 'f.txt']), 'stashed'#10);
+    PushOid := GitStashPush(GitDir, Work, 'my stash');
+    CheckFalse(GitOidIsZero(PushOid), 'push returns oid');
+    CheckEqual(1, GitStashCount(GitDir), 'one stash after push');
+    CheckTrue(GitStashExists(GitDir), 'stash exists');
+    CheckEqual('c2'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'worktree restored');
+    PopOid := GitStashPop(GitDir, Work);
+    CheckFalse(GitOidIsZero(PopOid), 'pop returns oid');
+    CheckEqual(0, GitStashCount(GitDir), 'empty after pop');
+    CheckEqual('stashed'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'pop restores change');
+    // apply keeps the entry, drop removes it, clear empties
+    WriteFileText(PathJoin([Work, 'f.txt']), 'stashed2'#10);
+    CheckFalse(GitOidIsZero(GitStashPush(GitDir, Work, 'second', True)), 'untracked overload push');
+    CheckFalse(GitOidIsZero(GitStashApply(GitDir, Work, 0)), 'apply by index');
+    CheckEqual(1, GitStashCount(GitDir), 'apply keeps entry');
+    CheckEqual('stashed2'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'apply restores change');
+    GitStashDrop(GitDir, 0);
+    CheckEqual(0, GitStashCount(GitDir), 'drop removes entry');
+    WriteFileText(PathJoin([Work, 'f.txt']), 'stashed3'#10);
+    CheckFalse(GitOidIsZero(GitStashPush(GitDir, Work, 'third')), 'push again');
+    GitStashClear(GitDir);
+    CheckFalse(GitStashExists(GitDir), 'clear empties stash');
+    CheckEqual('', Trim(MustCaptureIn('git', ['stash', 'list'], Work)), 'git agrees empty');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestTagCreateDeleteRename;
+var
+  Work, GitDir, Golden: string;
+  Head: TGitOid;
+  Tags: TGitTagArray;
+begin
+  // covers tag lightweight/annotated/create/rename/delete against git CLI
+  MakeTwoCommitRepo('nextpas_git_tag', Work, GitDir);
+  try
+    Head := GitResolveHead(GitDir);
+    CheckFalse(GitOidIsZero(GitTagCreateLightweight(GitDir, 'v-lite', Head)), 'lightweight created');
+    CheckFalse(GitOidIsZero(GitTagCreateAnnotated(GitDir, 'v-ann', Head, 'release')), 'annotated created');
+    CheckFalse(GitOidIsZero(GitTagCreateAnnotated(GitDir, 'v-full', Head,
+      'release', 'Tagger', 't@x')), 'full-tagger overload created');
+    CheckTrue(GitTagExists(GitDir, 'v-lite'), 'lite exists');
+    CheckEqual(GitOidToHex(Head), GitOidToHex(GitTagGetOid(GitDir, 'v-lite')), 'lite points at HEAD');
+    CheckEqual(GitOidToHex(Head), GitOidToHex(GitTagGetPeeled(GitDir, 'v-ann')), 'annotated peels to HEAD');
+    Tags := GitTagList(GitDir);
+    CheckEqual(3, Length(Tags), 'three tags listed');
+    Golden := MustCaptureIn('git', ['tag', '--list'], Work);
+    CheckTrue(Pos('v-lite', Golden) > 0, 'git agrees lite');
+    CheckTrue(Pos('v-ann', Golden) > 0, 'git agrees annotated');
+    CheckFalse(GitOidIsZero(GitTagRename(GitDir, 'v-lite', 'v-renamed')), 'rename returns oid');
+    CheckFalse(GitTagExists(GitDir, 'v-lite'), 'old name gone');
+    CheckTrue(GitTagExists(GitDir, 'v-renamed'), 'new name present');
+    GitTagDelete(GitDir, 'v-renamed');
+    GitTagDelete(GitDir, 'v-ann');
+    GitTagDelete(GitDir, 'v-full');
+    CheckEqual(0, Length(GitTagList(GitDir)), 'all tags deleted');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestBranchCreateDeleteRename;
+var
+  Work, GitDir, Golden: string;
+  Head: TGitOid;
+  Branches: TGitBranchArray;
+begin
+  // covers branch create/fromref/rename/delete against git CLI
+  MakeTwoCommitRepo('nextpas_git_branch', Work, GitDir);
+  try
+    Head := GitResolveHead(GitDir);
+    CheckEqual('main', GitBranchCurrent(GitDir), 'current is main');
+    CheckFalse(GitBranchIsDetached(GitDir), 'not detached');
+    CheckFalse(GitOidIsZero(GitBranchCreate(GitDir, 'feature', Head)), 'branch created');
+    CheckFalse(GitOidIsZero(GitBranchCreateFromRef(GitDir, 'fromref', 'HEAD')), 'fromref created');
+    CheckTrue(GitBranchExists(GitDir, 'feature'), 'feature exists');
+    CheckEqual(GitOidToHex(Head), GitOidToHex(GitBranchGetOid(GitDir, 'feature')), 'points at HEAD');
+    Branches := GitBranchList(GitDir);
+    CheckEqual(3, Length(Branches), 'three branches listed');
+    Golden := MustCaptureIn('git', ['branch', '--list'], Work);
+    CheckTrue(Pos('feature', Golden) > 0, 'git agrees feature');
+    CheckFalse(GitOidIsZero(GitBranchRename(GitDir, 'feature', 'renamed')), 'rename returns oid');
+    CheckFalse(GitBranchExists(GitDir, 'feature'), 'old gone');
+    CheckTrue(GitBranchExists(GitDir, 'renamed'), 'new present');
+    GitBranchDelete(GitDir, 'renamed');
+    GitBranchDelete(GitDir, 'fromref');
+    Branches := GitBranchList(GitDir);
+    CheckEqual(1, Length(Branches), 'only main remains');
+    CheckEqual('main', Branches[0].Name, 'remaining is main');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestLsFilesMatchesGit;
+var
+  Work, GitDir, CliOut: string;
+  Files: TStringArray;
+  Opts: TGitLsFilesOptions;
+  Detailed: TGitIndexEntryArray;
+  Stage: TStringArray;
+begin
+  // covers ls-files plain/options/detailed/stage against git CLI
+  MakeTwoCommitRepo('nextpas_git_lsfiles', Work, GitDir);
+  try
+    Files := GitLsFiles(GitDir);
+    CheckEqual(1, Length(Files), 'one tracked file');
+    CheckEqual('f.txt', Files[0], 'tracked path');
+    Opts := DefaultGitLsFilesOptions;
+    Files := GitLsFiles(GitDir, Opts);
+    CheckEqual(1, Length(Files), 'options overload same');
+    CheckEqual('f.txt', Files[0], 'options path');
+    Detailed := GitLsFilesDetailed(GitDir);
+    CheckEqual(1, Length(Detailed), 'detailed one entry');
+    CheckEqual('f.txt', Detailed[0].Path, 'detailed path');
+    Stage := GitLsFilesStage(GitDir);
+    CheckEqual(1, Length(Stage), 'stage one line');
+    CheckTrue(Pos('f.txt', Stage[0]) > 0, 'stage has path');
+    CliOut := Trim(MustCaptureIn('git', ['ls-files'], Work));
+    CheckEqual('f.txt', CliOut, 'git ls-files agrees');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestTrailerRoundTrip;
+var
+  Work, GitDir, Body: string;
+  Trailers: TGitTrailerArray;
+begin
+  // covers trailer parse/find/has/format/append on a real commit message
+  MakeTwoCommitRepo('nextpas_git_trailer', Work, GitDir);
+  try
+    RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty',
+      '-m', 'subject', '-m', 'Reviewed-by: Alice <a@x>'], Work);
+    Body := MustCaptureIn('git', ['log', '--format=%B', '-1', 'HEAD'], Work);
+    Trailers := GitParseTrailers(Body);
+    CheckEqual(1, Length(Trailers), 'one trailer parsed');
+    CheckEqual('Reviewed-by', Trailers[0].Key, 'trailer key');
+    CheckTrue(GitHasTrailer(Trailers, 'reviewed-by'), 'case-insensitive has');
+    CheckEqual('Alice <a@x>', GitFindTrailer(Trailers, 'REVIEWED-BY'), 'case-insensitive find');
+    CheckEqual('Signed-off-by: Bob <b@x>', GitFormatTrailer('Signed-off-by', 'Bob <b@x>'), 'format line');
+    CheckTrue(Pos('Signed-off-by: Bob <b@x>',
+      GitAppendTrailer('subject'#10, 'Signed-off-by', 'Bob <b@x>')) > 0, 'append adds trailer');
+    CheckTrue(Pos('Signed-off-by',
+      GitFormatTrailers(GitParseTrailers(
+        GitAppendTrailer('subject'#10, 'Signed-off-by', 'Bob <b@x>')))) > 0, 'format round-trip');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestMailmapResolve;
+var
+  Work, GitDir, CliOut, OutName, OutEmail: string;
+  Map: TGitMailmap;
+begin
+  // covers mailmap parse/load/resolve against git check-mailmap
+  MakeTwoCommitRepo('nextpas_git_mailmap', Work, GitDir);
+  try
+    WriteFileText(PathJoin([Work, '.mailmap']), 'New Name <new@x> Old Name <old@x>'#10);
+    Map := GitLoadMailmap(GitDir);
+    CheckEqual(1, Length(Map), 'one mailmap entry loaded');
+    CheckTrue(GitMailmapResolve(Map, 'Old Name', 'old@x', OutName, OutEmail), 'resolves');
+    CheckEqual('New Name', OutName, 'resolved name');
+    CheckEqual('new@x', OutEmail, 'resolved email');
+    CheckEqual('New Name', GitMailmapResolveName(Map, 'Old Name', 'old@x'), 'name helper');
+    CheckEqual('new@x', GitMailmapResolveEmail(Map, 'Old Name', 'old@x'), 'email helper');
+    Map := GitParseMailmap('New Name <new@x> Old Name <old@x>'#10);
+    CheckEqual(1, Length(Map), 'text overload parses');
+    CliOut := Trim(MustCaptureIn('git', ['check-mailmap', 'Old Name <old@x>'], Work));
+    CheckEqual('New Name <new@x>', CliOut, 'git check-mailmap agrees');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestAttributesMatchGit;
+var
+  Work, GitDir, CliOut: string;
+  Entries: TGitAttrEntries;
+  Attrs: TGitAttrArray;
+begin
+  // covers attributes parse/load/for/get/has against git check-attr
+  MakeTwoCommitRepo('nextpas_git_attr', Work, GitDir);
+  try
+    WriteFileText(PathJoin([Work, '.gitattributes']), '*.txt text'#10);
+    Entries := GitLoadAttributes(GitDir);
+    CheckTrue(Length(Entries) >= 1, 'entries loaded from worktree');
+    Attrs := GitAttributesFor(GitDir, 'f.txt');
+    CheckTrue(Length(Attrs) >= 1, 'attrs for f.txt');
+    CheckEqual('set', GitAttributeGet(Entries, 'f.txt', 'text'), 'text is set');
+    CheckEqual('set', GitAttributeGet(GitDir, 'f.txt', 'text'), 'gitdir overload agrees');
+    Entries := GitParseAttributes('*.txt text'#10);
+    CheckEqual(1, Length(Entries), 'text overload parses');
+    CliOut := Trim(MustCaptureIn('git', ['check-attr', 'text', '--', 'f.txt'], Work));
+    CheckEqual('f.txt: text: set', CliOut, 'git check-attr agrees');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestLogMatchesGit;
+var
+  Work, GitDir, CliOut: string;
+  Entries: TGitLogArray;
+  Lines: TStringArray;
+  Found: TGitLogEntry;
+begin
+  // covers log list/oneline/find/firstline against git CLI
+  MakeTwoCommitRepo('nextpas_git_log', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    CheckEqual(2, Length(Entries), 'two log entries');
+    CheckEqual('c2', Entries[0].Message, 'newest first');
+    CheckEqual('c1', Entries[1].Message, 'oldest last');
+    CheckEqual(7, Length(Entries[0].ShortOid), 'short oid 7 chars');
+    CheckTrue(Pos(Entries[0].ShortOid, GitOidToHex(Entries[0].Oid)) = 1, 'short is prefix');
+    Entries := GitLogList(GitDir, 'HEAD', 10);
+    CheckEqual(2, Length(Entries), 'ref overload same count');
+    Lines := GitLogOneline(GitDir, 10);
+    CheckEqual(2, Length(Lines), 'oneline count');
+    CheckTrue(Pos('c2', Lines[0]) > 0, 'oneline newest message');
+    CheckTrue(Pos('c1', Lines[1]) > 0, 'oneline oldest message');
+    CliOut := MustCaptureIn('git', ['log', '--format=%s', 'HEAD'], Work);
+    CheckTrue(Pos('c2', CliOut) > 0, 'git log agrees on c2');
+    CheckTrue(Pos('c1', CliOut) > 0, 'git log agrees on c1');
+    Found := GitLogFind(GitDir, Entries[0].Oid);
+    CheckEqual('c2', Found.Message, 'find by oid');
+    CheckEqual('c2', GitLogFirstLine('c2'#10'body'#10), 'firstline strips body');
+    CheckEqual('', GitLogFirstLine(''), 'firstline empty');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestShortlogMatchesGit;
+var
+  Work, GitDir, Txt, CliOut: string;
+  Entries: TGitShortlogArray;
+begin
+  // covers shortlog aggregation: two commits, one author
+  MakeTwoCommitRepo('nextpas_git_shortlog', Work, GitDir);
+  try
+    Entries := GitShortlog(GitDir, 10);
+    CheckEqual(1, Length(Entries), 'one author entry');
+    CheckEqual(2, Entries[0].Count, 'two commits counted');
+    CheckEqual('Test Er', Entries[0].AuthorName, 'author name');
+    Entries := GitShortlog(GitDir, 'HEAD', 10);
+    CheckEqual(1, Length(Entries), 'ref overload same');
+    Txt := GitShortlogText(GitDir, 10);
+    CheckTrue(Pos('Test Er', Txt) > 0, 'text has author');
+    CheckTrue(Pos('2', Txt) > 0, 'text has count');
+    CliOut := MustCaptureIn('git', ['shortlog', '-s', '-n', 'HEAD'], Work);
+    CheckTrue(Pos('Test Er', CliOut) > 0, 'git shortlog agrees on author');
+    CheckTrue(Pos('2', CliOut) > 0, 'git shortlog agrees on count');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestMergeBaseMatchesGit;
+var
+  Work, GitDir, Golden: string;
+  BaseByRef, BaseByOid, BaseMany: TGitOid;
+  Head, Parent: TGitOid;
+  Entries: TGitLogArray;
+begin
+  // covers merge-base ref/oid/many overloads against git CLI
+  MakeTwoCommitRepo('nextpas_git_mergebase', Work, GitDir);
+  try
+    Golden := Trim(MustCaptureIn('git', ['merge-base', 'HEAD', 'HEAD~1'], Work));
+    BaseByRef := GitMergeBase(GitDir, 'HEAD', 'HEAD~1');
+    CheckEqual(Golden, GitOidToHex(BaseByRef), 'ref overload matches git');
+    Entries := GitLogList(GitDir, 10);
+    Head := Entries[0].Oid;
+    Parent := Entries[1].Oid;
+    BaseByOid := GitMergeBase(GitDir, Head, Parent);
+    CheckEqual(GitOidToHex(BaseByRef), GitOidToHex(BaseByOid), 'oid overload agrees');
+    CheckEqual(GitOidToHex(Parent), GitOidToHex(BaseByOid), 'linear base is parent');
+    BaseMany := GitMergeBaseMany(GitDir, [Head, Parent]);
+    CheckEqual(GitOidToHex(BaseByOid), GitOidToHex(BaseMany), 'many overload agrees');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestCherryPickRoundTrip;
+var
+  Work, GitDir: string;
+  OidC2, NewOid, Head: TGitOid;
+  Entries: TGitLogArray;
+begin
+  // covers cherry-pick: reset to c1, pick c2, worktree + HEAD move
+  MakeTwoCommitRepo('nextpas_git_pick', Work, GitDir);
+  try
+    OidC2 := GitOidFromHex(Trim(MustCaptureIn('git', ['rev-parse', 'HEAD'], Work)));
+    RunInChecked('git', ['reset', '--hard', '--quiet', 'HEAD~1'], Work);
+    CheckEqual('c1'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'reset to c1');
+    NewOid := GitCherryPick(GitDir, Work, OidC2);
+    CheckFalse(GitOidIsZero(NewOid), 'pick returns non-zero oid');
+    Head := GitResolveHead(GitDir);
+    CheckEqual(GitOidToHex(NewOid), GitOidToHex(Head), 'HEAD moves to pick');
+    CheckEqual('c2'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'worktree has picked content');
+    Entries := GitLogList(GitDir, 10);
+    CheckEqual(2, Length(Entries), 'two commits after pick');
+    CheckTrue(Pos('cherry picked', Entries[0].FullMessage) > 0, 'pick trailer recorded');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestRevertRoundTrip;
+var
+  Work, GitDir: string;
+  NewOid: TGitOid;
+  Entries: TGitLogArray;
+  CliMsg: string;
+begin
+  // covers revert: revert HEAD on c2, worktree restored to c1
+  MakeTwoCommitRepo('nextpas_git_revert', Work, GitDir);
+  try
+    NewOid := GitRevert(GitDir, Work, 'HEAD');
+    CheckFalse(GitOidIsZero(NewOid), 'revert returns non-zero oid');
+    CheckEqual(GitOidToHex(NewOid), GitOidToHex(GitResolveHead(GitDir)), 'HEAD moves to revert');
+    CheckEqual('c1'#10, ReadFileText(PathJoin([Work, 'f.txt'])), 'worktree restored');
+    Entries := GitLogList(GitDir, 10);
+    CheckEqual(3, Length(Entries), 'three commits after revert');
+    CheckEqual('Revert "c2"', Entries[0].Message, 'revert subject line');
+    CliMsg := Trim(MustCaptureIn('git', ['log', '--format=%s', '-1', 'HEAD'], Work));
+    CheckEqual('Revert "c2"', CliMsg, 'git CLI agrees on revert message');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestDiffFamilyMatchesGit;
+var
+  Work, GitDir, CliOut: string;
+  Entries: TGitLogArray;
+  Head, Parent, HeadTree, ParentTree: TGitOid;
+  D: TGitDiffArray;
+  Names: TStringArray;
+  Stat: string;
+begin
+  // covers diff trees/commits/refs/namestatus/stat on c1..c2
+  MakeTwoCommitRepo('nextpas_git_diff', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    Head := Entries[0].Oid;
+    Parent := Entries[1].Oid;
+    HeadTree := Entries[0].Tree;
+    ParentTree := Entries[1].Tree;
+    D := GitDiffTrees(GitDir, ParentTree, HeadTree);
+    CheckEqual(1, Length(D), 'trees diff one file');
+    CheckEqual('f.txt', D[0].Path, 'trees diff path');
+    D := GitDiffCommits(GitDir, Parent, Head);
+    CheckEqual(1, Length(D), 'commits diff one file');
+    CheckEqual('f.txt', D[0].Path, 'commits diff path');
+    D := GitDiffRefs(GitDir, 'HEAD~1', 'HEAD');
+    CheckEqual(1, Length(D), 'refs diff one file');
+    Names := GitDiffNameStatus(GitDir, ParentTree, HeadTree);
+    CheckEqual(1, Length(Names), 'namestatus one line');
+    CheckTrue(Pos('f.txt', Names[0]) > 0, 'namestatus has path');
+    Stat := GitDiffStatSummary(GitDir, ParentTree, HeadTree);
+    CheckTrue(Pos('1 files changed', Stat) > 0, 'stat has file count');
+    CheckTrue(Pos('modified', Stat) > 0, 'stat has modified kind');
+    CliOut := Trim(MustCaptureIn('git', ['diff', '--name-only', 'HEAD~1', 'HEAD'], Work));
+    CheckEqual('f.txt', CliOut, 'git diff agrees on path');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
 procedure SetupFixture;
 begin
   GRepo := PathJoin([GetTempDir,
@@ -4515,6 +5662,8 @@ begin
     T.Test('walk commit/tree/blob', @TestWalkCommitTreeBlob);
     T.Test('repack ofs_delta readable', @TestRepackOfsDelta);
     T.Test('repack ref_delta readable', @TestRepackRefDelta);
+    T.Test('pack delta depth cap pinned', @TestPackDeltaDepthCapPinned);
+    T.Test('pack idx crc not validated', @TestPackIdxCrcNotValidated);
     T.Test('packed refs resolve after gc', @TestPackedRefsAfterGc);
     T.Test('missing object raises', @TestMissingObjectRaises);
     T.Test('truncated loose object raises', @TestTruncatedLooseRaises);
@@ -4533,6 +5682,7 @@ begin
     T.Test('index v4 prefix compression', @TestIndexV4PrefixCompression);
     T.Test('corrupt index raises', @TestIndexCorruptionRaises);
     T.Test('split-index extension refused', @TestIndexSplitIndexRefused);
+    T.Test('index v1 refused', @TestIndexVersion1Refused);
     T.Test('index serialization golden vs ls-files',
       @TestIndexSerializeGoldenLsFiles);
     T.Test('index roundtrip self-consistency',
@@ -4552,6 +5702,7 @@ begin
     T.Test('cache-tree conflict invalidates', @TestCacheTreeConflictInvalidates);
     T.Test('revwalk matches git rev-list', @TestRevWalkMatchesRevList);
     T.Test('revwalk start and max-count', @TestRevWalkStartAndMaxCount);
+    T.Test('revwalk ignores shallow file', @TestRevWalkIgnoresShallowFile);
     T.Test('revwalk topo-order matches git', @TestRevWalkTopoOrderMatchesGit);
     T.Test('revwalk topo-order max-count', @TestRevWalkTopoMaxCount);
     T.Test('revwalk topo-order branch start', @TestRevWalkTopoBranchStart);
@@ -4629,6 +5780,38 @@ begin
     T.Test('bisect golden', @TestBisectGolden);
     T.Test('blame threshold edge 1M', @TestBlameThresholdEdge);
     T.Test('blame large-file fallback 3k×3k', @TestBlameLargeFileFallback);
+    T.Test('parse cache growth no duplicates', @TestParseCacheGrowthNoDuplicates);
+    T.Test('workdir diff apply checkout round-trip', @TestWorkdirDiffApplyCheckoutRoundTrip);
+    T.Test('notes add get remove round-trip', @TestNotesAddGetRemoveRoundTrip);
+    T.Test('archive file list matches git', @TestArchiveFileListMatchesGit);
+    T.Test('describe matches git', @TestDescribeMatchesGit);
+    T.Test('show structure', @TestShowStructure);
+    T.Test('catfile matches git', @TestCatFileMatchesGit);
+    T.Test('log matches git', @TestLogMatchesGit);
+    T.Test('shortlog matches git', @TestShortlogMatchesGit);
+    T.Test('merge-base matches git', @TestMergeBaseMatchesGit);
+    T.Test('cherry-pick round-trip', @TestCherryPickRoundTrip);
+    T.Test('revert round-trip', @TestRevertRoundTrip);
+    T.Test('diff family matches git', @TestDiffFamilyMatchesGit);
+    T.Test('ls-files matches git', @TestLsFilesMatchesGit);
+    T.Test('trailer round-trip', @TestTrailerRoundTrip);
+    T.Test('mailmap resolve', @TestMailmapResolve);
+    T.Test('attributes match git', @TestAttributesMatchGit);
+    T.Test('stash push pop round-trip', @TestStashPushPopRoundTrip);
+    T.Test('tag create delete rename', @TestTagCreateDeleteRename);
+    T.Test('branch create delete rename', @TestBranchCreateDeleteRename);
+    T.Test('commit-graph write verify', @TestCommitGraphWriteVerify);
+    T.Test('worktree add remove', @TestWorktreeAddRemove);
+    T.Test('submodule at ref', @TestSubmoduleAtRef);
+    T.Test('bundle from revs range', @TestBundleFromRevsRange);
+    T.Test('grep tree commits', @TestGrepTreeCommits);
+    T.Test('small sibling overloads', @TestSmallSiblingOverloads);
+    T.Test('topo with boundary direct', @TestTopoWithBoundaryDirect);
+    T.Test('reflog parse', @TestReflogParse);
+    T.Test('config parse path', @TestConfigParsePath);
+    T.Test('cache-tree round-trip', @TestCacheTreeRoundTrip);
+    T.Test('protocol framing', @TestProtocolFraming);
+    T.Test('clone and pack index', @TestCloneAndPackIndex);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;

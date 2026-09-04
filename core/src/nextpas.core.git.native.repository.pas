@@ -18,7 +18,6 @@ type
     FWorkTree: string;
     FClosed: Boolean;
     procedure EnsureOpen;
-    procedure RaiseNotImpl(const AMethod: string);
   public
     constructor Create(const AGitDir, AWorkTree: string);
     // IGitRepository
@@ -63,6 +62,7 @@ implementation
 
 uses
   nextpas.core.fs,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.base,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
@@ -81,166 +81,12 @@ uses
   nextpas.core.git.native.write,
   nextpas.core.git.native.index,
   nextpas.core.git.native.checkout,
+  nextpas.core.git.native.clone,
+  nextpas.core.git.native.mergebase,
   nextpas.core.git.native.revwalk,
   nextpas.core.git.native.repository.diff,
-  nextpas.core.git.native.repository.worktree;
-
-type
-  TNativeReference = class(TInterfacedObject, IGitReference)
-  private
-    FName: string;
-    FShort: string;
-    FOID: string;
-  public
-    constructor Create(const AName, AShort, AOIDHex: string);
-    function Name: string;
-    function ShortName: string;
-    function TargetOIDString: string;
-    function IsBranch: Boolean;
-    function IsRemote: Boolean;
-    function IsTag: Boolean;
-  end;
-
-  TNativeCommit = class(TInterfacedObject, IGitCommit)
-  private
-    FOIDHex: string;
-    FInfo: TGitCommitInfo;
-  public
-    constructor Create(const AOIDHex: string; const AInfo: TGitCommitInfo);
-    function Message: string;
-    function ShortMessage: string;
-    function AuthorString: string;
-    function CommitterString: string;
-    function Time: TDateTime;
-    function ParentCount: Integer;
-    function OIDString: string;
-    function ParentOIDString(AIndex: Integer): string;
-  end;
-
-{ TNativeReference }
-
-constructor TNativeReference.Create(const AName, AShort, AOIDHex: string);
-begin
-  inherited Create;
-  FName := AName;
-  FShort := AShort;
-  FOID := AOIDHex;
-end;
-
-function TNativeReference.Name: string;
-begin
-  Result := FName;
-end;
-
-function TNativeReference.ShortName: string;
-begin
-  Result := FShort;
-end;
-
-function TNativeReference.TargetOIDString: string;
-begin
-  Result := FOID;
-end;
-
-function TNativeReference.IsBranch: Boolean;
-begin
-  Result := Pos('refs/heads/', FName) = 1;
-end;
-
-function TNativeReference.IsRemote: Boolean;
-begin
-  Result := Pos('refs/remotes/', FName) = 1;
-end;
-
-function TNativeReference.IsTag: Boolean;
-begin
-  Result := Pos('refs/tags/', FName) = 1;
-end;
-
-{ TNativeCommit }
-
-constructor TNativeCommit.Create(const AOIDHex: string; const AInfo: TGitCommitInfo);
-begin
-  inherited Create;
-  FOIDHex := LowerCase(AOIDHex);
-  FInfo := AInfo;
-end;
-
-function TNativeCommit.Message: string;
-begin
-  Result := FInfo.Message;
-end;
-
-function TNativeCommit.ShortMessage: string;
-var
-  P: Integer;
-begin
-  P := Pos(#10, FInfo.Message);
-  if P > 0 then
-    Result := Trim(Copy(FInfo.Message, 1, P - 1))
-  else
-    Result := Trim(FInfo.Message);
-end;
-
-function Pad2(AValue: Integer): string; inline;
-begin
-  if AValue < 10 then
-    Result := '0' + IntToStr(AValue)
-  else
-    Result := IntToStr(AValue);
-end;
-
-function FormatSig(const ASig: TGitSignature): string;
-var
-  Sign: Char;
-  AbsM: Integer;
-  H, M: Integer;
-begin
-  AbsM := ASig.TzMinutes;
-  if AbsM < 0 then
-  begin
-    Sign := '-';
-    AbsM := -AbsM;
-  end
-  else
-    Sign := '+';
-  H := AbsM div 60;
-  M := AbsM mod 60;
-  Result := ASig.Name + ' <' + ASig.Email + '> ' + IntToStr(ASig.UnixTime) +
-    ' ' + Sign + Pad2(H) + Pad2(M);
-end;
-
-function TNativeCommit.AuthorString: string;
-begin
-  Result := FormatSig(FInfo.Author);
-end;
-
-function TNativeCommit.CommitterString: string;
-begin
-  Result := FormatSig(FInfo.Committer);
-end;
-
-function TNativeCommit.Time: TDateTime;
-begin
-  Result := (FInfo.Author.UnixTime / 86400) + 25569;
-end;
-
-function TNativeCommit.ParentCount: Integer;
-begin
-  Result := Length(FInfo.Parents);
-end;
-
-function TNativeCommit.OIDString: string;
-begin
-  Result := FOIDHex;
-end;
-
-function TNativeCommit.ParentOIDString(AIndex: Integer): string;
-begin
-  if (AIndex < 0) or (AIndex >= Length(FInfo.Parents)) then
-    Exit('');
-  Result := GitOidToHex(FInfo.Parents[AIndex]);
-end;
+  nextpas.core.git.native.repository.worktree,
+  nextpas.core.git.native.repository.objects;
 
 { TNativeRepositoryAdapter }
 
@@ -256,11 +102,6 @@ procedure TNativeRepositoryAdapter.EnsureOpen;
 begin
   if FClosed then
     raise EGitError.Create('repository is closed');
-end;
-
-procedure TNativeRepositoryAdapter.RaiseNotImpl(const AMethod: string);
-begin
-  raise EGitError.Create('not implemented for native backend: ' + AMethod);
 end;
 
 function TNativeRepositoryAdapter.Path: string;
@@ -331,14 +172,30 @@ function TNativeRepositoryAdapter.ListBranches(Kind: TGitBranchKind): nextpas.co
 var
   List: TGitBranchArray;
   I: Integer;
+  LRemote: nextpas.core.base.TStringArray;
 begin
   EnsureOpen;
-  if Kind <> gbLocal then
-    RaiseNotImpl('ListBranches(Kind<>gbLocal)');
-  List := GitBranchList(FGitDir);
-  SetLength(Result, Length(List));
-  for I := 0 to High(List) do
-    Result[I] := List[I].RefName;
+  SetLength(Result, 0);
+  if (Kind = gbLocal) or (Kind = gbAll) then
+  begin
+    List := GitBranchList(FGitDir);
+    for I := 0 to High(List) do
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := List[I].RefName;
+    end;
+  end;
+  if (Kind = gbRemote) or (Kind = gbAll) then
+  begin
+    SetLength(LRemote, 0);
+    CollectRemoteBranches(FGitDir, LRemote);
+    for I := 0 to High(LRemote) do
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := LRemote[I];
+    end;
+  end;
+  SortStrArray(Result);
 end;
 
 function TNativeRepositoryAdapter.CommitByHash(const Hash: string): IGitCommit;
@@ -400,37 +257,61 @@ begin
 end;
 
 function TNativeRepositoryAdapter.Remote(const Name: string): IGitRemote;
+var
+  LName: string;
+  LRemote: TGitRemote;
 begin
   EnsureOpen;
-  RaiseNotImpl('Remote');
-  Result := nil;
+  LName := Trim(Name);
+  if LName = '' then
+    LName := 'origin';
+  if not GitRemoteFind(FGitDir, LName, LRemote) then
+    raise EGitError.CreateFmt('remote "%s" not found', [LName]);
+  Result := TNativeRemote.Create(FGitDir, LRemote.Name, LRemote.Url);
 end;
 
 function TNativeRepositoryAdapter.Fetch(const RemoteName: string): Boolean;
+var
+  RName: string;
 begin
   EnsureOpen;
-  RaiseNotImpl('Fetch');
-  Result := False;
+  RName := Trim(RemoteName);
+  if RName = '' then
+    RName := 'origin';
+  Result := GitFetch(FGitDir, RName);
 end;
 
 function TNativeRepositoryAdapter.CheckoutBranch(const Branch: string): Boolean;
 begin
   EnsureOpen;
-  RaiseNotImpl('CheckoutBranch');
-  Result := False;
+  Result := CheckoutBranchEx(Branch, False);
 end;
 
 function TNativeRepositoryAdapter.CheckoutBranchEx(const Branch: string; Force: Boolean): Boolean;
+var
+  LName, LRef: string;
 begin
   EnsureOpen;
-  RaiseNotImpl('CheckoutBranchEx');
-  Result := False;
-end;
-
-function MapNativeToFlags(HeadCode, WorkCode: TGitStatusCode): TGitStatusFlags; inline;
-begin
-  // single source via base.GitStatusCodesToFlags — inline zero-copy set ops, eliminates dual track mapping
-  Result := nextpas.core.git.base.GitStatusCodesToFlags(HeadCode, WorkCode);
+  LName := Trim(Branch);
+  if LName = '' then
+    raise EGitError.Create('checkout: branch empty');
+  if FWorkTree = '' then
+    raise EGitError.Create('checkout: cannot checkout in bare repository');
+  if Copy(LName, 1, 11) = 'refs/heads/' then
+    LRef := LName
+  else if Copy(LName, 1, 5) = 'refs/' then
+    LRef := LName
+  else
+    LRef := 'refs/heads/' + LName;
+  try
+    GitCheckoutRef(FGitDir, FWorkTree, LRef);
+  except
+    on E: EGitError do
+      raise;
+    on E: Exception do
+      raise EGitError.Create('checkout: ' + E.Message);
+  end;
+  Result := True;
 end;
 
 function TNativeRepositoryAdapter.Status: nextpas.core.base.TStringArray;
@@ -498,11 +379,6 @@ begin
   Result := not IsClean;
 end;
 
-function TrimInline(const S: string): string; inline;
-begin
-  Result := GitTrimSpaces(S);
-end;
-
 function TNativeRepositoryAdapter.ListRemotes: nextpas.core.base.TStringArray;
 var
   List: TGitRemoteArray;
@@ -524,7 +400,7 @@ function TNativeRepositoryAdapter.PullFastForward(const RemoteName: string; out 
 var
   RName, Branch, LocalRef, RemoteRef: string;
   HasDirty: Boolean;
-  Rem: TGitRemote;
+  LocalOid, RemoteOid, Base: TGitOid;
 begin
   EnsureOpen;
   Error:='';
@@ -535,19 +411,51 @@ begin
   if HasDirty then begin Error:='dirty worktree'; Exit(gpffDirty); end;
   Branch:=CurrentBranch;
   if Branch='' then begin Error:='detached HEAD'; Exit(gpffDetachedHead); end;
-  if not GitRemoteFind(FGitDir,RName,Rem) then begin Error:='no remote "'+RName+'"'; Exit(gpffNoRemote); end;
+  try
+    GitFetch(FGitDir, RName);
+  except
+    on E: EGitError do
+    begin
+      Error:=E.Message;
+      if Pos('remote "' + LowerCase(RName) + '" not found', LowerCase(Error)) > 0 then
+        Exit(gpffNoRemote);
+      Exit(gpffError);
+    end;
+    on E: Exception do
+    begin
+      Error:=E.Message;
+      Exit(gpffError);
+    end;
+  end;
   LocalRef:='refs/heads/'+Branch;
   RemoteRef:='refs/remotes/'+RName+'/'+Branch;
   try
-    if not GitOidSame(GitResolveRef(FGitDir,LocalRef),GitResolveRef(FGitDir,RemoteRef)) then
-    begin
-      Error:='needs merge (pure backend, no fetch)';
-      Exit(gpffNeedsMerge);
-    end;
+    LocalOid:=GitResolveRef(FGitDir,LocalRef);
+    RemoteOid:=GitResolveRef(FGitDir,RemoteRef);
   except
     on EGitError do begin Error:=CurrentExceptionMessage; Exit(gpffError); end;
   end;
-  Result:=gpffUpToDate;
+  if GitOidSame(LocalOid,RemoteOid) then
+    Exit(gpffUpToDate);
+  try
+    Base:=GitMergeBase(FGitDir,LocalOid,RemoteOid);
+  except
+    on EGitError do begin Error:=CurrentExceptionMessage; Exit(gpffError); end;
+  end;
+  if not GitOidSame(Base,LocalOid) then
+  begin
+    Error:='needs merge';
+    Exit(gpffNeedsMerge);
+  end;
+  try
+    WriteFileText(PathJoin([FGitDir,LocalRef]),GitOidToHex(RemoteOid)+#10);
+    if FWorkTree <> '' then
+      GitCheckoutRef(FGitDir,FWorkTree,LocalRef);
+  except
+    on EGitError do begin Error:=CurrentExceptionMessage; Exit(gpffError); end;
+    on E: Exception do begin Error:=E.Message; Exit(gpffError); end;
+  end;
+  Result:=gpffFastForwarded;
 end;
 
 function TNativeRepositoryAdapter.Diff(const AOldRef, ANewRef: string): TGitDiff;
@@ -626,12 +534,33 @@ var
   I, StartIdx: Integer;
   H: TGitBlameHunk;
   CurId: string;
+  HeadOid, TreeOid, BlobOid: TGitOid;
+  Repo: TNativeRepository;
 begin
   EnsureOpen;
   Result.Path:=APath;
   Result.Hunks:=nil;
   if TrimInline(APath)='' then
     Exit;
+  try
+    HeadOid := GitResolveHead(FGitDir);
+  except
+    on EGitError do
+      Exit;
+  end;
+  Repo := TNativeRepository.Create(FGitDir);
+  try
+    try
+      TreeOid := GitPeelToTree(Repo, HeadOid);
+    except
+      on EGitError do raise;
+      on Exception do raise EGitError.Create(CurrentExceptionMessage);
+    end;
+    if not GitFindBlobInTree(Repo, TreeOid, TrimInline(APath), BlobOid) then
+      Exit;
+  finally
+    Repo.Free;
+  end;
   try
     NativeBlame:=GitBlame(FGitDir,APath);
   except
