@@ -3,8 +3,7 @@ program test_openssl_connection_session_reused_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base.utils, nextpas.core.exception, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.base,
@@ -47,26 +46,25 @@ end;
 
 procedure WarmupStreamConnectionConstructor(AContext: ISSLContext);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(AContext, LStream);
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 
 procedure TestIsSessionReusedShouldDegradeSafelyWhenHelperIsUnavailable;
 var
   LContext: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: ISSLConnection;
   LResumption: ISSLSessionResumption;
   LOriginalSSLSessionReused: TSSL_session_reused;
@@ -93,10 +91,10 @@ begin
 
   WarmupStreamConnectionConstructor(LContext);
 
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LOriginalSSLSessionReused := SSL_session_reused;
   try
-    LConn := TOpenSSLConnection.Create(LContext, TStreamWrapper.Create(LStream)) as ISSLConnection;
+    LConn := TOpenSSLConnection.Create(LContext, LStream) as ISSLConnection;
     AssertTrue('connection exposes ISSLSessionResumption owner path',
       Supports(LConn, ISSLSessionResumption, LResumption));
 
@@ -127,7 +125,6 @@ begin
   finally
     LResumption := nil;
     LConn := nil;
-    LStream.Free;
   end;
 end;
 

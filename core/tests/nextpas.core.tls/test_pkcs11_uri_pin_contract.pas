@@ -3,8 +3,7 @@ program test_pkcs11_uri_pin_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.fs, nextpas.core.path, nextpas.core.text.conv,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.uri,
   nextpas.core.tls.pkcs11.pin,
@@ -82,7 +81,6 @@ var
   LURI: TPKCS11URI;
   LPINFile: string;
   LPIN: string;
-  LFileStream: TFileStream;
   LData: AnsiString;
 begin
   WriteLn('--- Test: PKCS11 URI pin-source=file');
@@ -92,12 +90,7 @@ begin
     'pkcs11_pin_contract_' + IntToStr(Random(1000000)) + '.txt';
 
   LData := ' 2468 ' + LineEnding;
-  LFileStream := TFileStream.Create(LPINFile, fmCreate);
-  try
-    LFileStream.WriteBuffer(Pointer(LData)^, Length(LData));
-  finally
-    LFileStream.Free;
-  end;
+  WriteFileText(LPINFile, LData);
 
   FillChar(LURI, SizeOf(LURI), 0);
   LURI.PINSource := 'file:' + LPINFile;
@@ -205,7 +198,6 @@ var
   LBackend: TEngineBackend;
   LConfig: TPKCS11Config;
   LModulePath: string;
-  LFileStream: TFileStream;
   LMessage: string;
 begin
   WriteLn('--- Test: ENGINE certificate loading should be explicit unsupported');
@@ -214,12 +206,8 @@ begin
   LModulePath := IncludeTrailingPathDelimiter(GetTempDir()) +
     'pkcs11_engine_dummy_module_' + IntToStr(Random(1000000)) + '.so';
 
-  LFileStream := TFileStream.Create(LModulePath, fmCreate);
-  try
-    // keep file existing for ValidateConfig
-  finally
-    LFileStream.Free;
-  end;
+  // keep file existing for ValidateConfig
+  WriteFileText(LModulePath, '');
 
   LBackend := TEngineBackend.Create;
   try

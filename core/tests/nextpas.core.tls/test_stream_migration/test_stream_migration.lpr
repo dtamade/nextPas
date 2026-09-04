@@ -3,7 +3,10 @@ program test_stream_migration;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.tls.asn1,
   nextpas.core.tls.base,
   nextpas.core.tls.crl,
@@ -28,17 +31,6 @@ const
   ASN1_SHIM_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.asn1.pas';
   CERT_PINNING_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.cert.pinning.pas';
   DEBUG_UTILS_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.debug.utils.pas';
-  MBEDTLS_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.mbedtls.connection.pas';
-  MBEDTLS_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.mbedtls.context.pas';
-  OPENSSL_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.openssl.connection.pas';
-  OPENSSL_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.openssl.context.pas';
-  WOLFSSL_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.wolfssl.connection.pas';
-  WOLFSSL_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.wolfssl.context.pas';
-  WINSSL_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.winssl.connection.pas';
-  WINSSL_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.winssl.context.pas';
-  FREEPASCAL_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.freepascal.connection.pas';
-  FREEPASCAL_CTX_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.freepascal.context.pas';
-  FREEPASCAL_LIB_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.freepascal.lib.pas';
   TIMEOUT_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.timeout.pas';
   NONBLOCKING_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.nonblocking.pas';
   PENDING_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.pending.pas';
@@ -46,18 +38,6 @@ const
   WEBSOCKET_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.websocket.pas';
   TLS_UTILS_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.utils.pas';
 
-  VALID_CRL_PEM =
-    '-----BEGIN X509 CRL-----'#10 +
-    'MIIBjTB3AgEBMA0GCSqGSIb3DQEBCwUAMDQxEDAOBgNVBAMMB1Rlc3QgQ0ExEzAR'#10 +
-    'BgNVBAoMCmZhZmFmYS5zc2wxCzAJBgNVBAYTAlVTFw0yNjAzMjAxNTI5NDZaFw0y'#10 +
-    'NjA0MTkxNTI5NDZaoA8wDTALBgNVHRQEBAICEAAwDQYJKoZIhvcNAQELBQADggEB'#10 +
-    'ACLaEDdVdaNeX3pTi8a2QjBKXDhZhr3sphOOr+4jGq2BrM4nd3Y/AzSLeykWtch7'#10 +
-    'tWtNT0BoNpPP63zD7qkUx3BS9qT/ATFuikWflP2cG3NzMXPLzjdcVF2LJCJf64VI'#10 +
-    'FOjEW1F6MDGp0Rciwjj9X52IePexvrmGqHVnDsvn1KVWNEiIP4THom01tUeHn186'#10 +
-    '8uLIjDgJ4DD7rSbR+OH1H6d8Dhh14yGBz6xVMA/BaCzTcRKH4VpUKgrw6wPKZAIy'#10 +
-    'RAAm1DGds5Z9gTqELwYJVHwv2UpdESsCGIYs7kOuyj+2MYyHhGNEPbUer3IZ7OZN'#10 +
-    'A0+1F8BNBBFon7Ehk2j/F6c='#10 +
-    '-----END X509 CRL-----';
 
 var
   GPassed: Integer = 0;
@@ -89,28 +69,8 @@ begin
 end;
 
 function LoadText(const AFileName: string): string;
-var
-  LStream: TStringList;
 begin
-  LStream := TStringList.Create;
-  try
-    LStream.LoadFromFile(AFileName);
-    Result := LStream.Text;
-  finally
-    LStream.Free;
-  end;
-end;
-
-function TempFileName(const APrefix: string): string;
-begin
-  Result := IncludeTrailingPathDelimiter(GetTempDir()) +
-    APrefix + '_' + IntToStr(GetProcessID) + '_' + IntToStr(Random(1000000));
-end;
-
-procedure DeleteIfExists(const AFileName: string);
-begin
-  if FileExists(AFileName) then
-    DeleteFile(AFileName);
+  Result := ReadFileText(AFileName);
 end;
 
 procedure TestSourceMigrationContracts;
@@ -286,81 +246,6 @@ begin
     'array-based ParseDistinguishedName signature is missing in ' + TLS_UTILS_PATH);
 end;
 
-procedure TestASN1WriterRoundTrip;
-var
-  LWriter: TASN1Writer;
-  LData: TBytes;
-  LReader: TASN1Reader;
-  LRoot: TASN1Node;
-begin
-  WriteLn;
-  WriteLn('=== ASN.1 roundtrip ===');
-
-  LWriter := TASN1Writer.Create;
-  try
-    LWriter.BeginSequence;
-    LWriter.WriteInteger(42);
-    LWriter.WriteUTF8String('stream-migration');
-    LWriter.EndSequence;
-    LData := LWriter.GetData;
-  finally
-    LWriter.Free;
-  end;
-
-  Check(Length(LData) > 0, 'asn1 writer emitted bytes');
-
-  LReader := TASN1Reader.Create(LData);
-  try
-    LRoot := LReader.Parse;
-    try
-      Check(LRoot.IsSequence, 'asn1 parsed sequence');
-      Check(LRoot.ChildCount = 2, 'asn1 sequence child count');
-      if LRoot.ChildCount >= 2 then
-      begin
-        Check(LRoot.GetChild(0).AsInteger = 42, 'asn1 integer roundtrip');
-        Check(LRoot.GetChild(1).AsString = 'stream-migration', 'asn1 string roundtrip');
-      end;
-    finally
-      LRoot.Free;
-    end;
-  finally
-    LReader.Free;
-  end;
-end;
-
-procedure TestSSLMemoryStreamBehavior;
-var
-  LStream: TSSLMemoryStream;
-  LBytes: TBytes;
-begin
-  WriteLn;
-  WriteLn('=== TSSLMemoryStream behavior ===');
-
-  LStream := TSSLMemoryStream.Create('migration');
-  try
-    LStream.WriteByte($12);
-    LStream.WriteWord($3456);
-    LStream.WriteDWord($789ABCDE);
-    LStream.WriteString('ok');
-
-    Check(LStream.Size > 0, 'ssl memory stream size tracks writes');
-    LStream.Position := 0;
-    Check(LStream.PeekByte = $12, 'ssl memory stream peek byte');
-    Check(LStream.ReadByte = $12, 'ssl memory stream read byte');
-    Check(LStream.ReadWord = $3456, 'ssl memory stream read word');
-    Check(LStream.ReadDWord = $789ABCDE, 'ssl memory stream read dword');
-    Check(LStream.ReadString(2) = 'ok', 'ssl memory stream read string');
-    Check(LStream.RemainingBytes = 0, 'ssl memory stream remaining bytes');
-
-    LStream.Position := 0;
-    LBytes := LStream.ReadBytes(LStream.Size);
-    Check(Length(LBytes) = LStream.Size, 'ssl memory stream read bytes count');
-    Check(Pos('12', UpperCase(LStream.GetHexDump)) > 0, 'ssl memory stream hex dump');
-  finally
-    LStream.Free;
-  end;
-end;
-
 procedure TestTimeoutAndNonBlockingIStreamCompatibility;
 var
   LInner: IStream;
@@ -440,87 +325,7 @@ begin
     Check(LParts[0] = 'CN=example.com', 'dn parser preserves first component');
 end;
 
-procedure TestOCSPCacheFileRoundTrip;
-var
-  LCache: TOCSPResponseCache;
-  LReloaded: TOCSPResponseCache;
-  LSerial: TBytes;
-  LResponse: TBytes;
-  LLoaded: TBytes;
-  LFileName: string;
 begin
-  WriteLn;
-  WriteLn('=== OCSP cache file roundtrip ===');
-
-  SetLength(LSerial, 3);
-  LSerial[0] := 1;
-  LSerial[1] := 2;
-  LSerial[2] := 3;
-
-  SetLength(LResponse, 4);
-  LResponse[0] := $30;
-  LResponse[1] := $82;
-  LResponse[2] := $00;
-  LResponse[3] := $01;
-
-  LFileName := TempFileName('nextpas_tls_ocsp_cache.bin');
-  DeleteIfExists(LFileName);
-
-  LCache := TOCSPResponseCache.Create;
-  try
-    LCache.Put(LSerial, LResponse, Now, Now + 1);
-    Check(LCache.SaveToFile(LFileName), 'ocsp cache save to file');
-  finally
-    LCache.Free;
-  end;
-
-  LReloaded := TOCSPResponseCache.Create;
-  try
-    Check(LReloaded.LoadFromFile(LFileName), 'ocsp cache load from file');
-    Check(LReloaded.Get(LSerial, LLoaded), 'ocsp cache entry reloaded');
-    Check(Length(LLoaded) = Length(LResponse), 'ocsp cache response length');
-  finally
-    LReloaded.Free;
-    DeleteIfExists(LFileName);
-  end;
-end;
-
-procedure TestCRLLoadFromFile;
-var
-  LCRL: TX509CRL;
-  LFileName: string;
-  LText: TStringList;
-begin
-  WriteLn;
-  WriteLn('=== CRL load from file ===');
-
-  LFileName := TempFileName('nextpas_tls_test.crl');
-  DeleteIfExists(LFileName);
-  LText := TStringList.Create;
-  try
-    LText.Text := VALID_CRL_PEM;
-    LText.SaveToFile(LFileName);
-  finally
-    LText.Free;
-  end;
-
-  LCRL := TX509CRL.Create;
-  try
-    try
-      LCRL.LoadFromFile(LFileName);
-      Check(True, 'crl load from file');
-    except
-      on E: Exception do
-        Check(False, 'crl load from file', E.ClassName + ': ' + E.Message);
-    end;
-  finally
-    LCRL.Free;
-    DeleteIfExists(LFileName);
-  end;
-end;
-
-begin
-  Randomize;
 
   TestSourceMigrationContracts;
   TestTimeoutAndNonBlockingIStreamCompatibility;

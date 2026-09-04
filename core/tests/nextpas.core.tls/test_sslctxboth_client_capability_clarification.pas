@@ -7,8 +7,7 @@ program test_sslctxboth_client_capability_clarification;
   inherit it implicitly. }
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -66,7 +65,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LClientConn: ISSLClientConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   LName := SSL_LIBRARY_NAMES[ABackend];
 
@@ -90,21 +89,17 @@ begin
   LCtx.SetServerName('both.example.com');
   {$POP}
 
-  LStream := TMemoryStream.Create;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
-    CheckTrue(LName + ' dual-context stream connection created',
-      LConn <> nil, 'CreateConnection(TStream) returned nil');
-    CheckTrue(LName + ' dual-context stream connection exposes ISSLClientConnection',
-      Supports(LConn, ISSLClientConnection, LClientConn),
-      'stream connection should remain client-capable for per-connection ServerName');
-    if Supports(LConn, ISSLClientConnection, LClientConn) then
-      CheckTrue(LName + ' dual-context stream connection no longer inherits context ServerName fallback',
-        LClientConn.GetServerName = '',
-        'expected empty ServerName, actual="' + LClientConn.GetServerName + '"');
-  finally
-    LStream.Free;
-  end;
+  LStream := CreateBytesStream;
+  LConn := LCtx.CreateConnection(LStream);
+  CheckTrue(LName + ' dual-context stream connection created',
+    LConn <> nil, 'CreateConnection(TStream) returned nil');
+  CheckTrue(LName + ' dual-context stream connection exposes ISSLClientConnection',
+    Supports(LConn, ISSLClientConnection, LClientConn),
+    'stream connection should remain client-capable for per-connection ServerName');
+  if Supports(LConn, ISSLClientConnection, LClientConn) then
+    CheckTrue(LName + ' dual-context stream connection no longer inherits context ServerName fallback',
+      LClientConn.GetServerName = '',
+      'expected empty ServerName, actual="' + LClientConn.GetServerName + '"');
 end;
 
 procedure TestFreePascalSocketConnectionServerNameFallback;
@@ -144,7 +139,7 @@ var
   LConn: ISSLConnection;
   LEarlyCtx: ISSLEarlyDataContext;
   LEarlyConn: ISSLEarlyDataConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LResult: TSSLOperationResult;
 begin
   LName := SSL_LIBRARY_NAMES[ABackend];
@@ -164,33 +159,29 @@ begin
     Exit;
   end;
 
-  LStream := TMemoryStream.Create;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
-    if not Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
-    begin
-      Skip(LName + ' dual-context early-data client gate',
-        'connection does not expose ISSLEarlyDataConnection');
-      Exit;
-    end;
-
-    CheckTrue(LName + ' dual-context ConfigureClientEarlyData succeeds',
-      TSSLHelper.ConfigureClientEarlyData(LCtx, True),
-      'client-scoped early-data helper should accept sslCtxBoth');
-    CheckTrue(LName + ' dual-context ConfigureServerEarlyData succeeds',
-      TSSLHelper.ConfigureServerEarlyData(LCtx, sslEarlyDataServerIssueOnly, 16),
-      'server-scoped early-data helper should accept sslCtxBoth');
-
-    LResult := LEarlyConn.SetEarlyData(BytesOfText('PING'));
-    CheckTrue(LName + ' dual-context SetEarlyData still requires a session',
-      not LResult.Success,
-      'SetEarlyData unexpectedly succeeded without a configured resumable session');
-    CheckTrue(LName + ' dual-context SetEarlyData passes the client-role gate',
-      LResult.ErrorMessage = 'Early data requires a configured resumable session',
-      'actual error="' + LResult.ErrorMessage + '"');
-  finally
-    LStream.Free;
+  LStream := CreateBytesStream;
+  LConn := LCtx.CreateConnection(LStream);
+  if not Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
+  begin
+    Skip(LName + ' dual-context early-data client gate',
+      'connection does not expose ISSLEarlyDataConnection');
+    Exit;
   end;
+
+  CheckTrue(LName + ' dual-context ConfigureClientEarlyData succeeds',
+    TSSLHelper.ConfigureClientEarlyData(LCtx, True),
+    'client-scoped early-data helper should accept sslCtxBoth');
+  CheckTrue(LName + ' dual-context ConfigureServerEarlyData succeeds',
+    TSSLHelper.ConfigureServerEarlyData(LCtx, sslEarlyDataServerIssueOnly, 16),
+    'server-scoped early-data helper should accept sslCtxBoth');
+
+  LResult := LEarlyConn.SetEarlyData(BytesOfText('PING'));
+  CheckTrue(LName + ' dual-context SetEarlyData still requires a session',
+    not LResult.Success,
+    'SetEarlyData unexpectedly succeeded without a configured resumable session');
+  CheckTrue(LName + ' dual-context SetEarlyData passes the client-role gate',
+    LResult.ErrorMessage = 'Early data requires a configured resumable session',
+    'actual error="' + LResult.ErrorMessage + '"');
 end;
 
 begin

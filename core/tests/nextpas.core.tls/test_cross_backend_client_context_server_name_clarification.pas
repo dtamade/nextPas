@@ -7,8 +7,10 @@ program test_cross_backend_client_context_server_name_clarification;
   backends no longer inherit it. }
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -66,7 +68,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LClientConn: ISSLClientConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   LName := SSL_LIBRARY_NAMES[ABackend];
 
@@ -91,21 +93,17 @@ begin
     LegacyContextServerName(LCtx) = 'client.example.com',
     'expected context state "client.example.com", actual="' + LegacyContextServerName(LCtx) + '"');
 
-  LStream := TMemoryStream.Create;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
-    CheckTrue(LName + ' client stream connection created',
-      LConn <> nil, 'CreateConnection(TStream) returned nil');
-    CheckTrue(LName + ' client stream connection exposes ISSLClientConnection',
-      Supports(LConn, ISSLClientConnection, LClientConn),
-      'stream connection should expose per-connection ServerName');
-    if Supports(LConn, ISSLClientConnection, LClientConn) then
-      CheckTrue(LName + ' client stream connection no longer inherits context ServerName fallback',
-        LClientConn.GetServerName = '',
-        'expected empty ServerName, actual="' + LClientConn.GetServerName + '"');
-  finally
-    LStream.Free;
-  end;
+  LStream := CreateBytesStream;
+  LConn := LCtx.CreateConnection(LStream);
+  CheckTrue(LName + ' client stream connection created',
+    LConn <> nil, 'CreateConnection(TStream) returned nil');
+  CheckTrue(LName + ' client stream connection exposes ISSLClientConnection',
+    Supports(LConn, ISSLClientConnection, LClientConn),
+    'stream connection should expose per-connection ServerName');
+  if Supports(LConn, ISSLClientConnection, LClientConn) then
+    CheckTrue(LName + ' client stream connection no longer inherits context ServerName fallback',
+      LClientConn.GetServerName = '',
+      'expected empty ServerName, actual="' + LClientConn.GetServerName + '"');
 end;
 
 begin

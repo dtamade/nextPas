@@ -3,8 +3,7 @@ program test_openssl_connection_info_cipher_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.base,
@@ -107,35 +106,34 @@ end;
 
 procedure WarmupStreamConnectionConstructor(AContext: ISSLContext);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(AContext, LStream);
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 
 function CaptureFreshConnectionInfo(AContext: ISSLContext): TSSLConnectionInfo;
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
   LConnInfoAccess: ISSLConnectionInfo;
   LManagedByInterface: Boolean;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   LConnInfoAccess := nil;
   LManagedByInterface := False;
   try
-    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(AContext, LStream);
     if not Supports(LConn, ISSLConnectionInfo, LConnInfoAccess) then
       raise Exception.Create('OpenSSL connection does not expose ISSLConnectionInfo');
     LManagedByInterface := True;
@@ -146,7 +144,6 @@ begin
     else if Assigned(LConn) then
       LConn.Free;
     LConnInfoAccess := nil;
-    LStream.Free;
   end;
 end;
 
@@ -156,7 +153,7 @@ procedure AssertConnectionInfoSafeDegrade(
   const AExpected: TSSLConnectionInfo
 );
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
   LConnInfoAccess: ISSLConnectionInfo;
   LManagedByInterface: Boolean;
@@ -164,12 +161,12 @@ var
   LInfo: TSSLConnectionInfo;
   LDetail: string;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   LConnInfoAccess := nil;
   LManagedByInterface := False;
   try
-    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(AContext, LStream);
 
     LRaised := False;
     FillChar(LInfo, SizeOf(LInfo), 0);
@@ -206,7 +203,6 @@ begin
     else if Assigned(LConn) then
       LConn.Free;
     LConnInfoAccess := nil;
-    LStream.Free;
   end;
 end;
 
@@ -216,7 +212,7 @@ procedure AssertConnectionInfoCipherSuiteId(
   const AExpectedCipherSuiteId: Word
 );
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
   LConnInfoAccess: ISSLConnectionInfo;
   LManagedByInterface: Boolean;
@@ -224,12 +220,12 @@ var
   LInfo: TSSLConnectionInfo;
   LDetail: string;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   LConnInfoAccess := nil;
   LManagedByInterface := False;
   try
-    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(AContext, LStream);
 
     LRaised := False;
     FillChar(LInfo, SizeOf(LInfo), 0);
@@ -258,7 +254,6 @@ begin
     else if Assigned(LConn) then
       LConn.Free;
     LConnInfoAccess := nil;
-    LStream.Free;
   end;
 end;
 
@@ -268,7 +263,7 @@ procedure AssertConnectionInfoMacSize(
   const AExpectedMacSize: Integer
 );
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
   LConnInfoAccess: ISSLConnectionInfo;
   LManagedByInterface: Boolean;
@@ -276,12 +271,12 @@ var
   LInfo: TSSLConnectionInfo;
   LDetail: string;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   LConnInfoAccess := nil;
   LManagedByInterface := False;
   try
-    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(AContext, LStream);
 
     LRaised := False;
     FillChar(LInfo, SizeOf(LInfo), 0);
@@ -309,7 +304,6 @@ begin
     else if Assigned(LConn) then
       LConn.Free;
     LConnInfoAccess := nil;
-    LStream.Free;
   end;
 end;
 

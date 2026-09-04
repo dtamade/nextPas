@@ -3,7 +3,8 @@ program test_cert_builder_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
@@ -49,16 +50,8 @@ begin
 end;
 
 function LoadFixtureText(const APath: string): string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(APath);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 function CreateCertificateHandleFromPEM(const APEM: string): PX509;

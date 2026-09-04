@@ -3,7 +3,7 @@ program test_pem_certificate_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.path, nextpas.core.text.conv,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -41,21 +41,11 @@ begin
 end;
 
 function WriteTempTextFile(const AFileName, AContent: string): Boolean;
-var
-  LStream: TFileStream;
-  LBytes: UTF8String;
 begin
   Result := False;
   ForceDirectories(ExtractFileDir(AFileName));
-  LStream := TFileStream.Create(AFileName, fmCreate);
-  try
-    LBytes := UTF8String(AContent);
-    if Length(LBytes) > 0 then
-      LStream.WriteBuffer(LBytes[1], Length(LBytes));
-    Result := True;
-  finally
-    LStream.Free;
-  end;
+  WriteFileText(AFileName, AContent);
+  Result := True;
 end;
 
 procedure TestPEMCertificateHelpersShouldDegradeWhenCertificateSymbolsAreUnavailable;
@@ -86,7 +76,7 @@ begin
     Exit;
   end;
 
-  LMemoryData := BytesOf('not-a-real-pem');
+  LMemoryData := StringToUTF8Bytes('not-a-real-pem');
 
   LOriginalPEMReadBioX509 := PEM_read_bio_X509;
   LOriginalPEMWriteBioX509 := PEM_write_bio_X509;

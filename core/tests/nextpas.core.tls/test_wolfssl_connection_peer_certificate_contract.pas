@@ -3,8 +3,8 @@ program test_wolfssl_connection_peer_certificate_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
+  nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,
   nextpas.core.tls.wolfssl.lib,
@@ -72,7 +72,7 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LFixture: TWolfSSLCertificate;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TWolfSSLConnection;
   LCert: ISSLCertificate;
   LExpectedFingerprint: string;
@@ -120,10 +120,10 @@ begin
   GSourcePeerCertificateD2I := LOriginalX509D2I;
 
   LCtx := LLib.CreateContext(sslCtxClient);
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TWolfSSLConnection.Create(LCtx, TStreamWrapper.Create(LStream, False));
+    LConn := TWolfSSLConnection.Create(LCtx, LStream);
     wolfSSL_get_peer_certificate := @StubWolfSSLGetPeerCertificateFromDER;
 
     LCert := LConn.GetPeerCertificate;
@@ -148,7 +148,6 @@ begin
     SetLength(GStubPeerCertificateDER, 0);
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
     LFixture.Free;
     LLib.Finalize;
   end;

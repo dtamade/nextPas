@@ -14,7 +14,8 @@ program test_freepascal_cert_verify_bypass_negative;
   by DN, but the leaf's signature only verifies against the EVIL key. }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -50,21 +51,8 @@ var
   GHonestLeafCertPEM: string;
 
 function ReadTextFile(const APath: string): string;
-var
-  LStream: TFileStream;
-  LBytes: TBytes;
 begin
-  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LBytes, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(LBytes[0], LStream.Size);
-    SetLength(Result, Length(LBytes));
-    if Length(LBytes) > 0 then
-      Move(LBytes[0], Result[1], Length(LBytes));
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 procedure LoadFixtures;

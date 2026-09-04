@@ -3,7 +3,7 @@ program test_pkcs12_d2i_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.fs, nextpas.core.path,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -41,21 +41,11 @@ begin
 end;
 
 function WriteTempTextFile(const AFileName, AContent: string): Boolean;
-var
-  LStream: TFileStream;
-  LBytes: UTF8String;
 begin
   Result := False;
   ForceDirectories(ExtractFileDir(AFileName));
-  LStream := TFileStream.Create(AFileName, fmCreate);
-  try
-    LBytes := UTF8String(AContent);
-    if Length(LBytes) > 0 then
-      LStream.WriteBuffer(LBytes[1], Length(LBytes));
-    Result := True;
-  finally
-    LStream.Free;
-  end;
+  WriteFileText(AFileName, AContent);
+  Result := True;
 end;
 
 procedure TestLoadPKCS12FromFileShouldDegradeWhenD2IIsUnavailable;

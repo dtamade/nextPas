@@ -3,7 +3,8 @@ program test_cert_utils_fingerprint_x509_digest_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -53,16 +54,8 @@ begin
 end;
 
 function LoadFixturePEM: string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(CERT_FIXTURE_PATH);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  Result := ReadFileText(CERT_FIXTURE_PATH);
 end;
 
 procedure WarmupFingerprintMaterial(out APEM: string; out AFingerprint: string);

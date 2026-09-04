@@ -3,7 +3,7 @@ program test_pkcs7_helper_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.text.conv,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -44,22 +44,13 @@ begin
 end;
 
 function ReadAllBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
   Result := nil;
   SetLength(Result, 0);
   if not FileExists(AFileName) then
     Exit;
 
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function LoadTestMaterials(out ASignerCert: PX509; out ASignerKey: PEVP_PKEY;
@@ -130,7 +121,7 @@ begin
     Exit;
   end;
 
-  LPlainData := BytesOf('pkcs7-helper-contract-data');
+  LPlainData := StringToUTF8Bytes('pkcs7-helper-contract-data');
   LEncryptedData := EncryptData(LPlainData, LRecipientStack, EVP_aes_256_cbc(), 0);
   if Length(LEncryptedData) = 0 then
   begin

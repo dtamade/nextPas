@@ -3,8 +3,8 @@ program test_openssl_context_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.fs, nextpas.core.text.conv,
+  nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -27,14 +27,8 @@ var
   SkippedTests: Integer = 0;
 
 function PEMStream(const APEM: string): IStream;
-var
-  LS: TMemoryStream;
 begin
-  LS := TMemoryStream.Create;
-  if Length(APEM) > 0 then
-    LS.WriteBuffer(PAnsiChar(APEM)^, Length(APEM));
-  LS.Position := 0;
-  Result := TStreamWrapper.Create(LS, True);
+  Result := CreateBytesStreamFrom(StringToUTF8Bytes(APEM));
 end;
 
 procedure AssertTrue(const AName: string; ACondition: Boolean; const ADetail: string = '');
@@ -62,16 +56,8 @@ begin
 end;
 
 function LoadFixtureText(const APath: string): string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(APath);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 function CreateServerContext: ISSLContext;

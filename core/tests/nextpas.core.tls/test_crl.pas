@@ -3,7 +3,11 @@ program test_crl;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.base,
+  nextpas.core.fs,
+  nextpas.core.path,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.process,   { ExecuteProcess:openssl 夹具生成 }
   nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.tls.crl;
 
@@ -31,16 +35,8 @@ begin
 end;
 
 procedure WriteTextFile(const AFileName, AContent: string);
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.Text := AContent;
-    LText.SaveToFile(AFileName);
-  finally
-    LText.Free;
-  end;
+  WriteFileText(AFileName, AContent);
 end;
 
 procedure CleanupGeneratedCRLFixture(const ADir: string);
@@ -52,8 +48,8 @@ begin
   DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'index.txt');
   DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'serial');
   DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'crlnumber');
-  RemoveDir(IncludeTrailingPathDelimiter(ADir) + 'newcerts');
-  RemoveDir(ADir);
+  DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'newcerts');
+  DeleteFile(ADir);
 end;
 
 function GenerateRuntimeCRL(out ACRLPath: string): Boolean;
@@ -252,7 +248,7 @@ begin
   Entry.SerialNumber[1] := $02;
   Entry.SerialNumber[2] := $03;
   Entry.SerialNumber[3] := $04;
-  Entry.RevocationDate := Now;
+  Entry.RevocationDate := DateTimeNow;
   Entry.Reason := crlrrKeyCompromise;
   Entry.HasReason := True;
 

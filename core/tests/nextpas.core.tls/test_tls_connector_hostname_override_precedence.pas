@@ -3,8 +3,8 @@ program test_tls_connector_hostname_override_precedence;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.io.intf, nextpas.core.io.memory,
+  nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.tls;
 
@@ -499,25 +499,20 @@ procedure RunCase(const ACaseName, AInputHost, AExpectedServerName: string);
 var
   Ctx: ISSLContext;
   Connector: TSSLConnector;
-  Transport: TMemoryStream;
+  Transport: IStream;
   LS: IStream;
   ClientConn: ISSLClientConnection;
 begin
   WriteLn('=== ', ACaseName, ' ===');
   Ctx := TMockContext.Create(sslCtxClient);
   Connector := TSSLConnector.FromContext(Ctx);
-  Transport := TMemoryStream.Create;
-  try
-    LS := Connector.ConnectStream(TStreamWrapper.Create(Transport, False), AInputHost);
-    Check(LS <> nil, 'ConnectStream should succeed');
-    Check(Supports((LS as TSSLStream).Connection, ISSLClientConnection, ClientConn),
-      'Connection supports ISSLClientConnection');
-    CheckEqualsStr('Connection server name matches precedence',
-      AExpectedServerName, ClientConn.GetServerName);
-  finally
-    LS := nil;
-    Transport.Free;
-  end;
+  Transport := CreateBytesStream;
+  LS := Connector.ConnectStream(Transport, AInputHost);
+  Check(LS <> nil, 'ConnectStream should succeed');
+  Check(Supports((LS as TSSLStream).Connection, ISSLClientConnection, ClientConn),
+    'Connection supports ISSLClientConnection');
+  CheckEqualsStr('Connection server name matches precedence',
+    AExpectedServerName, ClientConn.GetServerName);
 end;
 
 begin

@@ -3,8 +3,7 @@ program test_openssl_connection_stream_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -62,38 +61,37 @@ end;
 
 procedure WarmupStreamConnectionConstructor(AContext: ISSLContext);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(AContext, LStream);
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 
 procedure AssertStreamConstructorControlledFailure(const AName: string; AContext: ISSLContext);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
   LRaised: Boolean;
   LControlled: Boolean;
   LDetail: string;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
     LRaised := False;
     LControlled := False;
     LDetail := '';
     try
-      LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+      LConn := TOpenSSLConnection.Create(AContext, LStream);
     except
       on E: Exception do
       begin
@@ -109,7 +107,6 @@ begin
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 

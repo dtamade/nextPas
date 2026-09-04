@@ -4,8 +4,7 @@ program test_openssl_wolfssl_early_data_connection_contract;
 
 uses
   nextpas.core.tls.factory,
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.time, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.wolfssl.api,
@@ -89,7 +88,7 @@ end;
 
 function TMockSession.GetCreationTime: TDateTime;
 begin
-  Result := Now;
+  Result := DateTimeNow;
 end;
 
 function TMockSession.GetTimeout: Integer;
@@ -147,7 +146,7 @@ begin
   CheckTrue(AName,
     (not AResult.Success) and (AResult.ErrorCode = AExpectedCode),
     Format('expected error=%d, actual success=%s error=%d msg=%s',
-      [Ord(AExpectedCode), BoolToStr(AResult.Success, True),
+      [Ord(AExpectedCode), BoolToStr(AResult.Success, 'True', 'False'),
        Ord(AResult.ErrorCode), AResult.ErrorMessage]));
 end;
 
@@ -162,7 +161,7 @@ var
   LConn: ISSLConnection;
   LResumption: ISSLSessionResumption;
   LEarlyConn: ISSLEarlyDataConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LResult: TSSLOperationResult;
 begin
   LName := SSL_LIBRARY_NAMES[ABackend];
@@ -223,18 +222,14 @@ begin
       not Supports(LCtx, ISSLEarlyDataContext, LEarlyCtx),
       'client context should keep ISSLEarlyDataContext absent when capability is none');
 
-    LStream := TMemoryStream.Create;
-    try
-      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
-      CheckTrue(LName + ' helper keeps early-data connection absent when capability is none',
-        not TSSLHelper.SupportsEarlyDataConnection(LConn),
-        'TSSLHelper.SupportsEarlyDataConnection should be False when capability is none');
-      CheckTrue(LName + ' connection keeps ISSLEarlyDataConnection absent when capability is none',
-        not Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
-        'client connection should keep ISSLEarlyDataConnection absent when capability is none');
-    finally
-      LStream.Free;
-    end;
+    LStream := CreateBytesStream;
+    LConn := LCtx.CreateConnection(LStream);
+    CheckTrue(LName + ' helper keeps early-data connection absent when capability is none',
+      not TSSLHelper.SupportsEarlyDataConnection(LConn),
+      'TSSLHelper.SupportsEarlyDataConnection should be False when capability is none');
+    CheckTrue(LName + ' connection keeps ISSLEarlyDataConnection absent when capability is none',
+      not Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
+      'client connection should keep ISSLEarlyDataConnection absent when capability is none');
     Exit;
   end;
 
@@ -248,55 +243,51 @@ begin
     not LEarlyCtx.GetClientEarlyDataEnabled,
     'GetClientEarlyDataEnabled should default to False');
 
-  LStream := TMemoryStream.Create;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
+  LStream := CreateBytesStream;
+  LConn := LCtx.CreateConnection(LStream);
 
-    CheckTrue(LName + ' helper detects ISSLEarlyDataConnection',
-      TSSLHelper.SupportsEarlyDataConnection(LConn),
-      'TSSLHelper.SupportsEarlyDataConnection should be True');
-    CheckTrue(LName + ' connection exposes ISSLEarlyDataConnection',
-      Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
-      'client connection should expose ISSLEarlyDataConnection');
-    if not Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
-      Exit;
+  CheckTrue(LName + ' helper detects ISSLEarlyDataConnection',
+    TSSLHelper.SupportsEarlyDataConnection(LConn),
+    'TSSLHelper.SupportsEarlyDataConnection should be True');
+  CheckTrue(LName + ' connection exposes ISSLEarlyDataConnection',
+    Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
+    'client connection should expose ISSLEarlyDataConnection');
+  if not Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
+    Exit;
 
-    CheckTrue(LName + ' helper status defaults to none',
-      TSSLHelper.GetEarlyDataStatus(LConn) = sslEarlyDataNone,
-      Format('actual=%d', [Ord(TSSLHelper.GetEarlyDataStatus(LConn))]));
-    CheckTrue(LName + ' helper limit defaults to zero',
-      TSSLHelper.GetEarlyDataLimit(LConn) = 0,
-      Format('actual=%d', [TSSLHelper.GetEarlyDataLimit(LConn)]));
+  CheckTrue(LName + ' helper status defaults to none',
+    TSSLHelper.GetEarlyDataStatus(LConn) = sslEarlyDataNone,
+    Format('actual=%d', [Ord(TSSLHelper.GetEarlyDataStatus(LConn))]));
+  CheckTrue(LName + ' helper limit defaults to zero',
+    TSSLHelper.GetEarlyDataLimit(LConn) = 0,
+    Format('actual=%d', [TSSLHelper.GetEarlyDataLimit(LConn)]));
 
-    LResult := LEarlyConn.SetEarlyData(BytesOfText('PING'));
-    CheckOperationError(LName + ' SetEarlyData requires enabled client early-data',
-      LResult, sslErrConfiguration);
+  LResult := LEarlyConn.SetEarlyData(BytesOfText('PING'));
+  CheckOperationError(LName + ' SetEarlyData requires enabled client early-data',
+    LResult, sslErrConfiguration);
 
-    LEarlyCtx.SetClientEarlyDataEnabled(True);
+  LEarlyCtx.SetClientEarlyDataEnabled(True);
 
-    LResult := LEarlyConn.SetEarlyData(BytesOfText('PING'));
-    CheckOperationError(LName + ' SetEarlyData requires configured resumable session',
-      LResult, sslErrInvalidParam);
+  LResult := LEarlyConn.SetEarlyData(BytesOfText('PING'));
+  CheckOperationError(LName + ' SetEarlyData requires configured resumable session',
+    LResult, sslErrInvalidParam);
 
-    CheckTrue(LName + ' connection exposes ISSLSessionResumption',
-      Supports(LConn, ISSLSessionResumption, LResumption),
-      'client connection should expose ISSLSessionResumption');
-    if not Supports(LConn, ISSLSessionResumption, LResumption) then
-      Exit;
-    LResumption.SetSession(TMockSession.Create('mock-session'));
-    LResult := LEarlyConn.SetEarlyData(BytesOfText('PING'));
-    CheckOperationError(LName + ' SetEarlyData rejects session without usable native early-data limit',
-      LResult, sslErrInvalidParam);
+  CheckTrue(LName + ' connection exposes ISSLSessionResumption',
+    Supports(LConn, ISSLSessionResumption, LResumption),
+    'client connection should expose ISSLSessionResumption');
+  if not Supports(LConn, ISSLSessionResumption, LResumption) then
+    Exit;
+  LResumption.SetSession(TMockSession.Create('mock-session'));
+  LResult := LEarlyConn.SetEarlyData(BytesOfText('PING'));
+  CheckOperationError(LName + ' SetEarlyData rejects session without usable native early-data limit',
+    LResult, sslErrInvalidParam);
 
-    CheckTrue(LName + ' failed queue keeps status at none',
-      LEarlyConn.GetEarlyDataStatus = sslEarlyDataNone,
-      Format('actual=%d', [Ord(LEarlyConn.GetEarlyDataStatus)]));
-    CheckTrue(LName + ' failed queue keeps limit at zero',
-      LEarlyConn.GetEarlyDataLimit = 0,
-      Format('actual=%d', [LEarlyConn.GetEarlyDataLimit]));
-  finally
-    LStream.Free;
-  end;
+  CheckTrue(LName + ' failed queue keeps status at none',
+    LEarlyConn.GetEarlyDataStatus = sslEarlyDataNone,
+    Format('actual=%d', [Ord(LEarlyConn.GetEarlyDataStatus)]));
+  CheckTrue(LName + ' failed queue keeps limit at zero',
+    LEarlyConn.GetEarlyDataLimit = 0,
+    Format('actual=%d', [LEarlyConn.GetEarlyDataLimit]));
 end;
 
 begin

@@ -3,8 +3,8 @@ program test_tls_connector_early_data_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
+  nextpas.core.base, nextpas.core.time, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
+  nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.tls,
   nextpas.core.tls.exceptions;
@@ -222,7 +222,7 @@ end;
 
 function TMockSession.GetCreationTime: TDateTime;
 begin
-  Result := Now;
+  Result := DateTimeNow;
 end;
 
 function TMockSession.GetTimeout: Integer;
@@ -733,7 +733,7 @@ var
   CtxObj: TMockContext;
   Ctx: ISSLContext;
   Connector: TSSLConnector;
-  Transport: TMemoryStream;
+  Transport: IStream;
   LS: IStream;
   Probe: IMockConnectorProbe;
 begin
@@ -744,34 +744,29 @@ begin
 
   Connector := TSSLConnector.FromContext(Ctx)
     .WithSession(TMockSession.Create('connector-session'))
-    .WithEarlyData(BytesOf('PING'));
+    .WithEarlyData(StringToUTF8Bytes('PING'));
 
-  Transport := TMemoryStream.Create;
-  try
-    LS := Connector.ConnectStream(TStreamWrapper.Create(Transport, False), 'early.example.com');
-    Check(LS <> nil, 'ConnectStream should succeed when early-data interface is supported');
+  Transport := CreateBytesStream;
+  LS := Connector.ConnectStream(Transport, 'early.example.com');
+  Check(LS <> nil, 'ConnectStream should succeed when early-data interface is supported');
 
-    Probe := (LS as TSSLStream).Connection as IMockConnectorProbe;
-    Check(Probe.WasSessionApplied, 'Connector should apply the configured session before connect');
-    CheckEqualsStr('Connector should apply the explicit server name',
-      'early.example.com', Probe.GetObservedServerName);
-    CheckEqualsStr('Connector should queue early data before connect',
-      'PING', Probe.GetObservedEarlyDataText);
-    Check(Probe.GetObservedEarlyDataCalls = 1,
-      'Connector should queue early data exactly once');
-    CheckEqualsStr('Connector should preserve session -> servername -> earlydata -> connect ordering',
-      'session>servername>earlydata>connect', Probe.GetObservedCallLog);
-  finally
-    LS := nil;
-    Transport.Free;
-  end;
+  Probe := (LS as TSSLStream).Connection as IMockConnectorProbe;
+  Check(Probe.WasSessionApplied, 'Connector should apply the configured session before connect');
+  CheckEqualsStr('Connector should apply the explicit server name',
+    'early.example.com', Probe.GetObservedServerName);
+  CheckEqualsStr('Connector should queue early data before connect',
+    'PING', Probe.GetObservedEarlyDataText);
+  Check(Probe.GetObservedEarlyDataCalls = 1,
+    'Connector should queue early data exactly once');
+  CheckEqualsStr('Connector should preserve session -> servername -> earlydata -> connect ordering',
+    'session>servername>earlydata>connect', Probe.GetObservedCallLog);
 end;
 
 procedure TestEmptyEarlyDataDoesNotQueuePayload;
 var
   Ctx: ISSLContext;
   Connector: TSSLConnector;
-  Transport: TMemoryStream;
+  Transport: IStream;
   LS: IStream;
   Probe: IMockConnectorProbe;
 begin
@@ -782,27 +777,22 @@ begin
     .WithSession(TMockSession.Create('connector-empty'))
     .WithEarlyData(nil);
 
-  Transport := TMemoryStream.Create;
-  try
-    LS := Connector.ConnectStream(TStreamWrapper.Create(Transport, False), 'empty.example.com');
-    Check(LS <> nil, 'ConnectStream should still succeed for empty early-data payload');
+  Transport := CreateBytesStream;
+  LS := Connector.ConnectStream(Transport, 'empty.example.com');
+  Check(LS <> nil, 'ConnectStream should still succeed for empty early-data payload');
 
-    Probe := (LS as TSSLStream).Connection as IMockConnectorProbe;
-    Check(Probe.GetObservedEarlyDataCalls = 0,
-      'Empty early-data payload should not queue connector early data');
-    CheckEqualsStr('Empty early-data payload should skip the earlydata step',
-      'session>servername>connect', Probe.GetObservedCallLog);
-  finally
-    LS := nil;
-    Transport.Free;
-  end;
+  Probe := (LS as TSSLStream).Connection as IMockConnectorProbe;
+  Check(Probe.GetObservedEarlyDataCalls = 0,
+    'Empty early-data payload should not queue connector early data');
+  CheckEqualsStr('Empty early-data payload should skip the earlydata step',
+    'session>servername>connect', Probe.GetObservedCallLog);
 end;
 
 procedure TestUnsupportedEarlyDataTryConnectFailsCleanly;
 var
   Ctx: ISSLContext;
   Connector: TSSLConnector;
-  Transport: TMemoryStream;
+  Transport: IStream;
   OutStream: IStream;
   R: TSSLOperationResult;
 begin
@@ -811,26 +801,22 @@ begin
   Ctx := TMockContext.Create(sslCtxClient, False);
   Connector := TSSLConnector.FromContext(Ctx)
     .WithSession(TMockSession.Create('connector-unsupported'))
-    .WithEarlyData(BytesOf('PING'));
+    .WithEarlyData(StringToUTF8Bytes('PING'));
 
-  Transport := TMemoryStream.Create;
-  try
-    R := Connector.TryConnectStream(TStreamWrapper.Create(Transport, False),
-      'unsupported.example.com', OutStream);
-    Check(R.IsErr, 'TryConnectStream should fail when the connection does not expose early-data');
-    Check(R.ErrorCode = sslErrUnsupported,
-      'Unsupported connector early-data path should return sslErrUnsupported');
-    Check(OutStream = nil, 'TryConnectStream should not return a stream on early-data setup failure');
-  finally
-    Transport.Free;
-  end;
+  Transport := CreateBytesStream;
+  R := Connector.TryConnectStream(Transport,
+    'unsupported.example.com', OutStream);
+  Check(R.IsErr, 'TryConnectStream should fail when the connection does not expose early-data');
+  Check(R.ErrorCode = sslErrUnsupported,
+    'Unsupported connector early-data path should return sslErrUnsupported');
+  Check(OutStream = nil, 'TryConnectStream should not return a stream on early-data setup failure');
 end;
 
 procedure TestUnsupportedEarlyDataConnectRaises;
 var
   Ctx: ISSLContext;
   Connector: TSSLConnector;
-  Transport: TMemoryStream;
+  Transport: IStream;
   Raised: Boolean;
   LS: IStream;
 begin
@@ -839,23 +825,19 @@ begin
   Ctx := TMockContext.Create(sslCtxClient, False);
   Connector := TSSLConnector.FromContext(Ctx)
     .WithSession(TMockSession.Create('connector-unsupported-raise'))
-    .WithEarlyData(BytesOf('PING'));
+    .WithEarlyData(StringToUTF8Bytes('PING'));
 
-  Transport := TMemoryStream.Create;
+  Transport := CreateBytesStream;
+  Raised := False;
   try
-    Raised := False;
-    try
-      LS := Connector.ConnectStream(TStreamWrapper.Create(Transport, False),
-        'raise.example.com');
-      LS := nil;
-    except
-      on E: ESSLConnectionException do
-        Raised := True;
-    end;
-    Check(Raised, 'ConnectStream should raise connection exception when early-data setup fails');
-  finally
-    Transport.Free;
+    LS := Connector.ConnectStream(Transport,
+      'raise.example.com');
+    LS := nil;
+  except
+    on E: ESSLConnectionException do
+      Raised := True;
   end;
+  Check(Raised, 'ConnectStream should raise connection exception when early-data setup fails');
 end;
 
 begin

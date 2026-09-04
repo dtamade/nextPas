@@ -3,9 +3,7 @@ program test_winssl_private_key_format_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
-  nextpas.core.io.stream_adapter,
+  nextpas.core.exception, nextpas.core.fs, nextpas.core.path, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions
@@ -66,7 +64,7 @@ procedure CheckNonPFXFailsClosed;
 var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LTempDir: string;
   LTempFile: string;
   LRejected: Boolean;
@@ -84,52 +82,40 @@ begin
   LCtx := LLib.CreateContext(sslCtxServer);
   Require(LCtx <> nil, 'WinSSL context should be creatable');
 
-  LStream := TMemoryStream.Create;
-  LStream.Write(DUMMY_PRIVATE_KEY_PEM[1], Length(DUMMY_PRIVATE_KEY_PEM));
-  LStream.Position := 0;
+  LStream := CreateBytesStreamFrom(StringToUTF8Bytes(DUMMY_PRIVATE_KEY_PEM));
+  LRejected := False;
   try
-    LRejected := False;
-    try
-      LCtx.LoadPrivateKey(TStreamWrapper.Create(LStream, False), TEST_PASSWORD);
-    except
-      on E: ESSLException do
-      begin
-        Require(IsUnsupportedMessage(E.Message),
-          'WinSSL stream non-PFX rejection must report unsupported semantics: ' + E.Message);
-        LRejected := True;
-      end;
+    LCtx.LoadPrivateKey(LStream, TEST_PASSWORD);
+  except
+    on E: ESSLException do
+    begin
+      Require(IsUnsupportedMessage(E.Message),
+        'WinSSL stream non-PFX rejection must report unsupported semantics: ' + E.Message);
+      LRejected := True;
     end;
-    Require(LRejected, 'WinSSL stream private-key loader must reject non-PFX input');
-
-    LTempDir := IncludeTrailingPathDelimiter('tmp') + 'test_winssl_private_key_format_truth';
-    ForceDirectories(LTempDir);
-    LTempFile := IncludeTrailingPathDelimiter(LTempDir) + 'winssl_non_pfx_private_key.pem';
-    with TStringList.Create do
-    try
-      Text := DUMMY_PRIVATE_KEY_PEM;
-      SaveToFile(LTempFile);
-    finally
-      Free;
-    end;
-
-    LRejected := False;
-    try
-      LCtx.LoadPrivateKey(LTempFile, TEST_PASSWORD);
-    except
-      on E: ESSLException do
-      begin
-        Require(IsUnsupportedMessage(E.Message),
-          'WinSSL file non-PFX rejection must report unsupported semantics: ' + E.Message);
-        LRejected := True;
-      end;
-    end;
-    Require(LRejected, 'WinSSL file private-key loader must reject non-PFX input');
-
-    if FileExists(LTempFile) then
-      DeleteFile(LTempFile);
-  finally
-    LStream.Free;
   end;
+  Require(LRejected, 'WinSSL stream private-key loader must reject non-PFX input');
+
+  LTempDir := IncludeTrailingPathDelimiter('tmp') + 'test_winssl_private_key_format_truth';
+  ForceDirectories(LTempDir);
+  LTempFile := IncludeTrailingPathDelimiter(LTempDir) + 'winssl_non_pfx_private_key.pem';
+  WriteFileText(LTempFile, DUMMY_PRIVATE_KEY_PEM);
+
+  LRejected := False;
+  try
+    LCtx.LoadPrivateKey(LTempFile, TEST_PASSWORD);
+  except
+    on E: ESSLException do
+    begin
+      Require(IsUnsupportedMessage(E.Message),
+        'WinSSL file non-PFX rejection must report unsupported semantics: ' + E.Message);
+      LRejected := True;
+    end;
+  end;
+  Require(LRejected, 'WinSSL file private-key loader must reject non-PFX input');
+
+  if FileExists(LTempFile) then
+    DeleteFile(LTempFile);
 
   WriteLn('[PASS] WinSSL non-PFX private-key inputs fail-closed as unsupported');
 end;

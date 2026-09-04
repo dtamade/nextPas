@@ -4,7 +4,9 @@ program test_helper_utilities;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.tls.factory,
 
   nextpas.core.tls.base,
@@ -136,7 +138,6 @@ const
 procedure TestGroup1_LoadCertificateFromFile;
 var
   LTempFile: string;
-  LStream: TFileStream;
   LLib: ISSLLibrary;
   LCert: ISSLCertificate;
 begin
@@ -158,12 +159,7 @@ begin
 
   LTempFile := GetTempDir + 'test_cert.pem';
   try
-    LStream := TFileStream.Create(LTempFile, fmCreate);
-    try
-      LStream.WriteBuffer(TEST_CERT_PEM[1], Length(TEST_CERT_PEM));
-    finally
-      LStream.Free;
-    end;
+    WriteFileText(LTempFile, TEST_CERT_PEM);
 
     LCert := LLib.CreateCertificate;
     Test('CreateCertificate returns non-nil', LCert <> nil);
@@ -248,7 +244,6 @@ end;
 procedure TestGroup3_LoadPrivateKeyFromFile;
 var
   LTempFile: string;
-  LStream: TFileStream;
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
 begin
@@ -270,12 +265,7 @@ begin
 
   LTempFile := GetTempDir + 'test_key.pem';
   try
-    LStream := TFileStream.Create(LTempFile, fmCreate);
-    try
-      LStream.WriteBuffer(TEST_PRIVATE_KEY_PEM[1], Length(TEST_PRIVATE_KEY_PEM));
-    finally
-      LStream.Free;
-    end;
+    WriteFileText(LTempFile, TEST_PRIVATE_KEY_PEM);
 
     LCtx := LLib.CreateContext(sslCtxServer);
     Test('CreateContext returns non-nil', LCtx <> nil);

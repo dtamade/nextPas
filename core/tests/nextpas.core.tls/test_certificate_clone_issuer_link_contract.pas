@@ -4,7 +4,8 @@ program test_certificate_clone_issuer_link_contract;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
@@ -52,22 +53,8 @@ begin
 end;
 
 function ReadTextFile(const AFileName: string): string;
-var
-  LStream: TFileStream;
-  LBytes: TBytes;
 begin
-  Result := '';
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LBytes, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(LBytes[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
-
-  if Length(LBytes) > 0 then
-    SetString(Result, PAnsiChar(@LBytes[0]), Length(LBytes));
+  Result := ReadFileText(AFileName);
 end;
 
 function CreateLibraryForBackend(ABackend: TSSLLibraryType): ISSLLibrary;

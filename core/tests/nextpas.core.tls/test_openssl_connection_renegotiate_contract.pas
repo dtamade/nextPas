@@ -3,8 +3,7 @@ program test_openssl_connection_renegotiate_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.base,
@@ -69,35 +68,34 @@ end;
 
 procedure WarmupStreamConnectionConstructor(AContext: ISSLContext);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnectionAccess;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TOpenSSLConnectionAccess.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnectionAccess.Create(AContext, LStream);
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 
 procedure AssertRenegotiateContract(const AName: string; AContext: ISSLContext;
   AExpectedResult: Boolean);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnectionAccess;
   LRaised: Boolean;
   LResult: Boolean;
   LDetail: string;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TOpenSSLConnectionAccess.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnectionAccess.Create(AContext, LStream);
     LConn.ForceConnectedState;
 
     LRaised := False;
@@ -114,13 +112,12 @@ begin
     end;
 
     AssertTrue(AName + ' should not raise', not LRaised, LDetail);
-    AssertTrue(AName + ' should return ' + BoolToStr(AExpectedResult, True),
+    AssertTrue(AName + ' should return ' + BoolToStr(AExpectedResult, 'True', 'False'),
       LResult = AExpectedResult,
-      'expected Renegotiate to return ' + BoolToStr(AExpectedResult, True));
+      'expected Renegotiate to return ' + BoolToStr(AExpectedResult, 'True', 'False'));
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 

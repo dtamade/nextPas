@@ -3,7 +3,7 @@ program test_openssl_certificate_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.path,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -54,16 +54,8 @@ begin
 end;
 
 function LoadFixturePEM: string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(CERT_FIXTURE_PATH);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  Result := ReadFileText(CERT_FIXTURE_PATH);
 end;
 
 function CreateLoadedCertificate(const APEM: string): TOpenSSLCertificate;

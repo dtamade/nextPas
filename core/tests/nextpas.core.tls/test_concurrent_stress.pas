@@ -13,7 +13,7 @@ program test_concurrent_stress;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.factory,
   nextpas.core.tls.base;
 

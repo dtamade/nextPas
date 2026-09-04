@@ -3,8 +3,7 @@ program test_sslctxboth_roleless_handshake_clarification;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -55,7 +54,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LDiag: ISSLDiagnostics;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LState: TSSLHandshakeState;
   LHealth: TSSLHealthStatus;
 begin
@@ -74,34 +73,30 @@ begin
   if LCtx = nil then
     Exit;
 
-  LStream := TMemoryStream.Create;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
-    CheckTrue(LName + ' dual-context stream connection created',
-      LConn <> nil, 'CreateConnection(TStream) returned nil');
-    if LConn = nil then
-      Exit;
+  LStream := CreateBytesStream;
+  LConn := LCtx.CreateConnection(LStream);
+  CheckTrue(LName + ' dual-context stream connection created',
+    LConn <> nil, 'CreateConnection(TStream) returned nil');
+  if LConn = nil then
+    Exit;
 
-    LState := LConn.DoHandshake;
-    CheckTrue(LName + ' dual-context stream connection exposes ISSLDiagnostics',
-      Supports(LConn, ISSLDiagnostics, LDiag),
-      'connection should expose diagnostics owner interface');
-    if not Supports(LConn, ISSLDiagnostics, LDiag) then
-      Exit;
-    LHealth := LDiag.GetHealthStatus;
+  LState := LConn.DoHandshake;
+  CheckTrue(LName + ' dual-context stream connection exposes ISSLDiagnostics',
+    Supports(LConn, ISSLDiagnostics, LDiag),
+    'connection should expose diagnostics owner interface');
+  if not Supports(LConn, ISSLDiagnostics, LDiag) then
+    Exit;
+  LHealth := LDiag.GetHealthStatus;
 
-    CheckTrue(LName + ' dual-context DoHandshake fails instead of guessing a role',
-      LState = sslHsFailed,
-      'expected sslHsFailed, actual=' + IntToStr(Ord(LState)));
-    CheckTrue(LName + ' dual-context DoHandshake records configuration error',
-      LHealth.LastError = sslErrConfiguration,
-      'expected sslErrConfiguration, actual=' + IntToStr(Ord(LHealth.LastError)));
-    CheckTrue(LName + ' dual-context DoHandshake keeps handshake incomplete',
-      not LConn.IsHandshakeComplete,
-      'role-less dual-context handshake should not complete');
-  finally
-    LStream.Free;
-  end;
+  CheckTrue(LName + ' dual-context DoHandshake fails instead of guessing a role',
+    LState = sslHsFailed,
+    'expected sslHsFailed, actual=' + IntToStr(Ord(LState)));
+  CheckTrue(LName + ' dual-context DoHandshake records configuration error',
+    LHealth.LastError = sslErrConfiguration,
+    'expected sslErrConfiguration, actual=' + IntToStr(Ord(LHealth.LastError)));
+  CheckTrue(LName + ' dual-context DoHandshake keeps handshake incomplete',
+    not LConn.IsHandshakeComplete,
+    'role-less dual-context handshake should not complete');
 end;
 
 procedure TestOpenSSLDualContextImplicitWriteMustFailFast;
@@ -109,7 +104,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LDiag: ISSLDiagnostics;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LBuffer: Byte;
   LWritten: Integer;
   LHealth: TSSLHealthStatus;
@@ -122,27 +117,23 @@ begin
   end;
 
   LCtx := TSSLFactory.CreateContext(sslCtxBoth, sslOpenSSL);
-  LStream := TMemoryStream.Create;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
-    LBuffer := $42;
-    LWritten := LConn.Write(LBuffer, SizeOf(LBuffer));
-    CheckTrue('OpenSSL dual-context implicit write exposes ISSLDiagnostics',
-      Supports(LConn, ISSLDiagnostics, LDiag),
-      'connection should expose diagnostics owner interface');
-    if not Supports(LConn, ISSLDiagnostics, LDiag) then
-      Exit;
-    LHealth := LDiag.GetHealthStatus;
+  LStream := CreateBytesStream;
+  LConn := LCtx.CreateConnection(LStream);
+  LBuffer := $42;
+  LWritten := LConn.Write(LBuffer, SizeOf(LBuffer));
+  CheckTrue('OpenSSL dual-context implicit write exposes ISSLDiagnostics',
+    Supports(LConn, ISSLDiagnostics, LDiag),
+    'connection should expose diagnostics owner interface');
+  if not Supports(LConn, ISSLDiagnostics, LDiag) then
+    Exit;
+  LHealth := LDiag.GetHealthStatus;
 
-    CheckTrue('OpenSSL dual-context implicit write returns -1',
-      LWritten = -1,
-      'expected -1, actual=' + IntToStr(LWritten));
-    CheckTrue('OpenSSL dual-context implicit write records configuration error',
-      LHealth.LastError = sslErrConfiguration,
-      'expected sslErrConfiguration, actual=' + IntToStr(Ord(LHealth.LastError)));
-  finally
-    LStream.Free;
-  end;
+  CheckTrue('OpenSSL dual-context implicit write returns -1',
+    LWritten = -1,
+    'expected -1, actual=' + IntToStr(LWritten));
+  CheckTrue('OpenSSL dual-context implicit write records configuration error',
+    LHealth.LastError = sslErrConfiguration,
+    'expected sslErrConfiguration, actual=' + IntToStr(Ord(LHealth.LastError)));
 end;
 
 procedure TestOpenSSLDualContextImplicitReadMustFailFast;
@@ -150,7 +141,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LDiag: ISSLDiagnostics;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LBuffer: Byte;
   LRead: Integer;
   LHealth: TSSLHealthStatus;
@@ -163,27 +154,23 @@ begin
   end;
 
   LCtx := TSSLFactory.CreateContext(sslCtxBoth, sslOpenSSL);
-  LStream := TMemoryStream.Create;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
-    LBuffer := 0;
-    LRead := LConn.Read(LBuffer, SizeOf(LBuffer));
-    CheckTrue('OpenSSL dual-context implicit read exposes ISSLDiagnostics',
-      Supports(LConn, ISSLDiagnostics, LDiag),
-      'connection should expose diagnostics owner interface');
-    if not Supports(LConn, ISSLDiagnostics, LDiag) then
-      Exit;
-    LHealth := LDiag.GetHealthStatus;
+  LStream := CreateBytesStream;
+  LConn := LCtx.CreateConnection(LStream);
+  LBuffer := 0;
+  LRead := LConn.Read(LBuffer, SizeOf(LBuffer));
+  CheckTrue('OpenSSL dual-context implicit read exposes ISSLDiagnostics',
+    Supports(LConn, ISSLDiagnostics, LDiag),
+    'connection should expose diagnostics owner interface');
+  if not Supports(LConn, ISSLDiagnostics, LDiag) then
+    Exit;
+  LHealth := LDiag.GetHealthStatus;
 
-    CheckTrue('OpenSSL dual-context implicit read returns -1',
-      LRead = -1,
-      'expected -1, actual=' + IntToStr(LRead));
-    CheckTrue('OpenSSL dual-context implicit read records configuration error',
-      LHealth.LastError = sslErrConfiguration,
-      'expected sslErrConfiguration, actual=' + IntToStr(Ord(LHealth.LastError)));
-  finally
-    LStream.Free;
-  end;
+  CheckTrue('OpenSSL dual-context implicit read returns -1',
+    LRead = -1,
+    'expected -1, actual=' + IntToStr(LRead));
+  CheckTrue('OpenSSL dual-context implicit read records configuration error',
+    LHealth.LastError = sslErrConfiguration,
+    'expected sslErrConfiguration, actual=' + IntToStr(Ord(LHealth.LastError)));
 end;
 
 begin

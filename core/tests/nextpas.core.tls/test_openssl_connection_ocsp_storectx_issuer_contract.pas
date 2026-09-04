@@ -3,8 +3,7 @@ program test_openssl_connection_ocsp_storectx_issuer_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.exception, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.base,
@@ -340,7 +339,7 @@ end;
 procedure TestIsOCSPResponseVerifiedShouldFailClosedWhenStoreCtxIssuerCannotBeRetained;
 var
   LContext: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnectionOCSPAccess;
   LPeerCert: ISSLCertificate;
   LRaised: Boolean;
@@ -402,7 +401,7 @@ begin
   if LContext = nil then
     raise Exception.Create('failed to create OpenSSL client context');
 
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   LOriginalD2IOCSPResponse := d2i_OCSP_RESPONSE;
   LOriginalOCSPResponseStatus := OCSP_RESPONSE_status;
@@ -438,7 +437,7 @@ begin
     PrepareStoreCtxIssuerChain;
     LPeerCert := BuildPeerCertificateInterface(GLeafX509);
 
-    LConn := TOpenSSLConnectionOCSPAccess.Create(LContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnectionOCSPAccess.Create(LContext, LStream);
     SetLength(LStubResponse, 1);
     LStubResponse[0] := 1;
     LConn.SetStubOCSPResponse(LStubResponse);
@@ -514,7 +513,6 @@ begin
     sk_X509_free := LOriginalSkX509Free;
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
     LPeerCert := nil;
     CleanupStoreCtxIssuerChain;
   end;

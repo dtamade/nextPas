@@ -6,8 +6,10 @@ program test_freepascal_context_server_name_inheritance;
   WithSNI / direct context ServerName compatibility on FreePascal. }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
+  nextpas.core.exception,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
+  nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.freepascal.lib;
@@ -64,7 +66,7 @@ var
   Ctx: ISSLContext;
   Conn: ISSLConnection;
   ClientConn: ISSLClientConnection;
-  Stream: TMemoryStream;
+  Stream: IStream;
 begin
   TestHeader('Direct context server name is not inherited by stream connection');
 
@@ -73,19 +75,15 @@ begin
   Ctx.SetServerName('stream.example.com');
   {$POP}
 
-  Stream := TMemoryStream.Create;
-  try
-    Conn := Ctx.CreateConnection(TStreamWrapper.Create(Stream, False));
-    ClientConn := Conn as ISSLClientConnection;
+  Stream := CreateBytesStream;
+  Conn := Ctx.CreateConnection(Stream);
+  ClientConn := Conn as ISSLClientConnection;
 
-    Assert(ClientConn.GetServerName = '',
-      'Stream connection no longer inherits context server name from direct context API');
+  Assert(ClientConn.GetServerName = '',
+    'Stream connection no longer inherits context server name from direct context API');
 
-    ClientConn := nil;
-    Conn := nil;
-  finally
-    Stream.Free;
-  end;
+  ClientConn := nil;
+  Conn := nil;
 end;
 
 begin

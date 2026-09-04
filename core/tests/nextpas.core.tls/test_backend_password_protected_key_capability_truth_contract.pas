@@ -3,9 +3,13 @@ program test_backend_password_protected_key_capability_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
-  nextpas.core.io.stream_adapter,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
+  nextpas.core.path,
+  nextpas.core.text,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -93,13 +97,13 @@ begin
 end;
 
 procedure ExpectUnsupportedLoadPrivateKeyStream(ACtx: ISSLContext;
-  ABackend: TSSLLibraryType; AStream: TStream);
+  ABackend: TSSLLibraryType; AStream: IStream);
 var
   LRejected: Boolean;
 begin
   LRejected := False;
   try
-    ACtx.LoadPrivateKey(TStreamWrapper.Create(AStream, False), TEST_PASSWORD);
+    ACtx.LoadPrivateKey(AStream, TEST_PASSWORD);
   except
     on E: ESSLException do
     begin
@@ -144,7 +148,7 @@ var
   LCtx: ISSLContext;
   LTempDir: string;
   LTempFile: string;
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   if not TSSLFactory.IsLibraryAvailable(ABackend) then
   begin
@@ -166,17 +170,11 @@ begin
   ForceDirectories(LTempDir);
   LTempFile := IncludeTrailingPathDelimiter(LTempDir) +
     LowerCase(SSL_LIBRARY_NAMES[ABackend]) + '_encrypted_private_key.pem';
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LStream.Write(ENCRYPTED_PRIVATE_KEY_SENTINEL[1], Length(ENCRYPTED_PRIVATE_KEY_SENTINEL));
   LStream.Position := 0;
   try
-    with TStringList.Create do
-    try
-      Text := ENCRYPTED_PRIVATE_KEY_SENTINEL;
-      SaveToFile(LTempFile);
-    finally
-      Free;
-    end;
+    WriteFileText(LTempFile, ENCRYPTED_PRIVATE_KEY_SENTINEL);
 
     ExpectUnsupportedLoadPrivateKeyFile(LCtx, ABackend, LTempFile);
 
@@ -185,7 +183,6 @@ begin
 
     ExpectUnsupportedLoadPrivateKeyPEM(LCtx, ABackend);
   finally
-    LStream.Free;
     if FileExists(LTempFile) then
       DeleteFile(LTempFile);
   end;

@@ -3,7 +3,9 @@ program test_cert_utils_verify_chain_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
@@ -170,17 +172,9 @@ begin
 end;
 
 procedure WriteTextFile(const AFileName, AContent: string);
-var
-  LText: TStringList;
 begin
   ForceDirectories(ExtractFileDir(AFileName));
-  LText := TStringList.Create;
-  try
-    LText.Text := AContent;
-    LText.SaveToFile(AFileName);
-  finally
-    LText.Free;
-  end;
+  WriteFileText(AFileName, AContent);
 end;
 
 procedure WarmupVerifyChainMaterials(

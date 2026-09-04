@@ -23,8 +23,9 @@ program test_mbedtls_framework;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, nextpas.core.text.conv,
-  nextpas.core.io.stream_adapter,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception,
+  nextpas.core.io.intf, nextpas.core.io.memory,
+  nextpas.core.time, nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -92,7 +93,7 @@ begin
     Exit;
 
   if GStubMbedTLSSessionUnixTime = 0 then
-    GStubMbedTLSSessionUnixTime := DateTimeToUnix(Now);
+    GStubMbedTLSSessionUnixTime := DateTimeToUnix(DateTimeNow);
 
   LSession := PStubMbedTLSSessionNative(ASession);
   FillChar(LSession^, SizeOf(LSession^), 0);
@@ -658,7 +659,7 @@ var
   LStreamCert: TMbedTLSCertificate;
   LPEMAnsi: AnsiString;
   LExpectedFingerprint: string;
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   WriteLn('');
   WriteLn('=== MbedTLS Certificate Stream/Memory Truth Contract ===');
@@ -674,7 +675,7 @@ begin
   LCert := TMbedTLSCertificate.Create;
   LMemoryCert := TMbedTLSCertificate.Create;
   LStreamCert := TMbedTLSCertificate.Create;
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   try
     if not LCert.LoadFromFile('certs/server-cert.pem') then
     begin
@@ -703,17 +704,16 @@ begin
       Length(LMemoryCert.SaveToDER) = 0);
 
     Test('SaveToStream writes PEM stream',
-      LCert.SaveToStream(TStreamWrapper.Create(LStream)) and (LStream.Size > 0));
+      LCert.SaveToStream(LStream) and (LStream.Size > 0));
     if LStream.Size = 0 then
       Exit;
 
     LStream.Position := 0;
     Test('LoadFromStream accepts PEM stream roundtrip',
-      LStreamCert.LoadFromStream(TStreamWrapper.Create(LStream)));
+      LStreamCert.LoadFromStream(LStream));
     Test('LoadFromStream roundtrip preserves fingerprint truth',
       SameText(LStreamCert.GetFingerprintSHA256, LExpectedFingerprint));
   finally
-    LStream.Free;
     LStreamCert.Free;
     LMemoryCert.Free;
     LCert.Free;
@@ -1537,7 +1537,7 @@ var
   LConn: TTestMbedTLSConnection;
   LConnIntf: ISSLConnection;
   LCertVerify: ISSLCertificateVerification;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LVerifyResult: Integer;
   LVerifyText: string;
   LOriginalGetVerifyResult: Tmbedtls_ssl_get_verify_result;
@@ -1550,7 +1550,7 @@ begin
   if LLib.Initialize then
   begin
     LCtx := LLib.CreateContext(sslCtxClient);
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     LConn := nil;
     LConnIntf := nil;
     try
@@ -1558,7 +1558,7 @@ begin
         LCtx,
         Pmbedtls_ssl_config(GetNativeHandleSafe(LCtx,
           'TestMbedTLSVerifyResultHelperLossContract')),
-        TStreamWrapper.Create(LStream)
+        LStream
       );
       LConn.MarkHandshakeCompleteForTest;
       LConnIntf := LConn as ISSLConnection;
@@ -1581,7 +1581,6 @@ begin
     finally
       LCertVerify := nil;
       LConnIntf := nil;
-      LStream.Free;
       LLib.Finalize;
     end;
   end
@@ -1598,7 +1597,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LCertVerify: ISSLCertificateVerification;
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   WriteLn('');
   WriteLn('=== MbedTLS Pre-Handshake Verify Status Contract ===');
@@ -1608,9 +1607,9 @@ begin
   if LLib.Initialize then
   begin
     LCtx := LLib.CreateContext(sslCtxClient);
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     try
-      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
+      LConn := LCtx.CreateConnection(LStream);
       RequireCertificateVerification(LConn, LCertVerify,
         'TestMbedTLSVerifyStatusBeforeHandshakeContract');
       Test('Fresh MbedTLS connection does not report verify success before handshake',
@@ -1618,7 +1617,6 @@ begin
       Test('Fresh MbedTLS connection reports not-verified diagnostic before handshake',
         Pos('not verified', LowerCase(LCertVerify.GetVerifyResultString)) > 0);
     finally
-      LStream.Free;
       LLib.Finalize;
     end;
   end

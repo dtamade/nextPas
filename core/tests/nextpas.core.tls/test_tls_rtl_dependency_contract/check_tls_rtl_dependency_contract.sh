@@ -75,8 +75,9 @@ CRYPTO_UTILS="src/nextpas.core.tls.crypto.utils.pas"
 BACKEND_SELECTOR="src/nextpas.core.tls.backend.selector.pas"
 SYSTEM_CLASSES="src/nextpas.core.system.classes.pas"
 
-# certchain: Classes → nextpas.core.system.classes; text ops via text.conv
-require_token "$CERTCHAIN" "nextpas.core.system.classes"
+# certchain: IStream-era — dynamic arrays + owner units, no shim; text ops via text.conv
+reject_token "$CERTCHAIN" "nextpas.core.system.classes"
+require_token "$CERTCHAIN" "nextpas.core.base"
 reject_token "$CERTCHAIN" "Classes,"
 reject_token "$CERTCHAIN" "SysUtils"
 reject_token "$CERTCHAIN" "Math"

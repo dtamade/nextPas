@@ -3,9 +3,11 @@ program test_freepascal_server_accept_skeleton;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -111,7 +113,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LInfo: TSSLConnectionInfo;
-  LIOStream: TMemoryStream;
+  LIOStream: IStream;
   LClientPrivate: TBytes;
   LClientPublic: TBytes;
   LClientHelloRecord: TBytes;
@@ -138,70 +140,66 @@ begin
     TLS13_CIPHER_AES_128_GCM_SHA256
   );
 
-  LIOStream := TMemoryStream.Create;
-  try
-    if Length(LClientHelloRecord) > 0 then
-      LIOStream.WriteBuffer(LClientHelloRecord[0], Length(LClientHelloRecord));
-    LIOStream.Position := 0;
+  LIOStream := CreateBytesStream;
+  if Length(LClientHelloRecord) > 0 then
+    LIOStream.Write(LClientHelloRecord[0], Length(LClientHelloRecord));
+  LIOStream.Position := 0;
 
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LIOStream));
-    AssertTrue(LConn <> nil, 'Server connection should be created');
+  LConn := LCtx.CreateConnection(LIOStream);
+  AssertTrue(LConn <> nil, 'Server connection should be created');
 
-    LAcceptResult := LConn.Accept;
-    AssertTrue(not LAcceptResult, 'Server accept should fail in one-way stream test');
+  LAcceptResult := LConn.Accept;
+  AssertTrue(not LAcceptResult, 'Server accept should fail in one-way stream test');
 
-    LVerifyStr := LowerCase(GetCertificateVerifyResultString(LConn));
-    AssertTrue(
-      (LConn.GetError(-1) = sslErrIO) or (LConn.GetError(-1) = sslErrProtocol) or (LConn.GetError(-1) = sslErrUnsupported),
-      'Accept failure should be IO/protocol/unsupported'
-    );
-    AssertTrue(
-      (Pos('client finished', LVerifyStr) > 0) or
-      (Pos('certificateverify signer', LVerifyStr) > 0),
-      'Failure reason should indicate missing client Finished or CertificateVerify signer failure'
-    );
+  LVerifyStr := LowerCase(GetCertificateVerifyResultString(LConn));
+  AssertTrue(
+    (LConn.GetError(-1) = sslErrIO) or (LConn.GetError(-1) = sslErrProtocol) or (LConn.GetError(-1) = sslErrUnsupported),
+    'Accept failure should be IO/protocol/unsupported'
+  );
+  AssertTrue(
+    (Pos('client finished', LVerifyStr) > 0) or
+    (Pos('certificateverify signer', LVerifyStr) > 0),
+    'Failure reason should indicate missing client Finished or CertificateVerify signer failure'
+  );
 
-    AssertTrue(LConn.GetProtocolVersion = sslProtocolTLS13,
-      'Server skeleton should at least negotiate TLS 1.3 before stopping');
-    AssertTrue(LConn.GetCipherName = 'TLS_AES_128_GCM_SHA256',
-      'Server skeleton should select AES-128-GCM when client offers it');
-    AssertTrue(CaptureSelectedALPN(LConn) = AExpectedNegotiatedALPN,
-      'Server skeleton should mirror the negotiated ALPN');
-    LInfo := CaptureConnectionInfo(LConn);
-    AssertEqualsWord(TLS13_CIPHER_AES_128_GCM_SHA256, LInfo.CipherSuiteId,
-      'Server skeleton connection info should derive the TLS 1.3 cipher-suite id');
-    AssertTrue(LInfo.KeySize = 128,
-      'Server skeleton connection info should derive AES-128 key size');
-    AssertTrue(LInfo.MacSize = 16,
-      'Server skeleton connection info should derive 16-byte AEAD tag length');
-    AssertTrue(LInfo.ALPNProtocol = AExpectedNegotiatedALPN,
-      'Server skeleton connection info should mirror negotiated ALPN');
+  AssertTrue(LConn.GetProtocolVersion = sslProtocolTLS13,
+    'Server skeleton should at least negotiate TLS 1.3 before stopping');
+  AssertTrue(LConn.GetCipherName = 'TLS_AES_128_GCM_SHA256',
+    'Server skeleton should select AES-128-GCM when client offers it');
+  AssertTrue(CaptureSelectedALPN(LConn) = AExpectedNegotiatedALPN,
+    'Server skeleton should mirror the negotiated ALPN');
+  LInfo := CaptureConnectionInfo(LConn);
+  AssertEqualsWord(TLS13_CIPHER_AES_128_GCM_SHA256, LInfo.CipherSuiteId,
+    'Server skeleton connection info should derive the TLS 1.3 cipher-suite id');
+  AssertTrue(LInfo.KeySize = 128,
+    'Server skeleton connection info should derive AES-128 key size');
+  AssertTrue(LInfo.MacSize = 16,
+    'Server skeleton connection info should derive 16-byte AEAD tag length');
+  AssertTrue(LInfo.ALPNProtocol = AExpectedNegotiatedALPN,
+    'Server skeleton connection info should mirror negotiated ALPN');
 
-    LServerResponseLen := LIOStream.Size - Length(LClientHelloRecord);
-    AssertTrue(LServerResponseLen > 0, 'Server should write a ServerHello record to transport');
+  LServerResponseLen := LIOStream.Size - Length(LClientHelloRecord);
+  AssertTrue(LServerResponseLen > 0, 'Server should write a ServerHello record to transport');
 
-    SetLength(LServerResponse, LServerResponseLen);
-    LIOStream.Position := Length(LClientHelloRecord);
-    if LServerResponseLen > 0 then
-      LIOStream.ReadBuffer(LServerResponse[0], LServerResponseLen);
+  SetLength(LServerResponse, LServerResponseLen);
+  LIOStream.Position := Length(LClientHelloRecord);
+  if LServerResponseLen > 0 then
+    LIOStream.Read(LServerResponse[0], LServerResponseLen);
 
-    AssertTrue(ParseTLSRecordHeader(LServerResponse, LHeader), 'Server response record header should parse');
-    AssertTrue(LHeader.ContentType = TLS_CONTENT_TYPE_HANDSHAKE, 'First server response should be handshake record');
-    AssertTrue(TryExtractHandshakePayloadFromRecord(LServerResponse, LHandshake),
-      'Handshake payload extraction should succeed');
-    AssertTrue(TryParseServerHelloFromHandshake(LHandshake, LServerHello),
-      'ServerHello parsing should succeed');
+  AssertTrue(ParseTLSRecordHeader(LServerResponse, LHeader), 'Server response record header should parse');
+  AssertTrue(LHeader.ContentType = TLS_CONTENT_TYPE_HANDSHAKE, 'First server response should be handshake record');
+  AssertTrue(TryExtractHandshakePayloadFromRecord(LServerResponse, LHandshake),
+    'Handshake payload extraction should succeed');
+  AssertTrue(TryParseServerHelloFromHandshake(LHandshake, LServerHello),
+    'ServerHello parsing should succeed');
 
-    AssertTrue(LServerHello.Valid, 'Parsed ServerHello should be valid');
-    AssertEqualsWord(TLS13_VERSION, LServerHello.SelectedVersion, 'Selected version should be TLS 1.3');
-    AssertEqualsWord(TLS13_CIPHER_AES_128_GCM_SHA256, LServerHello.SelectedCipherSuite,
-      'Selected cipher should be AES-128-GCM');
-    AssertTrue(LServerHello.HasKeyShare, 'ServerHello should contain key_share');
-    AssertEqualsWord(TLS13_GROUP_X25519, LServerHello.KeyShareGroup, 'ServerHello key_share group should be X25519');
-    AssertEqualsWord(32, LServerHello.KeyShareLength, 'ServerHello key_share length should be 32');
-  finally
-    LIOStream.Free;
-  end;
+  AssertTrue(LServerHello.Valid, 'Parsed ServerHello should be valid');
+  AssertEqualsWord(TLS13_VERSION, LServerHello.SelectedVersion, 'Selected version should be TLS 1.3');
+  AssertEqualsWord(TLS13_CIPHER_AES_128_GCM_SHA256, LServerHello.SelectedCipherSuite,
+    'Selected cipher should be AES-128-GCM');
+  AssertTrue(LServerHello.HasKeyShare, 'ServerHello should contain key_share');
+  AssertEqualsWord(TLS13_GROUP_X25519, LServerHello.KeyShareGroup, 'ServerHello key_share group should be X25519');
+  AssertEqualsWord(32, LServerHello.KeyShareLength, 'ServerHello key_share length should be 32');
 end;
 
 procedure TestServerAcceptSkeleton;

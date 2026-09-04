@@ -3,8 +3,7 @@ program test_openssl_context_der_private_key_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.path, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
@@ -82,49 +81,29 @@ begin
 end;
 
 function LoadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function WriteTempBytesFile(const AFileName: string; const AData: TBytes): Boolean;
-var
-  LStream: TFileStream;
 begin
   Result := False;
   ForceDirectories(ExtractFileDir(AFileName));
-  LStream := TFileStream.Create(AFileName, fmCreate);
-  try
-    if Length(AData) > 0 then
-      LStream.WriteBuffer(AData[0], Length(AData));
-    Result := True;
-  finally
-    LStream.Free;
-  end;
+  WriteFile(AFileName, AData);
+  Result := True;
 end;
 
 function WriteTempTextFile(const AFileName, AText: string): Boolean;
 var
   LData: TBytes;
 begin
-  LData := BytesOf(AText);
+  LData := StringToUTF8Bytes(AText);
   Result := WriteTempBytesFile(AFileName, LData);
 end;
 
-function CreateMemoryStream(const AData: TBytes): TMemoryStream;
+function CreateMemoryStream(const AData: TBytes): IStream;
 begin
-  Result := TMemoryStream.Create;
-  if Length(AData) > 0 then
-    Result.WriteBuffer(AData[0], Length(AData));
-  Result.Position := 0;
+  Result := CreateBytesStreamFrom(AData);
 end;
 
 function CreateServerContext: ISSLContext;
@@ -255,7 +234,7 @@ begin
 
   LReader := TPEMReader.Create;
   try
-    LText := StringOf(APEMBlob);
+    LText := UTF8BytesToString(APEMBlob);
     LReader.LoadFromString(LText);
     LBlocks := LReader.GetPrivateKeys;
     for I := 0 to High(LBlocks) do
@@ -529,29 +508,25 @@ procedure AssertLoadPrivateKeyStreamSucceeds(
 );
 var
   LCtx: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LRaised: Boolean;
   LDetail: string;
 begin
   LCtx := CreateServerContext;
   LStream := CreateMemoryStream(AData);
+  LRaised := False;
+  LDetail := '';
   try
-    LRaised := False;
-    LDetail := '';
-    try
-      LCtx.LoadPrivateKey(TStreamWrapper.Create(LStream), APassword);
-    except
-      on E: Exception do
-      begin
-        LRaised := True;
-        LDetail := E.ClassName + ': ' + E.Message;
-      end;
+    LCtx.LoadPrivateKey(LStream, APassword);
+  except
+    on E: Exception do
+    begin
+      LRaised := True;
+      LDetail := E.ClassName + ': ' + E.Message;
     end;
-
-    AssertTrue(AName + ' should not raise', not LRaised, LDetail);
-  finally
-    LStream.Free;
   end;
+
+  AssertTrue(AName + ' should not raise', not LRaised, LDetail);
 end;
 
 procedure AssertLoadPrivateKeyFileControlledFailure(
@@ -594,37 +569,33 @@ procedure AssertLoadPrivateKeyStreamControlledFailure(
 );
 var
   LCtx: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LRaised: Boolean;
   LControlled: Boolean;
   LDetail: string;
 begin
   LCtx := CreateServerContext;
   LStream := CreateMemoryStream(AData);
+  LRaised := False;
+  LControlled := False;
+  LDetail := '';
   try
-    LRaised := False;
-    LControlled := False;
-    LDetail := '';
-    try
-      LCtx.LoadPrivateKey(TStreamWrapper.Create(LStream), APassword);
-    except
-      on E: Exception do
-      begin
-        LRaised := True;
-        if AExpectKeyException then
-          LControlled := E is ESSLKeyException
-        else
-          LControlled := E is ESSLException;
-        LDetail := E.ClassName + ': ' + E.Message;
-      end;
+    LCtx.LoadPrivateKey(LStream, APassword);
+  except
+    on E: Exception do
+    begin
+      LRaised := True;
+      if AExpectKeyException then
+        LControlled := E is ESSLKeyException
+      else
+        LControlled := E is ESSLException;
+      LDetail := E.ClassName + ': ' + E.Message;
     end;
-
-    AssertTrue(AName + ' should raise', LRaised,
-      'expected LoadPrivateKey(stream) to fail');
-    AssertTrue(AName + ' should raise controlled exception', LControlled, LDetail);
-  finally
-    LStream.Free;
   end;
+
+  AssertTrue(AName + ' should raise', LRaised,
+    'expected LoadPrivateKey(stream) to fail');
+  AssertTrue(AName + ' should raise controlled exception', LControlled, LDetail);
 end;
 
 procedure TestDERPrivateKeyLoadContract;

@@ -4,7 +4,7 @@ program test_wolfssl_ocsp_stapling_contract;
 
 uses
   nextpas.core.tls.factory,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.fs, nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.wolfssl.lib;
@@ -57,20 +57,8 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  Result := nil;
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
-  try
-    if LStream.Size > 0 then
-    begin
-      SetLength(Result, LStream.Size);
-      LStream.ReadBuffer(Result[0], LStream.Size);
-    end;
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function BytesEqual(const ALeft, ARight: TBytes): Boolean;

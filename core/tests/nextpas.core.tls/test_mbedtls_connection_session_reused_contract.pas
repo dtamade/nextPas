@@ -4,8 +4,12 @@ program test_mbedtls_connection_session_reused_contract;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
+  nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.api,
   nextpas.core.tls.mbedtls.session,
@@ -55,7 +59,7 @@ procedure TestSetSessionMustNotPreclaimResumedHandshake;
 var
   LConn: ISSLConnection;
   LResumption: ISSLSessionResumption;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LSession: ISSLSession;
   LNativeAccess: ISSLNativeHandleAccess;
   LOriginalSSLInit: Tmbedtls_ssl_init;
@@ -86,9 +90,9 @@ begin
   mbedtls_ssl_session_free := nil;
   GSetSessionCalls := 0;
 
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   try
-    LConn := TMbedTLSConnection.Create(nil, nil, TStreamWrapper.Create(LStream, False)) as ISSLConnection;
+    LConn := TMbedTLSConnection.Create(nil, nil, LStream) as ISSLConnection;
     LSession := TMbedTLSSession.Create;
     AssertTrue('connection exposes ISSLSessionResumption owner path',
       Supports(LConn, ISSLSessionResumption, LResumption));
@@ -115,7 +119,6 @@ begin
     LSession := nil;
     LResumption := nil;
     LConn := nil;
-    LStream.Free;
     mbedtls_ssl_init := LOriginalSSLInit;
     mbedtls_ssl_free := LOriginalSSLFree;
     mbedtls_ssl_setup := LOriginalSSLSetup;

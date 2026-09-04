@@ -3,7 +3,6 @@ program test_direct_library_early_data_replay_store_parity;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.freepascal.lib,

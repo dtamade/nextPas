@@ -3,7 +3,7 @@ program test_real_usage;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.backed;
@@ -126,7 +126,7 @@ begin
 
   try
     IsCA := Cert.IsCA;
-    RecordPass('IsCA callable', BoolToStr(IsCA, True));
+    RecordPass('IsCA callable', BoolToStr(IsCA, 'True', 'False'));
   except
     on E: Exception do
       RecordFail('IsCA', E.Message);
@@ -155,7 +155,7 @@ begin
 
   LRaised := False;
   try
-    Context.CreateConnection(TStream(nil));
+    Context.CreateConnection(IStream(nil));
   except
     on E: ESSLException do
     begin

@@ -3,8 +3,7 @@ program test_openssl_connection_peer_certificate_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.base,
@@ -47,26 +46,25 @@ end;
 
 procedure WarmupStreamConnectionConstructor(AContext: ISSLContext);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(AContext, LStream);
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 
 procedure TestGetPeerCertificateShouldDegradeSafelyWhenHelperIsUnavailable;
 var
   LContext: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
   LOriginalSSLGetPeerCertificate: TSSL_get_peer_certificate;
   LRaised: Boolean;
@@ -92,11 +90,11 @@ begin
 
   WarmupStreamConnectionConstructor(LContext);
 
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   LOriginalSSLGetPeerCertificate := SSL_get_peer_certificate;
   try
-    LConn := TOpenSSLConnection.Create(LContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(LContext, LStream);
 
     LRaised := False;
     LCert := nil;
@@ -125,7 +123,6 @@ begin
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 

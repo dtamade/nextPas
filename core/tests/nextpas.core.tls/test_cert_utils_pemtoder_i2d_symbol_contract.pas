@@ -3,7 +3,9 @@ program test_cert_utils_pemtoder_i2d_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
@@ -48,16 +50,8 @@ begin
 end;
 
 function LoadFixturePEM: string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(CERT_FIXTURE_PATH);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  Result := ReadFileText(CERT_FIXTURE_PATH);
 end;
 
 procedure WarmupPEMToDERMaterial(out APEM: string; out ADER: TBytes);

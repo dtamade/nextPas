@@ -3,8 +3,13 @@ program test_mbedtls_connection_peer_certificate_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
+  nextpas.core.text.conv,
+  nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.api,
   nextpas.core.tls.mbedtls.lib,
@@ -64,22 +69,8 @@ begin
 end;
 
 function ReadTextFile(const AFileName: string): string;
-var
-  LStream: TFileStream;
-  LBytes: TBytes;
 begin
-  Result := '';
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(LBytes, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(LBytes[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
-
-  if Length(LBytes) > 0 then
-    SetString(Result, PAnsiChar(@LBytes[0]), Length(LBytes));
+  Result := ReadFileText(AFileName);
 end;
 
 procedure TestConnectionPeerCertificateMustMaterializeOwnedCopy;
@@ -87,7 +78,7 @@ var
   LFixture: TMbedTLSCertificate;
   LLeafFixture: TMbedTLSCertificate;
   LIssuerFixture: TMbedTLSCertificate;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TMbedTLSConnection;
   LCert: ISSLCertificate;
   LIssuerFromPeerCert: ISSLCertificate;
@@ -159,10 +150,10 @@ begin
 
   LOriginalGetPeerCert := mbedtls_ssl_get_peer_cert;
   LOriginalParse := mbedtls_x509_crt_parse;
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TMbedTLSConnection.Create(nil, nil, TStreamWrapper.Create(LStream, False));
+    LConn := TMbedTLSConnection.Create(nil, nil, LStream);
 
     mbedtls_ssl_get_peer_cert := @StubMbedTLSSSLGetPeerCert;
 
@@ -215,7 +206,6 @@ begin
     mbedtls_x509_crt_parse := LOriginalParse;
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
     LIssuerFixture.Free;
     LLeafFixture.Free;
     LFixture.Free;

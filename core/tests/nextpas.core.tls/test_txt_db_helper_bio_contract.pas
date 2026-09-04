@@ -3,7 +3,7 @@ program test_txt_db_helper_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.fs, nextpas.core.path,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.txt_db;
 
@@ -38,21 +38,11 @@ begin
 end;
 
 function WriteTempTextFile(const AFileName, AContent: string): Boolean;
-var
-  LStream: TFileStream;
-  LBytes: UTF8String;
 begin
   Result := False;
   ForceDirectories(ExtractFileDir(AFileName));
-  LStream := TFileStream.Create(AFileName, fmCreate);
-  try
-    LBytes := UTF8String(AContent);
-    if Length(LBytes) > 0 then
-      LStream.WriteBuffer(LBytes[1], Length(LBytes));
-    Result := True;
-  finally
-    LStream.Free;
-  end;
+  WriteFileText(AFileName, AContent);
+  Result := True;
 end;
 
 procedure TestTXTDBHelpersShouldDegradeWhenBIOFileHelpersAreUnavailable;

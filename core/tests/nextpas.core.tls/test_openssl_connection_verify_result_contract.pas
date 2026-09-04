@@ -3,8 +3,7 @@ program test_openssl_connection_verify_result_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.base,
@@ -53,26 +52,25 @@ end;
 
 procedure WarmupStreamConnectionConstructor(AContext: ISSLContext);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(AContext, LStream);
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 
 procedure TestFreshConnectionShouldNotReportVerifySuccessBeforeHandshake;
 var
   LContext: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
 begin
   WriteLn;
@@ -94,10 +92,10 @@ begin
 
   WarmupStreamConnectionConstructor(LContext);
 
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   try
-    LConn := TOpenSSLConnection.Create(LContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(LContext, LStream);
     AssertTrue('Fresh OpenSSL connection should not report verify success before handshake',
       LConn.GetVerifyResult = -1,
       'expected fresh connection verify result to stay unavailable before handshake');
@@ -107,14 +105,13 @@ begin
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 
 procedure TestGetVerifyResultShouldDegradeSafelyWhenHelperIsUnavailable;
 var
   LContext: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: TOpenSSLConnection;
   LOriginalSSLGetVerifyResult: TSSL_get_verify_result;
   LRaised: Boolean;
@@ -140,11 +137,11 @@ begin
 
   WarmupStreamConnectionConstructor(LContext);
 
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   LOriginalSSLGetVerifyResult := SSL_get_verify_result;
   try
-    LConn := TOpenSSLConnection.Create(LContext, TStreamWrapper.Create(LStream));
+    LConn := TOpenSSLConnection.Create(LContext, LStream);
 
     LRaised := False;
     LResult := 0;
@@ -173,7 +170,6 @@ begin
   finally
     if Assigned(LConn) then
       LConn.Free;
-    LStream.Free;
   end;
 end;
 

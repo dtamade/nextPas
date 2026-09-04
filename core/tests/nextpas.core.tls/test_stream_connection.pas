@@ -15,8 +15,8 @@ program test_stream_connection;
 {$DEFINE ENABLE_MBEDTLS}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
+  nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.backed,
@@ -70,8 +70,8 @@ begin
     LogPass(ACaseName)
   else
     LogFail(ACaseName + ' classifier mismatch (expected=' +
-      BoolToStr(AExpectedCapabilitySkip, True) + ', actual=' +
-      BoolToStr(LActual, True) + ', message=' + AMessage + ')');
+      BoolToStr(AExpectedCapabilitySkip, 'True', 'False') + ', actual=' +
+      BoolToStr(LActual, 'True', 'False') + ', message=' + AMessage + ')');
 end;
 
 procedure TestLegacyNotImplementedClassification;
@@ -120,7 +120,7 @@ procedure TestOpenSSLStreamConnection;
 var
   LLibrary: ISSLLibrary;
   LContext: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConnection: ISSLConnection;
 begin
   WriteLn;
@@ -147,27 +147,23 @@ begin
       Exit;
     end;
 
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     try
-      try
-        LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
-        if LConnection <> nil then
-          LogPass('OpenSSL CreateConnection(TStream) returns valid connection')
+      LConnection := LContext.CreateConnection(LStream);
+      if LConnection <> nil then
+        LogPass('OpenSSL CreateConnection(TStream) returns valid connection')
+      else
+        LogFail('OpenSSL CreateConnection(TStream) returned nil');
+    except
+      on E: ESSLException do
+      begin
+        if IsCapabilityDrivenSkipMessage(E.Message) then
+          LogSkip('OpenSSL stream connection capability-limited: ' + E.Message)
         else
-          LogFail('OpenSSL CreateConnection(TStream) returned nil');
-      except
-        on E: ESSLException do
-        begin
-          if IsCapabilityDrivenSkipMessage(E.Message) then
-            LogSkip('OpenSSL stream connection capability-limited: ' + E.Message)
-          else
-            LogFail('OpenSSL CreateConnection(TStream) exception: ' + E.Message);
-        end;
-        on E: Exception do
-          LogFail('OpenSSL CreateConnection(TStream) unexpected error: ' + E.Message);
+          LogFail('OpenSSL CreateConnection(TStream) exception: ' + E.Message);
       end;
-    finally
-      LStream.Free;
+      on E: Exception do
+        LogFail('OpenSSL CreateConnection(TStream) unexpected error: ' + E.Message);
     end;
 
     LLibrary.Finalize;
@@ -181,7 +177,7 @@ procedure TestWinSSLStreamConnection;
 var
   LLibrary: ISSLLibrary;
   LContext: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConnection: ISSLConnection;
 begin
   WriteLn;
@@ -213,27 +209,23 @@ begin
       Exit;
     end;
 
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     try
-      try
-        LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
-        if LConnection <> nil then
-          LogPass('WinSSL CreateConnection(TStream) returns valid connection')
+      LConnection := LContext.CreateConnection(LStream);
+      if LConnection <> nil then
+        LogPass('WinSSL CreateConnection(TStream) returns valid connection')
+      else
+        LogFail('WinSSL CreateConnection(TStream) returned nil');
+    except
+      on E: ESSLException do
+      begin
+        if IsCapabilityDrivenSkipMessage(E.Message) then
+          LogSkip('WinSSL stream connection capability-limited: ' + E.Message)
         else
-          LogFail('WinSSL CreateConnection(TStream) returned nil');
-      except
-        on E: ESSLException do
-        begin
-          if IsCapabilityDrivenSkipMessage(E.Message) then
-            LogSkip('WinSSL stream connection capability-limited: ' + E.Message)
-          else
-            LogFail('WinSSL CreateConnection(TStream) exception: ' + E.Message);
-        end;
-        on E: Exception do
-          LogFail('WinSSL CreateConnection(TStream) unexpected error: ' + E.Message);
+          LogFail('WinSSL CreateConnection(TStream) exception: ' + E.Message);
       end;
-    finally
-      LStream.Free;
+      on E: Exception do
+        LogFail('WinSSL CreateConnection(TStream) unexpected error: ' + E.Message);
     end;
 
     LLibrary.Finalize;
@@ -247,7 +239,7 @@ procedure TestWolfSSLStreamConnection;
 var
   LLibrary: ISSLLibrary;
   LContext: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConnection: ISSLConnection;
 begin
   WriteLn;
@@ -274,27 +266,23 @@ begin
       Exit;
     end;
 
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     try
-      try
-        LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
-        if LConnection <> nil then
-          LogPass('WolfSSL CreateConnection(TStream) returns valid connection')
+      LConnection := LContext.CreateConnection(LStream);
+      if LConnection <> nil then
+        LogPass('WolfSSL CreateConnection(TStream) returns valid connection')
+      else
+        LogFail('WolfSSL CreateConnection(TStream) returned nil');
+    except
+      on E: ESSLException do
+      begin
+        if IsCapabilityDrivenSkipMessage(E.Message) then
+          LogSkip('WolfSSL stream connection capability-limited: ' + E.Message)
         else
-          LogFail('WolfSSL CreateConnection(TStream) returned nil');
-      except
-        on E: ESSLException do
-        begin
-          if IsCapabilityDrivenSkipMessage(E.Message) then
-            LogSkip('WolfSSL stream connection capability-limited: ' + E.Message)
-          else
-            LogFail('WolfSSL CreateConnection(TStream) exception: ' + E.Message);
-        end;
-        on E: Exception do
-          LogFail('WolfSSL CreateConnection(TStream) unexpected error: ' + E.Message);
+          LogFail('WolfSSL CreateConnection(TStream) exception: ' + E.Message);
       end;
-    finally
-      LStream.Free;
+      on E: Exception do
+        LogFail('WolfSSL CreateConnection(TStream) unexpected error: ' + E.Message);
     end;
 
     LLibrary.Finalize;
@@ -308,7 +296,7 @@ procedure TestMbedTLSStreamConnection;
 var
   LLibrary: ISSLLibrary;
   LContext: ISSLContext;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConnection: ISSLConnection;
 begin
   WriteLn;
@@ -335,27 +323,23 @@ begin
       Exit;
     end;
 
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     try
-      try
-        LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
-        if LConnection <> nil then
-          LogPass('MbedTLS CreateConnection(TStream) returns valid connection')
+      LConnection := LContext.CreateConnection(LStream);
+      if LConnection <> nil then
+        LogPass('MbedTLS CreateConnection(TStream) returns valid connection')
+      else
+        LogFail('MbedTLS CreateConnection(TStream) returned nil');
+    except
+      on E: ESSLException do
+      begin
+        if IsCapabilityDrivenSkipMessage(E.Message) then
+          LogSkip('MbedTLS stream connection capability-limited: ' + E.Message)
         else
-          LogFail('MbedTLS CreateConnection(TStream) returned nil');
-      except
-        on E: ESSLException do
-        begin
-          if IsCapabilityDrivenSkipMessage(E.Message) then
-            LogSkip('MbedTLS stream connection capability-limited: ' + E.Message)
-          else
-            LogFail('MbedTLS CreateConnection(TStream) exception: ' + E.Message);
-        end;
-        on E: Exception do
-          LogFail('MbedTLS CreateConnection(TStream) unexpected error: ' + E.Message);
+          LogFail('MbedTLS CreateConnection(TStream) exception: ' + E.Message);
       end;
-    finally
-      LStream.Free;
+      on E: Exception do
+        LogFail('MbedTLS CreateConnection(TStream) unexpected error: ' + E.Message);
     end;
 
     LLibrary.Finalize;
@@ -391,7 +375,7 @@ begin
 
     LRaisedException := False;
     try
-      LContext.CreateConnection(TStream(nil));
+      LContext.CreateConnection(IStream(nil));
     except
       on E: ESSLException do
       begin

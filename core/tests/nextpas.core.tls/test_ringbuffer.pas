@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.base, nextpas.core.base.utils, Classes, nextpas.core.time,
   nextpas.core.tls.ringbuffer;
 
 const
@@ -223,7 +223,7 @@ begin
 
   Ring := TLockFreeRingBuffer.Create(65536);
   try
-    StartTime := Now;
+    StartTime := DateTimeNow;
 
     for I := 1 to ITERATIONS do
     begin
@@ -231,7 +231,7 @@ begin
       Ring.Read(Data, 1024);
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     OpsPerSec := (ITERATIONS * 2) / (DateTimeMillisecondsBetween(EndTime, StartTime) / 1000);
 
@@ -361,7 +361,7 @@ begin
     Producer := TProducerThread.Create(Ring, Count);
     Consumer := TConsumerThread.Create(Ring, Count);
 
-    StartTime := Now;
+    StartTime := DateTimeNow;
 
     Producer.Start;
     Consumer.Start;
@@ -369,7 +369,7 @@ begin
     Producer.WaitFor;
     Consumer.WaitFor;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     WriteLn('  Messages: ', Count);
     WriteLn('  Duration: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');

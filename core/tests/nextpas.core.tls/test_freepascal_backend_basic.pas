@@ -3,21 +3,25 @@ program test_freepascal_backend_basic;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.base,
+  nextpas.core.fs,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
+  nextpas.core.path,
   nextpas.core.text.conv,
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.time,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib;
 function InvalidPEMStream(const APEM: string): IStream;
 var
-  LS: TMemoryStream;
+  LS: IStream;
 begin
-  LS := TMemoryStream.Create;
+  LS := CreateBytesStream;
   if Length(APEM) > 0 then
-    LS.WriteBuffer(PAnsiChar(APEM)^, Length(APEM));
+    LS.Write(PAnsiChar(APEM)^, Length(APEM));
   LS.Position := 0;
-  Result := TStreamWrapper.Create(LS, True);
+  Result := LS;
 end;
 
 procedure AssertTrue(ACondition: Boolean; const AMessage: string);
@@ -73,7 +77,7 @@ var
   LScanTxtPath: string;
   LScanPemPath: string;
   LConn: ISSLConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LBuf: array[0..7] of Byte;
   LRead: Integer;
   LWritten: Integer;
@@ -81,8 +85,8 @@ var
   LTLS12ServerCtx: ISSLContext;
   LTLS12ClientConn: ISSLConnection;
   LTLS12ServerConn: ISSLConnection;
-  LClientStream: TMemoryStream;
-  LServerStream: TMemoryStream;
+  LClientStream: IStream;
+  LServerStream: IStream;
   LVerifyText: string;
   LSubjectVariant: string;
   LIssuerVariant: string;
@@ -152,13 +156,7 @@ begin
     'Temporary directory for LoadFromPath filtering contract should be created');
 
   LScanTxtPath := IncludeTrailingPathDelimiter(LScanDir) + 'renamed_cert.txt';
-  with TStringList.Create do
-  try
-    Text := LValidPEM;
-    SaveToFile(LScanTxtPath);
-  finally
-    Free;
-  end;
+  WriteFileText(LScanTxtPath, LValidPEM);
 
   LFilterStore := LLib.CreateCertificateStore;
   AssertTrue(LFilterStore <> nil,
@@ -169,13 +167,7 @@ begin
     'LoadFromPath should keep store empty when directory only contains non-certificate extension files');
 
   LScanPemPath := IncludeTrailingPathDelimiter(LScanDir) + 'renamed_cert.pem';
-  with TStringList.Create do
-  try
-    Text := LValidPEM;
-    SaveToFile(LScanPemPath);
-  finally
-    Free;
-  end;
+  WriteFileText(LScanPemPath, LValidPEM);
 
   LFilterStore := LLib.CreateCertificateStore;
   AssertTrue(LFilterStore <> nil,
@@ -187,7 +179,7 @@ begin
 
   DeleteFile(LScanTxtPath);
   DeleteFile(LScanPemPath);
-  RemoveDir(LScanDir);
+  DeleteFile(LScanDir);
 
   LHostCert := LLib.CreateCertificate;
   AssertTrue(LHostCert <> nil, 'CreateCertificate should return SAN-vs-CN contract certificate instance');
@@ -392,64 +384,52 @@ begin
   AssertTrue(IsCipherSupported(LCaps, sslCipherAES256GCM),
     'FreePascal capability SupportedCiphers should advertise AES256GCM after SHA384 parity closes');
 
-  LStream := TMemoryStream.Create;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
-    AssertTrue(LConn <> nil, 'CreateConnection(TStream) should return connection');
+  LStream := CreateBytesStream;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'CreateConnection(TStream) should return connection');
 
-    FillChar(LBuf, SizeOf(LBuf), 0);
+  FillChar(LBuf, SizeOf(LBuf), 0);
 
-    LRead := LConn.Read(LBuf, SizeOf(LBuf));
-    AssertTrue(LRead = -1, 'Read before handshake should fail');
-    AssertTrue(LConn.GetError(-1) = sslErrProtocol,
-      'Read before handshake should report protocol precondition error');
+  LRead := LConn.Read(LBuf, SizeOf(LBuf));
+  AssertTrue(LRead = -1, 'Read before handshake should fail');
+  AssertTrue(LConn.GetError(-1) = sslErrProtocol,
+    'Read before handshake should report protocol precondition error');
 
-    LWritten := LConn.Write(LBuf, SizeOf(LBuf));
-    AssertTrue(LWritten = -1, 'Write before handshake should fail');
-    AssertTrue(LConn.GetError(-1) = sslErrProtocol,
-      'Write before handshake should report protocol precondition error');
+  LWritten := LConn.Write(LBuf, SizeOf(LBuf));
+  AssertTrue(LWritten = -1, 'Write before handshake should fail');
+  AssertTrue(LConn.GetError(-1) = sslErrProtocol,
+    'Write before handshake should report protocol precondition error');
 
-    AssertTrue(not LConn.Renegotiate,
-      'Renegotiate before handshake should fail');
-    AssertTrue(LConn.GetError(-1) = sslErrProtocol,
-      'Renegotiate before handshake should report protocol precondition error');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Renegotiate,
+    'Renegotiate before handshake should fail');
+  AssertTrue(LConn.GetError(-1) = sslErrProtocol,
+    'Renegotiate before handshake should report protocol precondition error');
 
   LTLS12ClientCtx := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
   AssertTrue(LTLS12ClientCtx <> nil, 'TLS1.2 client context should be created');
   LTLS12ClientCtx.SetPreferredVersion(sslProtocolTLS12);
 
-  LClientStream := TMemoryStream.Create;
-  try
-    LTLS12ClientConn := LTLS12ClientCtx.CreateConnection(TStreamWrapper.Create(LClientStream));
-    AssertTrue(LTLS12ClientConn <> nil, 'TLS1.2 client connection should be created');
-    AssertTrue(not LTLS12ClientConn.Connect, 'TLS1.2 client connect to empty stream should fail');
-    AssertTrue(
-      LTLS12ClientConn.GetError(-1) <> sslErrNone,
-      'TLS1.2 client connect failure to empty stream should report an error');
-  finally
-    LTLS12ClientConn := nil;
-    LClientStream.Free;
-  end;
+  LClientStream := CreateBytesStream;
+  LTLS12ClientConn := LTLS12ClientCtx.CreateConnection(LClientStream);
+  AssertTrue(LTLS12ClientConn <> nil, 'TLS1.2 client connection should be created');
+  AssertTrue(not LTLS12ClientConn.Connect, 'TLS1.2 client connect to empty stream should fail');
+  AssertTrue(
+    LTLS12ClientConn.GetError(-1) <> sslErrNone,
+    'TLS1.2 client connect failure to empty stream should report an error');
+  LTLS12ClientConn := nil;
 
   LTLS12ServerCtx := TSSLFactory.CreateContext(sslCtxServer, sslFreePascal);
   AssertTrue(LTLS12ServerCtx <> nil, 'TLS1.2 server context should be created');
   LTLS12ServerCtx.SetPreferredVersion(sslProtocolTLS12);
 
-  LServerStream := TMemoryStream.Create;
-  try
-    LTLS12ServerConn := LTLS12ServerCtx.CreateConnection(TStreamWrapper.Create(LServerStream));
-    AssertTrue(LTLS12ServerConn <> nil, 'TLS1.2 server connection should be created');
-    AssertTrue(not LTLS12ServerConn.Accept, 'TLS1.2 server accept to empty stream should fail');
-    AssertTrue(
-      LTLS12ServerConn.GetError(-1) <> sslErrNone,
-      'TLS1.2 server accept failure to empty stream should report an error');
-  finally
-    LTLS12ServerConn := nil;
-    LServerStream.Free;
-  end;
+  LServerStream := CreateBytesStream;
+  LTLS12ServerConn := LTLS12ServerCtx.CreateConnection(LServerStream);
+  AssertTrue(LTLS12ServerConn <> nil, 'TLS1.2 server connection should be created');
+  AssertTrue(not LTLS12ServerConn.Accept, 'TLS1.2 server accept to empty stream should fail');
+  AssertTrue(
+    LTLS12ServerConn.GetError(-1) <> sslErrNone,
+    'TLS1.2 server accept failure to empty stream should report an error');
+  LTLS12ServerConn := nil;
 
   WriteLn('✅ FreePascal backend basic checks passed');
 end.
