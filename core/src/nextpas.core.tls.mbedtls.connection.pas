@@ -26,7 +26,6 @@ uses
   nextpas.core.tls.connection.base,
   nextpas.core.platform.socket,
   nextpas.core.tls.mbedtls.base,
-  nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.native_handle,
   nextpas.core.tls.mbedtls.api;
 
