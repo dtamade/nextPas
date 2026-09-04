@@ -241,7 +241,7 @@ begin
               LHardSource := ArchiveJoinPath(ADestDir, H.LinkName);
               ArchiveValidateHardlinkSource(LHardSource, H.LinkName);
               ArchiveHandleSpecial(LFull);
-              // TOCTOU闭环：ArchiveHardLinkVerified→FsHardLinkVerified→platform_file_link_verified 单源原子落盘，O_NOFOLLOW|O_CLOEXEC fd 校验 ftRegular 后经 /proc/self/fd 或 /dev/fd 链路 link，消除 Validate→HandleSpecial→HardLink 窗口并发替换源为 symlink 的绕过，inline 单源 fd 级 Verified 闭环（前置 ArchiveValidateHardlinkSource fail-fast 诊断 via archive.fs 单源复用 bytes.ops 零拷贝 inline，零额外分配）
+              // TOCTOU闭环：ArchiveHardLinkVerified→FsHardLinkVerified→platform_file_link_verified 单源原子落盘，O_NOFOLLOW|O_CLOEXEC fd 校验 ftRegular 后经 /proc/self/fd 或 /dev/fd 链路 link；fd-link 不可用（EXDEV）时经 fs.util 重校验后普通 link 降级，真跨设备仍失败，见 FsHardLinkVerified
               ArchiveHardLinkVerified(LHardSource, LFull);
             end;
           tekFifo:

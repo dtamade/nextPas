@@ -53,6 +53,7 @@ const
   PLATFORM_ERR_NOMEM       = 12;    { Out of memory }
   PLATFORM_ERR_BUSY        = 16;    { Device or resource busy }
   PLATFORM_ERR_EXIST       = 17;    { File exists }
+  PLATFORM_ERR_XDEV        = 18;    { Invalid cross-device link }
   PLATFORM_ERR_NOTDIR      = 20;    { Not a directory }
   PLATFORM_ERR_INVALID     = 22;    { Invalid argument }
   PLATFORM_ERR_NOSPC       = 28;    { No space left on device }
