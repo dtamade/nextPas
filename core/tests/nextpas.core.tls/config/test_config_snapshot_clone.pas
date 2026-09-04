@@ -17,7 +17,11 @@ program test_config_snapshot_clone;
 
 uses
   nextpas.core.system.sysutils,
-  fpjson, jsonparser,
+  nextpas.core.text.view,
+  nextpas.core.mem.default,
+  nextpas.core.json.types,
+  nextpas.core.json.parser,
+  nextpas.core.json.value,
   nextpas.core.tls.base,
   nextpas.core.tls.backend.selector,
   nextpas.core.tls.context.builder,
@@ -82,9 +86,60 @@ begin
   WriteLn('═══════════════════════════════════════════════════════════');
 end;
 
-function ParseBuilderJSON(ABuilder: ISSLContextBuilder): TJSONObject;
+function ParseBuilderJSON(ABuilder: ISSLContextBuilder): string;
 begin
-  Result := TJSONObject(GetJSON(ABuilder.ExportToJSON));
+  Result := ABuilder.ExportToJSON;
+end;
+
+function JSONStr(const AJSON, AKey: string): string;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := '';
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsStr.ToString;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONBool(const AJSON, AKey: string): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := False;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsBool;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONInt(const AJSON, AKey: string): Int64;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := 0;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsInt;
+  finally
+    LDoc.Done;
+  end;
 end;
 
 { Test 1: Clone creates independent copy }
@@ -634,7 +689,7 @@ end;
 procedure Test_Merge_FileSources_ClearStalePEMState;
 var
   LSource, LDestination: ISSLContextBuilder;
-  LObj: TJSONObject;
+  LJSON: string;
 begin
   TestHeader('Test 22: Merge File Sources Clear Stale PEM State');
 
@@ -648,26 +703,22 @@ begin
 
   LDestination.Merge(LSource);
 
-  LObj := ParseBuilderJSON(LDestination);
-  try
-    Assert(LObj.Strings['certificate_file'] = '/tmp/merged-cert-file.pem',
-      'Merge keeps merged certificate_file export-visible');
-    Assert(LObj.Strings['certificate_pem'] = '',
-      'Merge(certificate_file) clears stale certificate_pem state');
-    Assert(LObj.Strings['private_key_file'] = '/tmp/merged-private-key.pem',
-      'Merge keeps merged private_key_file export-visible');
-    Assert(LObj.Strings['private_key_pem'] = '',
-      'Merge(private_key_file) clears stale private_key_pem state');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LDestination);
+  Assert(JSONStr(LJSON, 'certificate_file') = '/tmp/merged-cert-file.pem',
+    'Merge keeps merged certificate_file export-visible');
+  Assert(JSONStr(LJSON, 'certificate_pem') = '',
+    'Merge(certificate_file) clears stale certificate_pem state');
+  Assert(JSONStr(LJSON, 'private_key_file') = '/tmp/merged-private-key.pem',
+    'Merge keeps merged private_key_file export-visible');
+  Assert(JSONStr(LJSON, 'private_key_pem') = '',
+    'Merge(private_key_file) clears stale private_key_pem state');
 end;
 
 { Test 23: Merge PEM sources clear stale file state }
 procedure Test_Merge_PEMSources_ClearStaleFileState;
 var
   LSource, LDestination: ISSLContextBuilder;
-  LObj: TJSONObject;
+  LJSON: string;
 begin
   TestHeader('Test 23: Merge PEM Sources Clear Stale File State');
 
@@ -681,26 +732,22 @@ begin
 
   LDestination.Merge(LSource);
 
-  LObj := ParseBuilderJSON(LDestination);
-  try
-    Assert(LObj.Strings['certificate_file'] = '',
-      'Merge(certificate_pem) clears stale certificate_file state');
-    Assert(LObj.Strings['certificate_pem'] = 'merged-certificate-pem',
-      'Merge keeps merged certificate_pem export-visible');
-    Assert(LObj.Strings['private_key_file'] = '',
-      'Merge(private_key_pem) clears stale private_key_file state');
-    Assert(LObj.Strings['private_key_pem'] = 'merged-private-key-pem',
-      'Merge keeps merged private_key_pem export-visible');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LDestination);
+  Assert(JSONStr(LJSON, 'certificate_file') = '',
+    'Merge(certificate_pem) clears stale certificate_file state');
+  Assert(JSONStr(LJSON, 'certificate_pem') = 'merged-certificate-pem',
+    'Merge keeps merged certificate_pem export-visible');
+  Assert(JSONStr(LJSON, 'private_key_file') = '',
+    'Merge(private_key_pem) clears stale private_key_file state');
+  Assert(JSONStr(LJSON, 'private_key_pem') = 'merged-private-key-pem',
+    'Merge keeps merged private_key_pem export-visible');
 end;
 
 { Test 24: Clone/reset/merge preserve early-data policy and max size }
 procedure Test_Clone_ResetMerge_EarlyDataFields;
 var
   LSource, LClone, LDestination: ISSLContextBuilder;
-  LObj: TJSONObject;
+  LJSON: string;
 begin
   TestHeader('Test 24: Clone Reset Merge Preserve Early-Data Fields');
 
@@ -711,56 +758,44 @@ begin
     .WithServerEarlyDataReplayStoreFile('/tmp/clone-replay-store.bin');
 
   LClone := LSource.Clone;
-  LObj := ParseBuilderJSON(LClone);
-  try
-    Assert(LObj.Booleans['client_early_data_enabled'],
-      'Clone preserves client_early_data_enabled');
-    Assert(LObj.Integers['server_early_data_policy'] = Ord(sslEarlyDataServerIssueOnly),
-      'Clone preserves server_early_data_policy');
-    Assert(LObj.Integers['server_max_early_data_size'] = 2048,
-      'Clone preserves server_max_early_data_size');
-    Assert(LObj.Strings['server_early_data_replay_store_file'] = '/tmp/clone-replay-store.bin',
-      'Clone preserves server_early_data_replay_store_file');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LClone);
+  Assert(JSONBool(LJSON, 'client_early_data_enabled'),
+    'Clone preserves client_early_data_enabled');
+  Assert(JSONInt(LJSON, 'server_early_data_policy') = Ord(sslEarlyDataServerIssueOnly),
+    'Clone preserves server_early_data_policy');
+  Assert(JSONInt(LJSON, 'server_max_early_data_size') = 2048,
+    'Clone preserves server_max_early_data_size');
+  Assert(JSONStr(LJSON, 'server_early_data_replay_store_file') = '/tmp/clone-replay-store.bin',
+    'Clone preserves server_early_data_replay_store_file');
 
   LClone.Reset;
-  LObj := ParseBuilderJSON(LClone);
-  try
-    Assert(not LObj.Booleans['client_early_data_enabled'],
-      'Reset clears client_early_data_enabled');
-    Assert(LObj.Integers['server_early_data_policy'] = Ord(sslEarlyDataServerReject),
-      'Reset restores server_early_data_policy default');
-    Assert(LObj.Integers['server_max_early_data_size'] = 0,
-      'Reset restores server_max_early_data_size default');
-    Assert(LObj.Strings['server_early_data_replay_store_file'] = '',
-      'Reset clears server_early_data_replay_store_file');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LClone);
+  Assert(not JSONBool(LJSON, 'client_early_data_enabled'),
+    'Reset clears client_early_data_enabled');
+  Assert(JSONInt(LJSON, 'server_early_data_policy') = Ord(sslEarlyDataServerReject),
+    'Reset restores server_early_data_policy default');
+  Assert(JSONInt(LJSON, 'server_max_early_data_size') = 0,
+    'Reset restores server_max_early_data_size default');
+  Assert(JSONStr(LJSON, 'server_early_data_replay_store_file') = '',
+    'Reset clears server_early_data_replay_store_file');
 
   LDestination := TSSLContextBuilder.Create
     .WithServerEarlyDataPolicy(sslEarlyDataServerReject)
     .WithServerMaxEarlyDataSize(0);
   LDestination.Merge(LSource);
-  LObj := ParseBuilderJSON(LDestination);
-  try
-    Assert(LObj.Integers['server_early_data_policy'] = Ord(sslEarlyDataServerIssueOnly),
-      'Merge preserves server_early_data_policy');
-    Assert(LObj.Integers['server_max_early_data_size'] = 2048,
-      'Merge preserves server_max_early_data_size');
-    Assert(LObj.Strings['server_early_data_replay_store_file'] = '/tmp/clone-replay-store.bin',
-      'Merge preserves server_early_data_replay_store_file');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LDestination);
+  Assert(JSONInt(LJSON, 'server_early_data_policy') = Ord(sslEarlyDataServerIssueOnly),
+    'Merge preserves server_early_data_policy');
+  Assert(JSONInt(LJSON, 'server_max_early_data_size') = 2048,
+    'Merge preserves server_max_early_data_size');
+  Assert(JSONStr(LJSON, 'server_early_data_replay_store_file') = '/tmp/clone-replay-store.bin',
+    'Merge preserves server_early_data_replay_store_file');
 end;
 
 procedure Test_Clone_ResetMerge_EarlyDataReplayStoreDirectoryField;
 var
   LSource, LClone, LDestination: ISSLContextBuilder;
-  LObj: TJSONObject;
+  LJSON: string;
 begin
   TestHeader('Test 25: Clone Reset Merge Preserve Early-Data Replay Store Directory');
 
@@ -768,32 +803,20 @@ begin
     .WithServerEarlyDataReplayStoreDirectory('/tmp/clone-replay-store-dir');
 
   LClone := LSource.Clone;
-  LObj := ParseBuilderJSON(LClone);
-  try
-    Assert(LObj.Strings['server_early_data_replay_store_directory'] = '/tmp/clone-replay-store-dir',
-      'Clone preserves server_early_data_replay_store_directory');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LClone);
+  Assert(JSONStr(LJSON, 'server_early_data_replay_store_directory') = '/tmp/clone-replay-store-dir',
+    'Clone preserves server_early_data_replay_store_directory');
 
   LClone.Reset;
-  LObj := ParseBuilderJSON(LClone);
-  try
-    Assert(LObj.Strings['server_early_data_replay_store_directory'] = '',
-      'Reset clears server_early_data_replay_store_directory');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LClone);
+  Assert(JSONStr(LJSON, 'server_early_data_replay_store_directory') = '',
+    'Reset clears server_early_data_replay_store_directory');
 
   LDestination := TSSLContextBuilder.Create;
   LDestination.Merge(LSource);
-  LObj := ParseBuilderJSON(LDestination);
-  try
-    Assert(LObj.Strings['server_early_data_replay_store_directory'] = '/tmp/clone-replay-store-dir',
-      'Merge preserves server_early_data_replay_store_directory');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LDestination);
+  Assert(JSONStr(LJSON, 'server_early_data_replay_store_directory') = '/tmp/clone-replay-store-dir',
+    'Merge preserves server_early_data_replay_store_directory');
 end;
 
 { Main Test Runner }

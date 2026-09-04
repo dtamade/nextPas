@@ -17,7 +17,11 @@ program test_transformation_methods;
 
 uses
   nextpas.core.system.sysutils,
-  fpjson, jsonparser,
+  nextpas.core.text.view,
+  nextpas.core.mem.default,
+  nextpas.core.json.types,
+  nextpas.core.json.parser,
+  nextpas.core.json.value,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
@@ -50,19 +54,95 @@ begin
   WriteLn('═══════════════════════════════════════════════════════════');
 end;
 
-function JSONObjectHasOption(AObject: TJSONObject; AOption: TSSLOption): Boolean;
+function JSONStr(const AJSON, AKey: string): string;
 var
-  LOptions: TJSONArray;
-  I: Integer;
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := '';
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsStr.ToString;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONBool(const AJSON, AKey: string): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
 begin
   Result := False;
-  if AObject.IndexOfName('options') < 0 then
-    Exit;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsBool;
+  finally
+    LDoc.Done;
+  end;
+end;
 
-  LOptions := AObject.Arrays['options'];
-  for I := 0 to LOptions.Count - 1 do
-    if LOptions.Integers[I] = Ord(AOption) then
-      Exit(True);
+function JSONInt(const AJSON, AKey: string): Int64;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := 0;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsInt;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONHas(const AJSON, AKey: string): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := False;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.ObjectHas(AKey);
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONObjectHasOption(const AJSON: string; AOption: TSSLOption): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot, LOptions: TJsonValue;
+  I: UInt32;
+begin
+  Result := False;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    if not LRoot.ObjectHas('options') then
+      Exit;
+    LOptions := LRoot.Get('options');
+    for I := 0 to LOptions.ArrayLen - 1 do
+      if LOptions.ArrayGet(I).AsInt = Ord(AOption) then
+        Exit(True);
+  finally
+    LDoc.Done;
+  end;
 end;
 
 { Global transformation functions for testing }
@@ -323,8 +403,6 @@ procedure Test_Override_ServerOCSPStapledResponseFile;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
   LFileName: string;
 begin
   TestHeader('Test 14: Override Server OCSP Stapled Response File');
@@ -334,17 +412,11 @@ begin
     .Override('server_ocsp_stapled_response_file', LFileName);
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(LObj.IndexOfName('server_ocsp_stapled_response_file') >= 0,
-      'Override(server_ocsp_stapled_response_file) makes builder state export-visible');
-    if LObj.IndexOfName('server_ocsp_stapled_response_file') >= 0 then
-      Assert(LObj.Strings['server_ocsp_stapled_response_file'] = LFileName,
-        'Override(server_ocsp_stapled_response_file) stores the requested file path');
-  finally
-    LData.Free;
-  end;
+  Assert(JSONHas(LJSON, 'server_ocsp_stapled_response_file'),
+    'Override(server_ocsp_stapled_response_file) makes builder state export-visible');
+  if JSONHas(LJSON, 'server_ocsp_stapled_response_file') then
+    Assert(JSONStr(LJSON, 'server_ocsp_stapled_response_file') = LFileName,
+      'Override(server_ocsp_stapled_response_file) stores the requested file path');
 end;
 
 { Test 15: Override supports method chaining }
@@ -370,8 +442,6 @@ procedure Test_Override_CertificateFile_ClearsStalePEMState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
   LCertPEM, LKeyPEM: string;
 begin
   TestHeader('Test 15: Override certificate_file clears stale certificate PEM');
@@ -390,16 +460,10 @@ begin
     .Override('certificate_file', '/tmp/override-cert-file.pem');
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(LObj.Strings['certificate_file'] = '/tmp/override-cert-file.pem',
-      'Override keeps overridden certificate_file state export-visible');
-    Assert(LObj.Strings['certificate_pem'] = '',
-      'Override(certificate_file) clears stale certificate_pem state');
-  finally
-    LData.Free;
-  end;
+  Assert(JSONStr(LJSON, 'certificate_file') = '/tmp/override-cert-file.pem',
+    'Override keeps overridden certificate_file state export-visible');
+  Assert(JSONStr(LJSON, 'certificate_pem') = '',
+    'Override(certificate_file) clears stale certificate_pem state');
 end;
 
 { Test 16: Override private_key_file clears stale private key PEM }
@@ -407,8 +471,6 @@ procedure Test_Override_PrivateKeyFile_ClearsStalePEMState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
   LCertPEM, LKeyPEM: string;
 begin
   TestHeader('Test 16: Override private_key_file clears stale private key PEM');
@@ -427,16 +489,10 @@ begin
     .Override('private_key_file', '/tmp/override-private-key.pem');
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(LObj.Strings['private_key_file'] = '/tmp/override-private-key.pem',
-      'Override keeps overridden private_key_file state export-visible');
-    Assert(LObj.Strings['private_key_pem'] = '',
-      'Override(private_key_file) clears stale private_key_pem state');
-  finally
-    LData.Free;
-  end;
+  Assert(JSONStr(LJSON, 'private_key_file') = '/tmp/override-private-key.pem',
+    'Override keeps overridden private_key_file state export-visible');
+  Assert(JSONStr(LJSON, 'private_key_pem') = '',
+    'Override(private_key_file) clears stale private_key_pem state');
 end;
 
 { Test 17: Override certificate_pem clears stale certificate file }
@@ -444,8 +500,6 @@ procedure Test_Override_CertificatePEM_ClearsStaleFileState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
   LCertPEM, LKeyPEM: string;
 begin
   TestHeader('Test 17: Override certificate_pem clears stale certificate file');
@@ -464,16 +518,10 @@ begin
     .Override('certificate_pem', LCertPEM);
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(LObj.Strings['certificate_file'] = '',
-      'Override(certificate_pem) clears stale certificate_file state');
-    Assert(LObj.Strings['certificate_pem'] = LCertPEM,
-      'Override keeps overridden certificate_pem state export-visible');
-  finally
-    LData.Free;
-  end;
+  Assert(JSONStr(LJSON, 'certificate_file') = '',
+    'Override(certificate_pem) clears stale certificate_file state');
+  Assert(JSONStr(LJSON, 'certificate_pem') = LCertPEM,
+    'Override keeps overridden certificate_pem state export-visible');
 end;
 
 { Test 18: Override private_key_pem clears stale private key file }
@@ -481,8 +529,6 @@ procedure Test_Override_PrivateKeyPEM_ClearsStaleFileState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
   LCertPEM, LKeyPEM: string;
 begin
   TestHeader('Test 18: Override private_key_pem clears stale private key file');
@@ -501,16 +547,10 @@ begin
     .Override('private_key_pem', LKeyPEM);
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(LObj.Strings['private_key_file'] = '',
-      'Override(private_key_pem) clears stale private_key_file state');
-    Assert(LObj.Strings['private_key_pem'] = LKeyPEM,
-      'Override keeps overridden private_key_pem state export-visible');
-  finally
-    LData.Free;
-  end;
+  Assert(JSONStr(LJSON, 'private_key_file') = '',
+    'Override(private_key_pem) clears stale private_key_file state');
+  Assert(JSONStr(LJSON, 'private_key_pem') = LKeyPEM,
+    'Override keeps overridden private_key_pem state export-visible');
 end;
 
 { Test 15: Multiple Override calls }
@@ -695,8 +735,6 @@ procedure Test_Override_ExplicitBackend_ReplacesAutoSelectionState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 23: Override explicit_backend replaces stale auto-backend state');
 
@@ -705,19 +743,12 @@ begin
     .Override('explicit_backend', 'sslWinSSL');
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(LObj.IndexOfName('explicit_backend') >= 0,
-      'Override(explicit_backend) makes explicit backend state export-visible');
-    if LObj.IndexOfName('explicit_backend') >= 0 then
-      Assert(LObj.Integers['explicit_backend'] = Ord(sslWinSSL),
-      'Override(explicit_backend) stores the requested backend value');
-    Assert(LObj.IndexOfName('auto_select_backend') < 0,
-      'Override(explicit_backend) clears stale auto_select_backend state');
-  finally
-    LData.Free;
-  end;
+  Assert(JSONHas(LJSON, 'explicit_backend'),
+    'Override(explicit_backend) makes explicit backend state export-visible');
+  Assert(JSONInt(LJSON, 'explicit_backend') = Ord(sslWinSSL),
+    'Override(explicit_backend) stores the requested backend value');
+  Assert(not JSONHas(LJSON, 'auto_select_backend'),
+    'Override(explicit_backend) clears stale auto_select_backend state');
 end;
 
 { Test 24: Override OCSP required syncs enabled state }
@@ -725,8 +756,6 @@ procedure Test_Override_OCSPRequired_SyncsEnabledState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 24: Override OCSP required syncs enabled state');
 
@@ -734,16 +763,10 @@ begin
     .Override('ocsp_stapling_required', 'true');
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(LObj.Booleans['ocsp_stapling_required'],
-      'Override(ocsp_stapling_required) keeps required state export-visible');
-    Assert(LObj.Booleans['ocsp_stapling_enabled'],
-      'Override(ocsp_stapling_required) implies enabled state through OCSP sync');
-  finally
-    LData.Free;
-  end;
+  Assert(JSONBool(LJSON, 'ocsp_stapling_required'),
+    'Override(ocsp_stapling_required) keeps required state export-visible');
+  Assert(JSONBool(LJSON, 'ocsp_stapling_enabled'),
+    'Override(ocsp_stapling_required) implies enabled state through OCSP sync');
 end;
 
 { Test 25: Override OCSP enabled false clears stale required state }
@@ -751,8 +774,6 @@ procedure Test_Override_OCSPEnabledFalse_ClearsRequiredState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 25: Override OCSP enabled false clears stale required state');
 
@@ -761,16 +782,10 @@ begin
     .Override('ocsp_stapling_enabled', 'false');
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(not LObj.Booleans['ocsp_stapling_enabled'],
-      'Override(ocsp_stapling_enabled=false) clears enabled state');
-    Assert(not LObj.Booleans['ocsp_stapling_required'],
-      'Override(ocsp_stapling_enabled=false) clears stale required state through OCSP sync');
-  finally
-    LData.Free;
-  end;
+  Assert(not JSONBool(LJSON, 'ocsp_stapling_enabled'),
+    'Override(ocsp_stapling_enabled=false) clears enabled state');
+  Assert(not JSONBool(LJSON, 'ocsp_stapling_required'),
+    'Override(ocsp_stapling_enabled=false) clears stale required state through OCSP sync');
 end;
 
 { Test 26: Fluent OCSP disable clears stale required state }
@@ -778,8 +793,6 @@ procedure Test_WithOCSPStaplingFalse_ClearsRequiredState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 26: Fluent OCSP disable clears stale required state');
 
@@ -788,16 +801,10 @@ begin
     .WithOCSPStapling(False);
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(not LObj.Booleans['ocsp_stapling_enabled'],
-      'WithOCSPStapling(false) clears enabled state');
-    Assert(not LObj.Booleans['ocsp_stapling_required'],
-      'WithOCSPStapling(false) clears stale required state');
-  finally
-    LData.Free;
-  end;
+  Assert(not JSONBool(LJSON, 'ocsp_stapling_enabled'),
+    'WithOCSPStapling(false) clears enabled state');
+  Assert(not JSONBool(LJSON, 'ocsp_stapling_required'),
+    'WithOCSPStapling(false) clears stale required state');
 end;
 
 { Test 27: Override CT required keeps state export-visible }
@@ -805,8 +812,6 @@ procedure Test_Override_CertificateTransparencyRequired_ExportVisible;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 27: Override CT required keeps state export-visible');
 
@@ -814,16 +819,10 @@ begin
     .Override('certificate_transparency_required', 'true');
 
   LJSON := LBuilder.ExportToJSON;
-  LData := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LData);
-    Assert(LObj.Booleans['certificate_transparency_required'],
-      'Override(certificate_transparency_required) keeps required state export-visible');
-    Assert(JSONObjectHasOption(LObj, ssoRequireCertificateTransparency),
-      'Override(certificate_transparency_required) persists to exported options');
-  finally
-    LData.Free;
-  end;
+  Assert(JSONBool(LJSON, 'certificate_transparency_required'),
+    'Override(certificate_transparency_required) keeps required state export-visible');
+  Assert(JSONObjectHasOption(LJSON, ssoRequireCertificateTransparency),
+    'Override(certificate_transparency_required) persists to exported options');
 end;
 
 { Test 27: Cert verify cache is disabled by default }

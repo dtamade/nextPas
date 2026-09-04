@@ -22,14 +22,19 @@ program test_config_import_export;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.text.view,
+  nextpas.core.mem.default,
+  nextpas.core.json.types,
+  nextpas.core.json.parser,
+  nextpas.core.json.value,
+  nextpas.core.json.builder,
   nextpas.core.tls.base,
   nextpas.core.tls.backend.selector,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.freepascal.lib,
   nextpas.core.tls.pkcs11.types,
-  nextpas.core.tls.exceptions,
-  fpjson, jsonparser;
+  nextpas.core.tls.exceptions;
 
 var
   GTestsPassed: Integer = 0;
@@ -83,12 +88,127 @@ begin
   WriteLn('═══════════════════════════════════════════════════════════');
 end;
 
+function JSONParses(const AJSON: string): Boolean;
+var
+  LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  try
+    Result := LDoc.Parse(TStringView.FromStr(AJSON));
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONIsObject(const AJSON: string): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := False;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Kind = jnkObject;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONHas(const AJSON, AKey: string): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := False;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.ObjectHas(AKey);
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONStr(const AJSON, AKey: string): string;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := '';
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsStr.ToString;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONBool(const AJSON, AKey: string): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := False;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsBool;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONInt(const AJSON, AKey: string): Int64;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := 0;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsInt;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONArrayLen(const AJSON, AKey: string): UInt32;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := 0;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    if not LRoot.ObjectHas(AKey) then
+      Exit;
+    Result := LRoot.Get(AKey).ArrayLen;
+  finally
+    LDoc.Done;
+  end;
+end;
+
 { Test 1: JSON export produces valid JSON }
 procedure Test_JSONExport_ValidJSON;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LData: TJSONData;
 begin
   TestHeader('Test 1: JSON Export Produces Valid JSON');
 
@@ -100,22 +220,8 @@ begin
   LJSON := LBuilder.ExportToJSON;
 
   Assert(LJSON <> '', 'JSON export is not empty');
-
-  // Try to parse JSON
-  try
-    LData := GetJSON(LJSON);
-    try
-      Assert(LData <> nil, 'JSON is valid and parseable');
-      Assert(LData is TJSONObject, 'JSON root is an object');
-    finally
-      LData.Free;
-    end;
-  except
-    on E: Exception do
-    begin
-      Assert(False, 'JSON parsing failed: ' + E.Message);
-    end;
-  end;
+  Assert(JSONParses(LJSON), 'JSON is valid and parseable');
+  Assert(JSONIsObject(LJSON), 'JSON root is an object');
 end;
 
 { Test 2: JSON export contains expected fields }
@@ -123,8 +229,6 @@ procedure Test_JSONExport_HasExpectedFields;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 2: JSON Export Contains Expected Fields');
 
@@ -135,19 +239,13 @@ begin
     .WithSessionTimeout(600);
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    Assert(LRoot is TJSONObject, 'JSON root is object');
-    LObj := TJSONObject(LRoot);
+  Assert(JSONIsObject(LJSON), 'JSON root is object');
 
-    Assert(LObj.IndexOfName('protocols') >= 0, 'Has protocols field');
-    Assert(LObj.IndexOfName('verify_modes') >= 0, 'Has verify_modes field');
-    Assert(LObj.IndexOfName('cipher_list') >= 0, 'Has cipher_list field');
-    Assert(LObj.IndexOfName('session_timeout') >= 0, 'Has session_timeout field');
-    Assert(LObj.IndexOfName('options') >= 0, 'Has options field');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONHas(LJSON, 'protocols'), 'Has protocols field');
+  Assert(JSONHas(LJSON, 'verify_modes'), 'Has verify_modes field');
+  Assert(JSONHas(LJSON, 'cipher_list'), 'Has cipher_list field');
+  Assert(JSONHas(LJSON, 'session_timeout'), 'Has session_timeout field');
+  Assert(JSONHas(LJSON, 'options'), 'Has options field');
 end;
 
 { Test 3: JSON import restores configuration }
@@ -295,8 +393,6 @@ procedure Test_Export_AllProtocols;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LRoot: TJSONData;
-  LProtocols: TJSONArray;
 begin
   TestHeader('Test 9: Export All Protocol Versions');
 
@@ -304,13 +400,7 @@ begin
     .WithProtocols([sslProtocolTLS10, sslProtocolTLS11, sslProtocolTLS12, sslProtocolTLS13]);
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    LProtocols := TJSONObject(LRoot).Arrays['protocols'];
-    Assert(LProtocols.Count = 4, 'Exported 4 protocol versions');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONArrayLen(LJSON, 'protocols') = 4, 'Exported 4 protocol versions');
 end;
 
 { Test 10: Export with certificate paths }
@@ -318,8 +408,6 @@ procedure Test_Export_WithCertPaths;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 10: Export With Certificate Paths');
 
@@ -329,15 +417,9 @@ begin
     .WithCAFile('/path/to/ca.pem');
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.Strings['certificate_file'] = '/path/to/cert.pem', 'Certificate file exported');
-    Assert(LObj.Strings['private_key_file'] = '/path/to/key.pem', 'Private key file exported');
-    Assert(LObj.Strings['ca_file'] = '/path/to/ca.pem', 'CA file exported');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONStr(LJSON, 'certificate_file') = '/path/to/cert.pem', 'Certificate file exported');
+  Assert(JSONStr(LJSON, 'private_key_file') = '/path/to/key.pem', 'Private key file exported');
+  Assert(JSONStr(LJSON, 'ca_file') = '/path/to/ca.pem', 'CA file exported');
 end;
 
 { Test 11: Export with cipher configuration }
@@ -345,8 +427,6 @@ procedure Test_Export_WithCiphers;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 11: Export With Cipher Configuration');
 
@@ -355,14 +435,8 @@ begin
     .WithTLS13Ciphersuites('TLS_AES_256_GCM_SHA384');
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.Strings['cipher_list'] = 'ECDHE+AESGCM:ECDHE+AES256', 'Cipher list exported');
-    Assert(LObj.Strings['tls13_ciphersuites'] = 'TLS_AES_256_GCM_SHA384', 'TLS 1.3 ciphersuites exported');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONStr(LJSON, 'cipher_list') = 'ECDHE+AESGCM:ECDHE+AES256', 'Cipher list exported');
+  Assert(JSONStr(LJSON, 'tls13_ciphersuites') = 'TLS_AES_256_GCM_SHA384', 'TLS 1.3 ciphersuites exported');
 end;
 
 { Test 12: Export with advanced options }
@@ -370,8 +444,6 @@ procedure Test_Export_WithAdvancedOptions;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 12: Export With Advanced Options');
 
@@ -384,16 +456,10 @@ begin
   {$POP}
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.Strings['server_name'] = 'example.com', 'SNI server name exported');
-    Assert(LObj.Strings['alpn_protocols'] = 'h2,http/1.1', 'ALPN protocols exported');
-    Assert(LObj.Booleans['session_cache_enabled'] = True, 'Session cache exported');
-    Assert(LObj.Integers['session_timeout'] = 3600, 'Session timeout exported');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONStr(LJSON, 'server_name') = 'example.com', 'SNI server name exported');
+  Assert(JSONStr(LJSON, 'alpn_protocols') = 'h2,http/1.1', 'ALPN protocols exported');
+  Assert(JSONBool(LJSON, 'session_cache_enabled') = True, 'Session cache exported');
+  Assert(JSONInt(LJSON, 'session_timeout') = 3600, 'Session timeout exported');
 end;
 
 { Test 13: Import empty JSON }
@@ -501,8 +567,6 @@ procedure Test_Export_SystemRoots;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 17: System Roots Configuration Export');
 
@@ -510,13 +574,7 @@ begin
     .WithSystemRoots;
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.Booleans['use_system_roots'] = True, 'System roots flag exported');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONBool(LJSON, 'use_system_roots') = True, 'System roots flag exported');
 end;
 
 { Test 18: Options export and import }
@@ -524,8 +582,6 @@ procedure Test_Options_ExportImport;
 var
   LBuilder1, LBuilder2: ISSLContextBuilder;
   LJSON: string;
-  LRoot: TJSONData;
-  LOptions: TJSONArray;
 begin
   TestHeader('Test 18: Options Export and Import');
 
@@ -535,13 +591,7 @@ begin
   LJSON := LBuilder1.ExportToJSON;
 
   // Check options are in JSON
-  LRoot := GetJSON(LJSON);
-  try
-    LOptions := TJSONObject(LRoot).Arrays['options'];
-    Assert(LOptions.Count > 0, 'Options exported to JSON');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONArrayLen(LJSON, 'options') > 0, 'Options exported to JSON');
 
   // Import and verify
   LBuilder2 := TSSLContextBuilder.Create.ImportFromJSON(LJSON);
@@ -865,9 +915,7 @@ procedure Test_JSONImport_CertificatePEMClearsStaleFileState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LExported: TJSONData;
-  LImportObj: TJSONObject;
-  LObj: TJSONObject;
+  LBuild: IJsonBuilder;
   LCertPEM, LKeyPEM: string;
 begin
   TestHeader('Test 31: Manual JSON Import With certificate_pem Clears Stale certificate_file');
@@ -880,27 +928,21 @@ begin
     Exit;
   end;
 
-  LImportObj := TJSONObject.Create;
-  try
-    LImportObj.Add('certificate_pem', LCertPEM);
-    LJSON := LImportObj.AsJSON;
-  finally
-    LImportObj.Free;
-  end;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  LBuild.Key('certificate_pem');
+  LBuild.Str(LCertPEM);
+  LBuild.EndObject;
+  LJSON := LBuild.ToString;
   LBuilder := TSSLContextBuilder.Create
     .WithCertificate('/tmp/stale-cert-file.pem')
     .ImportFromJSON(LJSON);
 
-  LExported := GetJSON(LBuilder.ExportToJSON);
-  try
-    LObj := TJSONObject(LExported);
-    Assert(LObj.Strings['certificate_file'] = '',
-      'Manual JSON certificate_pem import clears stale certificate_file state');
-    Assert(LObj.Strings['certificate_pem'] = LCertPEM,
-      'Manual JSON certificate_pem import preserves imported PEM payload');
-  finally
-    LExported.Free;
-  end;
+  LJSON := LBuilder.ExportToJSON;
+  Assert(JSONStr(LJSON, 'certificate_file') = '',
+    'Manual JSON certificate_pem import clears stale certificate_file state');
+  Assert(JSONStr(LJSON, 'certificate_pem') = LCertPEM,
+    'Manual JSON certificate_pem import preserves imported PEM payload');
 end;
 
 { Test 32: Manual JSON import with private_key_pem clears stale private_key_file state }
@@ -908,9 +950,7 @@ procedure Test_JSONImport_PrivateKeyPEMClearsStaleFileState;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LExported: TJSONData;
-  LImportObj: TJSONObject;
-  LObj: TJSONObject;
+  LBuild: IJsonBuilder;
   LCertPEM, LKeyPEM: string;
 begin
   TestHeader('Test 32: Manual JSON Import With private_key_pem Clears Stale private_key_file');
@@ -923,27 +963,21 @@ begin
     Exit;
   end;
 
-  LImportObj := TJSONObject.Create;
-  try
-    LImportObj.Add('private_key_pem', LKeyPEM);
-    LJSON := LImportObj.AsJSON;
-  finally
-    LImportObj.Free;
-  end;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  LBuild.Key('private_key_pem');
+  LBuild.Str(LKeyPEM);
+  LBuild.EndObject;
+  LJSON := LBuild.ToString;
   LBuilder := TSSLContextBuilder.Create
     .WithPrivateKey('/tmp/stale-private-key.pem')
     .ImportFromJSON(LJSON);
 
-  LExported := GetJSON(LBuilder.ExportToJSON);
-  try
-    LObj := TJSONObject(LExported);
-    Assert(LObj.Strings['private_key_file'] = '',
-      'Manual JSON private_key_pem import clears stale private_key_file state');
-    Assert(LObj.Strings['private_key_pem'] = LKeyPEM,
-      'Manual JSON private_key_pem import preserves imported PEM payload');
-  finally
-    LExported.Free;
-  end;
+  LJSON := LBuilder.ExportToJSON;
+  Assert(JSONStr(LJSON, 'private_key_file') = '',
+    'Manual JSON private_key_pem import clears stale private_key_file state');
+  Assert(JSONStr(LJSON, 'private_key_pem') = LKeyPEM,
+    'Manual JSON private_key_pem import preserves imported PEM payload');
 end;
 
 { Test 33: Early-data policy and max size survive JSON/INI round-trip }
@@ -952,8 +986,6 @@ var
   LBuilder: ISSLContextBuilder;
   LJSON, LJSONRoundTrip: string;
   LINI, LINIRoundTrip: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
 begin
   TestHeader('Test 33: Early-Data Policy And Max Size Round-Trip');
 
@@ -963,18 +995,12 @@ begin
     .WithServerMaxEarlyDataSize(4096);
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.Booleans['client_early_data_enabled'],
-      'JSON export preserves client_early_data_enabled');
-    Assert(LObj.Integers['server_early_data_policy'] = Ord(sslEarlyDataServerIssueOnly),
-      'JSON export preserves server_early_data_policy');
-    Assert(LObj.Integers['server_max_early_data_size'] = 4096,
-      'JSON export preserves server_max_early_data_size');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONBool(LJSON, 'client_early_data_enabled'),
+    'JSON export preserves client_early_data_enabled');
+  Assert(JSONInt(LJSON, 'server_early_data_policy') = Ord(sslEarlyDataServerIssueOnly),
+    'JSON export preserves server_early_data_policy');
+  Assert(JSONInt(LJSON, 'server_max_early_data_size') = 4096,
+    'JSON export preserves server_max_early_data_size');
 
   LJSONRoundTrip := TSSLContextBuilder.Create
     .ImportFromJSON(LJSON)
@@ -997,8 +1023,6 @@ procedure Test_JSONRoundTrip_PreservesServerOCSPStapledResponseFile;
 var
   LBuilder: ISSLContextBuilder;
   LJSON, LJSONRoundTrip: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
   LFileName: string;
 begin
   TestHeader('Test 34: JSON Round-Trip Preserves Server OCSP Stapled Response File');
@@ -1008,17 +1032,11 @@ begin
     .Override('server_ocsp_stapled_response_file', LFileName);
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.IndexOfName('server_ocsp_stapled_response_file') >= 0,
-      'JSON export keeps server_ocsp_stapled_response_file visible');
-    if LObj.IndexOfName('server_ocsp_stapled_response_file') >= 0 then
-      Assert(LObj.Strings['server_ocsp_stapled_response_file'] = LFileName,
-        'JSON export preserves server_ocsp_stapled_response_file value');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONHas(LJSON, 'server_ocsp_stapled_response_file'),
+    'JSON export keeps server_ocsp_stapled_response_file visible');
+  if JSONHas(LJSON, 'server_ocsp_stapled_response_file') then
+    Assert(JSONStr(LJSON, 'server_ocsp_stapled_response_file') = LFileName,
+      'JSON export preserves server_ocsp_stapled_response_file value');
 
   LJSONRoundTrip := TSSLContextBuilder.Create
     .ImportFromJSON(LJSON)
@@ -1056,8 +1074,6 @@ procedure Test_JSONRoundTrip_PreservesServerEarlyDataReplayStoreFile;
 var
   LBuilder: ISSLContextBuilder;
   LJSON, LJSONRoundTrip: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
   LFileName: string;
 begin
   TestHeader('Test 36: JSON Round-Trip Preserves Server Early-Data Replay Store File');
@@ -1067,17 +1083,11 @@ begin
     .Override('server_early_data_replay_store_file', LFileName);
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.IndexOfName('server_early_data_replay_store_file') >= 0,
-      'JSON export keeps server_early_data_replay_store_file visible');
-    if LObj.IndexOfName('server_early_data_replay_store_file') >= 0 then
-      Assert(LObj.Strings['server_early_data_replay_store_file'] = LFileName,
-        'JSON export preserves server_early_data_replay_store_file value');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONHas(LJSON, 'server_early_data_replay_store_file'),
+    'JSON export keeps server_early_data_replay_store_file visible');
+  if JSONHas(LJSON, 'server_early_data_replay_store_file') then
+    Assert(JSONStr(LJSON, 'server_early_data_replay_store_file') = LFileName,
+      'JSON export preserves server_early_data_replay_store_file value');
 
   LJSONRoundTrip := TSSLContextBuilder.Create
     .ImportFromJSON(LJSON)
@@ -1115,8 +1125,6 @@ procedure Test_JSONRoundTrip_PreservesServerEarlyDataReplayStoreDirectory;
 var
   LBuilder: ISSLContextBuilder;
   LJSON, LJSONRoundTrip: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
   LDirectoryName: string;
 begin
   TestHeader('Test 38: JSON Round-Trip Preserves Server Early-Data Replay Store Directory');
@@ -1126,17 +1134,11 @@ begin
     .Override('server_early_data_replay_store_directory', LDirectoryName);
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
-  try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.IndexOfName('server_early_data_replay_store_directory') >= 0,
-      'JSON export keeps server_early_data_replay_store_directory visible');
-    if LObj.IndexOfName('server_early_data_replay_store_directory') >= 0 then
-      Assert(LObj.Strings['server_early_data_replay_store_directory'] = LDirectoryName,
-        'JSON export preserves server_early_data_replay_store_directory value');
-  finally
-    LRoot.Free;
-  end;
+  Assert(JSONHas(LJSON, 'server_early_data_replay_store_directory'),
+    'JSON export keeps server_early_data_replay_store_directory visible');
+  if JSONHas(LJSON, 'server_early_data_replay_store_directory') then
+    Assert(JSONStr(LJSON, 'server_early_data_replay_store_directory') = LDirectoryName,
+      'JSON export preserves server_early_data_replay_store_directory value');
 
   LJSONRoundTrip := TSSLContextBuilder.Create
     .ImportFromJSON(LJSON)

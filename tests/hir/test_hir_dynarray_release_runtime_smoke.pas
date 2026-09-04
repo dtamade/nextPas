@@ -3,7 +3,8 @@ program test_hir_dynarray_release_runtime_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, Process, SysUtils,
+  nextpas.core.text.conv, nextpas.core.os.env, nextpas.core.fs, nextpas.core.path,
+  nextpas.core.process,
   nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,
@@ -67,16 +68,8 @@ begin
 end;
 
 procedure WriteTextFile(const APath, AText: string);
-var
-  Lines: TStringList;
 begin
-  Lines := TStringList.Create;
-  try
-    Lines.Text := AText;
-    Lines.SaveToFile(APath);
-  finally
-    Lines.Free;
-  end;
+  WriteFileText(APath, AText);
 end;
 
 function ToolPath(const AEnvName, ADefaultValue: string): string;
@@ -89,22 +82,12 @@ end;
 procedure RunCommand(const ALabel, AExecutable: string;
   const AArgs: array of string; AExpectedExit: LongInt);
 var
-  Proc: TProcess;
-  I: LongInt;
+  LOut: TProcessOutput;
 begin
-  Proc := TProcess.Create(nil);
-  try
-    Proc.Executable := AExecutable;
-    for I := Low(AArgs) to High(AArgs) do
-      Proc.Parameters.Add(AArgs[I]);
-    Proc.Options := [poWaitOnExit];
-    Proc.Execute;
-    if Proc.ExitStatus <> AExpectedExit then
-      Fail(ALabel + '-exit:' + IntToStr(Proc.ExitStatus) +
-        '-expected:' + IntToStr(AExpectedExit));
-  finally
-    Proc.Free;
-  end;
+  LOut := Run(AExecutable, AArgs);
+  if LOut.ExitCode <> AExpectedExit then
+    Fail(ALabel + '-exit:' + IntToStr(LOut.ExitCode) +
+      '-expected:' + IntToStr(AExpectedExit));
 end;
 
 function FindAfter(const ANeedle, AText: string; AStart: LongInt): LongInt;

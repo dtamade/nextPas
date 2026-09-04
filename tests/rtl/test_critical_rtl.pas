@@ -3,7 +3,8 @@ program test_critical_rtl;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Process, Classes;
+  nextpas.core.text.conv, nextpas.core.os.env, nextpas.core.fs,
+  nextpas.core.process;
 
 var
   TestsPassed, TestsFailed: Integer;
@@ -67,41 +68,27 @@ end;
 
 procedure TestProcessExecute;
 var
-  Proc: TProcess;
   TestFile: string;
+  LOut: TProcessOutput;
 begin
   WriteLn('Testing TProcess.Execute...');
 
   TestFile := '/tmp/nextpas_test_' + IntToStr(Random(99999)) + '.txt';
 
-  Proc := TProcess.Create(nil);
-  try
-    // Test 1: Simple command
-    Proc.Executable := '/bin/echo';
-    Proc.Parameters.Add('hello');
-    Proc.Execute;
-    Test('echo command succeeds', Proc.ExitStatus = 0);
+  // Test 1: Simple command
+  LOut := Run('/bin/echo', ['hello']);
+  Test('echo command succeeds', LOut.ExitCode = 0);
 
-    // Test 2: Command with exit code
-    Proc.Executable := '/bin/sh';
-    Proc.Parameters.Clear;
-    Proc.Parameters.Add('-c');
-    Proc.Parameters.Add('exit 42');
-    Proc.Execute;
-    Test('Exit code is captured', Proc.ExitStatus = 42);
+  // Test 2: Command with exit code
+  LOut := Run('/bin/sh', ['-c', 'exit 42']);
+  Test('Exit code is captured', LOut.ExitCode = 42);
 
-    // Test 3: Create file
-    Proc.Executable := '/bin/touch';
-    Proc.Parameters.Clear;
-    Proc.Parameters.Add(TestFile);
-    Proc.Execute;
-    Test('touch creates file', FileExists(TestFile));
+  // Test 3: Create file
+  LOut := Run('/bin/touch', [TestFile]);
+  Test('touch creates file', FileExists(TestFile));
 
-    // Cleanup
-    DeleteFile(TestFile);
-  finally
-    Proc.Free;
-  end;
+  // Cleanup
+  DeleteFile(TestFile);
 end;
 
 begin

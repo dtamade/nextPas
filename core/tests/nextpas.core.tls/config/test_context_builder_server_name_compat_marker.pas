@@ -7,7 +7,11 @@ program test_context_builder_server_name_compat_marker;
 
 uses
   nextpas.core.system.sysutils,
-  fpjson, jsonparser,
+  nextpas.core.text.view,
+  nextpas.core.mem.default,
+  nextpas.core.json.types,
+  nextpas.core.json.parser,
+  nextpas.core.json.value,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder;
 
@@ -42,8 +46,8 @@ procedure Test_JSONExportMarksDeprecatedContextSNI;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
 begin
   TestHeader('JSON export marks deprecated context-level SNI');
 
@@ -53,16 +57,17 @@ begin
   {$POP}
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
+  LDoc.Init(DefaultAllocator);
   try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.Strings['server_name'] = 'compat.example.com',
+    Assert(LDoc.Parse(TStringView.FromStr(LJSON)), 'export JSON parses');
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Assert(LRoot.Get('server_name').AsStr.ToString = 'compat.example.com',
       'JSON export keeps server_name compatibility payload');
-    Assert((LObj.IndexOfName('server_name_mode') >= 0) and
-      (LObj.Strings['server_name_mode'] = CCompatMarker),
+    Assert(LRoot.ObjectHas('server_name_mode') and
+      (LRoot.Get('server_name_mode').AsStr.ToString = CCompatMarker),
       'JSON export marks server_name as deprecated context-level compatibility');
   finally
-    LRoot.Free;
+    LDoc.Done;
   end;
 end;
 
@@ -89,8 +94,8 @@ procedure Test_LegacyJSONImportUpgradesExportMarker;
 var
   LBuilder: ISSLContextBuilder;
   LJSON: string;
-  LRoot: TJSONData;
-  LObj: TJSONObject;
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
 begin
   TestHeader('Legacy JSON import upgrades export marker');
 
@@ -103,16 +108,17 @@ begin
     .ImportFromJSON(LJSON);
 
   LJSON := LBuilder.ExportToJSON;
-  LRoot := GetJSON(LJSON);
+  LDoc.Init(DefaultAllocator);
   try
-    LObj := TJSONObject(LRoot);
-    Assert(LObj.Strings['server_name'] = 'legacy.example.com',
+    Assert(LDoc.Parse(TStringView.FromStr(LJSON)), 'export JSON parses');
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Assert(LRoot.Get('server_name').AsStr.ToString = 'legacy.example.com',
       'legacy JSON import preserves server_name value');
-    Assert((LObj.IndexOfName('server_name_mode') >= 0) and
-      (LObj.Strings['server_name_mode'] = CCompatMarker),
+    Assert(LRoot.ObjectHas('server_name_mode') and
+      (LRoot.Get('server_name_mode').AsStr.ToString = CCompatMarker),
       'legacy JSON import upgrades export with compatibility marker');
   finally
-    LRoot.Free;
+    LDoc.Done;
   end;
 end;
 

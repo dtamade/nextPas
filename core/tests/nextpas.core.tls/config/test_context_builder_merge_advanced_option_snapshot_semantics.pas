@@ -7,7 +7,12 @@ program test_context_builder_merge_advanced_option_snapshot_semantics;
 
 uses
   nextpas.core.system.sysutils,
-  fpjson, jsonparser,
+  nextpas.core.text.view,
+  nextpas.core.mem.default,
+  nextpas.core.json.types,
+  nextpas.core.json.parser,
+  nextpas.core.json.value,
+  nextpas.core.json.builder,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder;
 
@@ -37,45 +42,105 @@ begin
   WriteLn('═══════════════════════════════════════════════════════════');
 end;
 
-function ParseBuilderJSON(ABuilder: ISSLContextBuilder): TJSONObject;
+function ParseBuilderJSON(ABuilder: ISSLContextBuilder): string;
 begin
-  Result := TJSONObject(GetJSON(ABuilder.ExportToJSON));
+  Result := ABuilder.ExportToJSON;
 end;
 
-function CreateJSONBuilder(AJSON: TJSONObject): ISSLContextBuilder;
+function CreateJSONBuilder(const AJSON: string): ISSLContextBuilder;
 begin
-  Result := TSSLContextBuilder.Create.ImportFromJSON(AJSON.AsJSON);
+  Result := TSSLContextBuilder.Create.ImportFromJSON(AJSON);
 end;
 
-function HasOption(AJSON: TJSONObject; AOption: TSSLOption): Boolean;
+function JSONStr(const AJSON, AKey: string): string;
 var
-  LOptions: TJSONArray;
-  I: Integer;
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := '';
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsStr.ToString;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function JSONBool(const AJSON, AKey: string): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
 begin
   Result := False;
-  if AJSON.IndexOfName('options') < 0 then
-    Exit;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsBool;
+  finally
+    LDoc.Done;
+  end;
+end;
 
-  LOptions := AJSON.Arrays['options'];
-  for I := 0 to LOptions.Count - 1 do
-    if LOptions.Integers[I] = Ord(AOption) then
-      Exit(True);
+function OptionCount(const AJSON: string): UInt32;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := 0;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    if not LRoot.ObjectHas('options') then
+      Exit;
+    Result := LRoot.Get('options').ArrayLen;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function HasOption(const AJSON: string; AOption: TSSLOption): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot, LOptions: TJsonValue;
+  I: UInt32;
+begin
+  Result := False;
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    if not LRoot.ObjectHas('options') then
+      Exit;
+    LOptions := LRoot.Get('options');
+    for I := 0 to LOptions.ArrayLen - 1 do
+      if LOptions.ArrayGet(I).AsInt = Ord(AOption) then
+        Exit(True);
+  finally
+    LDoc.Done;
+  end;
 end;
 
 procedure Test_Merge_EmptyServerNameClearsTargetField;
 var
   LTarget, LSource: ISSLContextBuilder;
-  LSourceJSON, LResultJSON: TJSONObject;
+  LBuild: IJsonBuilder;
+  LResultJSON: string;
 begin
   TestHeader('Test 1: Merge empty server_name clears target field');
 
-  LSourceJSON := TJSONObject.Create;
-  try
-    LSourceJSON.Add('server_name', '');
-    LSource := CreateJSONBuilder(LSourceJSON);
-  finally
-    LSourceJSON.Free;
-  end;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  LBuild.Key('server_name'); LBuild.Str('');
+  LBuild.EndObject;
+  LSource := CreateJSONBuilder(LBuild.ToString);
 
   {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
   LTarget := TSSLContextBuilder.Create.WithSNI('target.example.com');
@@ -83,55 +148,45 @@ begin
   LTarget.Merge(LSource);
 
   LResultJSON := ParseBuilderJSON(LTarget);
-  try
-    Assert(LResultJSON.Strings['server_name'] = '',
-      'Empty server_name from source clears stale target server_name');
-  finally
-    LResultJSON.Free;
-  end;
+  Assert(JSONStr(LResultJSON, 'server_name') = '',
+    'Empty server_name from source clears stale target server_name');
 end;
 
 procedure Test_Merge_EmptyALPNClearsTargetField;
 var
   LTarget, LSource: ISSLContextBuilder;
-  LSourceJSON, LResultJSON: TJSONObject;
+  LBuild: IJsonBuilder;
+  LResultJSON: string;
 begin
   TestHeader('Test 2: Merge empty alpn_protocols clears target field');
 
-  LSourceJSON := TJSONObject.Create;
-  try
-    LSourceJSON.Add('alpn_protocols', '');
-    LSource := CreateJSONBuilder(LSourceJSON);
-  finally
-    LSourceJSON.Free;
-  end;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  LBuild.Key('alpn_protocols'); LBuild.Str('');
+  LBuild.EndObject;
+  LSource := CreateJSONBuilder(LBuild.ToString);
 
   LTarget := TSSLContextBuilder.Create.WithALPN('h2,http/1.1');
   LTarget.Merge(LSource);
 
   LResultJSON := ParseBuilderJSON(LTarget);
-  try
-    Assert(LResultJSON.Strings['alpn_protocols'] = '',
-      'Empty alpn_protocols from source clears stale target ALPN');
-  finally
-    LResultJSON.Free;
-  end;
+  Assert(JSONStr(LResultJSON, 'alpn_protocols') = '',
+    'Empty alpn_protocols from source clears stale target ALPN');
 end;
 
 procedure Test_Merge_ExplicitEmptyOptionsClearsTargetOptionSet;
 var
   LTarget, LSource: ISSLContextBuilder;
-  LSourceJSON, LResultJSON: TJSONObject;
+  LBuild: IJsonBuilder;
+  LResultJSON: string;
 begin
   TestHeader('Test 3: Merge options=[] clears target option set');
 
-  LSourceJSON := TJSONObject.Create;
-  try
-    LSourceJSON.Add('options', TJSONArray.Create);
-    LSource := CreateJSONBuilder(LSourceJSON);
-  finally
-    LSourceJSON.Free;
-  end;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  LBuild.Key('options'); LBuild.BeginArray; LBuild.EndArray;
+  LBuild.EndObject;
+  LSource := CreateJSONBuilder(LBuild.ToString);
 
   LTarget := TSSLContextBuilder.Create
     .WithALPN('h2,http/1.1')
@@ -139,138 +194,114 @@ begin
   LTarget.Merge(LSource);
 
   LResultJSON := ParseBuilderJSON(LTarget);
-  try
-    Assert(LResultJSON.Arrays['options'].Count = 0,
-      'Explicit empty source options clear the target option array');
-    Assert(not HasOption(LResultJSON, ssoEnableSNI),
-      'Explicit empty source options remove stale SNI option');
-    Assert(not HasOption(LResultJSON, ssoEnableALPN),
-      'Explicit empty source options remove stale ALPN option');
-  finally
-    LResultJSON.Free;
-  end;
+  Assert(OptionCount(LResultJSON) = 0,
+    'Explicit empty source options clear the target option array');
+  Assert(not HasOption(LResultJSON, ssoEnableSNI),
+    'Explicit empty source options remove stale SNI option');
+  Assert(not HasOption(LResultJSON, ssoEnableALPN),
+    'Explicit empty source options remove stale ALPN option');
 end;
 
 procedure Test_Merge_CopiesOCSPBooleansWhenClearingOptions;
 var
   LTarget, LSource: ISSLContextBuilder;
-  LSourceJSON, LResultJSON: TJSONObject;
+  LBuild: IJsonBuilder;
+  LResultJSON: string;
 begin
   TestHeader('Test 4: Merge copies OCSP booleans when source clears options');
 
-  LSourceJSON := TJSONObject.Create;
-  try
-    LSourceJSON.Add('options', TJSONArray.Create);
-    LSourceJSON.Add('ocsp_stapling_enabled', False);
-    LSourceJSON.Add('ocsp_stapling_required', False);
-    LSource := CreateJSONBuilder(LSourceJSON);
-  finally
-    LSourceJSON.Free;
-  end;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  LBuild.Key('options'); LBuild.BeginArray; LBuild.EndArray;
+  LBuild.Key('ocsp_stapling_enabled'); LBuild.Bool(False);
+  LBuild.Key('ocsp_stapling_required'); LBuild.Bool(False);
+  LBuild.EndObject;
+  LSource := CreateJSONBuilder(LBuild.ToString);
 
   LTarget := TSSLContextBuilder.Create
     .WithOCSPStaplingRequired(True);
   LTarget.Merge(LSource);
 
   LResultJSON := ParseBuilderJSON(LTarget);
-  try
-    Assert(not LResultJSON.Booleans['ocsp_stapling_enabled'],
-      'Source ocsp_stapling_enabled=false clears stale enabled state');
-    Assert(not LResultJSON.Booleans['ocsp_stapling_required'],
-      'Source ocsp_stapling_required=false clears stale required state');
-  finally
-    LResultJSON.Free;
-  end;
+  Assert(not JSONBool(LResultJSON, 'ocsp_stapling_enabled'),
+    'Source ocsp_stapling_enabled=false clears stale enabled state');
+  Assert(not JSONBool(LResultJSON, 'ocsp_stapling_required'),
+    'Source ocsp_stapling_required=false clears stale required state');
 end;
 
 procedure Test_Merge_CopiesOCSPRequiredStateFromSource;
 var
   LTarget, LSource: ISSLContextBuilder;
-  LSourceJSON, LResultJSON: TJSONObject;
+  LBuild: IJsonBuilder;
+  LResultJSON: string;
 begin
   TestHeader('Test 5: Merge copies source OCSP required state');
 
-  LSourceJSON := TJSONObject.Create;
-  try
-    LSourceJSON.Add('ocsp_stapling_enabled', True);
-    LSourceJSON.Add('ocsp_stapling_required', True);
-    LSource := CreateJSONBuilder(LSourceJSON);
-  finally
-    LSourceJSON.Free;
-  end;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  LBuild.Key('ocsp_stapling_enabled'); LBuild.Bool(True);
+  LBuild.Key('ocsp_stapling_required'); LBuild.Bool(True);
+  LBuild.EndObject;
+  LSource := CreateJSONBuilder(LBuild.ToString);
 
   LTarget := TSSLContextBuilder.Create.WithOCSPStapling(False);
   LTarget.Merge(LSource);
 
   LResultJSON := ParseBuilderJSON(LTarget);
-  try
-    Assert(LResultJSON.Booleans['ocsp_stapling_enabled'],
-      'Source ocsp_stapling_enabled=true is preserved after merge');
-    Assert(LResultJSON.Booleans['ocsp_stapling_required'],
-      'Source ocsp_stapling_required=true is preserved after merge');
-  finally
-    LResultJSON.Free;
-  end;
+  Assert(JSONBool(LResultJSON, 'ocsp_stapling_enabled'),
+    'Source ocsp_stapling_enabled=true is preserved after merge');
+  Assert(JSONBool(LResultJSON, 'ocsp_stapling_required'),
+    'Source ocsp_stapling_required=true is preserved after merge');
 end;
 
 procedure Test_Merge_CopiesCTRequiredFalseWhenClearingOptions;
 var
   LTarget, LSource: ISSLContextBuilder;
-  LSourceJSON, LResultJSON: TJSONObject;
+  LBuild: IJsonBuilder;
+  LResultJSON: string;
 begin
   TestHeader('Test 6: Merge copies CT required false when source clears options');
 
-  LSourceJSON := TJSONObject.Create;
-  try
-    LSourceJSON.Add('options', TJSONArray.Create);
-    LSourceJSON.Add('certificate_transparency_required', False);
-    LSource := CreateJSONBuilder(LSourceJSON);
-  finally
-    LSourceJSON.Free;
-  end;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  LBuild.Key('options'); LBuild.BeginArray; LBuild.EndArray;
+  LBuild.Key('certificate_transparency_required'); LBuild.Bool(False);
+  LBuild.EndObject;
+  LSource := CreateJSONBuilder(LBuild.ToString);
 
   LTarget := TSSLContextBuilder.Create
     .WithCertificateTransparencyRequired(True);
   LTarget.Merge(LSource);
 
   LResultJSON := ParseBuilderJSON(LTarget);
-  try
-    Assert(not LResultJSON.Booleans['certificate_transparency_required'],
-      'Source certificate_transparency_required=false clears stale CT required state');
-    Assert(not HasOption(LResultJSON, ssoRequireCertificateTransparency),
-      'Source certificate_transparency_required=false clears stale CT required option');
-  finally
-    LResultJSON.Free;
-  end;
+  Assert(not JSONBool(LResultJSON, 'certificate_transparency_required'),
+    'Source certificate_transparency_required=false clears stale CT required state');
+  Assert(not HasOption(LResultJSON, ssoRequireCertificateTransparency),
+    'Source certificate_transparency_required=false clears stale CT required option');
 end;
 
 procedure Test_Merge_CopiesCTRequiredStateFromSource;
 var
   LTarget, LSource: ISSLContextBuilder;
-  LSourceJSON, LResultJSON: TJSONObject;
+  LBuild: IJsonBuilder;
+  LResultJSON: string;
 begin
   TestHeader('Test 7: Merge copies source CT required state');
 
-  LSourceJSON := TJSONObject.Create;
-  try
-    LSourceJSON.Add('certificate_transparency_required', True);
-    LSource := CreateJSONBuilder(LSourceJSON);
-  finally
-    LSourceJSON.Free;
-  end;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  LBuild.Key('certificate_transparency_required'); LBuild.Bool(True);
+  LBuild.EndObject;
+  LSource := CreateJSONBuilder(LBuild.ToString);
 
   LTarget := TSSLContextBuilder.Create;
   LTarget.Merge(LSource);
 
   LResultJSON := ParseBuilderJSON(LTarget);
-  try
-    Assert(LResultJSON.Booleans['certificate_transparency_required'],
-      'Source certificate_transparency_required=true is preserved after merge');
-    Assert(HasOption(LResultJSON, ssoRequireCertificateTransparency),
-      'Source certificate_transparency_required=true persists to the exported option set');
-  finally
-    LResultJSON.Free;
-  end;
+  Assert(JSONBool(LResultJSON, 'certificate_transparency_required'),
+    'Source certificate_transparency_required=true is preserved after merge');
+  Assert(HasOption(LResultJSON, ssoRequireCertificateTransparency),
+    'Source certificate_transparency_required=true persists to the exported option set');
 end;
 
 begin

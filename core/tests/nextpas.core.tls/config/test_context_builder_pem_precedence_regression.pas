@@ -4,7 +4,7 @@ program test_context_builder_pem_precedence_regression;
 
 uses
   nextpas.core.system.sysutils,
-  fpjson,
+  nextpas.core.json.builder,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
@@ -46,35 +46,43 @@ end;
 function ImportPEMOverrides(ABuilder: ISSLContextBuilder;
   const ACertificatePEM, APrivateKeyPEM: string): ISSLContextBuilder;
 var
-  LJSON: TJSONObject;
+  LBuild: IJsonBuilder;
 begin
-  LJSON := TJSONObject.Create;
-  try
-    if ACertificatePEM <> '' then
-      LJSON.Add('certificate_pem', ACertificatePEM);
-    if APrivateKeyPEM <> '' then
-      LJSON.Add('private_key_pem', APrivateKeyPEM);
-    Result := ABuilder.ImportFromJSON(LJSON.AsJSON);
-  finally
-    LJSON.Free;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  if ACertificatePEM <> '' then
+  begin
+    LBuild.Key('certificate_pem');
+    LBuild.Str(ACertificatePEM);
   end;
+  if APrivateKeyPEM <> '' then
+  begin
+    LBuild.Key('private_key_pem');
+    LBuild.Str(APrivateKeyPEM);
+  end;
+  LBuild.EndObject;
+  Result := ABuilder.ImportFromJSON(LBuild.ToString);
 end;
 
 function ImportFileOverridesJSON(ABuilder: ISSLContextBuilder;
   const ACertificateFile, APrivateKeyFile: string): ISSLContextBuilder;
 var
-  LJSON: TJSONObject;
+  LBuild: IJsonBuilder;
 begin
-  LJSON := TJSONObject.Create;
-  try
-    if ACertificateFile <> '' then
-      LJSON.Add('certificate_file', ACertificateFile);
-    if APrivateKeyFile <> '' then
-      LJSON.Add('private_key_file', APrivateKeyFile);
-    Result := ABuilder.ImportFromJSON(LJSON.AsJSON);
-  finally
-    LJSON.Free;
+  LBuild := JsonBuilder;
+  LBuild.BeginObject;
+  if ACertificateFile <> '' then
+  begin
+    LBuild.Key('certificate_file');
+    LBuild.Str(ACertificateFile);
   end;
+  if APrivateKeyFile <> '' then
+  begin
+    LBuild.Key('private_key_file');
+    LBuild.Str(APrivateKeyFile);
+  end;
+  LBuild.EndObject;
+  Result := ABuilder.ImportFromJSON(LBuild.ToString);
 end;
 
 function ImportFileOverridesINI(ABuilder: ISSLContextBuilder;

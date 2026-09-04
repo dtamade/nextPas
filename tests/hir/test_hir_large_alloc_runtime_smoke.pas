@@ -3,7 +3,8 @@ program test_hir_large_alloc_runtime_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, SysUtils, Process, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.builder,
+  nextpas.core.text.conv, nextpas.core.os.env, nextpas.core.fs, nextpas.core.path,
+  nextpas.core.process, nextpas.core.process.base, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.builder,
   nextpas.compiler.ir.hir.llvm_emitter;
 
 const
@@ -20,16 +21,8 @@ begin
 end;
 
 procedure WriteTextFile(const APath, AText: string);
-var
-  Lines: TStringList;
 begin
-  Lines := TStringList.Create;
-  try
-    Lines.Text := AText;
-    Lines.SaveToFile(APath);
-  finally
-    Lines.Free;
-  end;
+  WriteFileText(APath, AText);
 end;
 
 function ToolPath(const AEnvName, ADefaultValue: string): string;
@@ -43,38 +36,15 @@ procedure RunCommand(const ALabel, AExecutable: string;
   const AArgs: array of string; AExpectedExit: LongInt;
   ASuppressStderr: Boolean = False);
 var
-  Proc: TProcess;
-  I: LongInt;
-  CmdLine: string;
+  LOut: TProcessOutput;
 begin
-  Proc := TProcess.Create(nil);
-  try
-    if ASuppressStderr then
-    begin
-      { Use shell to redirect stderr to /dev/null, avoiding stdout corruption.
-        Quote arguments to handle paths with spaces. }
-      CmdLine := '"' + AExecutable + '"';
-      for I := Low(AArgs) to High(AArgs) do
-        CmdLine := CmdLine + ' "' + AArgs[I] + '"';
-      CmdLine := CmdLine + ' 2>/dev/null';
-      Proc.Executable := '/bin/sh';
-      Proc.Parameters.Add('-c');
-      Proc.Parameters.Add(CmdLine);
-    end
-    else
-    begin
-      Proc.Executable := AExecutable;
-      for I := Low(AArgs) to High(AArgs) do
-        Proc.Parameters.Add(AArgs[I]);
-    end;
-    Proc.Options := [poWaitOnExit];
-    Proc.Execute;
-    if Proc.ExitStatus <> AExpectedExit then
-      Fail(ALabel + '-exit:' + IntToStr(Proc.ExitStatus) +
-        '-expected:' + IntToStr(AExpectedExit));
-  finally
-    Proc.Free;
-  end;
+  if ASuppressStderr then
+    LOut := Command(AExecutable).Args(AArgs).Stderr(stNull).Output
+  else
+    LOut := Run(AExecutable, AArgs);
+  if LOut.ExitCode <> AExpectedExit then
+    Fail(ALabel + '-exit:' + IntToStr(LOut.ExitCode) +
+      '-expected:' + IntToStr(AExpectedExit));
 end;
 
 function FindAfter(const ANeedle, AText: string; AStart: LongInt): LongInt;

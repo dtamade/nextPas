@@ -13,7 +13,11 @@ program test_batch_config;
 
 uses
   nextpas.core.system.sysutils,
-  fpjson, jsonparser,
+  nextpas.core.text.view,
+  nextpas.core.mem.default,
+  nextpas.core.json.types,
+  nextpas.core.json.parser,
+  nextpas.core.json.value,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
@@ -52,9 +56,26 @@ begin
   WriteLn('═══════════════════════════════════════════════════════════');
 end;
 
-function ParseBuilderJSON(ABuilder: ISSLContextBuilder): TJSONObject;
+function ParseBuilderJSON(ABuilder: ISSLContextBuilder): string;
 begin
-  Result := TJSONObject(GetJSON(ABuilder.ExportToJSON));
+  Result := ABuilder.ExportToJSON;
+end;
+
+function JSONStr(const AJSON, AKey: string): string;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+begin
+  Result := '';
+  LDoc.Init(DefaultAllocator);
+  try
+    if not LDoc.Parse(TStringView.FromStr(AJSON)) then
+      Exit;
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    Result := LRoot.Get(AKey).AsStr.ToString;
+  finally
+    LDoc.Done;
+  end;
 end;
 
 { Global config procedures for testing }
@@ -431,7 +452,7 @@ end;
 procedure Test_ApplyPreset_FileSources_ClearStalePEMState;
 var
   LBuilder, LPreset: ISSLContextBuilder;
-  LObj: TJSONObject;
+  LJSON: string;
 begin
   TestHeader('Test 19: ApplyPreset File Sources Clear Stale PEM State');
 
@@ -444,26 +465,22 @@ begin
     .WithPrivateKeyPEM('stale-builder-private-key-pem')
     .ApplyPreset(LPreset);
 
-  LObj := ParseBuilderJSON(LBuilder);
-  try
-    Assert(LObj.Strings['certificate_file'] = '/tmp/preset-cert-file.pem',
-      'ApplyPreset keeps preset certificate_file export-visible');
-    Assert(LObj.Strings['certificate_pem'] = '',
-      'ApplyPreset(certificate_file) clears stale certificate_pem state');
-    Assert(LObj.Strings['private_key_file'] = '/tmp/preset-private-key.pem',
-      'ApplyPreset keeps preset private_key_file export-visible');
-    Assert(LObj.Strings['private_key_pem'] = '',
-      'ApplyPreset(private_key_file) clears stale private_key_pem state');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LBuilder);
+  Assert(JSONStr(LJSON, 'certificate_file') = '/tmp/preset-cert-file.pem',
+    'ApplyPreset keeps preset certificate_file export-visible');
+  Assert(JSONStr(LJSON, 'certificate_pem') = '',
+    'ApplyPreset(certificate_file) clears stale certificate_pem state');
+  Assert(JSONStr(LJSON, 'private_key_file') = '/tmp/preset-private-key.pem',
+    'ApplyPreset keeps preset private_key_file export-visible');
+  Assert(JSONStr(LJSON, 'private_key_pem') = '',
+    'ApplyPreset(private_key_file) clears stale private_key_pem state');
 end;
 
 { Test 20: ApplyPreset PEM sources clear stale file state }
 procedure Test_ApplyPreset_PEMSources_ClearStaleFileState;
 var
   LBuilder, LPreset: ISSLContextBuilder;
-  LObj: TJSONObject;
+  LJSON: string;
 begin
   TestHeader('Test 20: ApplyPreset PEM Sources Clear Stale File State');
 
@@ -476,19 +493,15 @@ begin
     .WithPrivateKey('/tmp/stale-builder-private-key.pem')
     .ApplyPreset(LPreset);
 
-  LObj := ParseBuilderJSON(LBuilder);
-  try
-    Assert(LObj.Strings['certificate_file'] = '',
-      'ApplyPreset(certificate_pem) clears stale certificate_file state');
-    Assert(LObj.Strings['certificate_pem'] = 'preset-certificate-pem',
-      'ApplyPreset keeps preset certificate_pem export-visible');
-    Assert(LObj.Strings['private_key_file'] = '',
-      'ApplyPreset(private_key_pem) clears stale private_key_file state');
-    Assert(LObj.Strings['private_key_pem'] = 'preset-private-key-pem',
-      'ApplyPreset keeps preset private_key_pem export-visible');
-  finally
-    LObj.Free;
-  end;
+  LJSON := ParseBuilderJSON(LBuilder);
+  Assert(JSONStr(LJSON, 'certificate_file') = '',
+    'ApplyPreset(certificate_pem) clears stale certificate_file state');
+  Assert(JSONStr(LJSON, 'certificate_pem') = 'preset-certificate-pem',
+    'ApplyPreset keeps preset certificate_pem export-visible');
+  Assert(JSONStr(LJSON, 'private_key_file') = '',
+    'ApplyPreset(private_key_pem) clears stale private_key_file state');
+  Assert(JSONStr(LJSON, 'private_key_pem') = 'preset-private-key-pem',
+    'ApplyPreset keeps preset private_key_pem export-visible');
 end;
 
 { Main Test Runner }
