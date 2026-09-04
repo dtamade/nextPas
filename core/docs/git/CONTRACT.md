@@ -122,6 +122,10 @@
   `DeflateReaderEmbedded`（TDeflateReader.CreateEmbedded）。
 - 已知限制：index v1 不支持；idx CRC 表不校验；delta 链深度上限 64；
   index 的 split-index/sparse 扩展（小写强制扩展）遇到即拒绝而不是跳过；
+  SHA-256 对象格式不支持（仅 SHA-1，20-byte `TGitOid` 权威）；
+  shallow/grafts 不支持（revwalk 仍遍历全父链）；
+  网络 `http(s)/ssh/git` 抓取/推送不支持（`CloneRepository` 仅本地目录与 `file://`，网络抛 `EGitError(transport)`；`Fetch` 返回 `False`）；
+  `SetGlobalConfig` 写不支持（读支持全局两文件+`XDG`，写需 `libgit2` 或 CLI）；
   cache-tree 冲突失效为整树粒度（git 是按目录最小失效，消费语义等价——
   无效缓存本就必须重算）；checkout 对 linked worktree 的 `commondir` 透明（经 `EffectiveGitDir` 读对象、`AGitDir` 写 index）；
   status/clean 有 .gitignore 链（.git/info/exclude + `core.excludesFile` 全局排除 + worktree 逐级 .gitignore，`~/` 展开）、untracked 过滤与 rename 检测（阈值 50

@@ -134,8 +134,10 @@ end;
 
 ---
 
-## 6. 非目标
+## 6. 非目标与传输边界
 
-- 首版不补全 `IGitRepositoryExt` 的 `Push/Fetch/Clone/Remote` 等，统一抛 `EGitError`。
+- `Clone/Remote/Checkout/ListBranches` 已闭合本地路径：`CloneRepository` 支持本地目录与 `file://`，`Remote` 返回远端清单条目，`CheckoutBranch/Ex` 经 `checkout` 物化并更新 `HEAD`，`ListBranches` 支持 `gbLocal/gbRemote/gbAll`。
+- 网络传输显式不支持：`http(s)/ssh/git` 与 scp 语法在 `CloneRepository` 抛 `EGitError(transport)`，`Fetch` 返回 `False`；`http` 智能协议与 `ssh` 通道待独立 slice 对接 `L2 net/tls` owner，不在 `git` 内自建网络。
+- `SetGlobalConfig` 写路径显式不支持（读经 `~/.gitconfig` + `~/.config/git/config` + `XDG_CONFIG_HOME`），需写时用 `libgit2` 后端或 `git CLI`。
 - 不重写 `libgit2.bindings` 生成器，不动 `vendors/`。
 - 不引入 `settings.inc` 开关，不改 `compiler/` 与 `stage0`。
