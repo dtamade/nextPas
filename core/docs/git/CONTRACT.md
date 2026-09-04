@@ -49,7 +49,7 @@
 | git.native.cachetree | TREE 扩展纯格式单元：记录解析（名字 NUL 前缀、计数哨兵 -1）与两遍精确尺寸序列化 |
 | git.native.status | worktree status 聚合（HEAD↔index 暂存态 / index↔worktree 工作树态 / untracked 扫描 + rename/copy 检测：oid 100 快路径 + hashsig 行哈希 0..100、阈值 50 配对、porcelain 分组序） |
 | git.native.ignore | .gitignore 引擎：模式编译（负规则/锚定/仅目录/字符类/**）、分组栈（深目录优先、文件内后者胜）、纯逻辑无 IO |
-| git.native.revwalk | 提交遍历（committer-date 降序游标 + topo 序一次性规划，first-parent / hide + boundary / since-until 日期裁剪，每提交恰一次读取解析，commit-graph 透明加速） |
+| git.native.revwalk | 提交遍历薄门面 + 6 域分片（`revwalk.base` 纯数据类型 / `intf` 契约接缝 / `hashset` 集合映射 / `parsecache` 恰一次缓存 / `fetch` 单次交付 / `walker` 堆游标 / `collect` 日期序收集 / `topo` 拓扑序，各 <650 行；原 1985 行单文件已按域拆分，门面 inline 转发，调用方零改动；分片 `TGitOidArray` 经 `revwalk.base` 别名单源，`commitgraph.base` 同名副本待收敛） |
 | git.native.commitgraph | commit-graph v1 薄门面 + 4 域分片（`commitgraph.base` 类型单源 / `cache` 16-cap LRU+mmap / `reader` 解析查找+TryLoad / `writer` 排序构建落盘 / `collect` 全量收集+WriteAll，各 <600 行；原 1541 行单文件已按域拆分，门面 inline 转发，调用方零改动） |
 | git.native.reflog | reflog 读取（`logs/<ref>` 文本解析，`old new sig TAB msg`，签名复用 `GitParseSignature`，空文件与缺失回空数组） |
 | git.native.stash | stash 栈（`logs/refs/stash` reflog 列表反序 + `GitStashPush/Apply/Pop/Drop/Clear` 原生栈操作：push 为 index/working 树落盘→index/stash 提交→reflog append→refs/stash→检出回 HEAD；apply 为 `checkout` 目标树；pop=apply+drop；drop/clear 精确重写 reflog 与 refs，对齐 `git stash push/pop/apply/drop/clear`） |
@@ -306,5 +306,5 @@ end;
 
 - **总索引**：1→89 源演进已固化（89 `nextpas.core.git*.pas`，含 6 native 门面 shard + libgit2.types + 10 bindings 域分片 + `native` 薄网关 `<250` 行 + `git.pas` 门面）；`scripts/git-contract-check.sh` C5 硬门禁自动维持，超阈即红，非人工巡检。
 - **分片阈值（硬门禁，`wc -l` 行阈）**：`objects <400` / `staging <500` / `history.traversal|query|ops` 各 `<260` & `history` umbrella `<80` & 总 `<650` / `branches <300` / `transport <600` / `extensions <400` / `bindings` 门面 `<150` & 各分片 `<800`（含 `types/structs/consts/c/oid/odb/refs/commit/repo/diff/extra` 各 `<800`）；单源 `bytes.ops`/`checksum.adler32`/`compress`/`text.wildmatch` 零拷贝 `inline` 约束同步门禁。
-- **触发与处置**：任一 shard 单单元 `>800` 或门面超域分档阈值即 C5 失败；接近阈值（>85%）即评估再拆分（按不变量域薄编排，复用 owner，不自建压缩/哈希/通配）；`commitgraph` 已按 `base/cache/reader/writer/collect` 四域拆分（各 <600 行，门面 inline 转发，见 `CONTRACT.history.md §6`），`revwalk.pas` 仍超 1500 硬阈待拆分（见 `CONTRACT.history.md §6`）。
+- **触发与处置**：任一 shard 单单元 `>800` 或门面超域分档阈值即 C5 失败；接近阈值（>85%）即评估再拆分（按不变量域薄编排，复用 owner，不自建压缩/哈希/通配）；`commitgraph` 与 `revwalk` 均已按域拆分完毕（各 <650 行，门面 inline 转发，见 `CONTRACT.history.md §6`）。
 - **资源与性能同门禁**：`IMappedFile`/`TPackFile`/`TBytes` 零泄漏（`try..finally` + 接口计数，`HEAPTRC` 双 pin）、`inline` 零拷贝 `PByte+Len/TByteSpan`（`bytes.ops` 单源）与 SLO 双锚（§7）同 C5 聚合于 `build/verify_local.sh`。

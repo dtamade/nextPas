@@ -24,7 +24,8 @@ uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.refs,
-  nextpas.core.git.native.revwalk,
+  nextpas.core.git.native.revwalk.base,
+  nextpas.core.git.native.revwalk.walker,
   nextpas.core.git.native.commitgraph.writer,
   nextpas.core.git.native.commitgraph.reader,
   nextpas.core.git.native.commitgraph.cache;
