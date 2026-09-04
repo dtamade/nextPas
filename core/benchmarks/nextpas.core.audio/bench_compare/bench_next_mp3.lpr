@@ -6,7 +6,8 @@ program bench_next_mp3;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.base,
   nextpas.core.io,
   nextpas.core.io.intf,

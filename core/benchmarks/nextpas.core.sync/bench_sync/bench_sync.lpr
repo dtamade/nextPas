@@ -3,7 +3,7 @@ program bench_sync;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.math,
   nextpas.core.thread.init,
   nextpas.core.thread.base,
   nextpas.core.bench,
@@ -248,7 +248,7 @@ begin
     .AddLoop('sync/Mutex/TryAcquire', @BenchMutexTryAcquire)
     .Run;
   WriteLn(LResults.PrintToConsole);
-  ForceDirectories('build');
+  MkdirAll('build');
   LResults.SaveToJSON('build/bench-sync.json');
 
   WriteLn;

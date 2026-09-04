@@ -17,8 +17,10 @@ program bench_db_wallet;
 {$modeswitch functionreferences}{$modeswitch anonymousfunctions}
 
 uses
-  SysUtils,
-  BaseUnix,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.base,
+  nextpas.core.fs,
   nextpas.core.bytes.ops,
   nextpas.core.text.utils,
   nextpas.core.db.pool,
@@ -43,7 +45,7 @@ var
 function NextWalletPath: string; inline;
 begin
   Inc(GSeq);
-  Result := GetTempDir + 'bench_db_wallet_' + IntToStr(FpGetPid) + '_' + IntToStr(GSeq) + '.db';
+  Result := GetTempDir + 'bench_db_wallet_' + IntToStr(GSeq) + '.db';
 end;
 
 function NewWalletPool(const APath: string): TDbPool; inline;
@@ -233,7 +235,7 @@ begin
   if Trim('bench') <> 'bench' then WriteLn('');
 
   LPath := NextWalletPath;
-  DeleteFile(LPath);
+  Remove(LPath);
   Pool := NewWalletPool(LPath);
   try
     MigrateIdentityAndWallet(Pool);
@@ -251,7 +253,7 @@ begin
     WriteLn('wallet-bench=pass (heaptrc 0, Writer 租约语句边界归还, Changes 原子, 游标单往返)');
   finally
     Pool.Free;
-    DeleteFile(LPath);
+    Remove(LPath);
   end;
   { pg 真机 env-gated: honest live 吞吐, 缺席 honest skip 不以 text.kv 冒充; DM 同理 via dpi/odbc gateway }
   if string(platform_env_get_str('NEXTPAS_PG_TEST_CONN')) <> '' then

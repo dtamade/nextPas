@@ -1,7 +1,7 @@
 program bench_mp3;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses
-  SysUtils,
+  nextpas.core.fs,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.base,
@@ -43,5 +43,5 @@ begin
   WriteLn(R.PrintToConsole);
   WriteLn('ns/op mp3');
   WriteLn('MB/s mp3');
-  ForceDirectories('build'); R.SaveToJSON('build/bench-mp3.json');
+  MkdirAll('build'); R.SaveToJSON('build/bench-mp3.json');
 end.

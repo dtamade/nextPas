@@ -8,7 +8,7 @@ program bench_db_dm_live;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.bytes.ops,
   nextpas.core.db,
   nextpas.core.db.base,

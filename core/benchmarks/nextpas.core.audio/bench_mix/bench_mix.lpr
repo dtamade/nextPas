@@ -1,7 +1,7 @@
 program bench_mix;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses
-  SysUtils,
+  nextpas.core.fs,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.audio.base,
@@ -52,5 +52,5 @@ begin
   WriteLn(R.PrintToConsole);
   WriteLn('ns/op mix');
   WriteLn('MB/s mix');
-  ForceDirectories('build'); R.SaveToJSON('build/bench-mix.json');
+  MkdirAll('build'); R.SaveToJSON('build/bench-mix.json');
 end.

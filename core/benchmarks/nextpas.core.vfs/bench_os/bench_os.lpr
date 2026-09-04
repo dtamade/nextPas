@@ -2,7 +2,7 @@ program bench_os;
 {$I nextpas.core.settings.inc}
 {** @desc os 独立热点基准：List/Walk/OpenRead 热路径，fs seam 句柄开销 inline 零拷贝 bytes.ops 单源补充 per-backend 独立证据。 }
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.bench,
   nextpas.core.bench.intf,

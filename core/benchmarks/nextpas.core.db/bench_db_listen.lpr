@@ -14,7 +14,9 @@ program bench_db_listen;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.os.env,
   nextpas.core.base,
   nextpas.core.db.pg.base,
   nextpas.core.db.pg,
@@ -106,7 +108,7 @@ begin
   S := TPgConn.Create(ADsn);
   try
     L.Listen(AChannel);
-    Sleep(ATickMs * 3);                { 确保 LISTEN 已应用 }
+    MsSleep(ATickMs * 3);                { 确保 LISTEN 已应用 }
     for I := 1 to WARMUP_N do
     begin
       S.Exec('NOTIFY ' + AChannel);
@@ -167,7 +169,7 @@ begin
   S := TPgConn.Create(ADsn);
   try
     L.Listen(AChannel);
-    Sleep(PG_LISTEN_DEFAULT_TICK_MS * 3);
+    MsSleep(PG_LISTEN_DEFAULT_TICK_MS * 3);
     LT0 := platform_monotonic_ns;
     for I := 0 to High(LBatches) do
       S.Exec(LBatches[I]);

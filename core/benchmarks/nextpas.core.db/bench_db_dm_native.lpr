@@ -10,7 +10,7 @@ program bench_db_dm_native;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.bytes.ops,
   nextpas.core.text.sqlscan,
   nextpas.core.db.dm.base,

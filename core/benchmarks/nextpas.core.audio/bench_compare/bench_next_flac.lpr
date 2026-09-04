@@ -9,7 +9,9 @@ program bench_next_flac;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.fs,
   nextpas.core.base,
   nextpas.core.io,
   nextpas.core.io.intf,
@@ -66,11 +68,11 @@ begin
     if IOResult = 0 then
     begin
       Close(F);
-      if FileExists(FIXTURE_CANDIDATES[I]) then Exit(FIXTURE_CANDIDATES[I]);
+      if Exists(FIXTURE_CANDIDATES[I]) then Exit(FIXTURE_CANDIDATES[I]);
     end;
   end;
   // fallback: absolute
-  if FileExists('/home/dtamade/projects/music888/tests/fixtures/tone_stereo_16.flac') then
+  if Exists('/home/dtamade/projects/music888/tests/fixtures/tone_stereo_16.flac') then
     Exit('/home/dtamade/projects/music888/tests/fixtures/tone_stereo_16.flac');
   Result := FIXTURE_CANDIDATES[0];
 end;
@@ -84,7 +86,7 @@ begin
   Assign(F, Path);
   {$I-} Reset(F, 1); {$I+}
   if IOResult <> 0 then Exit;
-  Sz := FileSize(F);
+  Sz := System.FileSize(F);
   SetLength(GFileData, Sz);
   if Sz > 0 then BlockRead(F, GFileData[0], Sz);
   Close(F);

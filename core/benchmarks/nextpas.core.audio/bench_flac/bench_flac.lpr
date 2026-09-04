@@ -1,7 +1,7 @@
 program bench_flac;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses
-  SysUtils,
+  nextpas.core.fs,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.base,
@@ -54,6 +54,6 @@ begin
   WriteLn(R.PrintToConsole);
   WriteLn('ns/op flac');
   WriteLn('MB/s flac');
-  ForceDirectories('build');
+  MkdirAll('build');
   R.SaveToJSON('build/bench-flac.json');
 end.

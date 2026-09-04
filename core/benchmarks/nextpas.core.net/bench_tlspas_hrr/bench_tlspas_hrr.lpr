@@ -3,7 +3,10 @@ program bench_tlspas_hrr;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.time,
+  nextpas.core.fs,
   nextpas.core.base,
   nextpas.core.bench.base,
   nextpas.core.thread.init,
@@ -527,8 +530,8 @@ begin
   GReplayStore := GReplayCache as ITlsPasReplayStore;
   SetLength(GReplayFp, 32);
   FillChar(GReplayFp[0], 32, $99);
-  if FileExists('/tmp/bench_replay_file.dat') then DeleteFile('/tmp/bench_replay_file.dat');
-  if FileExists('/tmp/bench_replay_file.dat.tmp') then DeleteFile('/tmp/bench_replay_file.dat.tmp');
+  if Exists('/tmp/bench_replay_file.dat') then Remove('/tmp/bench_replay_file.dat');
+  if Exists('/tmp/bench_replay_file.dat.tmp') then Remove('/tmp/bench_replay_file.dat.tmp');
   GFileStore := TAsyncTlsPasReplayFileStore.Create('/tmp/bench_replay_file.dat', 64, 600000) as ITlsPasReplayStore;
   GKvStore := TAsyncTlsPasReplayStoreFactory.CreateKv(TAsyncTlsPasMemoryKvStore.Create as ITlsPasKvStore, 64, 600000);
   GServerObserver := TAsyncTlsPasServerObserver.Create(GReplayStore);

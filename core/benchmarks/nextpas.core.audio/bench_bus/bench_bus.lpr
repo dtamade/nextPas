@@ -1,7 +1,7 @@
 program bench_bus;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses
-  SysUtils,
+  nextpas.core.fs,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.base,
@@ -55,5 +55,5 @@ begin
   WriteLn(R.PrintToConsole);
   WriteLn('ns/op bus');
   WriteLn('MB/s bus');
-  ForceDirectories('build'); R.SaveToJSON('build/bench-bus.json');
+  MkdirAll('build'); R.SaveToJSON('build/bench-bus.json');
 end.

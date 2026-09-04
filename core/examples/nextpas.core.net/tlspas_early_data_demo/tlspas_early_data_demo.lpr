@@ -3,7 +3,8 @@ program tlspas_early_data_demo;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.http.base,
   nextpas.core.http.headers,
@@ -43,8 +44,8 @@ begin
   WriteLn('Memory second replay: ', Mem.CheckAndAdd(TlsPasComputeEarlyDataFingerprint(Id, Early), IsReplay) and IsReplay);
   WriteLn('File count after 2: ', FileStore.Count);
   WriteLn('Kv cross-hit: ', KvStore.CheckAndAdd(TlsPasComputeEarlyDataFingerprint(Id, Early), IsReplay));
-  if FileExists('/tmp/tlspas_demo.dat') then DeleteFile('/tmp/tlspas_demo.dat');
-  if FileExists('/tmp/tlspas_demo.dat.tmp') then DeleteFile('/tmp/tlspas_demo.dat.tmp');
+  if Exists('/tmp/tlspas_demo.dat') then Remove('/tmp/tlspas_demo.dat');
+  if Exists('/tmp/tlspas_demo.dat.tmp') then Remove('/tmp/tlspas_demo.dat.tmp');
   WriteLn('Factory reuse: Memory/File/Kv same ITlsPasReplayStore');
 end;
 
@@ -224,7 +225,7 @@ begin
   WriteLn(F, 'base=4096'); WriteLn(F, 'threshold=0.2'); CloseFile(F);
   if TlsPasTryLoadAdaptiveConfigFromFile(LPath, C) then
     WriteLn('File config base=', C.BaseLimit, ' threshold=', C.RejectRateThreshold:0:2);
-  DeleteFile(LPath);
+  Remove(LPath);
   // Env demo: fallback to Default when not set
   C := TlsPasAdaptiveConfigFromEnvOrDefault;
   WriteLn('EnvOrDefault base=', C.BaseLimit, ' (default 16384 when env empty)');

@@ -21,9 +21,6 @@ procedure SnapAssert(const ASnap: TLeakSnapshot; const AContext: string);
 
 implementation
 
-uses
-  SysUtils;
-
 type
   TTrackedImpl = class(TInterfacedObject, ITracked)
   private

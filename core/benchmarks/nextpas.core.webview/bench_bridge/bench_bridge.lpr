@@ -16,7 +16,8 @@ uses
   {$ifdef unix}
   nextpas.core.thread.init,
   {$endif}
-  SysUtils,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.bench,
   nextpas.core.bench.intf,
   nextpas.core.base,

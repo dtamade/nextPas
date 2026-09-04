@@ -13,7 +13,10 @@ program bench_db_batch_insert;
 {$modeswitch functionreferences}{$modeswitch anonymousfunctions}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.os.env,
+  nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.db,
   nextpas.core.db.base,

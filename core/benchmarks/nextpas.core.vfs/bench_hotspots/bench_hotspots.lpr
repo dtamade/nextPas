@@ -7,7 +7,7 @@ program bench_hotspots;
      内联热路径证据：VfsStat/VfsList/BytesIsGzipBuffer/Span* inline，资源释放 try-finally Close 不丢，
      业务以 CONTRACT 为准，三后端语义一致性由 conformance 门锁，缺能力反哺 owner（os→fs，embedded→respack）。 }
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.bench,
   nextpas.core.bench.intf,

@@ -8,7 +8,6 @@ program tar_roundtrip;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.io.base,

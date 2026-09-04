@@ -1,7 +1,7 @@
 program bench_studio;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses
-  SysUtils,
+  nextpas.core.fs,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.audio.base,
@@ -57,6 +57,6 @@ begin
   WriteLn(R.PrintToConsole);
   WriteLn('ns/op studio');
   WriteLn('MB/s studio');
-  ForceDirectories('build'); R.SaveToJSON('build/bench-studio.json');
+  MkdirAll('build'); R.SaveToJSON('build/bench-studio.json');
   GCurve.Free;
 end.

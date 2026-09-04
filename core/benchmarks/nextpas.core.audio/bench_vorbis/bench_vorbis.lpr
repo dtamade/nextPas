@@ -1,7 +1,7 @@
 program bench_vorbis;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses
-  SysUtils,
+  nextpas.core.fs,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.base,
@@ -56,5 +56,5 @@ begin
   WriteLn(R.PrintToConsole);
   WriteLn('ns/op vorbis');
   WriteLn('MB/s vorbis');
-  ForceDirectories('build'); R.SaveToJSON('build/bench-vorbis.json');
+  MkdirAll('build'); R.SaveToJSON('build/bench-vorbis.json');
 end.

@@ -1,6 +1,6 @@
 program translate_bench;
 {$mode ObjFPC}{$H+}
-uses SysUtils;
+uses nextpas.core.text.conv, nextpas.core.time;
 { 与 nextpas.core.db.pg.adapter.TranslatePlaceholders 相同的拼接模式 }
 function TranslateLike(const ASql: string): string;
 var LB: string; I: Integer; C: Char;

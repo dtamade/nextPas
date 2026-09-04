@@ -15,8 +15,8 @@ program bench_db_pool_stress;
 {$modeswitch functionreferences}{$modeswitch anonymousfunctions}
 
 uses
-  cthreads,
-  SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.time,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.db,

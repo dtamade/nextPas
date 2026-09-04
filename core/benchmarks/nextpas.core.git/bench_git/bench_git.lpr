@@ -7,7 +7,8 @@ program bench_git;
 {$I nextpas.core.settings.inc}
 {$Q-}{$R-}
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
   nextpas.core.bench,
   nextpas.core.bench.intf,
   nextpas.core.bench.baseline,
@@ -364,7 +365,7 @@ begin
     .Add('Blame/ComputeMatches:3k×3k:fallback', @BenchBlame3Kx3K)
     .Run;
   WriteLn(LResults.PrintToConsole);
-  ForceDirectories('build');
+  MkdirAll('build');
   LResults.SaveToJSON('build/bench-git.json');
   // Dual-anchor gate: absolute SLO + committed baseline + noise-aware threshold.
   // Samples 10@200ms + 3 warmup + adaptive warmup (CV<5%) reduce noise vs prior 5@50ms.
@@ -372,9 +373,9 @@ begin
   // Regression requires ratio>1.10 AND exceeds per-sample CV (StdDev/NsPerOp) to avoid false positives from jitter.
   LBaseline := TBaselineManager.Create(1.10);
   try
-    if FileExists('baseline.json') then
+    if Exists('baseline.json') then
       LBaseline.LoadFromFile('baseline.json')
-    else if FileExists('core/benchmarks/nextpas.core.git/bench_git/baseline.json') then
+    else if Exists('core/benchmarks/nextpas.core.git/bench_git/baseline.json') then
       LBaseline.LoadFromFile('core/benchmarks/nextpas.core.git/bench_git/baseline.json');
     begin
       // noise-aware: fixed 10% + CV guard (max 15% effective) + unstable auto-skip

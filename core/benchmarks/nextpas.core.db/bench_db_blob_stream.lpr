@@ -12,8 +12,11 @@ program bench_db_blob_stream;
 {$modeswitch functionreferences}{$modeswitch anonymousfunctions}
 
 uses
-  SysUtils,
-  StrUtils,
+  nextpas.core.text.conv,
+  nextpas.core.text.utils,
+  nextpas.core.path,
+  nextpas.core.os.env,
+  nextpas.core.fs,
   nextpas.core.base,
   nextpas.core.db,
   nextpas.core.db.base,
@@ -206,7 +209,7 @@ begin
     BenchPgStream;
     WriteLn('blob-stream-bench=pass');
   finally
-    DeleteFile(GTmpPath);
+    Remove(GTmpPath);
   end;
   if GK < 0 then
     WriteLn;

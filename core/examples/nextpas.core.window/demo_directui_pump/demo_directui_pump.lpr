@@ -15,7 +15,7 @@ program demo_directui_pump;
 *}
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.factory,

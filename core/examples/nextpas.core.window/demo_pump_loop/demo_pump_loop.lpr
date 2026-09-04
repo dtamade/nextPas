@@ -5,7 +5,7 @@ program demo_pump_loop;
 {$modeswitch functionreferences}
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.factory,
@@ -14,6 +14,7 @@ uses
 var
   Win: IWindow;
   Host: IWindowHost;
+  SelfAccess: IFakeSelfAccess;
   Frame: Integer = 0;
   E: TWindowEvent;
 
@@ -57,7 +58,7 @@ begin
   end;
 
   { 注入一个关闭请求，演示 PumpOnce 驱动的游戏循环如何感知并退出 }
-  if Supports(Win, IFakeSelfAccess) then
+  if Supports(Win, IFakeSelfAccess, SelfAccess) then
   begin
     E.Kind := weCloseRequested;
     E.Width := TWindowPixel(0); E.Height := TWindowPixel(0); E.X := TWindowPixel(0); E.Y := TWindowPixel(0); E.NewScale := TWindowScale.Invalid;

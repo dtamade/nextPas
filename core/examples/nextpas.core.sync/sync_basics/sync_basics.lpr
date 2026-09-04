@@ -9,7 +9,6 @@ program sync_basics;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
   nextpas.core.thread.init,
   nextpas.core.thread.base,
   nextpas.core.time.base,

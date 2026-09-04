@@ -10,7 +10,7 @@ program bench_db_dm_adapter;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.bytes.ops,
   nextpas.core.text.sqlscan,
   nextpas.core.db.dm.adapter,

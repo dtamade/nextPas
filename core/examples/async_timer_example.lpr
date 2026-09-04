@@ -10,7 +10,6 @@ program async_timer_example;
   5. Stop after all work done }
 
 uses
-  SysUtils,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.async.base,

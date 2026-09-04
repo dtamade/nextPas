@@ -8,7 +8,8 @@ program bench_tar;
 {$Q-}{$R-}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
   nextpas.core.base,
   nextpas.core.bench,
   nextpas.core.bench.intf,
@@ -181,5 +182,5 @@ begin
   LResults := LSuit.Run;
   WriteLn(LResults.PrintToConsole);
   WriteLn('benchstat: ', LResults.ToBenchstat);
-  try ForceDirectories('build'); ForceDirectories('../../../build'); LResults.SaveToJSON('build/bench-tar.json'); LResults.SaveToJSON('../../../build/bench-tar.json'); except on E: Exception do WriteLn('save json skipped: ', E.Message); end;
+  try MkdirAll('build'); MkdirAll('../../../build'); LResults.SaveToJSON('build/bench-tar.json'); LResults.SaveToJSON('../../../build/bench-tar.json'); except on E: Exception do WriteLn('save json skipped: ', E.Message); end;
 end.

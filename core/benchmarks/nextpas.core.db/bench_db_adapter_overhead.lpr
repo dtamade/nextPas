@@ -1,7 +1,8 @@
 program db_bench;
 {$mode ObjFPC}{$H+}
 {$modeswitch functionreferences}{$modeswitch anonymousfunctions}
-uses SysUtils, Classes, nextpas.core.base, nextpas.core.db.sqlite, nextpas.core.db,
+uses nextpas.core.text.conv, nextpas.core.exception, nextpas.core.time,
+  nextpas.core.os.env, nextpas.core.base, nextpas.core.db.sqlite, nextpas.core.db,
   nextpas.core.db.dm.adapter, nextpas.core.platform.env;
 var
   T0, T1: QWord;
@@ -35,12 +36,13 @@ var
 begin
   Conn := ConnectSqlite(':memory:');
   Conn.Exec('CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER)');
-  WithTransaction(Conn, procedure
+  nextpas.core.db.WithTransaction(Conn,
+    procedure(const AConn: IDbConnection)
   begin
     T0 := GetTickCount64;
     for GK := 1 to N do
     begin
-      Q := Conn.Query('INSERT INTO t (v) VALUES (?)');
+      Q := AConn.Query('INSERT INTO t (v) VALUES (?)');
       Q.BindInt64(1, GK);
       Q.Step;
     end;
@@ -66,12 +68,13 @@ begin
   Conn.Exec('DROP TABLE IF EXISTS t_bench');
   Conn.Exec('CREATE TABLE t_bench (id INTEGER PRIMARY KEY AUTO_INCREMENT, v INTEGER)');
   Conn.Exec('DELETE FROM t_bench');
-  WithTransaction(Conn, procedure
+  nextpas.core.db.WithTransaction(Conn,
+    procedure(const AConn: IDbConnection)
   begin
     T0 := GetTickCount64;
     for GK := 1 to N do
     begin
-      Q := Conn.Query('INSERT INTO t_bench (v) VALUES (?)');
+      Q := AConn.Query('INSERT INTO t_bench (v) VALUES (?)');
       Q.BindInt64(1, GK);
       Q.Step;
     end;
@@ -118,12 +121,13 @@ begin
   try Conn.Exec('DROP TABLE IF EXISTS t_bench_dm'); except end;
   Conn.Exec('CREATE TABLE t_bench_dm (id INTEGER PRIMARY KEY, v INTEGER)');
   try Conn.Exec('DELETE FROM t_bench_dm'); except end;
-  WithTransaction(Conn, procedure
+  nextpas.core.db.WithTransaction(Conn,
+    procedure(const AConn: IDbConnection)
   begin
     T0 := GetTickCount64;
     for GK := 1 to N do
     begin
-      Q := Conn.Query('INSERT INTO t_bench_dm (v) VALUES (?)');
+      Q := AConn.Query('INSERT INTO t_bench_dm (v) VALUES (?)');
       Q.BindInt64(1, GK);
       Q.Step;
       Q := nil;

@@ -4,7 +4,6 @@ program demo_theme_focus_keybind;
 
 uses
   nextpas.core.thread.init,  { 必须第一：链接 tui.task（线程前置契约，见 CONTRACT §4） }
-  SysUtils,
   nextpas.core.tui.ext,
   nextpas.core.tui.event,
   nextpas.core.tui.keybind;

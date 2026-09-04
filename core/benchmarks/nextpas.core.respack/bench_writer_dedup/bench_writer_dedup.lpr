@@ -5,7 +5,8 @@ program bench_writer_dedup;
     门限 ≤1.08×/≤1.15× 且 ≤1.3× Go/Rust（RESULTS.md §4），零拷贝证据
     ContentPtr inline + bytes.ops.Move 单源。 }
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.os.procinfo,

@@ -2,7 +2,7 @@ program bench_embedded;
 {$I nextpas.core.settings.inc}
 {** @desc embedded 独立热点基准：List/Walk/OpenRead 热路径，零拷贝切片 + 64槽 SpinLock 池化 inline 复用 bytes.ops 单源。 }
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.bench,
   nextpas.core.bench.intf,

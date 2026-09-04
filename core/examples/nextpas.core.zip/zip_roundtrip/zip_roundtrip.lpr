@@ -9,8 +9,8 @@ program zip_roundtrip;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.compress.intf,
   nextpas.core.exception,
   nextpas.core.fs,
@@ -88,7 +88,7 @@ begin
   ZipExtractToDir(ReadFile(LOut + '.zip'), LOut);
   WriteLn('restored : ', ReadFileText(LOut + '/hello.txt'));
   LGot := ReadFile(LOut + '/assets/data.bin');
-  WriteLn('same bin : ', BoolToStr(SameBytes(LGot, LData), True));
+  WriteLn('same bin : ', BoolToStr(SameBytes(LGot, LData)));
 
   { 读端元数据浏览 }
   LR := NewZipReader(ReadFile(LOut + '.zip'));
@@ -109,7 +109,7 @@ begin
       .Finish);
   LR := NewZipReader(ReadFile(LOut + '.builder.zip'));
   WriteLn('builder    : entries=', LR.EntryCount, ' ok=', LR.EntryCount=3);
-  DeleteFile(LOut + '.builder.zip');
+  Remove(LOut + '.builder.zip');
 
   { 强制 Zip64 结构（预知超大归档时使用） }
   LOpts.ForceZip64 := True;
@@ -142,7 +142,7 @@ begin
         LGot[Length(LGot) - 1] := LChunk[LI];
       end;
   until LN = 0;
-  WriteLn('streamed   : ', BoolToStr(SameBytes(LGot, LData), True));
+  WriteLn('streamed   : ', BoolToStr(SameBytes(LGot, LData)));
 
   { 流式输出：归档逐字节直写文件，不经整档物化（任意大小内存恒定） }
   LW := NewZipWriter;
@@ -157,8 +157,7 @@ begin
   LFile := nextpas.core.fs.Open(LOut + '.stream.zip', [fmRead]);
   LR := NewZipReaderFrom(LFile as IStream);
   LGot := LR.ExtractToBytesByName('hello.txt');
-  WriteLn('piped read : ', BoolToStr(SameBytes(LGot, StrBytes('hello zip')),
-    True));
+  WriteLn('piped read : ', BoolToStr(SameBytes(LGot, StrBytes('hello zip'))));
   LFile.Close;
 
   { 顺序读（INV-16 对偶）：从纯顺序流逐条扫描，不整档 }
@@ -200,7 +199,7 @@ begin
   LR := NewZipReaderWithOptions(ReadFile(LAesZip), LROpts);
   LGot := LR.ExtractToBytesByName('secret.txt');
   WriteLn('aes256 read: ',
-    BoolToStr(SameBytes(LGot, StrBytes('encrypted hello')), True));
+    BoolToStr(SameBytes(LGot, StrBytes('encrypted hello'))));
 
   { PByte 零拷贝直写演示（INV-18）：无 TBytes 物化，store/deflate 共享校验内核 }
   LW := NewZipWriter;
@@ -231,7 +230,7 @@ begin
   LSeqSrc := CreateBytesStreamFrom(ReadFile(LAesZip+'.desc')) as IReader;
   LSeq := NewZipSequentialReaderWithOptions(LSeqSrc, LROpts);
   if LSeq.Next(LInfo) then begin LRs:=LSeq.Open; SetLength(LData,0); repeat LN:=LRs.Read(LChunk[0], SizeOf(LChunk)); if LN>0 then begin SetLength(LData, Length(LData)+Integer(LN)); Move(LChunk[0], LData[Length(LData)-Integer(LN)], LN); end; until LN=0; LRs.Close; WriteLn('aes-desc seq   : ok=', SameBytes(LData, LGot)); end;
-  DeleteFile(LAesZip+'.desc');
+  Remove(LAesZip+'.desc');
 
   { 总量守卫演示（INV-17）：单条与跨条目双上限，入口+流中途双重拦截 }
   LW := NewZipWriter;
@@ -329,8 +328,8 @@ begin
 
   RemoveAll(LRoot);
   RemoveAll(LOut);
-  DeleteFile(LOut + '.zip');
-  DeleteFile(LOut + '.stream.zip');
-  DeleteFile(LAesZip);
+  Remove(LOut + '.zip');
+  Remove(LOut + '.stream.zip');
+  Remove(LAesZip);
   WriteLn('zip_roundtrip: all demos ok');
 end.

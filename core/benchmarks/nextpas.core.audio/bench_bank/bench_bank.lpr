@@ -1,7 +1,8 @@
 program bench_bank;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses
-  SysUtils,
+  nextpas.core.math,
+  nextpas.core.fs,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.audio.base,
@@ -55,5 +56,5 @@ begin
   WriteLn(R.PrintToConsole);
   WriteLn('ns/op bank');
   WriteLn('MB/s bank');
-  ForceDirectories('build'); R.SaveToJSON('build/bench-bank.json');
+  MkdirAll('build'); R.SaveToJSON('build/bench-bank.json');
 end.

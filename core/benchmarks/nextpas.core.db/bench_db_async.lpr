@@ -14,7 +14,8 @@ program bench_db_async;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
   nextpas.core.base,
   nextpas.core.db,
   nextpas.core.db.base,

@@ -13,7 +13,9 @@ program demo_ssh_exec;
   需要一台真实可达的 SSH 服务器；本程序不做任何内建缺省连接。
 }
 uses
-  SysUtils, Classes,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.ssh;
 
 var
@@ -21,7 +23,6 @@ var
   LSession: ISshSession;
   LResult: TSshExecResult;
   LHost, LUser, LSecret, LCommand, LKnownHosts: string;
-  LLines: TStringList;
   LPort: Word;
 begin
   if ParamCount < 5 then
@@ -47,15 +48,7 @@ begin
 
     { @path 表示私钥文件；否则按密码认证 }
     if (Length(LSecret) > 1) and (LSecret[1] = '@') then
-    begin
-      LLines := TStringList.Create;
-      try
-        LLines.LoadFromFile(Copy(LSecret, 2, MaxInt));
-        LBuilder := LBuilder.PrivateKeyData(LLines.Text);
-      finally
-        LLines.Free;
-      end;
-    end
+      LBuilder := LBuilder.PrivateKeyData(ReadFileText(Copy(LSecret, 2, MaxInt)))
     else
       LBuilder := LBuilder.Password(LSecret);
 

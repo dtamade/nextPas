@@ -3,7 +3,7 @@ program compress_roundtrip;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.compress;
 
@@ -28,7 +28,7 @@ procedure RoundTripDeflate;
 var
   LSrc, LCompressed, LOut: TBytes;
 begin
-  LSrc := TEncoding.UTF8.GetBytes('deflate-roundtrip');
+  LSrc := StringToUTF8Bytes('deflate-roundtrip');
   LCompressed := DeflateCompress(LSrc);
   LOut := DeflateDecompress(LCompressed);
   CheckEqualBytes(LSrc, LOut, 'deflate one-shot');
@@ -40,7 +40,7 @@ procedure RoundTripGzip;
 var
   LSrc, LCompressed, LOut: TBytes;
 begin
-  LSrc := TEncoding.UTF8.GetBytes('gzip-roundtrip');
+  LSrc := StringToUTF8Bytes('gzip-roundtrip');
   LCompressed := GzipCompress(LSrc);
   LOut := GzipDecompress(LCompressed);
   CheckEqualBytes(LSrc, LOut, 'gzip one-shot');
@@ -53,7 +53,7 @@ var
   LSrc, LCompressed, LOut: TBytes;
   LBound: SizeUInt;
 begin
-  LSrc := TEncoding.UTF8.GetBytes('lz4-roundtrip-payload');
+  LSrc := StringToUTF8Bytes('lz4-roundtrip-payload');
   LBound := Lz4CompressBound(SizeUInt(Length(LSrc)));
   if LBound < SizeUInt(Length(LSrc)) then
     Fail('lz4 compress bound too small');

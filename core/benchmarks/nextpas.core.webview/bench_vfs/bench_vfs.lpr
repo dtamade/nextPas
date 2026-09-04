@@ -6,7 +6,7 @@ program bench_vfs;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.bench,
   nextpas.core.bench.intf,
   nextpas.core.bench.stats,

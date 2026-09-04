@@ -3,7 +3,7 @@ program bench_compare;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.base,
   nextpas.core.io,

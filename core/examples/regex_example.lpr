@@ -3,7 +3,7 @@ program regex_example;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, nextpas.core.regex, nextpas.core.regex.base;
+  nextpas.core.base, nextpas.core.regex, nextpas.core.regex.base;
 
 procedure DemoBasicMatch;
 var
