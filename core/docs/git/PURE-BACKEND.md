@@ -2,7 +2,7 @@
 
 **模块**：`nextpas.core.git.*`
 **层级**：L2
-**北极星**：`uses nextpas.core.git; NewGitManager` 或 `uses nextpas.core.git.factory; NewNativeGitManager/NewGitManager(gbNative)` 或 `uses nextpas.core.git.native.manager; TNativeGitManager.Create`（未拉入 `nextpas.core.git.libgit2` 注册单元）时编译期/运行期/产物三零（`fpc -va Loading` 与 `nm -D` 双零，无 `dlopen`/`-lgit2`/`libgit2.so`，产物不含 `libgit2` 声明，`bytes.ops` 零拷贝 + `inline` 值类型枚举分发，接口引用计数零泄漏）；`factory.NewGitManager(gbAuto/gbLibGit2)` 需显式 `uses nextpas.core.git.libgit2` 注册才可用，否则 fail-closed 抛 `EGitError`；全维度三零经门面/ factory 纯路径/直连三重达成（门面 impl 零 libgit2，base←intf←factory←facade 隔离）。
+**北极星**：`uses nextpas.core.git; NewGitManager` 或 `uses nextpas.core.git.factory; NewNativeGitManager/NewGitManager(gbNative)` 或 `uses nextpas.core.git.native.manager; TNativeGitManager.Create`（未拉入 `nextpas.core.git.libgit2` 注册单元）时编译期/运行期/产物三零（`fpc -va Loading` 与 `nm -D` 双零，无 `dlopen`/`-lgit2`/`libgit2.so`，产物不含 `libgit2` 声明，`bytes.ops` 零拷贝 + `inline` 值类型枚举分发，接口引用计数零泄漏）；`factory.NewGitManager(gbLibGit2)` 需显式 `uses nextpas.core.git.libgit2` 注册才可用，否则 fail-closed 抛 `EGitError`（`gbAuto` 即 `gbNative`，纯路径无需注册）；全维度三零经门面/ factory 纯路径/直连三重达成（门面 impl 零 libgit2，base←intf←factory←facade 隔离）。
 **状态**：gbAuto 已切换为 gbNative（BREAKING 见 CHANGELOG Unreleased；门面 impl 零 libgit2，`uses nextpas.core.git` 默认纯路径，需 libgit2 时显式 `uses nextpas.core.git.libgit2` + `gbLibGit2`）
 **关联**：`CONTRACT.md` §1.1 / `native-reference-map.md` / `scripts/git-contract-check.sh` C4（`core/tests/common.mk:75-78` `haltonnotreleased+log` 双 pin 因 FPC trunk `FlushFunc` 设备语义）
 
@@ -36,7 +36,7 @@ native.*              libgit2.ffi / binding / backend / bindings
 
 - **纯路径（全维度三零）**：`git.NewGitManager`（未显式 uses libgit2）或 `factory(gbNative)`/`NewNativeGitManager` 或 `native.manager.TNativeGitManager.Create` → `native.*` → 编译期/运行时/产物三零（`fpc -va Loading libgit2` 零命中与 `nm -D <pure_bin> | grep " git_"` 零命中，双零；未拉入 `libgit2` 注册单元时编译图零 `libgit2`，`bytes.ops` 零拷贝 + `inline` 值类型枚举零拷贝分发，接口引用计数零泄漏，资源 `try..finally` 不丢，`EGitError` 单源 `native.base`）。
 - **全维度零 `libgit2` 直连路径**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` → `native.*` → 同上三零（门面/ factory 纯路径/直连三重达成，未拉入 `libgit2` 时编译图/产物双零）。
-- **兼容路径**：显式 `uses nextpas.core.git.libgit2; factory(gbAuto)` 或 `git.NewGitManager`（已注册）首版 → `libgit2.manager` → 显式注册后与旧行为一致；未注册时 `gbAuto/gbLibGit2` fail-closed 抛 `EGitError`（`not registered`）。
+- **兼容路径**：显式 `uses nextpas.core.git.libgit2; factory(gbLibGit2)` 或 `git.NewGitManager`（已注册）首版 → `libgit2.manager` → 显式注册后与旧行为一致；未注册时 `gbLibGit2` fail-closed 抛 `EGitError`（`not registered`）。
 - **归一原则**：依赖隔离在单元级（`uses` 图），FPC 通过编译图决定链接，不用 `{$IFDEF}` 分叉。
 - **汇聚点**：`factory` 静态仅依赖 `native.manager`，`libgit2` 经 `RegisterLibGit2Creator` 注册注入；`nextpas.core.git` 门面 impl 零 libgit2（`base←intf←factory←facade` 隔离），不再为兼容路径静态聚合点，需显式 `uses nextpas.core.git.libgit2` 才注入；其余单元不得跨轨。
 - **枚举锚点**：后端选择由 `TGitBackend = (gbNative, gbLibGit2, gbAuto)` 驱动，定义于 `nextpas.core.git.factory`，`gbAuto=gbNative`，语义详见 §4。
@@ -58,7 +58,7 @@ native.*              libgit2.ffi / binding / backend / bindings
 
 | uses 场景 | 后端参数 | 实际后端 | 是否含 libgit2（编译图 / 运行时 dlopen / 产物符号） |
 |-----------|----------|----------|------------------------------------------------------|
-| `uses nextpas.core.git; NewGitManager;` | `gbAuto`（默认） | `gbLibGit2`（首版, 已注册）/ fail-closed（未注册） | 未显式 uses libgit2 时否 / 否 / 否（门面 impl 零 libgit2；显式 `uses nextpas.core.git.libgit2` 注册后是 / 是 / 是） |
+| `uses nextpas.core.git; NewGitManager;` | `gbAuto`（默认） | `gbNative` | 否 / 否 / 否（门面 impl 零 libgit2；需 libgit2 时显式 `uses nextpas.core.git.libgit2` + `gbLibGit2` 注册后是 / 是 / 是） |
 | `uses nextpas.core.git.factory; NewGitManager(gbNative);` 或 `NewNativeGitManager;` | `gbNative` | `gbNative` | 否 / 否 / 否（`inline` 值类型枚举零拷贝，未拉入 libgit2 注册单元时三零，经门面/ factory 纯路径/直连三重达成） |
 | `uses nextpas.core.git.factory; NewGitManager(gbLibGit2);` | `gbLibGit2` | `gbLibGit2` | 需显式注册时是 / 是 / 是；未注册时 fail-closed（`EGitError not registered`）/ 否 / 否 |
 | `uses nextpas.core.git.factory; NewGitManager(gbAuto);` | `gbAuto` | `gbNative` | 否 / 否 / 否 |
