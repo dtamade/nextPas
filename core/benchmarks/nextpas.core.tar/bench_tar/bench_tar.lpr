@@ -124,7 +124,7 @@ end;
 procedure BenchOpenParse(const ACtx: IBenchContext);
 var R: TTarReader; H: TTarHeader;
 begin
-  R := TTarReader.Create(GArchive); try while R.Next(H) do ; BenchBlackBoxPtr(Pointer(R)); finally R.Free; end; ACtx.SetBytes(0);
+  R := TTarReader.Create(GArchive); try while R.Next(H) do ; BenchBlackBoxPtr(Pointer(R)); finally R.Free; end; ACtx.SetBytes(Int64(Length(GArchive)));
 end;
 
 procedure BenchExtractAll(const ACtx: IBenchContext);

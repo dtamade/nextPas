@@ -155,7 +155,7 @@ fn main() {
     let benches = vec![
         measure("tar/pack/200x512B", || bench_pack_many(&files), 102400),
         measure("tar/builder-pack/200x512B", || bench_builder_pack(&files), 102400),
-        measure("tar/open/parse", || bench_open_parse(&archive), 5536),
+        measure("tar/open/parse", || bench_open_parse(&archive), 205824),
         measure("tar/extract-all/200x512B", || bench_extract_all(&archive), 102400),
         measure("tar/extract-slice/200x512B", || bench_extract_slice(&archive), 102400),
         measure("tar/write/1MB", || bench_write_1m(&blob), 1048576),

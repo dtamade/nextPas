@@ -11,11 +11,12 @@ regression: run run-compare
 	@python3 ./check_regression.py --with-compare
 
 # 对照（CONTRACT §6 CI 硬红，缺失即硬红）：Go archive/tar / Rust tar 同口径，GOMAXPROCS=1 降噪
+# hygiene：cargo target 重定向至 build/（hygiene 豁免区），不污染源码树
 run-compare:
 	@echo "=== Go compare (archive/tar, GOMAXPROCS=1) ==="
-	@GOMAXPROCS=1 go run ./compare_go || echo "go run failed (need go toolchain)"
+	@cd compare_go && GOMAXPROCS=1 go run . || echo "go run failed (need go toolchain)"
 	@echo "=== Rust compare (tar 0.4) ==="
-	@cargo run --manifest-path compare_rust/Cargo.toml --release 2>&1 | tail -20 || rustc -C opt-level=3 compare_rust/main.rs -o /tmp/bench_tar_rust && /tmp/bench_tar_rust || echo "rust run failed (need rustc/cargo)"
+	@cd compare_rust && CARGO_TARGET_DIR=../build/cargo-target cargo run --release 2>&1 | tail -5 || echo "cargo run failed (need rustc/cargo)"
 
 compare: regression
 	@python3 ./check_regression.py --with-compare

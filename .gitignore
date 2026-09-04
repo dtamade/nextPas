@@ -73,6 +73,7 @@ core/benchmarks/*/bench_*/bench_*
 core/benchmarks/**/compare_go/bench_*
 !core/benchmarks/**/*.go
 core/benchmarks/**/compare_rust/bench_*
+core/benchmarks/**/compare_rust/Cargo.lock
 !core/benchmarks/**/*.rs
 core/benchmarks/**/compare_fpcrtl/bench_*
 core/benchmarks/platform-comparison/**/bench_compare
