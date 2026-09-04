@@ -98,6 +98,11 @@ ensure_stage0() {
 
   mkdir -p "$STAGE0_BUILD_DIR"
   rm -f "$stage0_stderr_file"
+  # Drop cached .ppu/.o before rebuilding: fpc reuse of half-stale unit
+  # caches has been observed to crash the compiler itself (EListError)
+  # instead of recompiling, which turns every run into stage0-build-failed.
+  # Same rationale as core/tests/common.mk build target.
+  rm -f "$STAGE0_BUILD_DIR"/*.ppu "$STAGE0_BUILD_DIR"/*.o "$STAGE0_BUILD_DIR"/*.a "$STAGE0_BUILD_DIR"/*.res
   if ! (
     cd "$REPO_ROOT" &&
     fpc $STAGE0_FPC_FLAGS -FE"$STAGE0_BUILD_DIR" -FU"$STAGE0_BUILD_DIR" tools/stage0/nextpas.pas \

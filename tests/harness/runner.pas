@@ -1275,6 +1275,8 @@ begin
       Params.Add('-Fucompiler/syntax');
       Params.Add('-Fucompiler/toolchain');
       Params.Add('-Fucompiler/targets');
+      Params.Add('-Fucompiler/src');
+      Params.Add('-Fucompiler/lower');
       Params.Add('-Futools/stage0');
       Params.Add('-Fucore/src');
       Params.Add('-Ficore/src');
@@ -1283,6 +1285,13 @@ begin
     begin
       Params.Add('-Furtl/core/base');
       Params.Add('-Furtl/core/text');
+      Params.Add('-Fucore/src');
+      Params.Add('-Ficore/src');
+    end
+    else if AGroup = hgCRT then
+    begin
+      Params.Add('-Fucore/src');
+      Params.Add('-Ficore/src');
     end;
     Params.Add(AFixturePath);
     SafeRunProcessCapture(
