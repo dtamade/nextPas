@@ -5,7 +5,7 @@ program test_tls13_psk_loopback;
 uses
   nextpas.core.thread.init,
   nextpas.core.platform.socket,
-  nextpas.core.system.classes,
+  nextpas.core.thread.base,
   nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.tls.base,
@@ -31,7 +31,7 @@ begin
 end;
 
 type
-  TServerThread = class(TThread)
+  TServerThread = class(TWorkerThread)
   private
     FListenSock: TPlatformSocket;
     FClientSock: TPlatformSocket;
@@ -53,12 +53,11 @@ type
 
 constructor TServerThread.Create(AListenSock: TPlatformSocket; AContext: ISSLContext);
 begin
-  inherited Create(True);
+  inherited Create;
   FListenSock := AListenSock;
   FContext := AContext;
   FSuccess := False;
   FClientSock := PLATFORM_INVALID_SOCKET;
-  FreeOnTerminate := False;
 end;
 
 procedure TServerThread.Execute;

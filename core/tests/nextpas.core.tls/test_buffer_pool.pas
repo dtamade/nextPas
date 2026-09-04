@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  Classes, Math,
+  nextpas.core.thread.base, nextpas.core.math,
   nextpas.core.base.utils,
   nextpas.core.time,
   nextpas.core.tls.buffer.pool;
@@ -176,7 +176,7 @@ end;
 
 { 测试 4: 并发访问 }
 type
-  TConcurrentTestThread = class(TThread)
+  TConcurrentTestThread = class(TWorkerThread)
   private
     FIterations: Integer;
     FCompleted: Boolean;
@@ -189,10 +189,9 @@ type
 
 constructor TConcurrentTestThread.Create(AIterations: Integer);
 begin
-  inherited Create(True);
+  inherited Create;
   FIterations := AIterations;
   FCompleted := False;
-  FreeOnTerminate := False;
 end;
 
 procedure TConcurrentTestThread.Execute;

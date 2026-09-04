@@ -22,6 +22,7 @@ uses
   nextpas.core.exception, nextpas.core.text.conv,
   nextpas.core.base.utils,
   nextpas.core.time,
+  nextpas.core.id,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.native_handle,
@@ -373,7 +374,7 @@ begin
   // owner 边界复用 nextpas.core.mem，零拷贝 Move/零填充经 base.utils
   FSession := GetMem(LSize);
   if FSession = nil then
-    raise EOutOfMemory.Create('TMbedTLSSession.AllocateSession: GetMem failed');
+    raise EOutOfMemory.CreateMsg('TMbedTLSSession.AllocateSession: GetMem failed');
   FillChar(FSession^, LSize, 0);
   try
     if Assigned(mbedtls_ssl_session_init) then
@@ -524,11 +525,8 @@ begin
 end;
 
 function TMbedTLSSession.GenerateSessionID: string;
-var
-  LGuid: TGUID;
 begin
-  CreateGUID(LGuid);
-  Result := GUIDToString(LGuid);
+  Result := UuidV4;
 end;
 
 function TMbedTLSSession.GetID: string;

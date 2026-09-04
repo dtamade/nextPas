@@ -93,7 +93,7 @@ begin
     begin
       LRaised := True;
       LControlled := E is ESSLOutOfMemoryException;
-      LWasAccessViolation := E is EAccessViolation;
+      LWasAccessViolation := E.ClassName = 'EAccessViolation';
       LDetail := E.ClassName + ': ' + E.Message;
       LMentionsAccessViolation := Pos('Access violation', LDetail) > 0;
     end;

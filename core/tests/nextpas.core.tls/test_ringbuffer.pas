@@ -6,7 +6,8 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.base, nextpas.core.base.utils, Classes, nextpas.core.time,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.thread.base, nextpas.core.time,
+  nextpas.core.platform.thread,
   nextpas.core.tls.ringbuffer;
 
 const
@@ -251,7 +252,7 @@ end;
 
 { 测试 7: SPSC 并发测试 }
 type
-  TProducerThread = class(TThread)
+  TProducerThread = class(TWorkerThread)
   private
     FRing: TLockFreeRingBuffer;
     FCount: Integer;
@@ -263,7 +264,7 @@ type
     property Written: Int64 read FWritten;
   end;
 
-  TConsumerThread = class(TThread)
+  TConsumerThread = class(TWorkerThread)
   private
     FRing: TLockFreeRingBuffer;
     FCount: Integer;
@@ -279,11 +280,10 @@ type
 
 constructor TProducerThread.Create(ARing: TLockFreeRingBuffer; ACount: Integer);
 begin
-  inherited Create(True);
+  inherited Create;
   FRing := ARing;
   FCount := ACount;
   FWritten := 0;
-  FreeOnTerminate := False;
 end;
 
 procedure TProducerThread.Execute;
@@ -304,18 +304,17 @@ begin
       Inc(I);
     end
     else
-      Sleep(0);  // 让出 CPU
+      platform_thread_yield;  // 让出 CPU
   end;
 end;
 
 constructor TConsumerThread.Create(ARing: TLockFreeRingBuffer; ACount: Integer);
 begin
-  inherited Create(True);
+  inherited Create;
   FRing := ARing;
   FCount := ACount;
   FRead := 0;
   FErrors := 0;
-  FreeOnTerminate := False;
 end;
 
 procedure TConsumerThread.Execute;
@@ -340,7 +339,7 @@ begin
       Inc(FRead, 64);
     end
     else
-      Sleep(0);  // 让出 CPU
+      platform_thread_yield;  // 让出 CPU
   end;
 end;
 

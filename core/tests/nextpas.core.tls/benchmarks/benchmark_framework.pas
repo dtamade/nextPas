@@ -387,6 +387,7 @@ var
   LLine, LToken, LValue: string;
   LPosColon, LPosFirstQuote, LPosSecondQuote: Integer;
   LEntryCount: Integer;
+  LLineIdx: Integer;
   LHasName, LHasMean: Boolean;
   LMeanValue: Double;
   LFormatSettings: TFormatSettings;
@@ -405,8 +406,9 @@ begin
     LFormatSettings := DefaultFormatSettings;
     LFormatSettings.DecimalSeparator := '.';
 
-    for LLine in LLines do
+    for LLineIdx := 0 to LLines.Count - 1 do
     begin
+      LLine := LLines[LLineIdx];
       LToken := Trim(LLine);
 
       if Pos('"name"', LToken) = 1 then

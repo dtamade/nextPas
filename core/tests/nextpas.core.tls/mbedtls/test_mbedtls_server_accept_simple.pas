@@ -18,7 +18,7 @@ uses
   nextpas.core.exception,
   nextpas.core.time,
   nextpas.core.fs,
-  nextpas.core.system.classes,
+  nextpas.core.thread.base,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.connection,
@@ -34,7 +34,7 @@ const
 
 { 服务端线程 }
 type
-  TServerThread = class(TThread)
+  TServerThread = class(TWorkerThread)
   private
     FPort: Word;
     FLib: ISSLLibrary;
@@ -46,8 +46,7 @@ type
 
 constructor TServerThread.Create(APort: Word; ALib: ISSLLibrary);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FPort := APort;
   FLib := ALib;
 end;

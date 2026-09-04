@@ -16,10 +16,10 @@ function GbkToUtf8(const AStr: string): string;
 
 implementation
 
-{$I nextpas.core.encoding.gbk.table.inc}
-
 uses
   nextpas.core.text.builder;
+
+{$I nextpas.core.encoding.gbk.table.inc}
 
 function GbkToUtf8(const AStr: string): string;
 var

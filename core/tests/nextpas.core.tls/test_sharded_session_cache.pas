@@ -16,7 +16,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.base, nextpas.core.text.conv, Classes, nextpas.core.time,
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.thread.base, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.session.cache.sharded;
 
@@ -243,7 +243,7 @@ end;
 
 { 测试 3: 并发性能 }
 type
-  TConcurrentTestThread = class(TThread)
+  TConcurrentTestThread = class(TWorkerThread)
   private
     FCache: TShardedSessionCache;
     FStartIndex: Integer;
@@ -259,12 +259,11 @@ type
 constructor TConcurrentTestThread.Create(ACache: TShardedSessionCache;
   AStartIndex, ACount: Integer);
 begin
-  inherited Create(True);
+  inherited Create;
   FCache := ACache;
   FStartIndex := AStartIndex;
   FCount := ACount;
   FOperations := 0;
-  FreeOnTerminate := False;
 end;
 
 procedure TConcurrentTestThread.Execute;

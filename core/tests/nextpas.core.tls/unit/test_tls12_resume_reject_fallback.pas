@@ -6,14 +6,14 @@ uses
   nextpas.core.thread.init,
   nextpas.core.exception,
   nextpas.core.base,
-  nextpas.core.base.utils, nextpas.core.system.classes, Sockets, ssockets,
+  nextpas.core.base.utils, nextpas.core.system.classes, nextpas.core.thread.base, Sockets, ssockets,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.server,
   nextpas.core.tls.x509,
   nextpas.core.tls.pem;
 
 type
-  TTLS12ServerThread = class(TThread)
+  TTLS12ServerThread = class(TWorkerThread)
   private
     FListenSocket: Longint;
     FPort: Word;
@@ -85,8 +85,7 @@ end;
 
 constructor TTLS12ServerThread.Create;
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FListenSocket := -1;
   FillChar(FState, SizeOf(FState), 0);
   FillChar(FConfig, SizeOf(FConfig), 0);

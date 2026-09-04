@@ -5,7 +5,7 @@ program test_tls12_loopback_resume;
 uses
   nextpas.core.thread.init,
   nextpas.core.platform.socket,
-  nextpas.core.system.classes,
+  nextpas.core.thread.base,
   nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
@@ -22,7 +22,7 @@ begin
 end;
 
 type
-  TServerThread = class(TThread)
+  TServerThread = class(TWorkerThread)
   private
     FListenSock: TPlatformSocket;
     FContext: ISSLContext;
@@ -41,11 +41,10 @@ type
 
 constructor TServerThread.Create(AListenSock: TPlatformSocket; AContext: ISSLContext);
 begin
-  inherited Create(True);
+  inherited Create;
   FListenSock := AListenSock;
   FContext := AContext;
   FSuccess := False;
-  FreeOnTerminate := False;
 end;
 
 procedure TServerThread.Execute;

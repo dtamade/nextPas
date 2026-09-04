@@ -15,7 +15,7 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.fs,
-  nextpas.core.system.classes,
+  nextpas.core.thread.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.loader,
@@ -72,7 +72,7 @@ const
   RESUMPTION_PORT = 44591;
 
 type
-  TTLSServerThread = class(TThread)
+  TTLSServerThread = class(TWorkerThread)
   private
     FListenSock: TSocketHandle;
     FContext: ISSLContext;
@@ -88,12 +88,11 @@ type
 
 constructor TTLSServerThread.Create(AListenSock: TSocketHandle; AContext: ISSLContext);
 begin
-  inherited Create(True);
+  inherited Create;
   FListenSock := AListenSock;
   FContext := AContext;
   FSuccess := False;
   FError := '';
-  FreeOnTerminate := False;
 end;
 
 procedure TTLSServerThread.Execute;

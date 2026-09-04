@@ -15,7 +15,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  Classes,
+  nextpas.core.thread.base,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.conv,
@@ -33,7 +33,7 @@ type
     ErrorMsg: string;
   end;
 
-  TTestThread = class(TThread)
+  TTestThread = class(TWorkerThread)
   private
     FTestID: Integer;
     FSuccess: Boolean;
@@ -85,10 +85,9 @@ end;
 
 constructor TTestThread.Create(ATestID: Integer);
 begin
-  inherited Create(True);
+  inherited Create;
   FTestID := ATestID;
   FSuccess := False;
-  FreeOnTerminate := False;
 end;
 
 procedure TTestThread.Execute;

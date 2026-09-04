@@ -83,7 +83,7 @@ begin
     begin
       LRaised := True;
       LControlled := E is ESSLException;
-      LWasAccessViolation := E is EAccessViolation;
+      LWasAccessViolation := E.ClassName = 'EAccessViolation';
       LDetail := E.ClassName + ': ' + E.Message;
       LMentionsHelper := Pos('SSL_new', LDetail) > 0;
       LMentionsAccessViolation := Pos('Access violation', LDetail) > 0;
