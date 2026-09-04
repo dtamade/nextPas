@@ -932,6 +932,7 @@ end;
 procedure TestIndexVersion1Refused;
 var
   I: Integer;
+  LRaised: Boolean;
 begin
   // contract: index v1 unsupported — parser refuses with explicit version error
   SetLength(GRawIdxV1, 32);
@@ -940,7 +941,17 @@ begin
   GRawIdxV1[4] := 0; GRawIdxV1[5] := 0; GRawIdxV1[6] := 0; GRawIdxV1[7] := 1;
   for I := 8 to 31 do
     GRawIdxV1[I] := 0;
-  CheckTrue(RaisedEGitError(@RaiseIdxV1), 'v1 header raises unsupported-version');
+  LRaised := False;
+  try
+    GitParseIndex(GRawIdxV1);
+  except
+    on E: EGitError do
+    begin
+      LRaised := True;
+      CheckTrue(Pos('version', LowerCase(E.Message)) > 0, 'refusal names the version, got: ' + E.Message);
+    end;
+  end;
+  CheckTrue(LRaised, 'v1 header raises unsupported-version');
 end;
 
 procedure TestIndexSplitIndexRefused;
@@ -1897,17 +1908,32 @@ procedure TestRevWalkIgnoresShallowFile;
 var
   Starts, Got, Baseline: TGitOidArray;
   Repo: TNativeRepository;
-  RootSha, ShallowPath: string;
+  Work, GitDir, RootSha, ShallowPath: string;
 begin
   // contract: shallow/grafts unsupported — walker still traverses full parent chains
-  Repo := TNativeRepository.Create(GRwRepo);
+  // isolated fixture: never mutate the shared GRwRepo, a crashed binary must not
+  // leave a .git/shallow behind for other revwalk cases
+  Work := PathJoin([GetTempDir, 'nextpas_git_shallow_' + IntToStr(GetProcessID)]);
+  RemoveAll(Work);
+  MkdirAll(Work, PermDirDefault);
+  RunInChecked('git', ['init', '--quiet', '-b', 'main'], Work);
+  RunInChecked('git', ['config', 'user.email', 'test@example.com'], Work);
+  RunInChecked('git', ['config', 'user.name', 'Test Er'], Work);
+  WriteFileText(PathJoin([Work, 'f.txt']), 'c1'#10);
+  RunInChecked('git', ['add', '.'], Work);
+  RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c1'], Work);
+  WriteFileText(PathJoin([Work, 'f.txt']), 'c2'#10);
+  RunInChecked('git', ['add', '.'], Work);
+  RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c2'], Work);
+  GitDir := PathJoin([Work, '.git']);
+  Repo := TNativeRepository.Create(GitDir);
   try
     SetLength(Starts, 1);
-    Starts[0] := GitResolveHead(PathJoin([GRwRepo, '.git']));
+    Starts[0] := GitResolveHead(GitDir);
     Baseline := GitCollectCommits(Repo, Starts, -1);
-    CheckTrue(Length(Baseline) > 1, 'fixture has history');
+    CheckEqual(2, Length(Baseline), 'fixture has two commits');
     RootSha := GitOidToHex(Baseline[High(Baseline)]);
-    ShallowPath := PathJoin([GRwRepo, '.git', 'shallow']);
+    ShallowPath := PathJoin([GitDir, 'shallow']);
     WriteFileText(ShallowPath, RootSha + #10);
     try
       Got := GitCollectCommits(Repo, Starts, -1);
@@ -1918,6 +1944,7 @@ begin
     end;
   finally
     Repo.Free;
+    RemoveAll(Work);
   end;
 end;
 
