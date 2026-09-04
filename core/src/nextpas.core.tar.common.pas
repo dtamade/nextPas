@@ -203,13 +203,19 @@ begin
   begin
     if ALen <= 1 then
       raise EIOError.Create('tar: numeric field too small for base-256');
-    if ((ALen - 1) * 8 + 7) >= 63 then
+    // base-256 上限取可往返语义：首字节低 7 位中 bit6 为符号位（见解码侧 ShortInt 分叉），
+    // 正数上限为 2^((ALen-1)*8+6)-1（8 字节域即 2^62-1；12 字节域超 Int64 取 High）
+    if ((ALen - 1) * 8 + 6) >= 63 then
       MaxBase256 := High(Int64)
     else
-      MaxBase256 := (Int64(1) shl ((ALen - 1) * 8 + 7)) - 1;
+      MaxBase256 := (Int64(1) shl ((ALen - 1) * 8 + 6)) - 1;
     if AValue > MaxBase256 then
       raise EIOError.CreateFmt('tar: numeric field %d exceeds base-256 capacity %d at offset %d', [AValue, MaxBase256, AOff]);
-    ABlock[AOff] := C_TAR_BASE256_SENTINEL;
+    // 首字节携带高位数据（仅 7 位，bit6 符号位恒 0）；位移超 63 直接取哨兵（Int64 高位恒 0，避 shr 截断）
+    if ((ALen - 1) * 8) >= 63 then
+      ABlock[AOff] := C_TAR_BASE256_SENTINEL
+    else
+      ABlock[AOff] := C_TAR_BASE256_SENTINEL or Byte((AValue shr ((ALen - 1) * 8)) and $7F);
     for I := ALen - 1 downto 1 do
     begin
       ABlock[AOff + I] := Byte(AValue and $FF);

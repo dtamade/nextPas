@@ -9,7 +9,7 @@
 | 类型 | 说明 |
 |------|------|
 | `TTarEntryKind` | 7 种类：`tekRegular/HardLink/Symlink/CharDevice/BlockDevice/Directory/Fifo` |
-| `TTarHeader` | `Name/LinkName/Kind/Mode/UID/GID/Size/MTimeUnix/UName/GName/DevMajor/DevMinor` |
+| `TTarHeader` | `Name/LinkName/Kind/Mode/UID/GID/Size/MTimeUnix/UName/GName/DevMajor/DevMinor/PaxRecords`（`PaxRecords: TPaxRecordArray` 保序透传全部 pax 原文，含已应用键与未知键） |
 | `TTarAddOptions` | `Mode/UID/GID/MTimeUnix/UName/GName`（`DefaultTarAddOptions` 取 0/空） |
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
@@ -37,7 +37,8 @@
 
 - **[INV-1]** USTAR 写入：`magic "ustar\0"` @257 + `version "00"` @263 固定；>100 字符名自动 `prefix/name` 分割，否则以 `pax x` 扩展头承载。
 - **[INV-2]** 数值字段八进制为主，超限自动 `base-256`（`$80` + big-endian），读端双路径兼容。
-- **[INV-3]** 读写对称：读端支持 `GNU L/K` 与 `pax x/g` 的 `path/linkpath` 覆盖（per-entry 优于 global，`g` 需 guard 持久否则单次消费自动清理并 `ILogger.Warn`；`g` 恶意路堨经 `IsSafeTarEntryName` 过滤置空同步 `Warn` 可观测，防静默篡改），pax 记录严格校验、畸形抛 `EIOError`。
+- **[INV-3]** 读写对称：读端支持 `GNU L/K` 与 `pax x/g` 的 `path/linkpath` 覆盖（per-entry 优于 global，`g` 需 guard 持久否则单次消费自动清理并 `ILogger.Warn`；`g` 恶意路堨经 `IsSafeTarEntryName` 过滤置空同步 `Warn` 可观测，防静默篡改），pax 记录严格校验、畸形抛 `EIOError`；类型化键 `size/mtime/uid/gid/uname/gname` 同规则应用（`x` 优先，`mtime` 小数截断取整，`size/uid/gid` 越界即 `EIOError`），未知键（含 `atime/ctime/xattr/GNU.sparse.*`）保序透传至 `PaxRecords`。
+- **[INV-8]** 稀疏重建：读端支持 oldgnu `S`（0.0/0.1，386 区 map + 482/504 扩展链，0.0 无 realsize 时由段推导）与 pax 1.0（`GNU.sparse.*` + 数据段首块十进制 map 文本 + `./GNUSparseFile.*` 占位名）；重建前 `stored` 与 `realsize` 双计总量、`realsize` 受单条目上限约束，未分配先守卫；map 缺终结符、段越界、存储不对账、错版、占位名失配一律 `EIOError`，占位名无 map 由名守卫 `EParseError`；写端不产生稀疏（dense 零块输出，标准兼容）。
 - **[INV-4]** 校验和双算（unsigned/signed）任一匹配即过，否则 `EIOError: header checksum mismatch`。
 - **[INV-5]** 名安全：`IsSafeTarEntryName` 拒绝空名/绝对路径/盘符/反斜杠/`//`/`./`/`..`；写端 `EArgumentError`，读端/落盘前 `EParseError`，落盘二次拒绝；落盘前拒绝路径含符号链接段。
 - **[INV-6]** Bomb 守卫：`MaxEntrySize` 单条目与 `MaxTotalSize` 总量在 `common.Guard*` 单点 fail-closed，`TrySlice`/`OpenEntryStream` 中途同受；`pax x/g` 与 `GNU L/K` 扩展载荷计入总量（防 100k×超大 pax DoS，`GuardTarTotalSize` 单源）。
@@ -48,6 +49,7 @@
 | 场景 | 异常 |
 |------|------|
 | 结构损坏（截断、八进制非法、校验和不符、不支持 typeflag、负尺寸、长名过长、孤儿块、pax 畸形） | `EIOError('tar: ...'/'pax: ...')` |
+| 稀疏损坏（错版、缺 realsize/name、map 缺终结符、段越界、存储不对账、占位名失配） | `EIOError('tar: sparse ...')`（占位名无 map 时走名守卫 `EParseError`） |
 | 名不安全（写端） | `EArgumentError('tar entry name ...')` |
 | 名不安全（读端/落盘） | `EParseError('tar: refusing unsafe entry name: ...')` |
 | 落盘路径含符号链接段 | `EParseError('tar extract: symlink in path: ...')` |
@@ -69,6 +71,7 @@ make focused FOCUS=core/tests/nextpas.core.tar/test_tar_reader
 make focused FOCUS=core/tests/nextpas.core.tar/test_tar_writer
 make focused FOCUS=core/tests/nextpas.core.tar/test_tar_fs
 make focused FOCUS=core/tests/nextpas.core.tar/test_tar_fuzz
+make focused FOCUS=core/tests/nextpas.core.tar/test_tar_interop
 make focused FOCUS=core/tests/nextpas.core.tar/test_tar_contract
 make focused FOCUS=core/tests/nextpas.core.compress/test_compress_tar
 make -C core/benchmarks/nextpas.core.tar/bench_tar run
