@@ -3,7 +3,7 @@ program nextpas_test_harness_runner;
 {$mode objfpc}{$H+}
 
 uses
-  BaseUnix, Classes, Process, SysUtils, snapshot_support;
+  Classes, Process, SysUtils, nextpas.core.platform.which, snapshot_support;
 
 type
   THarnessGroup = (
@@ -637,7 +637,7 @@ end;
 
 function HostPathIsExecutable(const APath: string): Boolean;
 begin
-  Result := (APath <> '') and (FpAccess(PChar(APath), X_OK) = 0);
+  Result := (APath <> '') and platform_is_executable(PAnsiChar(APath));
 end;
 
 function ShouldUseLinuxX8664LoaderFallback: Boolean;
