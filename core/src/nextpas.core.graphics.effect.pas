@@ -6,7 +6,6 @@
  *}
 unit nextpas.core.graphics.effect;
 
-{$mode objfpc}{$H+}
 {$I nextpas.core.settings.inc}
 
 interface

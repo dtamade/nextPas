@@ -8,9 +8,6 @@ unit nextpas.core.gtk3.ffi;
        本单元禁止 uses 家族其他单元（仅允许 base，INV-5）。 *}
 
 {$I nextpas.core.settings.inc}
-{$IF 0}
-{$mode objfpc}{$H+}
-{$ENDIF}
 
 interface
 
