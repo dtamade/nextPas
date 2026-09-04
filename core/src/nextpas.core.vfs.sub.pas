@@ -14,6 +14,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.io.intf,
+  nextpas.core.text.view,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
@@ -30,21 +31,24 @@ const
 type
   EVfsErrorClass = class of EVfsError;
 
-  TSubVfs = class(TInterfacedObject, IVfs)
+  TSubVfs = class(TInterfacedObject, IVfs, IVfsView)
   private
     FBase: IVfs;
     FSubRoot: string;
     FSubPrefix: string;   { FSubRoot + '/' 缓存，identity 时为空，零重复分配 }
     FIdentity: Boolean;   { SubRoot='.' 时直通 }
     function ToBase(const APath: string): string;
+    function ToBaseView(const APath: TStringView): string; inline;
     function ToSubView(const APath: string): string; inline;
     procedure ReraiseSub(E: EVfsError);
   public
     constructor Create(const ABase: IVfs; const ASubRoot: string);
     function Exists(const APath: string): Boolean;
+    function ExistsView(const APath: TStringView): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
+    function OpenReadView(const APath: TStringView): IStream;
     function CaseSensitive: Boolean;
   end;
 
@@ -96,6 +100,12 @@ begin
   Result := FSubPrefix + APath;
 end;
 
+{ 视图版坐标换算：单次 ToString 物化后复用 ToBase 单源（含 identity 直通与根映射） }
+function TSubVfs.ToBaseView(const APath: TStringView): string; inline;
+begin
+  Result := ToBase(APath.ToString);
+end;
+
 function TSubVfs.ToSubView(const APath: string): string; inline;
 var
   SPath, SPrefix: TByteSpan;
@@ -126,6 +136,22 @@ begin
   if not VfsValidPath(APath, True) then
     Exit(False);
   Result := FBase.Exists(ToBase(APath));
+end;
+
+function TSubVfs.ExistsView(const APath: TStringView): Boolean; inline;
+var
+  V: IVfsView;
+  LBase: string;
+begin
+  { 零拷贝直达：内层支持视图则免物化透传；否则单次物化走 ToBase 单源 }
+  if VfsIsRootView(APath) then
+    Exit(FBase.Exists(ToBase('.')));
+  if not VfsValidPathView(APath, True) then
+    Exit(False);
+  if FIdentity and Supports(FBase, IVfsView, V) then
+    Exit(V.ExistsView(APath));
+  LBase := ToBaseView(APath);
+  Result := FBase.Exists(LBase);
 end;
 
 function TSubVfs.Stat(const APath: string): TStatInfo;
@@ -161,6 +187,32 @@ begin
     raise EVfsInvalidPath.CreateCtx('open', APath, 'invalid virtual path');
   try
     Result := FBase.OpenRead(ToBase(APath));
+  except
+    on E: EVfsError do ReraiseSub(E);
+  end;
+end;
+
+function TSubVfs.OpenReadView(const APath: TStringView): IStream;
+var
+  V: IVfsView;
+  LBase: string;
+begin
+  { 零拷贝直达：identity 且内层支持视图则免物化透传；
+    否则单次物化走 ToBase 单源，错误改写仍是子视图坐标 }
+  if not VfsValidPathView(APath, True) then
+    raise EVfsInvalidPath.CreateCtx('open', APath.ToString, 'invalid virtual path');
+  if FIdentity and Supports(FBase, IVfsView, V) then
+  begin
+    try
+      Result := V.OpenReadView(APath);
+    except
+      on E: EVfsError do ReraiseSub(E);
+    end;
+    Exit;
+  end;
+  LBase := ToBaseView(APath);
+  try
+    Result := FBase.OpenRead(LBase);
   except
     on E: EVfsError do ReraiseSub(E);
   end;

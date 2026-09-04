@@ -95,6 +95,13 @@ procedure VfsEnumerateChildSpans(const ACount: SizeInt; AGetter: TVfsSpanGetter;
   AGetterData: Pointer; const ADirPrefix: string; AHandler: TVfsChildHandler;
   AHandlerData: Pointer);
 
+{ 有序 Span 序列 LowerBound 单源：返回首个 >= AKey 的下标（Count 表全小）。
+  memtree/embedded 的字符串/视图四路二分收敛于此，比较经 bytes.ops
+  CompareBytesOrdered 单源（SpanCompare），零堆分配 O(log n)；
+  含循环体故不 inline（与 VfsEnumerateChildSpans 同例）。 }
+function VfsLowerBoundSpan(const ACount: SizeInt; AGetter: TVfsSpanGetter;
+  AGetterData: Pointer; const AKey: TByteSpan): SizeInt;
+
 implementation
 
 uses
@@ -177,9 +184,6 @@ begin
   if AView.Len < SizeUInt(Length(APrefix)) then Exit(False);
   Result := CompareMem(AView.Data, @APrefix[1], SizeUInt(Length(APrefix)));
 end;
-
-const
-  HEX_DIGITS: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
 
 function VfsHex(const AValue: UInt64; const ADigits: Integer): string; inline;
 var
@@ -316,6 +320,27 @@ begin
     end;
     Exit(False);
   end;
+end;
+
+{ 有序 Span 序列 LowerBound 单源实现：见接口注释。 }
+function VfsLowerBoundSpan(const ACount: SizeInt; AGetter: TVfsSpanGetter;
+  AGetterData: Pointer; const AKey: TByteSpan): SizeInt;
+var
+  Lo, Hi, Mid: SizeInt;
+begin
+  { bytes.ops SpanCompare 单源 inline 零拷贝；SizeInt 天然防回绕 }
+  Lo := 0;
+  Hi := ACount;
+  if (ACount <= 0) or not Assigned(AGetter) then Exit(0);
+  while Lo < Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    if SpanCompare(AGetter(Mid, AGetterData), AKey) < 0 then
+      Lo := Mid + 1
+    else
+      Hi := Mid;
+  end;
+  Result := Lo;
 end;
 
 { 单源：LowerBound + UpperBound + '/' 分段 + 去重；O(log n + k) 有序区间，资源释放不丢。 }
