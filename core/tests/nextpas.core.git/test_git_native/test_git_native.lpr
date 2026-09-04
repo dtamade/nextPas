@@ -5000,6 +5000,207 @@ begin
   end;
 end;
 
+procedure TestTopoWithBoundaryDirect;
+var
+  Work, GitDir, CliOut: string;
+  Repo: TNativeRepository;
+  Starts, Hides: TGitOidArray;
+  Opts: TGitRevOptions;
+  Got: TGitRevEntryArray;
+  Entries: TGitLogArray;
+begin
+  // covers topo-with-boundary + default rev options against git rev-list
+  MakeTwoCommitRepo('nextpas_git_topo', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    Repo := TNativeRepository.Create(GitDir);
+    try
+      Opts := DefaultGitRevOptions;
+      SetLength(Starts, 1);
+      Starts[0] := Entries[0].Oid;
+      SetLength(Hides, 0);
+      Got := GitTopoOrderCommitsWithBoundary(Repo, Starts, Hides, Opts, -1);
+      CheckEqual(2, Length(Got), 'two commits without hides');
+      CheckEqual(GitOidToHex(Entries[0].Oid), GitOidToHex(Got[0].Oid), 'newest first');
+      SetLength(Hides, 1);
+      Hides[0] := Entries[1].Oid;
+      Opts.ShowBoundary := True;
+      Got := GitTopoOrderCommitsWithBoundary(Repo, Starts, Hides, Opts, -1);
+      CheckEqual(2, Length(Got), 'head plus boundary');
+      CheckFalse(Got[0].IsBoundary, 'head not boundary');
+      CheckTrue(Got[1].IsBoundary, 'parent is boundary');
+      CliOut := Trim(MustCaptureIn('git', ['rev-list', '--boundary', 'HEAD',
+        '--not', GitOidToHex(Entries[1].Oid)], Work));
+      CheckTrue(Pos(GitOidToHex(Entries[0].Oid), CliOut) > 0, 'git agrees head');
+    finally
+      Repo.Free;
+    end;
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestReflogParse;
+var
+  Work, GitDir, CliOut: string;
+  Raw: TBytes;
+  Log_: TGitReflog;
+  One: TGitReflogEntry;
+  Lines: TStringArray;
+begin
+  // covers reflog whole-file + single-line parse against git log
+  MakeTwoCommitRepo('nextpas_git_reflog', Work, GitDir);
+  try
+    Raw := ReadFile(PathJoin([GitDir, 'logs', 'HEAD']));
+    Log_ := GitParseReflog(Raw);
+    CheckEqual(2, Length(Log_), 'two reflog lines');
+    CheckEqual(GitOidToHex(GitResolveHead(GitDir)), GitOidToHex(Log_[1].NewOid), 'tip matches HEAD');
+    CheckEqual('Test Er', Log_[1].Committer.Name, 'committer name');
+    CheckTrue(Pos('commit', Log_[1].Message) > 0, 'commit message');
+    SplitTextLines(BytesToString(Raw), Lines);
+    One := GitParseReflogLine(Lines[1]);
+    CheckEqual(GitOidToHex(Log_[1].NewOid), GitOidToHex(One.NewOid), 'line parse agrees');
+    CliOut := Trim(MustCaptureIn('git', ['log', '--format=%H', '-1', 'HEAD'], Work));
+    CheckEqual(CliOut, GitOidToHex(Log_[1].NewOid), 'git agrees tip');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestConfigParsePath;
+var
+  Work, GitDir, CliOut: string;
+  Cfg: TGitConfig;
+begin
+  // covers config path/parse/get against git config
+  MakeTwoCommitRepo('nextpas_git_config', Work, GitDir);
+  try
+    CheckEqual(PathJoin([GitDir, 'config']), GitConfigPath(GitDir), 'config path');
+    Cfg := GitParseConfig(ReadFile(GitConfigPath(GitDir)));
+    CheckEqual('test@example.com', GitConfigGet(Cfg, 'user.email'), 'email parsed');
+    CheckEqual('Test Er', GitConfigGet(Cfg, 'USER.NAME'), 'case-insensitive key');
+    CliOut := Trim(MustCaptureIn('git', ['config', 'user.email'], Work));
+    CheckEqual('test@example.com', CliOut, 'git agrees email');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestCacheTreeRoundTrip;
+var
+  Work, GitDir: string;
+  Tree: TGitCacheTree;
+  Back: TGitCacheTree;
+  HeadTree: TGitOid;
+begin
+  // covers cache-tree serialize/parse round-trip on real + empty trees
+  MakeTwoCommitRepo('nextpas_git_cachetree', Work, GitDir);
+  try
+    HeadTree := GitLogList(GitDir, 1)[0].Tree;
+    Tree.Name := '';
+    Tree.EntryCount := 1;
+    Tree.Oid := HeadTree;
+    SetLength(Tree.Children, 0);
+    Back := GitParseCacheTree(GitSerializeCacheTree(Tree));
+    CheckEqual('', Back.Name, 'root name empty');
+    CheckEqual(1, Back.EntryCount, 'entry count preserved');
+    CheckEqual(GitOidToHex(HeadTree), GitOidToHex(Back.Oid), 'oid preserved');
+    Tree.EntryCount := -1;
+    Back := GitParseCacheTree(GitSerializeCacheTree(Tree));
+    CheckEqual(-1, Back.EntryCount, 'invalidated marker preserved');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestProtocolFraming;
+var
+  Work, GitDir: string;
+  Entries: TGitLogArray;
+  Want: TBytes;
+  Stream: TBytes;
+  Refs: TGitAdvertisedRefArray;
+  Chans: TGitSidebandArray;
+  Demuxed: TGitSidebandDemuxed;
+  Raw: TGitSidebandArray;
+begin
+  // covers want-encode/advertise-parse/sideband join-demux round-trips
+  MakeTwoCommitRepo('nextpas_git_proto', Work, GitDir);
+  try
+    Entries := GitLogList(GitDir, 10);
+    Want := GitEncodeWantSimple(Entries[0].Oid);
+    CheckTrue(Length(Want) > 40, 'want framed');
+    CheckTrue(Pos(GitOidToHex(Entries[0].Oid), BytesToString(Want)) > 0, 'want carries oid');
+    Stream := BytesConcat(BytesConcat(GitPktEncodeStr(GitOidToHex(Entries[0].Oid) + ' HEAD' + #0 +
+      'multi_ack thin-pack'), GitPktEncodeStr(GitOidToHex(Entries[1].Oid) +
+      ' refs/heads/main')), GitPktEncodeFlush);
+    Refs := GitParseAdvertisedRefs(Stream);
+    CheckEqual(2, Length(Refs), 'two advertised refs');
+    CheckEqual('HEAD', Refs[0].Name, 'first is HEAD');
+    CheckEqual(GitOidToHex(Entries[0].Oid), GitOidToHex(Refs[0].Oid), 'HEAD oid');
+    CheckEqual('refs/heads/main', Refs[1].Name, 'second ref name');
+    SetLength(Chans, 2);
+    Chans[0].Kind := gsbData;
+    Chans[0].Data := BytesOfString('payload');
+    Chans[1].Kind := gsbProgress;
+    Chans[1].Data := BytesOfString('working');
+    Stream := GitSidebandJoin(Chans);
+    GitSidebandDemux(Stream, Demuxed);
+    CheckEqual('payload', BytesToString(Demuxed.DataBytes), 'data channel');
+    CheckEqual(1, Length(Demuxed.Progress), 'one progress line');
+    CheckTrue(Pos('working', Demuxed.Progress[0]) > 0, 'progress text');
+    Raw := GitSidebandDemuxRaw(Stream);
+    CheckEqual(2, Length(Raw), 'two raw packets');
+    CheckTrue(Raw[0].Kind = gsbData, 'first kind data');
+    CheckTrue(Raw[1].Kind = gsbProgress, 'second kind progress');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestCloneAndPackIndex;
+var
+  Work, GitDir, BareDir, CloneWork, PackPath, CliOut: string;
+  HeadHex, CloneHead: string;
+  IdxPath: string;
+  PackEntries: TDirEntryArray;
+  E: TDirEntry;
+begin
+  // covers local clone (worktree + bare) and pack-idx build vs git CLI
+  MakeTwoCommitRepo('nextpas_git_clone', Work, GitDir);
+  try
+    HeadHex := GitOidToHex(GitResolveHead(GitDir));
+    CloneWork := Work + '_clone';
+    RemoveAll(CloneWork);
+    CloneHead := GitCloneHead(GitDir, CloneWork);
+    CheckEqual(HeadHex, CloneHead, 'clone head matches source');
+    CheckTrue(FileExists(PathJoin([CloneWork, 'f.txt'])), 'clone worktree checked out');
+    CheckEqual('', Trim(MustCaptureIn('git', ['status', '--porcelain'], CloneWork)), 'clone status clean');
+    BareDir := Work + '_bare.git';
+    RemoveAll(BareDir);
+    CheckEqual(HeadHex, GitCloneBareHead(GitDir, BareDir), 'bare clone head matches');
+    CliOut := Trim(MustCaptureIn('git', ['--git-dir=' + BareDir, 'rev-parse', 'HEAD'], Work));
+    CheckEqual(HeadHex, CliOut, 'git reads bare clone');
+    RunInChecked('git', ['repack', '-a', '-d'], Work);
+    PackPath := '';
+    PackEntries := ReadDir(PathJoin([GitDir, 'objects', 'pack']));
+    for E in PackEntries do
+      if (not E.IsDir) and (Length(E.Name) > 5)
+        and (Copy(E.Name, Length(E.Name)-4, 5) = '.pack') then
+        PackPath := PathJoin([GitDir, 'objects', 'pack', E.Name]);
+    CheckTrue(PackPath <> '', 'pack produced by repack');
+    try Remove(Copy(PackPath, 1, Length(PackPath) - 5) + '.idx') except end;
+    IdxPath := GitBuildPackIndexFile(PackPath);
+    CheckTrue(FileExists(IdxPath), 'idx built');
+    MustCaptureIn('git', ['verify-pack', '-v', IdxPath], Work);
+    CheckTrue(True, 'git verify-pack accepts built idx');
+    RemoveAll(CloneWork);
+    RemoveAll(BareDir);
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
 procedure TestStashPushPopRoundTrip;
 var
   Work, GitDir: string;
@@ -5578,6 +5779,12 @@ begin
     T.Test('bundle from revs range', @TestBundleFromRevsRange);
     T.Test('grep tree commits', @TestGrepTreeCommits);
     T.Test('small sibling overloads', @TestSmallSiblingOverloads);
+    T.Test('topo with boundary direct', @TestTopoWithBoundaryDirect);
+    T.Test('reflog parse', @TestReflogParse);
+    T.Test('config parse path', @TestConfigParsePath);
+    T.Test('cache-tree round-trip', @TestCacheTreeRoundTrip);
+    T.Test('protocol framing', @TestProtocolFraming);
+    T.Test('clone and pack index', @TestCloneAndPackIndex);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;
