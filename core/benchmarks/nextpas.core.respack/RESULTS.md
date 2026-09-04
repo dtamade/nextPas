@@ -9,8 +9,8 @@ All numbers were collected on the **same host** (re-measurable via `make -C core
 make -C core/benchmarks/nextpas.core.respack/bench_servevfs run
 make -C core/benchmarks/nextpas.core.respack/bench_embed_startup run
 make -C core/benchmarks/nextpas.core.respack/bench_writer_memory run
-# Go/Rust peers (same payload, same host)
-go run ./core/benchmarks/nextpas.core.respack/compare_go
+# Go/Rust peers (same payload, same host; run from each peer dir: no root go module)
+(cd core/benchmarks/nextpas.core.respack/compare_go && go run .)
 cargo run --manifest-path core/benchmarks/nextpas.core.respack/compare_rust/Cargo.toml --release
 ```
 

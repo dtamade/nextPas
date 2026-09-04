@@ -3,5 +3,9 @@ name = "compare_rust"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "compare_rust"
+path = "main.rs"
+
 [dependencies]
 include_dir = "0.7.4"

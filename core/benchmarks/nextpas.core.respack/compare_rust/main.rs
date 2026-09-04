@@ -12,16 +12,26 @@ fn print_result(name: &str, iters: u64, elapsed: Duration) {
 }
 
 fn bench_include_dir_get_file(dur: Duration) {
+    // Accumulate a checksum over the full contents and print it: without
+    // consuming the bytes the optimizer reduces the loop to a bare lookup
+    // (~tens of ns) instead of a real payload read.
+    let mut acc: u64 = 0;
     for _ in 0..WARMUP_ITERS {
-        let _ = ASSETS.get_file("file0000.bin");
+        let f = ASSETS.get_file("file0000.bin").unwrap();
+        for &b in f.contents() {
+            acc = acc.wrapping_add(b as u64);
+        }
     }
     let mut iters: u64 = 0;
     let start = Instant::now();
     while start.elapsed() < dur {
         let f = ASSETS.get_file("file0000.bin").unwrap();
-        let _ = f.contents();
+        for &b in f.contents() {
+            acc = acc.wrapping_add(b as u64);
+        }
         iters += 1;
     }
+    println!("  checksum: {:016x}", acc);
     print_result("rust-include_dir/4k", iters, start.elapsed());
 }
 
