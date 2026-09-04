@@ -1,7 +1,8 @@
 unit nextpas.core.vfs.embedded;
 
 {** @desc embedded 后端：respack blob 只读 IVfs 视图——资产嵌入主路径。
-  依赖 respack.reader（Registry whitelisted，source-contract gated，L7 后端族聚合后收敛单缝）；
+  经 vfs.backends 单缝间接复用 respack 视图（TResPack/TResPackEntry/EFLAG；
+  不直连 respack.reader，L2 同层单点门禁见 source-contract）；
   零拷贝：Stat/Find 直通二分索引，读取窗口落 blob 区间
   （bytes.ops 单源 inline 零拷贝，SpinLock 池化 try-finally 保证释放）。
   EResPackCorrupted 原样透传，详见 core/docs/vfs/README.md。 }
@@ -14,8 +15,7 @@ uses
   nextpas.core.base,
   nextpas.core.io.base,
   nextpas.core.io.intf,
-  nextpas.core.respack.base,
-  nextpas.core.respack.reader,
+  nextpas.core.vfs.backends,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
