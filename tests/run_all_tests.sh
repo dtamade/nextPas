@@ -22,6 +22,9 @@ STAGE0_BUILD_DIR="$REPO_ROOT/build/stage0-bootstrap"
 STAGE0_BINARY="$STAGE0_BUILD_DIR/nextpas"
 # shellcheck source=../scripts/stage0-fpc-flags.sh
 . "$REPO_ROOT/scripts/stage0-fpc-flags.sh"
+# Source dirs feeding the stage0 build; mirrors STAGE0_FPC_FLAGS -Fu entries.
+# Keep in sync when compiler/core layout moves (same drift class as HOST_UNIT_SEARCH_FLAGS).
+STAGE0_SOURCE_DIRS="compiler/src compiler/frontend compiler/diagnostics compiler/targets compiler/syntax compiler/sema compiler/lower compiler/ir compiler/backend compiler/toolchain tools/stage0 rtl/core/base rtl/core/text core/src"
 BASELINE_TARGET="linux-x86_64"
 
 emit_bootstrap_failure() {
@@ -89,9 +92,27 @@ ensure_runner() {
   fi
 }
 
+stage0_compute_fingerprint() {
+  {
+    printf '%s\n' "$STAGE0_FPC_FLAGS"
+    fpc -iV
+    for stage0_dir in $STAGE0_SOURCE_DIRS; do
+      if [ -d "$REPO_ROOT/$stage0_dir" ]; then
+        find "$REPO_ROOT/$stage0_dir" -type f \( -name '*.pas' -o -name '*.inc' -o -name '*.pp' \) -print0
+      fi
+    done | sort -z | xargs -0 -r sha256sum
+  } | sha256sum | awk '{print $1}'
+}
+
+stage0_fingerprint_matches() {
+  [ -f "$stage0_fingerprint_file" ] &&
+    [ "$(stage0_compute_fingerprint)" = "$(cat "$stage0_fingerprint_file")" ]
+}
+
 ensure_stage0() {
   stage0_build_command="fpc $STAGE0_FPC_FLAGS -FE$STAGE0_BUILD_DIR -FU$STAGE0_BUILD_DIR tools/stage0/nextpas.pas"
   stage0_stderr_file="$STAGE0_BUILD_DIR/stage0-build.stderr.txt"
+  stage0_fingerprint_file="$STAGE0_BUILD_DIR/.source-fingerprint"
   if ! command -v fpc >/dev/null 2>&1; then
     emit_bootstrap_failure \
       'missing compiler for stage0 bootstrap' \
@@ -101,6 +122,14 @@ ensure_stage0() {
 
   mkdir -p "$STAGE0_BUILD_DIR"
   rm -f "$stage0_stderr_file"
+  # Content-hash skip: inputs provably unchanged since last successful build
+  # means a rebuild would produce a byte-identical driver, so skip it.
+  # Any mismatch (sources, flags, fpc version, missing file) falls through
+  # to a clean rebuild; a torn fingerprint can only cause a rebuild, never
+  # a false skip.
+  if [ -x "$STAGE0_BINARY" ] && stage0_fingerprint_matches; then
+    return 0
+  fi
   # Drop cached .ppu/.o before rebuilding: fpc reuse of half-stale unit
   # caches has been observed to crash the compiler itself (EListError)
   # instead of recompiling, which turns every run into stage0-build-failed.
@@ -119,6 +148,7 @@ ensure_stage0() {
       "$stage0_build_command" \
       "$stage0_stderr_file"
   fi
+  stage0_compute_fingerprint >"$stage0_fingerprint_file"
 }
 
 ensure_stage0
