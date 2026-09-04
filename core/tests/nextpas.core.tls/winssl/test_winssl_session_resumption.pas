@@ -226,10 +226,11 @@ end;
 
 procedure SetProcessEnvironment(const AName, AValue: string);
 begin
+  // Empty restores pre-probe unset state (prior code passed nil = delete).
   if AValue = '' then
-    Windows.SetEnvironmentVariable(PChar(AName), nil)
+    UnsetEnv(AName)
   else
-    Windows.SetEnvironmentVariable(PChar(AName), PChar(AValue));
+    SetEnv(AName, AValue);
 end;
 
 function ExtractResumeMarker(const ALine: string; out AMarker: string): Boolean;
