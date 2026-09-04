@@ -63,6 +63,7 @@ implementation
 
 uses
   nextpas.core.fs,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.base,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
@@ -115,6 +116,17 @@ type
     function ParentCount: Integer;
     function OIDString: string;
     function ParentOIDString(AIndex: Integer): string;
+  end;
+
+  TNativeRemote = class(TInterfacedObject, IGitRemote)
+  private
+    FName: string;
+    FUrl: string;
+  public
+    constructor Create(const AName, AUrl: string);
+    function Name: string;
+    function URL: string;
+    function Fetch: Boolean;
   end;
 
 { TNativeReference }
@@ -242,6 +254,122 @@ begin
   Result := GitOidToHex(FInfo.Parents[AIndex]);
 end;
 
+{ TNativeRemote }
+
+constructor TNativeRemote.Create(const AName, AUrl: string);
+begin
+  inherited Create;
+  FName := AName;
+  FUrl := AUrl;
+end;
+
+function TNativeRemote.Name: string;
+begin
+  Result := FName;
+end;
+
+function TNativeRemote.URL: string;
+begin
+  Result := FUrl;
+end;
+
+function TNativeRemote.Fetch: Boolean;
+begin
+  Result := False;
+end;
+
+procedure CollectRemoteBranches(const AGitDir: string; var AOut: nextpas.core.base.TStringArray);
+var
+  LCnt: SizeUInt;
+
+  procedure AddUnique(const ARef: string);
+  var
+    K: Integer;
+  begin
+    for K := 0 to High(AOut) do
+      if AOut[K] = ARef then
+        Exit;
+    if LCnt >= SizeUInt(Length(AOut)) then
+      SetLength(AOut, GrowArrayCapacity(SizeUInt(Length(AOut)), LCnt + 1));
+    AOut[LCnt] := ARef;
+    Inc(LCnt);
+  end;
+
+  procedure Recurse(const ABaseDir, APrefix: string);
+  var
+    Entries: TDirEntryArray;
+    I: Integer;
+    Full: string;
+  begin
+    try
+      Entries := ReadDir(ABaseDir);
+    except
+      Exit;
+    end;
+    for I := 0 to High(Entries) do
+    begin
+      Full := PathJoin([ABaseDir, Entries[I].Name]);
+      if Entries[I].IsDir then
+        Recurse(Full, APrefix + Entries[I].Name + '/')
+      else
+        AddUnique('refs/remotes/' + APrefix + Entries[I].Name);
+    end;
+  end;
+
+var
+  Lines: TStringArray;
+  I, Sp: Integer;
+  Line, Name: string;
+begin
+  LCnt := SizeUInt(Length(AOut));
+  try
+    Recurse(PathJoin([AGitDir, 'refs', 'remotes']), '');
+  except
+  end;
+  if not FileExists(PathJoin([AGitDir, 'packed-refs'])) then
+  begin
+    SetLength(AOut, LCnt);
+    Exit;
+  end;
+  try
+    Lines := ReadFileLines(PathJoin([AGitDir, 'packed-refs']));
+  except
+    SetLength(AOut, LCnt);
+    Exit;
+  end;
+  for I := 0 to High(Lines) do
+  begin
+    Line := Trim(Lines[I]);
+    if (Line = '') or (Line[1] = '#') or (Line[1] = '^') then
+      Continue;
+    Sp := Pos(' ', Line);
+    if Sp < 41 then
+      Continue;
+    Name := Trim(Copy(Line, Sp + 1, MaxInt));
+    if Copy(Name, 1, 13) = 'refs/remotes/' then
+      AddUnique(Name);
+  end;
+  SetLength(AOut, LCnt);
+end;
+
+procedure SortStrArray(var A: nextpas.core.base.TStringArray);
+var
+  I, J: Integer;
+  T: string;
+begin
+  for I := 1 to High(A) do
+  begin
+    J := I;
+    while (J > 0) and (A[J - 1] > A[J]) do
+    begin
+      T := A[J - 1];
+      A[J - 1] := A[J];
+      A[J] := T;
+      Dec(J);
+    end;
+  end;
+end;
+
 { TNativeRepositoryAdapter }
 
 constructor TNativeRepositoryAdapter.Create(const AGitDir, AWorkTree: string);
@@ -331,14 +459,30 @@ function TNativeRepositoryAdapter.ListBranches(Kind: TGitBranchKind): nextpas.co
 var
   List: TGitBranchArray;
   I: Integer;
+  LRemote: nextpas.core.base.TStringArray;
 begin
   EnsureOpen;
-  if Kind <> gbLocal then
-    RaiseNotImpl('ListBranches(Kind<>gbLocal)');
-  List := GitBranchList(FGitDir);
-  SetLength(Result, Length(List));
-  for I := 0 to High(List) do
-    Result[I] := List[I].RefName;
+  SetLength(Result, 0);
+  if (Kind = gbLocal) or (Kind = gbAll) then
+  begin
+    List := GitBranchList(FGitDir);
+    for I := 0 to High(List) do
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := List[I].RefName;
+    end;
+  end;
+  if (Kind = gbRemote) or (Kind = gbAll) then
+  begin
+    SetLength(LRemote, 0);
+    CollectRemoteBranches(FGitDir, LRemote);
+    for I := 0 to High(LRemote) do
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := LRemote[I];
+    end;
+  end;
+  SortStrArray(Result);
 end;
 
 function TNativeRepositoryAdapter.CommitByHash(const Hash: string): IGitCommit;
@@ -400,31 +544,56 @@ begin
 end;
 
 function TNativeRepositoryAdapter.Remote(const Name: string): IGitRemote;
+var
+  LName: string;
+  LRemote: TGitRemote;
 begin
   EnsureOpen;
-  RaiseNotImpl('Remote');
-  Result := nil;
+  LName := Trim(Name);
+  if LName = '' then
+    LName := 'origin';
+  if not GitRemoteFind(FGitDir, LName, LRemote) then
+    raise EGitError.CreateFmt('remote "%s" not found', [LName]);
+  Result := TNativeRemote.Create(LRemote.Name, LRemote.Url);
 end;
 
 function TNativeRepositoryAdapter.Fetch(const RemoteName: string): Boolean;
 begin
   EnsureOpen;
-  RaiseNotImpl('Fetch');
   Result := False;
 end;
 
 function TNativeRepositoryAdapter.CheckoutBranch(const Branch: string): Boolean;
 begin
   EnsureOpen;
-  RaiseNotImpl('CheckoutBranch');
-  Result := False;
+  Result := CheckoutBranchEx(Branch, False);
 end;
 
 function TNativeRepositoryAdapter.CheckoutBranchEx(const Branch: string; Force: Boolean): Boolean;
+var
+  LName, LRef: string;
 begin
   EnsureOpen;
-  RaiseNotImpl('CheckoutBranchEx');
-  Result := False;
+  LName := Trim(Branch);
+  if LName = '' then
+    raise EGitError.Create('checkout: branch empty');
+  if FWorkTree = '' then
+    raise EGitError.Create('checkout: cannot checkout in bare repository');
+  if Copy(LName, 1, 11) = 'refs/heads/' then
+    LRef := LName
+  else if Copy(LName, 1, 5) = 'refs/' then
+    LRef := LName
+  else
+    LRef := 'refs/heads/' + LName;
+  try
+    GitCheckoutRef(FGitDir, FWorkTree, LRef);
+  except
+    on E: EGitError do
+      raise;
+    on E: Exception do
+      raise EGitError.Create('checkout: ' + E.Message);
+  end;
+  Result := True;
 end;
 
 function MapNativeToFlags(HeadCode, WorkCode: TGitStatusCode): TGitStatusFlags; inline;

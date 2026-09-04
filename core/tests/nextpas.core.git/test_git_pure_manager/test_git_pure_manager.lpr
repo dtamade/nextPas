@@ -295,11 +295,12 @@ begin
   end;
 end;
 
-// CONTRACT INV-O4/E2/M4: CloneRepository failure not leak, raises EGitError native not implemented
+// CONTRACT INV-O4/E2/M4: CloneRepository network raises transport EGitError, local clone succeeds
 procedure TestCloneRepositoryInvariants;
 var
-  LBase, LClone: string;
+  LBase, LClone, LSrc, LLocal: string;
   LMgr: IGitManager;
+  LRepo, LCloned: IGitRepository;
   LRaised: Boolean;
 begin
   LBase := MkTempDir('pure_clone');
@@ -314,19 +315,86 @@ begin
       on E: EGitError do
       begin
         LRaised := True;
-        // native backend message must contain not implemented, EGitError not lost (INV-E2)
-        Check(Pos('not implemented', LowerCase(E.Message)) > 0, 'Clone EGitError should mention not implemented');
+        Check(Pos('transport', LowerCase(E.Message)) > 0, 'Clone network EGitError should mention transport');
       end;
       on E: Exception do
         LRaised := True;
     end;
-    Check(LRaised, 'CloneRepository native must raise EGitError');
-    // no half repo left (INV-M4)
+    Check(LRaised, 'CloneRepository network must raise EGitError');
     CheckFalse(FileExists(PathJoin([LClone, 'HEAD'])), 'Clone failure must not leave HEAD');
     CheckFalse(DirectoryExists(PathJoin([LClone, 'objects'])), 'Clone failure must not leave objects');
-    // manager still usable after failure (INV-M4: exception not corrupt manager state)
     Check(LMgr.Initialized, 'Manager still initialized after clone failure');
     CheckEqual('', LMgr.DiscoverRepository(PathJoin([LClone, 'nested'])), 'Manager usable after clone failure');
+    LSrc := PathJoin([LBase, 'src']);
+    LRepo := LMgr.InitRepository(LSrc, False);
+    Check(LRepo <> nil, 'src init');
+    GitRun(LSrc, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LSrc, ['config', 'user.email', 'pure@example.invalid']);
+    WriteFile(PathJoin([LSrc, 'seed.txt']), BytesOfString('seed'), PermDefault);
+    GitRun(LSrc, ['add', 'seed.txt']);
+    GitRun(LSrc, ['commit', '-m', 'seed']);
+    LLocal := PathJoin([LBase, 'local_clone']);
+    LCloned := LMgr.CloneRepository(LSrc, LLocal);
+    Check(LCloned <> nil, 'local clone should return repo');
+    Check(LMgr.IsRepository(LLocal), 'local clone result is repository');
+    Check(FileExists(PathJoin([LLocal, 'seed.txt'])), 'local clone should checkout seed.txt');
+  finally
+    RemoveAll(LBase);
+  end;
+end;
+
+procedure TestManagerInterfaceClosure;
+var
+  LBase, LDir: string;
+  LMgr: IGitManager;
+  LRepo: IGitRepository;
+  LRem: IGitRemote;
+  LRaised: Boolean;
+  LVal: string;
+begin
+  LBase := MkTempDir('pure_closure');
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+    LDir := PathJoin([LBase, 'repo']);
+    LRepo := LMgr.InitRepository(LDir, False);
+    GitRun(LDir, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LDir, ['config', 'user.email', 'pure@example.invalid']);
+    WriteFile(PathJoin([LDir, 'a.txt']), BytesOfString('a'), PermDefault);
+    GitRun(LDir, ['add', 'a.txt']);
+    GitRun(LDir, ['commit', '-m', 'one']);
+    GitRun(LDir, ['branch', 'feature']);
+    Check(Length(LRepo.ListBranches(gbLocal)) >= 2, 'ListBranches local lists main+feature');
+    Check(Length(LRepo.ListBranches(gbAll)) >= 2, 'ListBranches all includes local');
+    CheckEqual(0, Length(LRepo.ListBranches(gbRemote)), 'ListBranches remote empty without remotes');
+    LRaised := False;
+    try
+      LRem := LRepo.Remote('origin');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Remote missing should raise EGitError');
+    GitRun(LDir, ['remote', 'add', 'origin', 'file:///tmp/pure-closure-origin.git']);
+    LRem := LRepo.Remote('origin');
+    Check(LRem <> nil, 'Remote origin found');
+    CheckEqual('origin', LRem.Name, 'remote name');
+    Check(Pos('pure-closure-origin', LRem.URL) > 0, 'remote url');
+    CheckFalse(LRepo.Fetch('origin'), 'native Fetch returns False without network');
+    Check(LRepo.CheckoutBranch('feature'), 'CheckoutBranch feature');
+    CheckEqual('feature', LRepo.CurrentBranch, 'current branch feature');
+    Check(LRepo.CheckoutBranchEx('main', True), 'CheckoutBranchEx main force');
+    CheckEqual('main', LRepo.CurrentBranch, 'current branch main');
+    LVal := LMgr.GetGlobalConfig('user.name');
+    Check(True, 'GetGlobalConfig readable, value="' + LVal + '"');
+    LRaised := False;
+    try
+      LMgr.SetGlobalConfig('user.name', 'x');
+    except
+      on E: EGitError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'SetGlobalConfig native raises explicit EGitError');
   finally
     RemoveAll(LBase);
   end;
@@ -523,6 +591,7 @@ begin
   Suite.Test('TestFactoryGbAutoCompat', @TestFactoryGbAutoCompat);
   Suite.Test('TestDiscoverRepositoryInvariants', @TestDiscoverRepositoryInvariants);
   Suite.Test('TestCloneRepositoryNotImplemented', @TestCloneRepositoryInvariants);
+  Suite.Test('TestManagerInterfaceClosure', @TestManagerInterfaceClosure);
   Suite.Test('TestCommitOnHeadInvariants', @TestCommitOnHeadInvariants);
   Suite.Test('TestAddWorktreeInvariants', @TestAddWorktreeInvariants);
   Suite.Test('TestSetVerifySSLInvariants', @TestSetVerifySSLInvariants);
