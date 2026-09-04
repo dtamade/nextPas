@@ -6,8 +6,6 @@ uses
   nextpas.core.exception,
   nextpas.core.io.intf,
   nextpas.core.vfs,
-  nextpas.core.vfs.intf,
-  nextpas.core.vfs.compressed,
   nextpas.core.compress;
 
 var
