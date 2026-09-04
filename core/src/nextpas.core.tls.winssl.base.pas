@@ -893,7 +893,47 @@ const
 function SUCCEEDED(Status: SECURITY_STATUS): Boolean; inline;
 function FAILED(Status: SECURITY_STATUS): Boolean; inline;
 
+{ Cross-platform OS error/timing capture for Schannel diagnostics.
+  Windows: real GetLastError / QueryPerformanceCounter(Frequency).
+  Elsewhere: LastError = 0, counters untouched (callers already tolerate
+  zero frequency; Schannel paths are Windows-only, values are diagnostic). }
+function WinsslLastError: DWORD; inline;
+procedure WinsslQueryPerformanceCounter(var ACounter: Int64); inline;
+procedure WinsslQueryPerformanceFrequency(var AFrequency: Int64); inline;
+
 implementation
+
+{$IFDEF WINDOWS}
+uses
+  nextpas.core.platform.windows.ffi;
+{$ENDIF}
+
+function WinsslLastError: DWORD; inline;
+begin
+  {$IFDEF WINDOWS}
+  Result := nextpas.core.platform.windows.ffi.GetLastError;
+  {$ELSE}
+  Result := 0;
+  {$ENDIF}
+end;
+
+procedure WinsslQueryPerformanceCounter(var ACounter: Int64); inline;
+begin
+  {$IFDEF WINDOWS}
+  nextpas.core.platform.windows.ffi.QueryPerformanceCounter(ACounter);
+  {$ELSE}
+  ACounter := ACounter;
+  {$ENDIF}
+end;
+
+procedure WinsslQueryPerformanceFrequency(var AFrequency: Int64); inline;
+begin
+  {$IFDEF WINDOWS}
+  nextpas.core.platform.windows.ffi.QueryPerformanceFrequency(AFrequency);
+  {$ELSE}
+  AFrequency := 0;
+  {$ENDIF}
+end;
 
 function SUCCEEDED(Status: SECURITY_STATUS): Boolean;
 begin

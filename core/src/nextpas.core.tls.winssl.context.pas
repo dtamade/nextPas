@@ -487,7 +487,7 @@ begin
         'Failed to decode PEM data: invalid format',
         sslErrLoadFailed,
         'TWinSSLContext.PEMToDER',
-        GetLastError,
+        WinsslLastError,
         sslWinSSL
       );
   end;
@@ -522,7 +522,7 @@ begin
         'Failed to decode PEM data',
         sslErrLoadFailed,
         'TWinSSLContext.PEMToDER',
-        GetLastError,
+        WinsslLastError,
         sslWinSSL
       );
     end;
@@ -695,7 +695,7 @@ begin
       'Certificate load failed: unsupported format or invalid data',
       sslErrLoadFailed,
       'TWinSSLContext.LoadCertificate',
-      GetLastError,
+      WinsslLastError,
       sslWinSSL
     );
   end;
@@ -880,7 +880,7 @@ begin
       'Failed to add certificate to store',
       sslErrLoadFailed,
       'TWinSSLContext.LoadCertificatePEM',
-      GetLastError,
+      WinsslLastError,
       sslWinSSL
     );
 
@@ -973,7 +973,7 @@ begin
         'Failed to parse CA certificate',
         sslErrLoadFailed,
         'TWinSSLContext.LoadCAFile',
-        GetLastError,
+        WinsslLastError,
         sslWinSSL
       );
 
@@ -990,7 +990,7 @@ begin
         'Failed to add CA certificate to store',
         sslErrLoadFailed,
         'TWinSSLContext.LoadCAFile',
-        GetLastError,
+        WinsslLastError,
         sslWinSSL
       );
     end;

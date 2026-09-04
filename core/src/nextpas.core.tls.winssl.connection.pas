@@ -24,6 +24,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.platform.socket,
   nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.sync, nextpas.core.time,
+  nextpas.core.math,
   nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
@@ -1158,7 +1159,7 @@ begin
       @LChainContext
     ) then
     begin
-      AVerifyError := GetLastError;
+      AVerifyError := WinsslLastError;
       Result := False;
       Exit;
     end;
@@ -1208,7 +1209,7 @@ begin
           @LPolicyStatus
         ) then
         begin
-          AVerifyError := GetLastError;
+          AVerifyError := WinsslLastError;
           Result := False;
           Exit;
         end;
@@ -1282,8 +1283,8 @@ begin
 
   FHandshakeState := sslHsCompleted;
 
-  QueryPerformanceCounter(FHandshakeEndCounter);
-  QueryPerformanceFrequency(LFrequency);
+  WinsslQueryPerformanceCounter(FHandshakeEndCounter);
+  WinsslQueryPerformanceFrequency(LFrequency);
   if LFrequency > 0 then
     FHandshakeDuration := ((FHandshakeEndCounter - FHandshakeStartCounter) * 1000) / LFrequency;
 
@@ -1324,8 +1325,8 @@ begin
 
   FHandshakeState := sslHsCompleted;
 
-  QueryPerformanceCounter(FHandshakeEndCounter);
-  QueryPerformanceFrequency(LFrequency);
+  WinsslQueryPerformanceCounter(FHandshakeEndCounter);
+  WinsslQueryPerformanceFrequency(LFrequency);
   if LFrequency > 0 then
     FHandshakeDuration := ((FHandshakeEndCounter - FHandshakeStartCounter) * 1000) / LFrequency;
 
@@ -1631,7 +1632,7 @@ begin
   end;
   {$ENDIF}
 
-  LastErr := GetLastError;
+  LastErr := WinsslLastError;
 
   case LastErr of
     {$IFDEF WINDOWS}
@@ -2076,8 +2077,8 @@ begin
   end;
 
   FHandshakeState := sslHsCompleted;
-  QueryPerformanceCounter(FHandshakeEndCounter);
-  QueryPerformanceFrequency(LFrequency);
+  WinsslQueryPerformanceCounter(FHandshakeEndCounter);
+  WinsslQueryPerformanceFrequency(LFrequency);
   if LFrequency > 0 then
     FHandshakeDuration := ((FHandshakeEndCounter - FHandshakeStartCounter) * 1000) / LFrequency;
   SaveSessionAfterHandshake;
@@ -2105,8 +2106,8 @@ var
 begin
   Result := False;
 
-  QueryPerformanceFrequency(LFrequency);
-  QueryPerformanceCounter(FHandshakeStartCounter);
+  WinsslQueryPerformanceFrequency(LFrequency);
+  WinsslQueryPerformanceCounter(FHandshakeStartCounter);
 
   dwSSPIFlags := ISC_REQ_SEQUENCE_DETECT or
                 ISC_REQ_REPLAY_DETECT or
@@ -2315,8 +2316,8 @@ var
 begin
   Result := False;
 
-  QueryPerformanceFrequency(LFrequency);
-  QueryPerformanceCounter(FHandshakeStartCounter);
+  WinsslQueryPerformanceFrequency(LFrequency);
+  WinsslQueryPerformanceCounter(FHandshakeStartCounter);
 
   dwSSPIFlags := ASC_REQ_SEQUENCE_DETECT or
                 ASC_REQ_REPLAY_DETECT or
@@ -2383,7 +2384,7 @@ begin
         Result := True;
         FHandshakeState := sslHsCompleted;
 
-        QueryPerformanceCounter(FHandshakeEndCounter);
+        WinsslQueryPerformanceCounter(FHandshakeEndCounter);
         if LFrequency > 0 then
           FHandshakeDuration := ((FHandshakeEndCounter - FHandshakeStartCounter) * 1000) / LFrequency;
 
