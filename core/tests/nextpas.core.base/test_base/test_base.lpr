@@ -224,7 +224,7 @@ end;
 
 procedure TestInvariantCompatibilityAlias;
 var
-  LErr: ENextPasError;
+  LErr: ECore;
 begin
   Check(EWow = EInvariantViolation, 'EWow should be a compatibility alias of EInvariantViolation');
   LErr := EInvariantViolation.Create('invariant violated');
@@ -244,7 +244,7 @@ end;
 
 procedure TestBaseResultExceptionsUseInternalCategory;
 var
-  LErr: ENextPasError;
+  LErr: ECore;
 begin
   LErr := EInvalidResult.Create('invalid result');
   try
@@ -282,7 +282,7 @@ end;
 
 procedure TestBaseValidationExceptionsUseInvalidArgumentCategory;
 var
-  LErr: ENextPasError;
+  LErr: ECore;
 begin
   LErr := EArgumentNil.Create('argument is nil');
   try
@@ -310,7 +310,7 @@ end;
 
 procedure TestBaseOperationExceptionsUseSpecificCategories;
 var
-  LErr: ENextPasError;
+  LErr: ECore;
 begin
   LErr := EEmptyCollection.Create('collection is empty');
   try
@@ -358,7 +358,7 @@ begin
   try
     Check(LErr is nextpas.core.base.ECore,
       'base EOutOfMemoryError should be catchable as base ECore');
-    Check(LErr.Category = nextpas.core.base.ecResourceExhausted,
+    Check(LErr.Category = ecResourceExhausted,
       'base EOutOfMemoryError should keep resource-exhausted category');
   finally
     LErr.Free;
