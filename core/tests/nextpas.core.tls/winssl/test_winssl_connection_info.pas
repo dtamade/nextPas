@@ -10,11 +10,7 @@ program test_winssl_connection_info;
 {$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
 
 uses
-  {$IFDEF WINDOWS}
-  Windows, WinSock2,
-  {$ELSE}
-  Sockets,
-  {$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
@@ -78,7 +74,7 @@ var
   LContext: ISSLContext;
   LConn: ISSLConnection;
   LInfo: TSSLConnectionInfo;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
 begin
   WriteLn('=== Test: GetConnectionInfo 未连接状态 ===');
 
@@ -93,8 +89,8 @@ begin
     LContext := LLib.CreateContext(sslCtxClient);
 
     // 创建未连接的连接对象
-    LSocket := INVALID_SOCKET;
-    LConn := LContext.CreateConnection(LSocket);
+    LSocket := PLATFORM_INVALID_SOCKET;
+    LConn := LContext.CreateConnection(THandle(LSocket.Value));
 
     // 获取连接信息（应该返回默认值）
     {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
@@ -151,7 +147,7 @@ var
   LContext: ISSLContext;
   LConn: ISSLConnection;
   LProtocol: TSSLProtocolVersion;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
 begin
   WriteLn('=== Test: GetProtocolVersion 基本功能 ===');
 
@@ -166,8 +162,8 @@ begin
     LContext := LLib.CreateContext(sslCtxClient);
 
     // 创建未连接的连接对象
-    LSocket := INVALID_SOCKET;
-    LConn := LContext.CreateConnection(LSocket);
+    LSocket := PLATFORM_INVALID_SOCKET;
+    LConn := LContext.CreateConnection(THandle(LSocket.Value));
 
     // 获取协议版本（应该返回默认值）
     LProtocol := LConn.GetProtocolVersion;
@@ -192,7 +188,7 @@ var
   LContext: ISSLContext;
   LConn: ISSLConnection;
   LCipherName: string;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
 begin
   WriteLn('=== Test: GetCipherName 基本功能 ===');
 
@@ -207,8 +203,8 @@ begin
     LContext := LLib.CreateContext(sslCtxClient);
 
     // 创建未连接的连接对象
-    LSocket := INVALID_SOCKET;
-    LConn := LContext.CreateConnection(LSocket);
+    LSocket := PLATFORM_INVALID_SOCKET;
+    LConn := LContext.CreateConnection(THandle(LSocket.Value));
 
     // 获取密码套件名称（应该返回空字符串）
     LCipherName := LConn.GetCipherName;
@@ -233,7 +229,7 @@ var
   LContext: ISSLContext;
   LConn: ISSLConnection;
   LChain: TSSLCertificateArray;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
 begin
   WriteLn('=== Test: GetPeerCertificateChain 基本功能 ===');
 
@@ -248,8 +244,8 @@ begin
     LContext := LLib.CreateContext(sslCtxClient);
 
     // 创建未连接的连接对象
-    LSocket := INVALID_SOCKET;
-    LConn := LContext.CreateConnection(LSocket);
+    LSocket := PLATFORM_INVALID_SOCKET;
+    LConn := LContext.CreateConnection(THandle(LSocket.Value));
 
     // 获取证书链（应该返回空数组）
     LChain := LConn.GetPeerCertificateChain;
@@ -276,7 +272,7 @@ var
   LInfo: TSSLConnectionInfo;
   LProtocol: TSSLProtocolVersion;
   LCipherName: string;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
 begin
   WriteLn('=== Test: GetConnectionInfo 与单独方法一致性 ===');
 
@@ -291,8 +287,8 @@ begin
     LContext := LLib.CreateContext(sslCtxClient);
 
     // 创建未连接的连接对象
-    LSocket := INVALID_SOCKET;
-    LConn := LContext.CreateConnection(LSocket);
+    LSocket := PLATFORM_INVALID_SOCKET;
+    LConn := LContext.CreateConnection(THandle(LSocket.Value));
 
     // 获取连接信息
     {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}

@@ -12,9 +12,8 @@ uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
+  nextpas.core.platform.socket,
   {$IFNDEF WINDOWS}
-  sockets,
-  BaseUnix, Unix,
   nextpas.core.tls.openssl.backed,
   {$ENDIF}
   {$IFDEF WINDOWS}nextpas.core.tls.winssl.lib,{$ENDIF}
@@ -33,25 +32,6 @@ const
   CERT_E_EXPIRED = $800B0101;
   CERT_E_CN_NO_MATCH = $800B010F;
   CERT_E_INVALID_NAME = $800B0114;
-
-type
-  TInetSockAddr = record
-    sin_family: cushort;
-    sin_port: cushort;
-    sin_addr: in_addr;
-    sin_zero: array[0..7] of char;
-  end;
-
-  PHostEnt = ^THostEnt;
-  THostEnt = record
-    h_name: PChar;
-    h_aliases: PPChar;
-    h_addrtype: cint;
-    h_length: cint;
-    h_addr_list: PPChar;
-  end;
-
-function gethostbyname(name: PChar): PHostEnt; cdecl; external 'c';
 {$ENDIF}
 
 type
@@ -102,38 +82,29 @@ begin
     Result := '';
 end;
 
-{$IFDEF WINDOWS}
-function ConnectTCP(const H: string; Port: Word; out Sock: THandle): Boolean;
-var A: TSockAddrIn; WSA: TWSAData; HE: PHostEnt; InA: TInAddr; Tm: Integer;
+function ConnectTCP(const H: string; Port: Word;
+  out Sock: TPlatformSocket): Boolean;
+var
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
-  Result := False; Sock := INVALID_HANDLE_VALUE; if WSAStartup(MAKEWORD(2,2), WSA) <> 0 then Exit;
-  Sock := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); if Sock = INVALID_SOCKET then Exit;
-  Tm := 10000; setsockopt(Sock, SOL_SOCKET, SO_RCVTIMEO, @Tm, SizeOf(Tm)); setsockopt(Sock, SOL_SOCKET, SO_SNDTIMEO, @Tm, SizeOf(Tm));
-  HE := gethostbyname(PAnsiChar(AnsiString(H))); if HE = nil then begin closesocket(Sock); Sock := INVALID_SOCKET; Exit; end;
-  FillChar(A, SizeOf(A), 0); A.sin_family := AF_INET; A.sin_port := htons(Port); Move(HE^.h_addr_list^^, InA, SizeOf(InA)); A.sin_addr := InA;
-  Result := connect(Sock, @A, SizeOf(A)) = 0; if not Result then begin closesocket(Sock); Sock := INVALID_SOCKET; end;
-end;
-{$ELSE}
-function ConnectTCP(const H: string; Port: Word; out Sock: THandle): Boolean;
-var A: TInetSockAddr; HE: PHostEnt; Sfd: cint;
-begin
-  Result := False; Sock := THandle(-1);
-  Sfd := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Sfd < 0 then Exit;
-  HE := gethostbyname(PChar(H));
-  if HE = nil then begin fpClose(Sfd); Exit; end;
-  FillChar(A, SizeOf(A), 0);
-  A.sin_family := AF_INET;
-  A.sin_port := htons(Port);
-  Move(HE^.h_addr_list^^, A.sin_addr, SizeOf(A.sin_addr));
-  if fpConnect(Sfd, @A, SizeOf(A)) = 0 then
+  Result := False;
+  Sock := PLATFORM_INVALID_SOCKET;
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(H)), LIP) <> 0 then
+    Exit;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Sock) <> 0 then
+    Exit;
+  platform_socket_set_timeout(Sock, PLATFORM_SO_RCVTIMEO, 10000);
+  platform_socket_set_timeout(Sock, PLATFORM_SO_SNDTIMEO, 10000);
+  platform_sockaddr_ipv4(Port, LIP, LAddr);
+  if platform_socket_connect(Sock, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin
-    Sock := Sfd; Result := True;
-  end
-  else
-    fpClose(Sfd);
+    platform_socket_close(Sock);
+    Exit;
+  end;
+  Result := True;
 end;
-{$ENDIF}
 
 procedure Probe(const Host: string; out Code: Integer; out Str: string; SideIsWin: Boolean);
 var
@@ -141,7 +112,7 @@ var
   Ctx: ISSLContext;
   Conn: ISSLConnection;
   ClientConn: ISSLClientConnection;
-  S: THandle;
+  S: TPlatformSocket;
   ok: Boolean;
 begin
   Code := 0; Str := '';
@@ -152,7 +123,7 @@ begin
   Ctx.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
   if not ConnectTCP(Host, 443, S) then Exit;
   try
-    Conn := Ctx.CreateConnection(S);
+    Conn := Ctx.CreateConnection(THandle(S.Value));
     if Conn = nil then Exit;
     if not Supports(Conn, ISSLClientConnection, ClientConn) then Exit;
     ClientConn.SetServerName(Host);
@@ -162,7 +133,8 @@ begin
     Str := GetVerificationResultString(Conn);
     Conn.Shutdown;
   finally
-    {$IFDEF WINDOWS} if S <> INVALID_HANDLE_VALUE then closesocket(S) {$ELSE} if S <> THandle(-1) then fpClose(S) {$ENDIF};
+    if S.IsValid then
+      platform_socket_close(S);
   end;
 end;
 
@@ -170,7 +142,7 @@ var
   c: Integer; s: string; k: TErrorKind;
   failCode: Integer; failStr: string;
   Lib: ISSLLibrary; Ctx: ISSLContext; Conn: ISSLConnection; ClientConn: ISSLClientConnection;
-  Sfd, SockRefused, SockNX: THandle; ok: Boolean;
+  Sfd, SockRefused, SockNX: TPlatformSocket; ok: Boolean;
 
 procedure RunErrorTests;
 begin
@@ -197,13 +169,14 @@ begin
       if ConnectTCP('www.google.com', 80, Sfd) then
       begin
         try
-          Conn := Ctx.CreateConnection(Sfd);
+          Conn := Ctx.CreateConnection(THandle(Sfd.Value));
           if (Conn <> nil) and Supports(Conn, ISSLClientConnection, ClientConn) then
             ClientConn.SetServerName('www.google.com');
           ok := (Conn <> nil) and Conn.Connect;
           Check('HTTP:80 握手应失败', not ok);
         finally
-          {$IFDEF WINDOWS} if Sfd <> INVALID_HANDLE_VALUE then closesocket(Sfd) {$ELSE} if Sfd <> THandle(-1) then fpClose(Sfd) {$ENDIF};
+          if Sfd.IsValid then
+            platform_socket_close(Sfd);
         end;
       end;
     end;
@@ -212,7 +185,7 @@ begin
   // 连接拒绝（本地环回：端口1通常拒绝）
   if ConnectTCP('127.0.0.1', 1, SockRefused) then
   begin
-    {$IFDEF WINDOWS} closesocket(SockRefused) {$ELSE} fpClose(SockRefused) {$ENDIF};
+    platform_socket_close(SockRefused);
     Check('127.0.0.1:1 预期连接拒绝', False, '意外连接成功');
   end
   else
@@ -221,7 +194,7 @@ begin
   // 不存在的域名（NXDOMAIN）
   if ConnectTCP('nonexistent.invalid', 443, SockNX) then
   begin
-    {$IFDEF WINDOWS} closesocket(SockNX) {$ELSE} fpClose(SockNX) {$ENDIF};
+    platform_socket_close(SockNX);
     Check('nonexistent.invalid 应解析失败', False, '意外连接成功');
   end
   else

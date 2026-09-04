@@ -3,9 +3,6 @@ program test_winssl_context_config;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ENDIF}
   nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,

@@ -3,58 +3,43 @@ program test_winssl_debug;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Windows, WinSock2,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.platform.socket,
   nextpas.core.tls.base, nextpas.core.tls.winssl.lib;
 
 const
   TEST_HOST = 'www.google.com';
   TEST_PORT = 443;
 
-function CreateTCPSocket(const AHost: string; APort: Word): TSocket;
+function CreateTCPSocket(const AHost: string; APort: Word): TPlatformSocket;
 var
-  HostEnt: PHostEnt;
-  SockAddr: TSockAddrIn;
-  WSAData: TWSAData;
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
-  Result := INVALID_SOCKET;
+  Result := PLATFORM_INVALID_SOCKET;
 
-  // Initialize Winsock on Windows
-  if WSAStartup($0202, WSAData) <> 0 then
+  // Resolve host
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(AHost)), LIP) <> 0 then
   begin
-    WriteLn('Error: Failed to initialize Winsock');
+    WriteLn('Error: Failed to resolve host: ' + AHost);
     Exit;
   end;
 
   // Create socket
-  Result := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if Result = INVALID_SOCKET then
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
   begin
     WriteLn('Error: Failed to create socket');
+    Result := PLATFORM_INVALID_SOCKET;
     Exit;
   end;
-
-  // Resolve host
-  HostEnt := gethostbyname(PChar(AHost));
-  if HostEnt = nil then
-  begin
-    WriteLn('Error: Failed to resolve host: ' + AHost);
-    closesocket(Result);
-    Result := INVALID_SOCKET;
-    Exit;
-  end;
-
-  // Setup address structure
-  FillChar(SockAddr, SizeOf(SockAddr), 0);
-  SockAddr.sin_family := AF_INET;
-  SockAddr.sin_port := htons(APort);
-  SockAddr.sin_addr.S_addr := PLongWord(HostEnt^.h_addr_list^)^;
 
   // Connect
-  if connect(Result, PSockAddr(@SockAddr)^, SizeOf(SockAddr)) <> 0 then
+  platform_sockaddr_ipv4(APort, LIP, LAddr);
+  if platform_socket_connect(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin
     WriteLn('Error: Failed to connect to ' + AHost + ':' + IntToStr(APort));
-    closesocket(Result);
-    Result := INVALID_SOCKET;
+    platform_socket_close(Result);
+    Result := PLATFORM_INVALID_SOCKET;
     Exit;
   end;
 
@@ -67,7 +52,7 @@ var
   Context: ISSLContext;
   Connection: ISSLConnection;
   ClientConn: ISSLClientConnection;
-  Socket: TSocket;
+  Socket: TPlatformSocket;
   Request, Response: AnsiString;
   Buffer: array[0..16383] of Byte; // Larger buffer
   BytesRead, BytesSent: Integer;
@@ -102,7 +87,7 @@ begin
       // Create TCP socket
       WriteLn('Creating TCP connection to ', TEST_HOST, ':', TEST_PORT, '...');
       Socket := CreateTCPSocket(TEST_HOST, TEST_PORT);
-      if Socket = INVALID_SOCKET then
+      if Socket.IsInvalid then
       begin
         WriteLn('Error: Failed to create TCP connection');
         Exit;
@@ -111,7 +96,7 @@ begin
       try
         // Create SSL connection
         WriteLn('Creating SSL connection...');
-        Connection := Context.CreateConnection(Socket);
+        Connection := Context.CreateConnection(THandle(Socket.Value));
         ClientConn := Connection as ISSLClientConnection;
         ClientConn.SetServerName(TEST_HOST);
         try
@@ -258,8 +243,7 @@ begin
           // Connection is freed automatically (interface)
         end;
       finally
-        closesocket(Socket);
-        WSACleanup;
+        platform_socket_close(Socket);
       end;
     finally
       // Context is freed automatically (interface)

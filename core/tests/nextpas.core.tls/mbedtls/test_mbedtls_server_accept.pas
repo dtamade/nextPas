@@ -18,7 +18,7 @@ program test_mbedtls_server_accept;
 
 uses
   {$IFDEF UNIX}
-  CThreads, // Must be first: threading is used before other units' initialization
+  nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,

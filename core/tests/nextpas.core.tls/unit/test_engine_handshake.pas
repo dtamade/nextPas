@@ -4,7 +4,8 @@ program test_engine_handshake;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.platform.socket,
   nextpas.core.tls.base,
   nextpas.core.tls.engine,
   nextpas.core.tls.freepascal.engine,
@@ -29,22 +30,20 @@ begin
   end;
 end;
 
-function ConnectTCP(const AHost: string; APort: Word): THandle;
+function ConnectTCP(const AHost: string; APort: Word): TPlatformSocket;
 var
-  LSockAddr: TInetSockAddr;
+  LSockAddr: TPlatformSockAddr;
 begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result < 0 then
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
     raise Exception.Create('socket() failed');
 
-  FillChar(LSockAddr, SizeOf(LSockAddr), 0);
-  LSockAddr.sin_family := AF_INET;
-  LSockAddr.sin_port := htons(APort);
-  LSockAddr.sin_addr.s_addr := HostToNet(Cardinal($7F000001));
+  platform_sockaddr_loopback4(APort, LSockAddr);
 
-  if fpConnect(Result, @LSockAddr, SizeOf(LSockAddr)) <> 0 then
+  if platform_socket_connect(Result, @LSockAddr.Storage[0],
+    LSockAddr.Len) <> 0 then
   begin
-    CloseSocket(Result);
+    platform_socket_close(Result);
     raise Exception.CreateFmt('connect(%s:%d) failed', [AHost, APort]);
   end;
 end;
@@ -54,7 +53,7 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LEngine: ISSLEngine;
-  LSock: THandle;
+  LSock: TPlatformSocket;
   LAction: TSSLEngineAction;
   LPlaintext, LResponse: TBytes;
   LRequest: string;
@@ -69,22 +68,22 @@ begin
   LCtx.SetServerName('localhost');
 
   LSock := ConnectTCP('127.0.0.1', 44388);
-  WriteLn('  Socket: ', LSock);
+  WriteLn('  Socket: ', LSock.Value);
   try
     // Direct connection test (no engine)
     WriteLn('  Testing direct connection first...');
     LCtx.SetServerName('localhost');
-    LDirect := LCtx.CreateConnection(THandle(LSock));
+    LDirect := LCtx.CreateConnection(THandle(LSock.Value));
     if LDirect.Connect then
       WriteLn('  Direct: OK, cipher=', LDirect.GetCipherName)
     else
       WriteLn('  Direct: FAILED');
     LDirect.Shutdown;
-    CloseSocket(LSock);
+    platform_socket_close(LSock);
 
     // Now test via engine
     LSock := ConnectTCP('127.0.0.1', 44388);
-    LEngine := CreateFreePascalEngine(LCtx, erClient, LSock);
+    LEngine := CreateFreePascalEngine(LCtx, erClient, THandle(LSock.Value));
     LEngine.SetServerName('localhost');
 
     LAction := LEngine.ProcessHandshake;
@@ -116,7 +115,7 @@ begin
     Move(LResponse[0], LRequest[1], Length(LResponse));
     Check(Pos('HTTP/', LRequest) = 1, 'Response starts with HTTP/');
   finally
-    CloseSocket(LSock);
+    platform_socket_close(LSock);
   end;
 end;
 

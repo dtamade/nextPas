@@ -4,7 +4,7 @@ program test_winssl_mtls_e2e_local;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  {$IFDEF WINDOWS}Windows, WinSock2,{$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
@@ -28,23 +28,31 @@ begin
   else begin Inc(Failed); WriteLn('FAIL'); if details <> '' then WriteLn('    ', details); end;
 end;
 
-function InitWinsock: Boolean; var W: TWSAData; begin Result := WSAStartup(MAKEWORD(2,2), W) = 0; end;
-procedure CleanupWinsock; begin WSACleanup; end;
+function InitWinsock: Boolean; begin Result := True; end;
+procedure CleanupWinsock; begin end;
 
-function ConnectToHost(const aHost: string; aPort: Word; out aSocket: TSocket): Boolean;
-var A: TSockAddrIn; H: PHostEnt; InAddr: TInAddr; Tm: Integer;
+function ConnectToHost(const aHost: string; aPort: Word;
+  out aSocket: TPlatformSocket): Boolean;
+var
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
-  Result := False; aSocket := INVALID_SOCKET;
-  aSocket := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if aSocket = INVALID_SOCKET then Exit;
-  Tm := 10000; setsockopt(aSocket, SOL_SOCKET, SO_RCVTIMEO, @Tm, SizeOf(Tm));
-  setsockopt(aSocket, SOL_SOCKET, SO_SNDTIMEO, @Tm, SizeOf(Tm));
-  H := gethostbyname(PAnsiChar(AnsiString(aHost)));
-  if H = nil then begin closesocket(aSocket); aSocket := INVALID_SOCKET; Exit; end;
-  FillChar(A, SizeOf(A), 0); A.sin_family := AF_INET; A.sin_port := htons(aPort);
-  Move(H^.h_addr_list^^, InAddr, SizeOf(InAddr)); A.sin_addr := InAddr;
-  Result := connect(aSocket, @A, SizeOf(A)) = 0;
-  if not Result then begin closesocket(aSocket); aSocket := INVALID_SOCKET; end;
+  Result := False;
+  aSocket := PLATFORM_INVALID_SOCKET;
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(aHost)), LIP) <> 0 then
+    Exit;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    aSocket) <> 0 then
+    Exit;
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_RCVTIMEO, 10000);
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_SNDTIMEO, 10000);
+  platform_sockaddr_ipv4(aPort, LIP, LAddr);
+  if platform_socket_connect(aSocket, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(aSocket);
+    Exit;
+  end;
+  Result := True;
 end;
 
 function Env(const name: string; const defVal: string): string; begin Result := GetEnvironmentVariable(name); if Result = '' then Result := defVal; end;
@@ -53,7 +61,7 @@ function EnvDefault(const name: string): string; begin Result := GetEnvironmentV
 procedure Test_mTLS_E2E_Local;
 var
   Lib: ISSLLibrary; Ctx: ISSLContext; Conn: ISSLConnection; ClientConn: ISSLClientConnection;
-  Host, Pfx, PfxPass, CaFile: string; Port: Integer; S: TSocket; ok: Boolean;
+  Host, Pfx, PfxPass, CaFile: string; Port: Integer; S: TPlatformSocket; ok: Boolean;
 begin
   BeginSection('WinSSL mTLS E2E (local s_server)');
 
@@ -98,7 +106,7 @@ begin
 
     if not ConnectToHost(Host, Port, S) then begin Check('TCP 连接到 ' + Host + ':' + IntToStr(Port), False); Exit; end;
     try
-      Conn := Ctx.CreateConnection(THandle(S));
+      Conn := Ctx.CreateConnection(THandle(S.Value));
       Check('创建 SSL 连接对象', Conn <> nil);
       if Conn = nil then Exit;
 
@@ -112,7 +120,7 @@ begin
       Check('mTLS 握手', ok);
       if ok then Conn.Shutdown;
     finally
-      if S <> INVALID_SOCKET then closesocket(S);
+      if S.IsValid then platform_socket_close(S);
     end;
 
   finally

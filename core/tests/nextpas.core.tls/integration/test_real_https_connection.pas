@@ -8,12 +8,9 @@ program test_real_https_connection;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  {$IFDEF UNIX}
-  ctypes, BaseUnix, Unix,
-  {$ENDIF}
   nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.platform.socket,
   nextpas.core.tls.base,
-  sockets,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -22,69 +19,38 @@ uses
 var
   Runner: TSimpleTestRunner;
 
-{$IFNDEF WINDOWS}
-const
-  INVALID_SOCKET = TSocket(-1);
-
-type
-  TInetSockAddr = record
-    sin_family: cushort;
-    sin_port: cushort;
-    sin_addr: in_addr;
-    sin_zero: array[0..7] of char;
-  end;
-
-  PHostEnt = ^THostEnt;
-  THostEnt = record
-    h_name: PChar;
-    h_aliases: PPChar;
-    h_addrtype: cint;
-    h_length: cint;
-    h_addr_list: PPChar;
-  end;
-
-function gethostbyname(name: PChar): PHostEnt; cdecl; external 'c';
-{$ENDIF}
-
 { Create TCP socket }
-function CreateTCPSocket: TSocket;
+function CreateTCPSocket: TPlatformSocket;
 begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
+    Result := PLATFORM_INVALID_SOCKET;
 end;
 
 { Resolve hostname }
-function ResolveHostname(const AHostname: string; out AAddress: in_addr): Boolean;
-var
-  HostEnt: PHostEnt;
+function ResolveHostname(const AHostname: string; out AAddress: UInt32): Boolean;
 begin
-  Result := False;
-  FillChar(AAddress, SizeOf(AAddress), 0);
-
-  HostEnt := gethostbyname(PChar(AHostname));
-  if (HostEnt = nil) or (HostEnt^.h_addr_list = nil) or (HostEnt^.h_addr_list^ = nil) then
-    Exit;
-
-  Move(HostEnt^.h_addr_list^^, AAddress, SizeOf(AAddress));
-  Result := True;
+  AAddress := 0;
+  Result := platform_socket_resolve_ipv4(
+    PAnsiChar(AnsiString(AHostname)), AAddress) = 0;
 end;
 
 { Connect to server }
-function ConnectToHost(ASocket: TSocket; const AHostname: string; APort: Word): Boolean;
+function ConnectToHost(ASocket: TPlatformSocket; const AHostname: string;
+  APort: Word): Boolean;
 var
-  Addr: TInetSockAddr;
-  IP: in_addr;
+  Addr: TPlatformSockAddr;
+  IP: UInt32;
 begin
   Result := False;
 
   if not ResolveHostname(AHostname, IP) then
     Exit;
 
-  FillChar(Addr, SizeOf(Addr), 0);
-  Addr.sin_family := AF_INET;
-  Addr.sin_port := htons(APort);
-  Addr.sin_addr := IP;
+  platform_sockaddr_ipv4(APort, IP, Addr);
 
-  Result := fpConnect(ASocket, @Addr, SizeOf(Addr)) = 0;
+  Result := platform_socket_connect(ASocket, @Addr.Storage[0],
+    Addr.Len) = 0;
 end;
 
 function GetConnectionStateString(AConn: ISSLConnection): string;
@@ -108,13 +74,10 @@ begin
 end;
 
 { Set socket timeout }
-procedure SetSocketTimeout(ASocket: TSocket; ATimeoutMs: Integer);
-var
-  Timeout: LongInt;
+procedure SetSocketTimeout(ASocket: TPlatformSocket; ATimeoutMs: Integer);
 begin
-  Timeout := ATimeoutMs;
-  fpSetSockOpt(ASocket, SOL_SOCKET, SO_RCVTIMEO, @Timeout, SizeOf(Timeout));
-  fpSetSockOpt(ASocket, SOL_SOCKET, SO_SNDTIMEO, @Timeout, SizeOf(Timeout));
+  platform_socket_set_timeout(ASocket, PLATFORM_SO_RCVTIMEO, ATimeoutMs);
+  platform_socket_set_timeout(ASocket, PLATFORM_SO_SNDTIMEO, ATimeoutMs);
 end;
 
 { Test single HTTPS site connection }
@@ -123,7 +86,7 @@ var
   Lib: ISSLLibrary;
   Ctx: ISSLContext;
   Conn: ISSLConnection;
-  Sock: TSocket;
+  Sock: TPlatformSocket;
   Request: string;
   Buffer: array[0..4095] of Byte;
   BytesRead, BytesWritten: Integer;
@@ -131,11 +94,11 @@ var
   RequestBytes: TBytes;
 begin
   Result := False;
-  Sock := INVALID_SOCKET;
+  Sock := PLATFORM_INVALID_SOCKET;
 
   try
     Sock := CreateTCPSocket;
-    if Sock = INVALID_SOCKET then
+    if Sock.IsInvalid then
     begin
       WriteLn('    Cannot create socket');
       Exit;
@@ -173,7 +136,7 @@ begin
       Ctx.SetVerifyMode([]);
     Ctx.SetALPNProtocols('http/1.1');
 
-    Conn := Ctx.CreateConnection(Sock);
+    Conn := Ctx.CreateConnection(THandle(Sock.Value));
     if Conn = nil then
     begin
       WriteLn('    Create SSL connection failed');
@@ -237,8 +200,8 @@ begin
     end;
   end;
 
-  if Sock <> INVALID_SOCKET then
-    fpClose(Sock);
+  if Sock.IsValid then
+    platform_socket_close(Sock);
 end;
 
 { Test TLS version negotiation }
@@ -247,7 +210,7 @@ var
   Lib: ISSLLibrary;
   Ctx: ISSLContext;
   Conn: ISSLConnection;
-  Sock: TSocket;
+  Sock: TPlatformSocket;
   Protocol: string;
   ProtoVer: TSSLProtocolVersion;
 begin
@@ -255,7 +218,7 @@ begin
   WriteLn('=== TLS Version Negotiation ===');
 
   Sock := CreateTCPSocket;
-  if Sock = INVALID_SOCKET then
+  if Sock.IsInvalid then
   begin
     Runner.Skip('TLS 1.3 negotiation', '[environment] cannot create socket');
     Exit;
@@ -265,7 +228,7 @@ begin
 
   if not ConnectToHost(Sock, 'www.google.com', 443) then
   begin
-    fpClose(Sock);
+    platform_socket_close(Sock);
     Runner.Skip('TLS 1.3 negotiation', '[environment] TCP connect failed');
     Exit;
   end;
@@ -282,7 +245,7 @@ begin
     Ctx.SetProtocolVersions([sslProtocolTLS13]);
     Ctx.SetVerifyMode([]);
 
-    Conn := Ctx.CreateConnection(Sock);
+    Conn := Ctx.CreateConnection(THandle(Sock.Value));
     (Conn as ISSLClientConnection).SetServerName('www.google.com');
     if Conn.Connect then
     begin
@@ -298,7 +261,7 @@ begin
       Runner.Check('TLS 1.3 negotiation', False, E.Message);
   end;
 
-  fpClose(Sock);
+  platform_socket_close(Sock);
 end;
 
 { Test certificate verification }
@@ -307,7 +270,7 @@ var
   Lib: ISSLLibrary;
   Ctx: ISSLContext;
   Conn: ISSLConnection;
-  Sock: TSocket;
+  Sock: TPlatformSocket;
   CertInfo: TSSLCertificateInfo;
   PeerCert: ISSLCertificate;
 begin
@@ -315,7 +278,7 @@ begin
   WriteLn('=== Certificate Verification ===');
 
   Sock := CreateTCPSocket;
-  if Sock = INVALID_SOCKET then
+  if Sock.IsInvalid then
   begin
     Runner.Skip('Get server certificate', '[environment] cannot create socket');
     Exit;
@@ -325,7 +288,7 @@ begin
 
   if not ConnectToHost(Sock, 'www.github.com', 443) then
   begin
-    fpClose(Sock);
+    platform_socket_close(Sock);
     Runner.Skip('Get server certificate', '[environment] TCP connect failed');
     Exit;
   end;
@@ -338,7 +301,7 @@ begin
     Ctx.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
     Ctx.SetVerifyMode([]);
 
-    Conn := Ctx.CreateConnection(Sock);
+    Conn := Ctx.CreateConnection(THandle(Sock.Value));
     (Conn as ISSLClientConnection).SetServerName('www.github.com');
     if Conn.Connect then
     begin
@@ -363,7 +326,7 @@ begin
       Runner.Check('Get server certificate', False, E.Message);
   end;
 
-  fpClose(Sock);
+  platform_socket_close(Sock);
 end;
 
 { Test multiple known websites }
@@ -407,13 +370,13 @@ var
   Ctx: ISSLContext;
   Conn: ISSLConnection;
   ClientConn: ISSLClientConnection;
-  Sock: TSocket;
+  Sock: TPlatformSocket;
 begin
   WriteLn;
   WriteLn('=== SNI Function Tests ===');
 
   Sock := CreateTCPSocket;
-  if Sock = INVALID_SOCKET then
+  if Sock.IsInvalid then
   begin
     Runner.Skip('SNI setup', '[environment] cannot create socket');
     Exit;
@@ -423,7 +386,7 @@ begin
 
   if not ConnectToHost(Sock, 'www.cloudflare.com', 443) then
   begin
-    fpClose(Sock);
+    platform_socket_close(Sock);
     Runner.Skip('SNI setup', '[environment] TCP connect failed');
     Exit;
   end;
@@ -436,7 +399,7 @@ begin
     Ctx.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
     Ctx.SetVerifyMode([]);
 
-    Conn := Ctx.CreateConnection(Sock);
+    Conn := Ctx.CreateConnection(THandle(Sock.Value));
     ClientConn := Conn as ISSLClientConnection;
     ClientConn.SetServerName('www.cloudflare.com');
     Runner.Check('Set SNI', ClientConn.GetServerName = 'www.cloudflare.com');
@@ -450,7 +413,7 @@ begin
       Runner.Check('SNI function', False, E.Message);
   end;
 
-  fpClose(Sock);
+  platform_socket_close(Sock);
 end;
 
 { Test ALPN }
@@ -459,14 +422,14 @@ var
   Lib: ISSLLibrary;
   Ctx: ISSLContext;
   Conn: ISSLConnection;
-  Sock: TSocket;
+  Sock: TPlatformSocket;
   NegotiatedProtocol: string;
 begin
   WriteLn;
   WriteLn('=== ALPN Protocol Negotiation ===');
 
   Sock := CreateTCPSocket;
-  if Sock = INVALID_SOCKET then
+  if Sock.IsInvalid then
   begin
     Runner.Skip('ALPN negotiation', '[environment] cannot create socket');
     Exit;
@@ -476,7 +439,7 @@ begin
 
   if not ConnectToHost(Sock, 'www.google.com', 443) then
   begin
-    fpClose(Sock);
+    platform_socket_close(Sock);
     Runner.Skip('ALPN negotiation', '[environment] TCP connect failed');
     Exit;
   end;
@@ -492,7 +455,7 @@ begin
 
     Runner.Check('Set ALPN protocols', Ctx.GetALPNProtocols = 'h2,http/1.1');
 
-    Conn := Ctx.CreateConnection(Sock);
+    Conn := Ctx.CreateConnection(THandle(Sock.Value));
     (Conn as ISSLClientConnection).SetServerName('www.google.com');
     if Conn.Connect then
     begin
@@ -508,7 +471,7 @@ begin
       Runner.Check('ALPN function', False, E.Message);
   end;
 
-  fpClose(Sock);
+  platform_socket_close(Sock);
 end;
 
 begin

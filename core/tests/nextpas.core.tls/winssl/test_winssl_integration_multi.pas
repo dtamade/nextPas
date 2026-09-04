@@ -4,7 +4,8 @@ program test_winssl_integration_multi;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  Windows, nextpas.core.system.sysutils, nextpas.core.system.classes, WinSock2,
+  nextpas.core.platform.socket,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
@@ -83,12 +84,12 @@ begin
 end;
 
 procedure TestExpectedHandshakeFailurePath(const aTestName, aHost: string;
-  aContext: ISSLContext; aSocket: TSocket);
+  aContext: ISSLContext; aSocket: TPlatformSocket);
 var
   LConn: ISSLConnection;
 begin
   try
-    LConn := aContext.CreateConnection(aSocket);
+    LConn := aContext.CreateConnection(THandle(aSocket.Value));
     (LConn as ISSLClientConnection).SetServerName(aHost);
     Test(aTestName, not LConn.Connect);
   except
@@ -98,59 +99,41 @@ begin
 end;
 
 function InitWinsock: Boolean;
-var
-  LWSAData: TWSAData;
 begin
-  Result := WSAStartup(MAKEWORD(2, 2), LWSAData) = 0;
+  Result := True;
 end;
 
 procedure CleanupWinsock;
 begin
-  WSACleanup;
 end;
 
-function ConnectToHost(const aHost: string; aPort: Word; out aSocket: TSocket): Boolean;
+function ConnectToHost(const aHost: string; aPort: Word;
+  out aSocket: TPlatformSocket): Boolean;
 var
-  LAddr: TSockAddrIn;
-  LHostEnt: PHostEnt;
-  LInAddr: TInAddr;
-  LTimeout: Integer;
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
   Result := False;
-  aSocket := INVALID_SOCKET;
+  aSocket := PLATFORM_INVALID_SOCKET;
 
-  // Create socket
-  aSocket := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if aSocket = INVALID_SOCKET then
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(aHost)), LIP) <> 0 then
+    Exit;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    aSocket) <> 0 then
     Exit;
 
   // Set timeout
-  LTimeout := 10000; // 10 seconds
-  setsockopt(aSocket, SOL_SOCKET, SO_RCVTIMEO, @LTimeout, SizeOf(LTimeout));
-  setsockopt(aSocket, SOL_SOCKET, SO_SNDTIMEO, @LTimeout, SizeOf(LTimeout));
-
-  // Resolve hostname
-  LHostEnt := gethostbyname(PAnsiChar(AnsiString(aHost)));
-  if LHostEnt = nil then
-  begin
-    closesocket(aSocket);
-    aSocket := INVALID_SOCKET;
-    Exit;
-  end;
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_RCVTIMEO, 10000);
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_SNDTIMEO, 10000);
 
   // Connect
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(aPort);
-  Move(LHostEnt^.h_addr_list^^, LInAddr, SizeOf(LInAddr));
-  LAddr.sin_addr := LInAddr;
-
-  Result := connect(aSocket, @LAddr, SizeOf(LAddr)) = 0;
-  if not Result then
+  platform_sockaddr_ipv4(aPort, LIP, LAddr);
+  if platform_socket_connect(aSocket, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin
-    closesocket(aSocket);
-    aSocket := INVALID_SOCKET;
+    platform_socket_close(aSocket);
+    Exit;
   end;
+  Result := True;
 end;
 
 function SendHTTPRequest(aConn: ISSLConnection; const aHost, aPath: string): Boolean;
@@ -235,7 +218,7 @@ var
   LLib: ISSLLibrary;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
   LResponse: string;
   LProtocol: TSSLProtocolVersion;
   LCipherName: string;
@@ -245,7 +228,7 @@ var
 begin
   BeginSection(aName);
 
-  LSocket := INVALID_SOCKET;
+  LSocket := PLATFORM_INVALID_SOCKET;
   LConnected := False;
 
   try
@@ -274,11 +257,11 @@ begin
 
     // Connect TCP socket
     Test('TCP 连接到 ' + aHost, ConnectToHost(aHost, aPort, LSocket));
-    if LSocket = INVALID_SOCKET then
+    if LSocket.IsInvalid then
       Exit;
 
     // Create SSL connection
-    LConn := LContext.CreateConnection(LSocket);
+    LConn := LContext.CreateConnection(THandle(LSocket.Value));
     Test('创建 SSL 连接对象', LConn <> nil);
     if LConn = nil then
       Exit;
@@ -327,8 +310,8 @@ begin
     Test('优雅关闭连接', True);
 
   finally
-    if LSocket <> INVALID_SOCKET then
-      closesocket(LSocket);
+    if LSocket.IsValid then
+      platform_socket_close(LSocket);
   end;
 end;
 
@@ -337,12 +320,12 @@ var
   LLib: ISSLLibrary;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
   LProtocol: TSSLProtocolVersion;
 begin
   BeginSection('协议版本协商测试');
 
-  LSocket := INVALID_SOCKET;
+  LSocket := PLATFORM_INVALID_SOCKET;
 
   try
     LLib := CreateWinSSLLibrary;
@@ -359,7 +342,7 @@ begin
 
     if ConnectToHost('www.google.com', 443, LSocket) then
     begin
-      LConn := LContext.CreateConnection(LSocket);
+      LConn := LContext.CreateConnection(THandle(LSocket.Value));
       (LConn as ISSLClientConnection).SetServerName('www.google.com');
 
       if LConn.Connect then
@@ -371,8 +354,8 @@ begin
       else
         Test('强制 TLS 1.2 协商', False);
 
-      closesocket(LSocket);
-      LSocket := INVALID_SOCKET;
+      platform_socket_close(LSocket);
+      LSocket := PLATFORM_INVALID_SOCKET;
     end;
 
     // Test 2: TLS 1.3 (if supported by both client and server)
@@ -383,7 +366,7 @@ begin
     if ConnectToHost('www.cloudflare.com', 443, LSocket) then
     begin
       try
-        LConn := LContext.CreateConnection(LSocket);
+        LConn := LContext.CreateConnection(THandle(LSocket.Value));
         (LConn as ISSLClientConnection).SetServerName('www.cloudflare.com');
 
         if LConn.Connect then
@@ -409,10 +392,10 @@ begin
         end;
       end;
 
-      if LSocket <> INVALID_SOCKET then
+      if LSocket.IsValid then
       begin
-        closesocket(LSocket);
-        LSocket := INVALID_SOCKET;
+        platform_socket_close(LSocket);
+        LSocket := PLATFORM_INVALID_SOCKET;
       end;
     end;
 
@@ -423,7 +406,7 @@ begin
 
     if ConnectToHost('www.microsoft.com', 443, LSocket) then
     begin
-      LConn := LContext.CreateConnection(LSocket);
+      LConn := LContext.CreateConnection(THandle(LSocket.Value));
       (LConn as ISSLClientConnection).SetServerName('www.microsoft.com');
 
       if LConn.Connect then
@@ -435,13 +418,13 @@ begin
       else
         Test('自动协商', False);
 
-      closesocket(LSocket);
-      LSocket := INVALID_SOCKET;
+      platform_socket_close(LSocket);
+      LSocket := PLATFORM_INVALID_SOCKET;
     end;
 
   finally
-    if LSocket <> INVALID_SOCKET then
-      closesocket(LSocket);
+    if LSocket.IsValid then
+      platform_socket_close(LSocket);
   end;
 end;
 
@@ -450,12 +433,12 @@ var
   LLib: ISSLLibrary;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
   LResponse: string;
 begin
   BeginSection('数据传输大小测试');
 
-  LSocket := INVALID_SOCKET;
+  LSocket := PLATFORM_INVALID_SOCKET;
 
   try
     LLib := CreateWinSSLLibrary;
@@ -472,7 +455,7 @@ begin
 
     if ConnectToHost('www.google.com', 443, LSocket) then
     begin
-      LConn := LContext.CreateConnection(LSocket);
+      LConn := LContext.CreateConnection(THandle(LSocket.Value));
       (LConn as ISSLClientConnection).SetServerName('www.google.com');
 
       if LConn.Connect then
@@ -489,8 +472,8 @@ begin
         LConn.Shutdown;
       end;
 
-      closesocket(LSocket);
-      LSocket := INVALID_SOCKET;
+      platform_socket_close(LSocket);
+      LSocket := PLATFORM_INVALID_SOCKET;
     end;
 
     // Test medium response (~10KB) - main page
@@ -500,7 +483,7 @@ begin
 
     if ConnectToHost('www.microsoft.com', 443, LSocket) then
     begin
-      LConn := LContext.CreateConnection(LSocket);
+      LConn := LContext.CreateConnection(THandle(LSocket.Value));
       (LConn as ISSLClientConnection).SetServerName('www.microsoft.com');
 
       if LConn.Connect then
@@ -517,8 +500,8 @@ begin
         LConn.Shutdown;
       end;
 
-      closesocket(LSocket);
-      LSocket := INVALID_SOCKET;
+      platform_socket_close(LSocket);
+      LSocket := PLATFORM_INVALID_SOCKET;
     end;
 
     // Test large response (> 10KB) - API response
@@ -528,7 +511,7 @@ begin
 
     if ConnectToHost('api.github.com', 443, LSocket) then
     begin
-      LConn := LContext.CreateConnection(LSocket);
+      LConn := LContext.CreateConnection(THandle(LSocket.Value));
       (LConn as ISSLClientConnection).SetServerName('api.github.com');
 
       if LConn.Connect then
@@ -545,13 +528,13 @@ begin
         LConn.Shutdown;
       end;
 
-      closesocket(LSocket);
-      LSocket := INVALID_SOCKET;
+      platform_socket_close(LSocket);
+      LSocket := PLATFORM_INVALID_SOCKET;
     end;
 
   finally
-    if LSocket <> INVALID_SOCKET then
-      closesocket(LSocket);
+    if LSocket.IsValid then
+      platform_socket_close(LSocket);
   end;
 end;
 
@@ -560,11 +543,11 @@ var
   LLib: ISSLLibrary;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
 begin
   BeginSection('错误场景测试');
 
-  LSocket := INVALID_SOCKET;
+  LSocket := PLATFORM_INVALID_SOCKET;
 
   try
     LLib := CreateWinSSLLibrary;
@@ -588,8 +571,8 @@ begin
       TestExpectedHandshakeFailurePath('HTTP 端口 TLS 握手失败', 'www.google.com',
         LContext, LSocket);
 
-      closesocket(LSocket);
-      LSocket := INVALID_SOCKET;
+      platform_socket_close(LSocket);
+      LSocket := PLATFORM_INVALID_SOCKET;
     end
     else
       Test('连接到 HTTP 端口', False);
@@ -605,8 +588,8 @@ begin
       TestExpectedHandshakeFailurePath('SSL 3.0 握手失败（已废弃）', 'www.google.com',
         LContext, LSocket);
 
-      closesocket(LSocket);
-      LSocket := INVALID_SOCKET;
+      platform_socket_close(LSocket);
+      LSocket := PLATFORM_INVALID_SOCKET;
     end;
 
     // Test 4: Connection timeout (using a non-routable IP)
@@ -614,8 +597,8 @@ begin
       '使用非可路由 IP 测试超时');
 
   finally
-    if LSocket <> INVALID_SOCKET then
-      closesocket(LSocket);
+    if LSocket.IsValid then
+      platform_socket_close(LSocket);
   end;
 end;
 
@@ -624,7 +607,7 @@ var
   LLib: ISSLLibrary;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
   LResponse: string;
   i: Integer;
   LSuccessCount: Integer;
@@ -644,14 +627,14 @@ begin
     // Perform 5 sequential connections
     for i := 1 to 5 do
     begin
-      LSocket := INVALID_SOCKET;
+      LSocket := PLATFORM_INVALID_SOCKET;
       LContext := LLib.CreateContext(sslCtxClient);
       LContext.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
       LContext.SetVerifyMode([]);
 
       if ConnectToHost('www.google.com', 443, LSocket) then
       begin
-        LConn := LContext.CreateConnection(LSocket);
+        LConn := LContext.CreateConnection(THandle(LSocket.Value));
         (LConn as ISSLClientConnection).SetServerName('www.google.com');
 
         if LConn.Connect then
@@ -668,7 +651,7 @@ begin
           LConn.Shutdown;
         end;
 
-        closesocket(LSocket);
+        platform_socket_close(LSocket);
       end;
     end;
 

@@ -3,7 +3,8 @@ program test_tls12_leak_on_failure;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
+  nextpas.core.thread.init,
+  nextpas.core.platform.socket, nextpas.core.platform.signal,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
@@ -11,12 +12,8 @@ uses
 
 {$IFDEF UNIX}
 procedure IgnoreSIGPIPE;
-var
-  SA: SigActionRec;
 begin
-  FillChar(SA, SizeOf(SA), 0);
-  SA.sa_handler := SigActionHandler(SIG_IGN);
-  fpSigAction(SIGPIPE, @SA, nil);
+  platform_signal_ignore(PLATFORM_SIGPIPE);
 end;
 {$ENDIF}
 
@@ -38,39 +35,45 @@ begin
   end;
 end;
 
-function CreateListenSocket(APort: Word): cint;
+function CreateListenSocket(APort: Word): TPlatformSocket;
 var
-  LAddr: TInetSockAddr;
-  LOptVal: cint;
+  LAddr: TPlatformSockAddr;
+  LOptVal: LongInt;
 begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result < 0 then Exit(-1);
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
+    Exit(PLATFORM_INVALID_SOCKET);
   LOptVal := 1;
-  fpSetSockOpt(Result, SOL_SOCKET, SO_REUSEADDR, @LOptVal, SizeOf(LOptVal));
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  LAddr.sin_addr.s_addr := htonl($7F000001);
-  if fpBind(Result, @LAddr, SizeOf(LAddr)) <> 0 then begin fpClose(Result); Exit(-1); end;
-  if fpListen(Result, 5) <> 0 then begin fpClose(Result); Exit(-1); end;
+  platform_socket_setsockopt(Result, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_REUSEADDR, @LOptVal, SizeOf(LOptVal));
+  platform_sockaddr_loopback4(APort, LAddr);
+  if platform_socket_bind(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(Result);
+    Exit(PLATFORM_INVALID_SOCKET);
+  end;
+  if platform_socket_listen(Result, 5) <> 0 then
+  begin
+    platform_socket_close(Result);
+    Exit(PLATFORM_INVALID_SOCKET);
+  end;
 end;
 
-function ConnectTo(APort: Word): cint;
+function ConnectTo(APort: Word): TPlatformSocket;
 var
-  LAddr: TInetSockAddr;
-  LTimeout: TTimeVal;
+  LAddr: TPlatformSockAddr;
 begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result < 0 then Exit(-1);
-  LTimeout.tv_sec := 2;
-  LTimeout.tv_usec := 0;
-  fpSetSockOpt(Result, SOL_SOCKET, SO_RCVTIMEO, @LTimeout, SizeOf(LTimeout));
-  fpSetSockOpt(Result, SOL_SOCKET, SO_SNDTIMEO, @LTimeout, SizeOf(LTimeout));
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  LAddr.sin_addr.s_addr := htonl($7F000001);
-  if fpConnect(Result, @LAddr, SizeOf(LAddr)) <> 0 then begin fpClose(Result); Exit(-1); end;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
+    Exit(PLATFORM_INVALID_SOCKET);
+  platform_socket_set_timeout(Result, PLATFORM_SO_RCVTIMEO, 2000);
+  platform_socket_set_timeout(Result, PLATFORM_SO_SNDTIMEO, 2000);
+  platform_sockaddr_loopback4(APort, LAddr);
+  if platform_socket_connect(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(Result);
+    Exit(PLATFORM_INVALID_SOCKET);
+  end;
 end;
 
 procedure TestConnectToClosedPort;
@@ -78,9 +81,9 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LListenSock, LClientSock, LServerSock: cint;
-  LAddr: TInetSockAddr;
-  LAddrLen: TSockLen;
+  LListenSock, LClientSock, LServerSock: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  LAddrLen: Int32;
   LPort: Word;
 begin
   WriteLn('TestConnectToClosedPort - server closes immediately');
@@ -94,18 +97,20 @@ begin
   LCtx.SetVerifyMode([]);
 
   LListenSock := CreateListenSocket(LPort);
-  Check(LListenSock >= 0, 'Listen socket');
+  Check(LListenSock.IsValid, 'Listen socket');
 
   LClientSock := ConnectTo(LPort);
-  Check(LClientSock >= 0, 'Client connected');
+  Check(LClientSock.IsValid, 'Client connected');
 
   // Accept and immediately close server side (RST)
-  LAddrLen := SizeOf(LAddr);
-  LServerSock := fpAccept(LListenSock, @LAddr, @LAddrLen);
-  fpShutdown(LServerSock, 2);
-  fpClose(LServerSock);
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  platform_socket_accept(LListenSock, @LAddr.Storage[0], @LAddrLen,
+    LServerSock);
+  platform_socket_shutdown(LServerSock, PLATFORM_SHUT_RDWR);
+  platform_socket_close(LServerSock);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     Check(not LConn.Connect, 'Handshake fails when server closes');
   except
@@ -114,8 +119,8 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock);
-  fpClose(LListenSock);
+  platform_socket_close(LClientSock);
+  platform_socket_close(LListenSock);
   LCtx := nil;
   LLib.Finalize;
   LLib := nil;
@@ -126,11 +131,12 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LListenSock, LClientSock, LServerSock: cint;
-  LAddr: TInetSockAddr;
-  LAddrLen: TSockLen;
+  LListenSock, LClientSock, LServerSock: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  LAddrLen: Int32;
   LPort: Word;
   LGarbage: array[0..19] of Byte;
+  LSent: Int32;
 begin
   WriteLn('TestConnectToNonTLS - server sends garbage');
   LPort := 44591;
@@ -143,19 +149,21 @@ begin
   LCtx.SetVerifyMode([]);
 
   LListenSock := CreateListenSocket(LPort);
-  Check(LListenSock >= 0, 'Listen socket');
+  Check(LListenSock.IsValid, 'Listen socket');
 
   LClientSock := ConnectTo(LPort);
-  Check(LClientSock >= 0, 'Client connected');
+  Check(LClientSock.IsValid, 'Client connected');
 
   // Accept and send garbage
-  LAddrLen := SizeOf(LAddr);
-  LServerSock := fpAccept(LListenSock, @LAddr, @LAddrLen);
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  platform_socket_accept(LListenSock, @LAddr.Storage[0], @LAddrLen,
+    LServerSock);
   FillChar(LGarbage, SizeOf(LGarbage), $FF);
-  fpSend(LServerSock, @LGarbage, SizeOf(LGarbage), 0);
-  fpClose(LServerSock);
+  platform_socket_send(LServerSock, @LGarbage, SizeOf(LGarbage), 0, LSent);
+  platform_socket_close(LServerSock);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     if LConn.Connect then
       Check(True, 'Handshake unexpectedly succeeded on garbage')
@@ -167,8 +175,8 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock);
-  fpClose(LListenSock);
+  platform_socket_close(LClientSock);
+  platform_socket_close(LListenSock);
   LCtx := nil;
   LLib.Finalize;
   LLib := nil;
@@ -188,26 +196,28 @@ begin
 end.
 
   LClientSock := ConnectTo(LPort);
-  Check(LClientSock >= 0, 'Client connected');
+  Check(LClientSock.IsValid, 'Client connected');
 
-  LAddrLen := SizeOf(LAddr);
-  LServerSock := fpAccept(LListenSock, @LAddr, @LAddrLen);
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  platform_socket_accept(LListenSock, @LAddr.Storage[0], @LAddrLen,
+    LServerSock);
 
   // Server accept in same thread (simple)
-  LConn := LServerCtx.CreateConnection(THandle(LServerSock));
+  LConn := LServerCtx.CreateConnection(THandle(LServerSock.Value));
   // Don't call Accept - just test client side
   // Actually we need both sides. Use a thread for server.
   LConn := nil;
-  fpClose(LServerSock);
+  platform_socket_close(LServerSock);
 
   // Just test that client connect + cleanup doesn't leak
   // (server closed, so handshake will fail)
-  LConn := LClientCtx.CreateConnection(THandle(LClientSock));
+  LConn := LClientCtx.CreateConnection(THandle(LClientSock.Value));
   LConn.Connect; // will fail since server closed
   LConn := nil;
 
-  fpClose(LClientSock);
-  fpClose(LListenSock);
+  platform_socket_close(LClientSock);
+  platform_socket_close(LListenSock);
   LServerCtx := nil;
   LClientCtx := nil;
   LLib.Finalize;

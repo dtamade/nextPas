@@ -4,7 +4,8 @@ program test_openssl_https;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, BaseUnix, Sockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.platform.socket,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed;
 
@@ -58,8 +59,8 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LSock: LongInt;
-  LAddr: sockaddr_in;
+  LSock: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
   LRequest: string;
   LBuf: array[0..4095] of Byte;
   LRead: Integer;
@@ -76,26 +77,29 @@ begin
   LCtx.SetServerName('cloudflare.com');
 
   // TCP connect to httpbin.org:443
-  LSock := fpSocket(AF_INET, SOCK_STREAM, 0);
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(443);
-  LAddr.sin_addr := StrToNetAddr('1.1.1.1'); // Cloudflare (reliable)
-
-  WriteLn('  Connecting to 1.1.1.1:443...');
-  if fpConnect(LSock, @LAddr, SizeOf(LAddr)) <> 0 then
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    LSock) <> 0 then
   begin
     WriteLn('  SKIP: network unavailable');
-    fpClose(LSock);
+    LLib.Finalize;
+    Exit;
+  end;
+  platform_sockaddr_ipv4(443, platform_ipv4_parse('1.1.1.1'), LAddr); // Cloudflare (reliable)
+
+  WriteLn('  Connecting to 1.1.1.1:443...');
+  if platform_socket_connect(LSock, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    WriteLn('  SKIP: network unavailable');
+    platform_socket_close(LSock);
     LLib.Finalize;
     Exit;
   end;
   Check('TCP connect', True);
 
   // Create SSL connection from socket
-  LConn := LCtx.CreateConnection(THandle(LSock));
+  LConn := LCtx.CreateConnection(THandle(LSock.Value));
   Check('SSL connection created', LConn <> nil);
-  if LConn = nil then begin fpClose(LSock); LLib.Finalize; Exit; end;
+  if LConn = nil then begin platform_socket_close(LSock); LLib.Finalize; Exit; end;
 
   // Set SNI on context
   LCtx.SetServerName('cloudflare.com');
@@ -105,7 +109,7 @@ begin
   begin
     WriteLn('    Handshake failed, error code: ', Ord(LConn.GetError(-1)));
     Check('TLS handshake', False);
-    LConn.Close; fpClose(LSock); LLib.Finalize;
+    LConn.Close; platform_socket_close(LSock); LLib.Finalize;
     Exit;
   end;
   Check('TLS handshake', True);

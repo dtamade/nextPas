@@ -3,7 +3,8 @@ program test_tls12_server_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.platform.socket,
   nextpas.core.io.intf,
   nextpas.core.tls.socket_stream,
   nextpas.core.tls.tls12.server,
@@ -27,9 +28,9 @@ end;
 
 var
   LPort: Word;
-  LServerSocket, LClientHandle: Longint;
-  LAddr: TInetSockAddr;
-  LAddrLen: TSockLen;
+  LServerSocket, LClientHandle: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  LAddrLen: Int32;
   LClientStream: IStream;
   LConfig: TTLS12ServerConfig;
   LState: TTLS12ServerState;
@@ -75,42 +76,41 @@ begin
 
   WriteLn('[INFO] Starting TLS 1.2 server on port ', LPort);
 
-  LServerSocket := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if LServerSocket < 0 then
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    LServerSocket) <> 0 then
   begin
     WriteLn('[FAIL] Cannot create socket');
     Halt(1);
   end;
 
-  fpSetSockOpt(LServerSocket, SOL_SOCKET, SO_REUSEADDR, @LOne, SizeOf(LOne));
+  platform_socket_setsockopt(LServerSocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_REUSEADDR, @LOne, SizeOf(LOne));
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(LPort);
-  LAddr.sin_addr.s_addr := 0; // INADDR_ANY
+  platform_sockaddr_ipv4(LPort, platform_ipv4_parse('0.0.0.0'), LAddr);
 
-  if fpBind(LServerSocket, @LAddr, SizeOf(LAddr)) <> 0 then
+  if platform_socket_bind(LServerSocket, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin
     WriteLn('[FAIL] Cannot bind to port ', LPort);
     Halt(1);
   end;
 
-  if fpListen(LServerSocket, 1) <> 0 then
+  if platform_socket_listen(LServerSocket, 1) <> 0 then
   begin
     WriteLn('[FAIL] Cannot listen');
     Halt(1);
   end;
 
   WriteLn('[INFO] Waiting for client...');
-  LAddrLen := SizeOf(LAddr);
-  LClientHandle := fpAccept(LServerSocket, @LAddr, @LAddrLen);
-  if LClientHandle < 0 then
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  if platform_socket_accept(LServerSocket, @LAddr.Storage[0], @LAddrLen,
+    LClientHandle) <> 0 then
   begin
     WriteLn('[FAIL] Accept failed');
     Halt(1);
   end;
 
-  LClientStream := SocketHandleAsIStream(LClientHandle);
+  LClientStream := SocketHandleAsIStream(THandle(LClientHandle.Value));
   try
     WriteLn('[INFO] Client connected, starting handshake...');
     LOk := TryTLS12ServerHandshake(LClientStream, LConfig, LState, LError);
@@ -130,6 +130,6 @@ begin
     LClientStream := nil;
   end;
 
-  CloseSocket(LServerSocket);
+  platform_socket_close(LServerSocket);
   LConfig.Certificate.Free;
 end.

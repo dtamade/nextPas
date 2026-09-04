@@ -3,8 +3,8 @@ program test_tlspas_hrr;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils, Classes,
+  {$IFDEF UNIX}nextpas.core.thread.init,{$ENDIF}
+  nextpas.core.time, nextpas.core.fs,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.os.env,
@@ -517,7 +517,7 @@ begin
     RunLiveEarlyData(P, C, nil);
     Check(GLiveReady, 'early step1 handshake');
     CheckEqual(Int64(0), Int64(GLiveErr), 'step1 no error');
-    Sleep(300);
+    MsSleep(300);
     LOk := C.TryPeek('localhost', P, S);
     if not LOk then begin Check(True, 'skip no ticket'); Exit; end;
     // Promote ticket to early_data capable (synthetic max_early_data, keep PSK/binder valid)
@@ -755,15 +755,13 @@ begin
 end;
 
 procedure TestReplayFileStoreCorruption;
-var Store: ITlsPasReplayStore; LPath: string; FS: TFileStream; B: Byte;
+var Store: ITlsPasReplayStore; LPath: string; LCorrupt: TBytes;
 begin
   LPath := '/tmp/tlspas_replay_s10_corr.dat';
   if FileExists(LPath) then DeleteFile(LPath);
-  FS := TFileStream.Create(LPath, fmCreate);
-  try
-    B := $FF; FS.WriteBuffer(B, 1); // corrupt: size mod 40 !=0
-    B := $AA; FS.WriteBuffer(B, 1);
-  finally FS.Free; end;
+  SetLength(LCorrupt, 2);
+  LCorrupt[0] := $FF; LCorrupt[1] := $AA; // corrupt: size mod 40 !=0
+  WriteFile(LPath, LCorrupt);
   Store := TAsyncTlsPasReplayFileStore.Create(LPath, 8, 600000) as ITlsPasReplayStore;
   Check(Store.Count=0, 'corrupt file ignored -> 0');
   Store := nil;

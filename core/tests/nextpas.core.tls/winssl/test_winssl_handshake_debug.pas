@@ -3,9 +3,7 @@ program test_winssl_handshake_debug;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF WINDOWS}
-  Windows, WinSock2,
-  {$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
@@ -17,15 +15,9 @@ uses
 var
   SSLLib: ISSLLibrary;
   Context: ISSLContext;
-  Socket: TSocket;
+  Socket: TPlatformSocket;
   Host: string;
   Port: Word;
-  {$IFDEF WINDOWS}
-  WSAData: TWSAData;
-  Addr: TSockAddrIn;
-  HostEnt: PHostEnt;
-  HostAddr: PInAddr;
-  {$ENDIF}
 
   // 手动握手变量
   CredHandle: TSecHandle;
@@ -43,42 +35,37 @@ var
   TimeStamp: TTimeStamp;
 
 function CreateAndConnectSocket: Boolean;
+var
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
   Result := False;
 
   WriteLn('Creating TCP socket...');
-  Socket := WinSock2.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if Socket = INVALID_SOCKET then
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Socket) <> 0 then
   begin
-    WriteLn('  ERROR: Failed to create socket, WSA error: ', WSAGetLastError);
+    WriteLn('  ERROR: Failed to create socket');
     Exit;
   end;
-  WriteLn('  Socket created: ', Socket);
+  WriteLn('  Socket created: ', Socket.Value);
 
   WriteLn('Resolving host: ', Host);
-  HostEnt := gethostbyname(PAnsiChar(AnsiString(Host)));
-  if HostEnt = nil then
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(Host)), LIP) <> 0 then
   begin
-    WriteLn('  ERROR: Failed to resolve host, WSA error: ', WSAGetLastError);
-    closesocket(Socket);
-    Socket := INVALID_SOCKET;
+    WriteLn('  ERROR: Failed to resolve host');
+    platform_socket_close(Socket);
     Exit;
   end;
 
-  HostAddr := PInAddr(HostEnt^.h_addr_list^);
-  WriteLn('  Resolved to: ', inet_ntoa(HostAddr^));
+  WriteLn('  Resolved to: ', platform_ipv4_to_string(LIP));
 
-  FillChar(Addr, SizeOf(Addr), 0);
-  Addr.sin_family := AF_INET;
-  Addr.sin_port := htons(Port);
-  Addr.sin_addr := HostAddr^;
-
+  platform_sockaddr_ipv4(Port, LIP, LAddr);
   WriteLn('Connecting to ', Host, ':', Port, '...');
-  if WinSock2.connect(Socket, Addr, SizeOf(Addr)) = SOCKET_ERROR then
+  if platform_socket_connect(Socket, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin
-    WriteLn('  ERROR: Failed to connect, WSA error: ', WSAGetLastError);
-    closesocket(Socket);
-    Socket := INVALID_SOCKET;
+    WriteLn('  ERROR: Failed to connect');
+    platform_socket_close(Socket);
     Exit;
   end;
 
@@ -128,6 +115,7 @@ end;
 function PerformHandshake: Boolean;
 var
   i: Integer;
+  LSent, LRecvd: Int32;
 begin
   Result := False;
 
@@ -180,12 +168,16 @@ begin
     if (OutBuffers[0].cbBuffer > 0) and (OutBuffers[0].pvBuffer <> nil) then
     begin
       WriteLn('  Sending Client Hello (', OutBuffers[0].cbBuffer, ' bytes)...');
-      cbData := WinSock2.send(Socket, OutBuffers[0].pvBuffer^, OutBuffers[0].cbBuffer, 0);
+      LSent := 0;
+      if platform_socket_send(Socket, OutBuffers[0].pvBuffer,
+        Int32(OutBuffers[0].cbBuffer), 0, LSent) <> 0 then
+        LSent := 0;
       FreeContextBuffer(OutBuffers[0].pvBuffer);
+      cbData := DWORD(LSent);
 
-      if (cbData = SOCKET_ERROR) or (cbData = 0) then
+      if cbData = 0 then
       begin
-        WriteLn('  ERROR: Failed to send client hello, WSA error: ', WSAGetLastError);
+        WriteLn('  ERROR: Failed to send client hello');
         Exit;
       end;
       WriteLn('  Sent ', cbData, ' bytes');
@@ -209,11 +201,15 @@ begin
           WriteLn('  Receiving server data...');
 
         // 在现有数据后面追加新数据
-        cbData := WinSock2.recv(Socket, IoBuffer[cbIoBuffer], SizeOf(IoBuffer) - cbIoBuffer, 0);
+        LRecvd := 0;
+        if platform_socket_recv(Socket, @IoBuffer[cbIoBuffer],
+          SizeOf(IoBuffer) - Int32(cbIoBuffer), 0, LRecvd) <> 0 then
+          LRecvd := 0;
+        cbData := DWORD(LRecvd);
 
-        if (cbData = SOCKET_ERROR) or (cbData = 0) then
+        if cbData = 0 then
         begin
-          WriteLn('  ERROR: Failed to receive data, WSA error: ', WSAGetLastError);
+          WriteLn('  ERROR: Failed to receive data');
           Exit;
         end;
 
@@ -277,12 +273,16 @@ begin
       if (OutBuffers[0].cbBuffer > 0) and (OutBuffers[0].pvBuffer <> nil) then
       begin
         WriteLn('  Sending response (', OutBuffers[0].cbBuffer, ' bytes)...');
-        cbData := WinSock2.send(Socket, OutBuffers[0].pvBuffer^, OutBuffers[0].cbBuffer, 0);
+        LSent := 0;
+        if platform_socket_send(Socket, OutBuffers[0].pvBuffer,
+          Int32(OutBuffers[0].cbBuffer), 0, LSent) <> 0 then
+          LSent := 0;
         FreeContextBuffer(OutBuffers[0].pvBuffer);
+        cbData := DWORD(LSent);
 
-        if (cbData = SOCKET_ERROR) or (cbData = 0) then
+        if cbData = 0 then
         begin
-          WriteLn('  ERROR: Failed to send response, WSA error: ', WSAGetLastError);
+          WriteLn('  ERROR: Failed to send response');
           Exit;
         end;
         WriteLn('  Sent ', cbData, ' bytes');
@@ -330,15 +330,6 @@ begin
   WriteLn('=== WinSSL Handshake Debug Test ===');
   WriteLn;
 
-  {$IFDEF WINDOWS}
-  if WSAStartup(MAKEWORD(2, 2), WSAData) <> 0 then
-  begin
-    WriteLn('ERROR: Failed to initialize Winsock');
-    Halt(1);
-  end;
-  WriteLn('Winsock initialized (version ', Lo(WSAData.wVersion), '.', Hi(WSAData.wVersion), ')');
-  {$ENDIF}
-
   try
     Host := 'www.google.com';
     Port := 443;
@@ -357,7 +348,7 @@ begin
     begin
       WriteLn;
       WriteLn('FAILED: Could not initialize Schannel');
-      closesocket(Socket);
+      platform_socket_close(Socket);
       Halt(1);
     end;
 
@@ -365,7 +356,7 @@ begin
     begin
       WriteLn;
       WriteLn('FAILED: TLS handshake failed');
-      closesocket(Socket);
+      platform_socket_close(Socket);
       DeleteSecurityContext(@CtxtHandle);
       FreeCredentialsHandle(@CredHandle);
       Halt(1);
@@ -374,7 +365,7 @@ begin
     WriteLn;
     WriteLn('SUCCESS! Cleaning up...');
 
-    closesocket(Socket);
+    platform_socket_close(Socket);
     DeleteSecurityContext(@CtxtHandle);
     FreeCredentialsHandle(@CredHandle);
 
@@ -382,9 +373,6 @@ begin
     WriteLn('All operations completed successfully!');
 
   finally
-    {$IFDEF WINDOWS}
-    WSACleanup;
-    {$ENDIF}
   end;
 
   ExitCode := 0;

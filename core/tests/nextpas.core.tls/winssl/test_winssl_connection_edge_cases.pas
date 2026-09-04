@@ -29,9 +29,7 @@ program test_winssl_connection_edge_cases;
 }
 
 uses
-  {$IFDEF WINDOWS}
-  Windows, winsock2,
-  {$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
@@ -79,7 +77,7 @@ begin
     LContext := TSSLFactory.CreateContext(LConfig);
 
     // 创建无效的 socket（不会连接）
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -128,7 +126,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -188,7 +186,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -251,7 +249,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -300,7 +298,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -373,7 +371,7 @@ begin
   LConfig.ALPNProtocols := 'h2,http/1.1,spdy/3.1,http/2,h3,quic,websocket,mqtt,amqp,stomp';
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -415,7 +413,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -461,7 +459,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -517,7 +515,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     // 创建多个连接
     for I := 0 to High(LConnections) do
@@ -571,7 +569,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -624,7 +622,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);
@@ -675,7 +673,7 @@ begin
 
   try
     LContext := TSSLFactory.CreateContext(LConfig);
-    LSocket := INVALID_SOCKET;
+    LSocket := THandle(PLATFORM_INVALID_SOCKET.Value);
 
     try
       LConnection := TWinSSLConnection.Create(LContext, LSocket);

@@ -25,9 +25,8 @@ program test_winssl_mtls_skeleton;
  *}
 
 uses
+  nextpas.core.platform.socket,
   {$IFDEF WINDOWS}
-  Windows,
-  WinSock2,
   nextpas.core.tls.winssl.lib,
   nextpas.core.tls.winssl.certstore,
   {$ENDIF}
@@ -74,59 +73,40 @@ begin
     WriteLn;
 end;
 
-{$IFDEF WINDOWS}
 function InitWinsock: Boolean;
-var
-  W: TWSAData;
 begin
-  Result := WSAStartup(MAKEWORD(2, 2), W) = 0;
+  Result := True;
 end;
 
 procedure CleanupWinsock;
 begin
-  WSACleanup;
 end;
 
-function ConnectToHost(const aHost: string; aPort: Word; out aSocket: TSocket): Boolean;
+function ConnectToHost(const aHost: string; aPort: Word;
+  out aSocket: TPlatformSocket): Boolean;
 var
-  A: TSockAddrIn;
-  H: PHostEnt;
-  InAddr: TInAddr;
-  Tm: Integer;
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
   Result := False;
-  aSocket := INVALID_SOCKET;
+  aSocket := PLATFORM_INVALID_SOCKET;
 
-  aSocket := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if aSocket = INVALID_SOCKET then
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(aHost)), LIP) <> 0 then
+    Exit;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    aSocket) <> 0 then
     Exit;
 
-  Tm := 10000;
-  setsockopt(aSocket, SOL_SOCKET, SO_RCVTIMEO, @Tm, SizeOf(Tm));
-  setsockopt(aSocket, SOL_SOCKET, SO_SNDTIMEO, @Tm, SizeOf(Tm));
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_RCVTIMEO, 10000);
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_SNDTIMEO, 10000);
 
-  H := gethostbyname(PAnsiChar(AnsiString(aHost)));
-  if H = nil then
-  begin
-    closesocket(aSocket);
-    aSocket := INVALID_SOCKET;
-    Exit;
-  end;
+  platform_sockaddr_ipv4(aPort, LIP, LAddr);
 
-  FillChar(A, SizeOf(A), 0);
-  A.sin_family := AF_INET;
-  A.sin_port := htons(aPort);
-  Move(H^.h_addr_list^^, InAddr, SizeOf(InAddr));
-  A.sin_addr := InAddr;
-
-  Result := connect(aSocket, @A, SizeOf(A)) = 0;
+  Result := platform_socket_connect(aSocket, @LAddr.Storage[0],
+    LAddr.Len) = 0;
   if not Result then
-  begin
-    closesocket(aSocket);
-    aSocket := INVALID_SOCKET;
-  end;
+    platform_socket_close(aSocket);
 end;
-{$ENDIF}
 
 { 测试证书存储访问 }
 procedure TestCertificateStoreAccess;
@@ -307,7 +287,7 @@ var
   Ctx: ISSLContext;
   Conn: ISSLConnection;
   ClientConn: ISSLClientConnection;
-  Socket: TSocket;
+  Socket: TPlatformSocket;
   ServerHost: string;
   ServerPort: Word;
 {$ENDIF}
@@ -385,7 +365,7 @@ begin
     Check('TCP 连接到 ' + ServerHost, True);
 
     try
-      Conn := Ctx.CreateConnection(THandle(Socket));
+      Conn := Ctx.CreateConnection(THandle(Socket.Value));
       Check('创建连接对象', Conn <> nil);
 
       if Conn <> nil then
@@ -403,7 +383,7 @@ begin
           Check('mTLS 握手', False, 'Handshake failed');
       end;
     finally
-      closesocket(Socket);
+      platform_socket_close(Socket);
     end;
   finally
     CleanupWinsock;

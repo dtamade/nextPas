@@ -3,7 +3,7 @@ program test_freepascal_diagnostics;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
+  nextpas.core.thread.init, nextpas.core.platform.socket,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
@@ -22,62 +22,73 @@ end;
 type
   TServerThread = class(TThread)
   private
-    FListenSock: cint;
-    FClientSock: cint;
+    FListenSock: TPlatformSocket;
+    FClientSock: TPlatformSocket;
     FContext: ISSLContext;
     FConn: ISSLConnection;
     FSuccess: Boolean;
   protected
     procedure Execute; override;
   public
-    constructor Create(AListenSock: cint; AContext: ISSLContext);
+    constructor Create(AListenSock: TPlatformSocket; AContext: ISSLContext);
     property Conn: ISSLConnection read FConn;
-    property ClientSock: cint read FClientSock;
+    property ClientSock: TPlatformSocket read FClientSock;
     property Success: Boolean read FSuccess;
   end;
 
-constructor TServerThread.Create(AListenSock: cint; AContext: ISSLContext);
+constructor TServerThread.Create(AListenSock: TPlatformSocket; AContext: ISSLContext);
 begin
   inherited Create(True);
   FListenSock := AListenSock; FContext := AContext;
-  FSuccess := False; FClientSock := -1; FreeOnTerminate := False;
+  FSuccess := False; FClientSock := PLATFORM_INVALID_SOCKET; FreeOnTerminate := False;
 end;
 
 procedure TServerThread.Execute;
-var LAddr: TInetSockAddr; LAddrLen: TSockLen;
+var LAddr: TPlatformSockAddr; LAddrLen: Int32;
 begin
-  LAddrLen := SizeOf(LAddr);
-  FClientSock := fpAccept(FListenSock, @LAddr, @LAddrLen);
-  if FClientSock < 0 then Exit;
-  FConn := FContext.CreateConnection(THandle(FClientSock));
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  if platform_socket_accept(FListenSock, @LAddr.Storage[0], @LAddrLen,
+    FClientSock) <> 0 then
+    Exit;
+  FConn := FContext.CreateConnection(THandle(FClientSock.Value));
   FSuccess := FConn.Accept;
 end;
 
-function CreateListenSocket(APort: Word): cint;
-var LAddr: TInetSockAddr; LOptVal: cint;
+function CreateListenSocket(APort: Word): TPlatformSocket;
+var LAddr: TPlatformSockAddr; LOptVal: LongInt;
 begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result < 0 then Exit(-1);
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
+    Exit(PLATFORM_INVALID_SOCKET);
   LOptVal := 1;
-  fpSetSockOpt(Result, SOL_SOCKET, SO_REUSEADDR, @LOptVal, SizeOf(LOptVal));
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  LAddr.sin_addr.s_addr := htonl($7F000001);
-  if fpBind(Result, @LAddr, SizeOf(LAddr)) <> 0 then begin fpClose(Result); Exit(-1); end;
-  if fpListen(Result, 5) <> 0 then begin fpClose(Result); Exit(-1); end;
+  platform_socket_setsockopt(Result, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_REUSEADDR, @LOptVal, SizeOf(LOptVal));
+  platform_sockaddr_loopback4(APort, LAddr);
+  if platform_socket_bind(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(Result);
+    Exit(PLATFORM_INVALID_SOCKET);
+  end;
+  if platform_socket_listen(Result, 5) <> 0 then
+  begin
+    platform_socket_close(Result);
+    Exit(PLATFORM_INVALID_SOCKET);
+  end;
 end;
 
-function ConnectTo(APort: Word): cint;
-var LAddr: TInetSockAddr;
+function ConnectTo(APort: Word): TPlatformSocket;
+var LAddr: TPlatformSockAddr;
 begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result < 0 then Exit(-1);
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  LAddr.sin_addr.s_addr := htonl($7F000001);
-  if fpConnect(Result, @LAddr, SizeOf(LAddr)) <> 0 then begin fpClose(Result); Exit(-1); end;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
+    Exit(PLATFORM_INVALID_SOCKET);
+  platform_sockaddr_loopback4(APort, LAddr);
+  if platform_socket_connect(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(Result);
+    Exit(PLATFORM_INVALID_SOCKET);
+  end;
 end;
 
 var
@@ -88,9 +99,10 @@ var
   LMetrics: TSSLPerformanceMetrics;
   LInfo: TSSLDiagnosticInfo;
   LHealth: TSSLHealthStatus;
-  LListenSock, LClientSock: cint;
+  LListenSock, LClientSock: TPlatformSocket;
   LServerThread: TServerThread;
   LPort: Word;
+  LTmpSock: TPlatformSocket;
 begin
   LTotal := 0; LPassed := 0;
   LPort := 44710;
@@ -109,13 +121,13 @@ begin
   LClientCtx.SetVerifyMode([]);
 
   LListenSock := CreateListenSocket(LPort);
-  Check(LListenSock >= 0, 'Listen socket');
+  Check(LListenSock.IsValid, 'Listen socket');
 
   LServerThread := TServerThread.Create(LListenSock, LServerCtx);
   LServerThread.Start;
 
   LClientSock := ConnectTo(LPort);
-  LConn := LClientCtx.CreateConnection(THandle(LClientSock));
+  LConn := LClientCtx.CreateConnection(THandle(LClientSock.Value));
   Check(LConn.Connect, 'TLS handshake');
 
   // Test ISSLDiagnostics interface
@@ -151,10 +163,11 @@ begin
   LConn.Shutdown;
   LConn := nil;
   LServerThread.Conn.Shutdown;
-  fpClose(LServerThread.ClientSock);
+  LTmpSock := LServerThread.ClientSock;
+  platform_socket_close(LTmpSock);
   LServerThread.Free;
-  fpClose(LClientSock);
-  fpClose(LListenSock);
+  platform_socket_close(LClientSock);
+  platform_socket_close(LListenSock);
   LDiag := nil;
   LServerCtx := nil;
   LClientCtx := nil;

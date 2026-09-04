@@ -3,11 +3,7 @@ program test_winssl_https_client;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF WINDOWS}
-  Windows, WinSock2,
-  {$ELSE}
-  Sockets,
-  {$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
@@ -18,7 +14,7 @@ var
   Context: ISSLContext;
   Connection: ISSLConnection;
   ClientConnection: ISSLClientConnection;
-  Socket: TSocket;
+  Socket: TPlatformSocket;
   Host: string;
   Port: Word;
   Request: string;
@@ -26,9 +22,6 @@ var
   BytesRead: Integer;
   TestsPassed: Integer = 0;
   TestsFailed: Integer = 0;
-  {$IFDEF WINDOWS}
-  WSAData: TWSAData;
-  {$ENDIF}
 
 procedure TestPass(const TestName: string);
 begin
@@ -42,106 +35,44 @@ begin
   Inc(TestsFailed);
 end;
 
-{$IFDEF WINDOWS}
-function CreateTCPSocket(const aHost: string; aPort: Word): TSocket;
+function CreateTCPSocket(const aHost: string; aPort: Word): TPlatformSocket;
 var
-  Addr: TSockAddrIn;
-  HostEnt: PHostEnt;
-  HostAddr: PInAddr;
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
-  Result := INVALID_SOCKET;
+  Result := PLATFORM_INVALID_SOCKET;
 
-  // 创建 socket
-  Result := WinSock2.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if Result = INVALID_SOCKET then
-  begin
-    WriteLn('Failed to create socket: WSA error ', WSAGetLastError);
-    Exit;
-  end;
-
-  // 解析主机名
-  HostEnt := gethostbyname(PAnsiChar(AnsiString(aHost)));
-  if HostEnt = nil then
-  begin
-    WriteLn('Failed to resolve host: ', aHost, ', WSA error ', WSAGetLastError);
-    closesocket(Result);
-    Result := INVALID_SOCKET;
-    Exit;
-  end;
-
-  // 获取第一个地址
-  HostAddr := PInAddr(HostEnt^.h_addr_list^);
-
-  // 设置地址结构
-  FillChar(Addr, SizeOf(Addr), 0);
-  Addr.sin_family := AF_INET;
-  Addr.sin_port := htons(aPort);
-  Addr.sin_addr := HostAddr^;
-
-  // 连接
-  if WinSock2.connect(Result, Addr, SizeOf(Addr)) = SOCKET_ERROR then
-  begin
-    WriteLn('Failed to connect: WSA error ', WSAGetLastError);
-    closesocket(Result);
-    Result := INVALID_SOCKET;
-    Exit;
-  end;
-
-  WriteLn('TCP connection established to ', aHost, ':', aPort);
-end;
-{$ELSE}
-function CreateTCPSocket(const aHost: string; aPort: Word): TSocket;
-var
-  Addr: TInetSockAddr;
-  HostEnt: PHostEntry;
-begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result = -1 then
-  begin
-    WriteLn('Failed to create socket');
-    Exit;
-  end;
-
-  HostEnt := GetHostByName(PChar(aHost));
-  if HostEnt = nil then
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(aHost)), LIP) <> 0 then
   begin
     WriteLn('Failed to resolve host: ', aHost);
-    CloseSocket(Result);
-    Result := -1;
     Exit;
   end;
 
-  FillChar(Addr, SizeOf(Addr), 0);
-  Addr.sin_family := AF_INET;
-  Addr.sin_port := htons(aPort);
-  Addr.sin_addr := PInAddr(HostEnt^.h_addr_list^)^;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
+  begin
+    WriteLn('Failed to create socket');
+    Result := PLATFORM_INVALID_SOCKET;
+    Exit;
+  end;
 
-  if fpConnect(Result, @Addr, SizeOf(Addr)) = -1 then
+  platform_socket_set_timeout(Result, PLATFORM_SO_RCVTIMEO, 10000);
+  platform_socket_set_timeout(Result, PLATFORM_SO_SNDTIMEO, 10000);
+  platform_sockaddr_ipv4(aPort, LIP, LAddr);
+  if platform_socket_connect(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin
     WriteLn('Failed to connect');
-    CloseSocket(Result);
-    Result := -1;
+    platform_socket_close(Result);
+    Result := PLATFORM_INVALID_SOCKET;
     Exit;
   end;
 
   WriteLn('TCP connection established to ', aHost, ':', aPort);
 end;
-{$ENDIF}
 
 begin
   WriteLn('=== WinSSL HTTPS Client Test ===');
   WriteLn;
-
-  {$IFDEF WINDOWS}
-  // 初始化 Winsock
-  if WSAStartup(MAKEWORD(2, 2), WSAData) <> 0 then
-  begin
-    WriteLn('Failed to initialize Winsock');
-    Halt(1);
-  end;
-  WriteLn('Winsock initialized (version ', Lo(WSAData.wVersion), '.', Hi(WSAData.wVersion), ')');
-  WriteLn;
-  {$ENDIF}
 
   try
     // 设置目标服务器
@@ -220,11 +151,7 @@ begin
   // Test 5: 创建 TCP 连接
   WriteLn('Test 5: Creating TCP connection...');
   Socket := CreateTCPSocket(Host, Port);
-  {$IFDEF WINDOWS}
-  if Socket = INVALID_SOCKET then
-  {$ELSE}
-  if Socket = -1 then
-  {$ENDIF}
+  if Socket.IsInvalid then
   begin
     TestFail('Create TCP connection', 'Socket creation failed');
     Halt(1);
@@ -234,28 +161,20 @@ begin
   // Test 6: 创建 SSL 连接
   WriteLn('Test 6: Creating SSL connection...');
   try
-    Connection := Context.CreateConnection(Socket);
+    Connection := Context.CreateConnection(THandle(Socket.Value));
     if Connection <> nil then
       TestPass('Create SSL connection')
     else
     begin
       TestFail('Create SSL connection', 'Returned nil');
-      {$IFDEF WINDOWS}
-      closesocket(Socket);
-      {$ELSE}
-      CloseSocket(Socket);
-      {$ENDIF}
+      platform_socket_close(Socket);
       Halt(1);
     end;
   except
     on E: Exception do
     begin
       TestFail('Create SSL connection', E.Message);
-      {$IFDEF WINDOWS}
-      closesocket(Socket);
-      {$ELSE}
-      CloseSocket(Socket);
-      {$ENDIF}
+      platform_socket_close(Socket);
       Halt(1);
     end;
   end;
@@ -268,11 +187,7 @@ begin
   else
   begin
     TestFail('Configure connection SNI', 'Connection does not support ISSLClientConnection');
-    {$IFDEF WINDOWS}
-    closesocket(Socket);
-    {$ELSE}
-    CloseSocket(Socket);
-    {$ENDIF}
+    platform_socket_close(Socket);
     Halt(1);
   end;
 
@@ -290,11 +205,7 @@ begin
     begin
       TestFail('TLS handshake', 'Connect returned False');
       Connection.Close;
-      {$IFDEF WINDOWS}
-      closesocket(Socket);
-      {$ELSE}
-      CloseSocket(Socket);
-      {$ENDIF}
+      platform_socket_close(Socket);
       Halt(1);
     end;
   except
@@ -302,11 +213,7 @@ begin
     begin
       TestFail('TLS handshake', E.Message);
       Connection.Close;
-      {$IFDEF WINDOWS}
-      closesocket(Socket);
-      {$ELSE}
-      CloseSocket(Socket);
-      {$ENDIF}
+      platform_socket_close(Socket);
       Halt(1);
     end;
   end;
@@ -326,11 +233,7 @@ begin
     begin
       TestFail('Send HTTP request', 'WriteString returned False');
       Connection.Close;
-      {$IFDEF WINDOWS}
-      closesocket(Socket);
-      {$ELSE}
-      CloseSocket(Socket);
-      {$ENDIF}
+      platform_socket_close(Socket);
       Halt(1);
     end;
   except
@@ -338,11 +241,7 @@ begin
     begin
       TestFail('Send HTTP request', E.Message);
       Connection.Close;
-      {$IFDEF WINDOWS}
-      closesocket(Socket);
-      {$ELSE}
-      CloseSocket(Socket);
-      {$ENDIF}
+      platform_socket_close(Socket);
       Halt(1);
     end;
   end;
@@ -396,11 +295,7 @@ begin
   end;
 
   // 关闭 socket
-  {$IFDEF WINDOWS}
-  closesocket(Socket);
-  {$ELSE}
-  CloseSocket(Socket);
-  {$ENDIF}
+  platform_socket_close(Socket);
 
   // 清理
   Connection := nil;
@@ -431,9 +326,5 @@ begin
   end;
 
   finally
-    {$IFDEF WINDOWS}
-    // 清理 Winsock
-    WSACleanup;
-    {$ENDIF}
   end;
 end.

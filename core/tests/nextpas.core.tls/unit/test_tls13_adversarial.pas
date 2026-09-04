@@ -3,7 +3,8 @@ program test_tls13_adversarial;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
+  nextpas.core.thread.init,
+  nextpas.core.platform.socket, nextpas.core.platform.signal,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib;
@@ -20,62 +21,68 @@ end;
 
 {$IFDEF UNIX}
 procedure IgnoreSIGPIPE;
-var SA: SigActionRec;
 begin
-  FillChar(SA, SizeOf(SA), 0);
-  SA.sa_handler := SigActionHandler(SIG_IGN);
-  fpSigAction(SIGPIPE, @SA, nil);
+  platform_signal_ignore(PLATFORM_SIGPIPE);
 end;
 {$ENDIF}
 
-function CreateListenSocket(APort: Word): cint;
-var LAddr: TInetSockAddr; LOptVal: cint;
+function CreateListenSocket(APort: Word): TPlatformSocket;
+var LAddr: TPlatformSockAddr; LOptVal: LongInt;
 begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result < 0 then Exit(-1);
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
+    Exit(PLATFORM_INVALID_SOCKET);
   LOptVal := 1;
-  fpSetSockOpt(Result, SOL_SOCKET, SO_REUSEADDR, @LOptVal, SizeOf(LOptVal));
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  LAddr.sin_addr.s_addr := htonl($7F000001);
-  if fpBind(Result, @LAddr, SizeOf(LAddr)) <> 0 then begin fpClose(Result); Exit(-1); end;
-  if fpListen(Result, 5) <> 0 then begin fpClose(Result); Exit(-1); end;
-end;
-
-function ConnectTo(APort: Word): cint;
-var LAddr: TInetSockAddr; LTimeout: TTimeVal;
-begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result < 0 then Exit(-1);
-  LTimeout.tv_sec := 2; LTimeout.tv_usec := 0;
-  fpSetSockOpt(Result, SOL_SOCKET, SO_RCVTIMEO, @LTimeout, SizeOf(LTimeout));
-  fpSetSockOpt(Result, SOL_SOCKET, SO_SNDTIMEO, @LTimeout, SizeOf(LTimeout));
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  LAddr.sin_addr.s_addr := htonl($7F000001);
-  if fpConnect(Result, @LAddr, SizeOf(LAddr)) <> 0 then begin fpClose(Result); Exit(-1); end;
-end;
-
-procedure SendAndClose(AListenSock: cint; const AData: array of Byte);
-var LSock: cint; LAddr: TInetSockAddr; LAddrLen: TSockLen;
-begin
-  LAddrLen := SizeOf(LAddr);
-  LSock := fpAccept(AListenSock, @LAddr, @LAddrLen);
-  if LSock >= 0 then
+  platform_socket_setsockopt(Result, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_REUSEADDR, @LOptVal, SizeOf(LOptVal));
+  platform_sockaddr_loopback4(APort, LAddr);
+  if platform_socket_bind(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin
-    if Length(AData) > 0 then
-      fpSend(LSock, @AData[0], Length(AData), 0);
-    fpShutdown(LSock, 2);
-    fpClose(LSock);
+    platform_socket_close(Result);
+    Exit(PLATFORM_INVALID_SOCKET);
   end;
+  if platform_socket_listen(Result, 5) <> 0 then
+  begin
+    platform_socket_close(Result);
+    Exit(PLATFORM_INVALID_SOCKET);
+  end;
+end;
+
+function ConnectTo(APort: Word): TPlatformSocket;
+var LAddr: TPlatformSockAddr;
+begin
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
+    Exit(PLATFORM_INVALID_SOCKET);
+  platform_socket_set_timeout(Result, PLATFORM_SO_RCVTIMEO, 2000);
+  platform_socket_set_timeout(Result, PLATFORM_SO_SNDTIMEO, 2000);
+  platform_sockaddr_loopback4(APort, LAddr);
+  if platform_socket_connect(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(Result);
+    Exit(PLATFORM_INVALID_SOCKET);
+  end;
+end;
+
+procedure SendAndClose(AListenSock: TPlatformSocket; const AData: array of Byte);
+var LSock: TPlatformSocket; LAddr: TPlatformSockAddr; LAddrLen: Int32;
+  LSent: Int32;
+begin
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  if platform_socket_accept(AListenSock, @LAddr.Storage[0], @LAddrLen,
+    LSock) <> 0 then
+    Exit;
+  if Length(AData) > 0 then
+    platform_socket_send(LSock, @AData[0], Length(AData), 0, LSent);
+  platform_socket_shutdown(LSock, PLATFORM_SHUT_RDWR);
+  platform_socket_close(LSock);
 end;
 
 procedure TestTruncatedServerHello;
 var
   LLib: ISSLLibrary; LCtx: ISSLContext; LConn: ISSLConnection;
-  LListenSock, LClientSock: cint;
+  LListenSock, LClientSock: TPlatformSocket;
   LPort: Word;
   LBadSH: array[0..9] of Byte;
 begin
@@ -96,7 +103,7 @@ begin
   LBadSH[8] := $01; LBadSH[9] := $00;
   SendAndClose(LListenSock, LBadSH);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     Check(not LConn.Connect, 'Truncated ServerHello rejected');
   except
@@ -105,14 +112,14 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock); fpClose(LListenSock);
+  platform_socket_close(LClientSock); platform_socket_close(LListenSock);
   LCtx := nil; LLib.Finalize; LLib := nil;
 end;
 
 procedure TestWrongContentType;
 var
   LLib: ISSLLibrary; LCtx: ISSLContext; LConn: ISSLConnection;
-  LListenSock, LClientSock: cint;
+  LListenSock, LClientSock: TPlatformSocket;
   LPort: Word;
   LBad: array[0..9] of Byte;
 begin
@@ -133,7 +140,7 @@ begin
   LBad[5] := $02; LBad[6] := $28; // fatal, handshake_failure
   SendAndClose(LListenSock, LBad);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     Check(not LConn.Connect, 'Alert instead of ServerHello rejected');
   except
@@ -142,14 +149,14 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock); fpClose(LListenSock);
+  platform_socket_close(LClientSock); platform_socket_close(LListenSock);
   LCtx := nil; LLib.Finalize; LLib := nil;
 end;
 
 procedure TestZeroLengthRecord;
 var
   LLib: ISSLLibrary; LCtx: ISSLContext; LConn: ISSLConnection;
-  LListenSock, LClientSock: cint;
+  LListenSock, LClientSock: TPlatformSocket;
   LPort: Word;
   LBad: array[0..4] of Byte;
 begin
@@ -168,7 +175,7 @@ begin
   LBad[3] := $00; LBad[4] := $00;
   SendAndClose(LListenSock, LBad);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     Check(not LConn.Connect, 'Zero-length record rejected');
   except
@@ -177,14 +184,14 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock); fpClose(LListenSock);
+  platform_socket_close(LClientSock); platform_socket_close(LListenSock);
   LCtx := nil; LLib.Finalize; LLib := nil;
 end;
 
 procedure TestOversizeRecord;
 var
   LLib: ISSLLibrary; LCtx: ISSLContext; LConn: ISSLConnection;
-  LListenSock, LClientSock: cint;
+  LListenSock, LClientSock: TPlatformSocket;
   LPort: Word;
   LBad: array[0..4] of Byte;
 begin
@@ -203,7 +210,7 @@ begin
   LBad[3] := $FF; LBad[4] := $FF;
   SendAndClose(LListenSock, LBad);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     Check(not LConn.Connect, 'Oversize record rejected');
   except
@@ -212,18 +219,19 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock); fpClose(LListenSock);
+  platform_socket_close(LClientSock); platform_socket_close(LListenSock);
   LCtx := nil; LLib.Finalize; LLib := nil;
 end;
 
 procedure TestServerAcceptGarbage;
 var
   LLib: ISSLLibrary; LCtx: ISSLContext; LConn: ISSLConnection;
-  LListenSock, LServerSock: cint;
-  LAddr: TInetSockAddr; LAddrLen: TSockLen;
+  LListenSock, LServerSock: TPlatformSocket;
+  LAddr: TPlatformSockAddr; LAddrLen: Int32;
   LPort: Word;
   LGarbage: array[0..31] of Byte;
-  LClientSock: cint;
+  LClientSock: TPlatformSocket;
+  LSent: Int32;
 begin
   WriteLn('TestServerAcceptGarbage');
   LPort := 44704;
@@ -238,12 +246,14 @@ begin
 
   // Send garbage as "ClientHello"
   FillChar(LGarbage, SizeOf(LGarbage), $DE);
-  fpSend(LClientSock, @LGarbage, SizeOf(LGarbage), 0);
+  platform_socket_send(LClientSock, @LGarbage, SizeOf(LGarbage), 0, LSent);
 
-  LAddrLen := SizeOf(LAddr);
-  LServerSock := fpAccept(LListenSock, @LAddr, @LAddrLen);
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  platform_socket_accept(LListenSock, @LAddr.Storage[0], @LAddrLen,
+    LServerSock);
 
-  LConn := LCtx.CreateConnection(THandle(LServerSock));
+  LConn := LCtx.CreateConnection(THandle(LServerSock.Value));
   try
     Check(not LConn.Accept, 'Server rejects garbage ClientHello');
   except
@@ -252,14 +262,14 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LServerSock); fpClose(LClientSock); fpClose(LListenSock);
+  platform_socket_close(LServerSock); platform_socket_close(LClientSock); platform_socket_close(LListenSock);
   LCtx := nil; LLib.Finalize; LLib := nil;
 end;
 
 procedure TestVersionDowngradeAttack;
 var
   LLib: ISSLLibrary; LCtx: ISSLContext; LConn: ISSLConnection;
-  LListenSock, LClientSock: cint;
+  LListenSock, LClientSock: TPlatformSocket;
   LPort: Word;
   LBadSH: array[0..42] of Byte;
 begin
@@ -283,7 +293,7 @@ begin
   // rest is zeros (invalid random, session_id, etc.)
   SendAndClose(LListenSock, LBadSH);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     Check(not LConn.Connect, 'Version downgrade attack rejected');
   except
@@ -292,14 +302,14 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock); fpClose(LListenSock);
+  platform_socket_close(LClientSock); platform_socket_close(LListenSock);
   LCtx := nil; LLib.Finalize; LLib := nil;
 end;
 
 procedure TestInvalidCipherSuiteSelection;
 var
   LLib: ISSLLibrary; LCtx: ISSLContext; LConn: ISSLConnection;
-  LListenSock, LClientSock: cint;
+  LListenSock, LClientSock: TPlatformSocket;
   LPort: Word;
   LBadSH: array[0..80] of Byte;
   LIdx: Integer;
@@ -340,7 +350,7 @@ begin
   // key data (zeros) at 63..94 — already zero from FillChar
   SendAndClose(LListenSock, LBadSH);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     Check(not LConn.Connect, 'Invalid cipher suite selection rejected');
   except
@@ -349,14 +359,14 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock); fpClose(LListenSock);
+  platform_socket_close(LClientSock); platform_socket_close(LListenSock);
   LCtx := nil; LLib.Finalize; LLib := nil;
 end;
 
 procedure TestMalformedHandshakeLength;
 var
   LLib: ISSLLibrary; LCtx: ISSLContext; LConn: ISSLConnection;
-  LListenSock, LClientSock: cint;
+  LListenSock, LClientSock: TPlatformSocket;
   LPort: Word;
   LBad: array[0..9] of Byte;
 begin
@@ -378,7 +388,7 @@ begin
   LBad[9] := $03;
   SendAndClose(LListenSock, LBad);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     Check(not LConn.Connect, 'Malformed handshake length rejected');
   except
@@ -387,14 +397,14 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock); fpClose(LListenSock);
+  platform_socket_close(LClientSock); platform_socket_close(LListenSock);
   LCtx := nil; LLib.Finalize; LLib := nil;
 end;
 
 procedure TestUnknownHandshakeType;
 var
   LLib: ISSLLibrary; LCtx: ISSLContext; LConn: ISSLConnection;
-  LListenSock, LClientSock: cint;
+  LListenSock, LClientSock: TPlatformSocket;
   LPort: Word;
   LBad: array[0..9] of Byte;
 begin
@@ -416,7 +426,7 @@ begin
   LBad[9] := $00;
   SendAndClose(LListenSock, LBad);
 
-  LConn := LCtx.CreateConnection(THandle(LClientSock));
+  LConn := LCtx.CreateConnection(THandle(LClientSock.Value));
   try
     Check(not LConn.Connect, 'Unknown handshake type rejected');
   except
@@ -425,7 +435,7 @@ begin
   end;
 
   LConn := nil;
-  fpClose(LClientSock); fpClose(LListenSock);
+  platform_socket_close(LClientSock); platform_socket_close(LListenSock);
   LCtx := nil; LLib.Finalize; LLib := nil;
 end;
 

@@ -3,31 +3,24 @@ program test_minimal_socket;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF UNIX}
-  BaseUnix, Unix,
-  {$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.system.sysutils;
 
-{$IFDEF UNIX}
 procedure TestSocket;
 var
-  S: cint;
+  S: TPlatformSocket;
+  LErr: Int32;
 begin
-  S := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if S < 0 then
-    WriteLn('Failed to create socket: ', fpGetErrno)
+  LErr := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, S);
+  if LErr <> 0 then
+    WriteLn('Failed to create socket: ', LErr)
   else
   begin
-    WriteLn('Socket created successfully: ', S);
-    fpClose(S);
+    WriteLn('Socket created successfully: ', S.Value);
+    platform_socket_close(S);
   end;
 end;
-{$ENDIF}
 
 begin
-  {$IFDEF UNIX}
   TestSocket;
-  {$ELSE}
-  WriteLn('Not Unix');
-  {$ENDIF}
 end.

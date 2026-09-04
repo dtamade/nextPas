@@ -3,11 +3,7 @@ program test_winssl_string_methods;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF WINDOWS}
-  Windows, WinSock2,
-  {$ELSE}
-  Sockets,
-  {$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
@@ -38,7 +34,7 @@ var
   LContext: ISSLContext;
   LConn: ISSLConnection;
   LData: string;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
 begin
   WriteLn('=== Test: ReadString 基本功能 ===');
 

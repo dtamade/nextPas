@@ -24,10 +24,7 @@ program test_winssl_ocsp_crl_skeleton;
  *}
 
 uses
-  {$IFDEF WINDOWS}
-  Windows,
-  WinSock2,
-  {$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base;
 
@@ -71,59 +68,40 @@ begin
     WriteLn;
 end;
 
-{$IFDEF WINDOWS}
 function InitWinsock: Boolean;
-var
-  W: TWSAData;
 begin
-  Result := WSAStartup(MAKEWORD(2, 2), W) = 0;
+  Result := True;
 end;
 
 procedure CleanupWinsock;
 begin
-  WSACleanup;
 end;
 
-function ConnectToHost(const aHost: string; aPort: Word; out aSocket: TSocket): Boolean;
+function ConnectToHost(const aHost: string; aPort: Word;
+  out aSocket: TPlatformSocket): Boolean;
 var
-  A: TSockAddrIn;
-  H: PHostEnt;
-  InAddr: TInAddr;
-  Tm: Integer;
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
   Result := False;
-  aSocket := INVALID_SOCKET;
+  aSocket := PLATFORM_INVALID_SOCKET;
 
-  aSocket := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if aSocket = INVALID_SOCKET then
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(aHost)), LIP) <> 0 then
+    Exit;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    aSocket) <> 0 then
     Exit;
 
-  Tm := 10000;
-  setsockopt(aSocket, SOL_SOCKET, SO_RCVTIMEO, @Tm, SizeOf(Tm));
-  setsockopt(aSocket, SOL_SOCKET, SO_SNDTIMEO, @Tm, SizeOf(Tm));
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_RCVTIMEO, 10000);
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_SNDTIMEO, 10000);
 
-  H := gethostbyname(PAnsiChar(AnsiString(aHost)));
-  if H = nil then
-  begin
-    closesocket(aSocket);
-    aSocket := INVALID_SOCKET;
-    Exit;
-  end;
+  platform_sockaddr_ipv4(aPort, LIP, LAddr);
 
-  FillChar(A, SizeOf(A), 0);
-  A.sin_family := AF_INET;
-  A.sin_port := htons(aPort);
-  Move(H^.h_addr_list^^, InAddr, SizeOf(InAddr));
-  A.sin_addr := InAddr;
-
-  Result := connect(aSocket, @A, SizeOf(A)) = 0;
+  Result := platform_socket_connect(aSocket, @LAddr.Storage[0],
+    LAddr.Len) = 0;
   if not Result then
-  begin
-    closesocket(aSocket);
-    aSocket := INVALID_SOCKET;
-  end;
+    platform_socket_close(aSocket);
 end;
-{$ENDIF}
 
 { 测试吊销检查配置 }
 procedure TestRevocationConfig;
@@ -146,7 +124,7 @@ end;
 procedure TestOCSPOnline;
 {$IFDEF WINDOWS}
 var
-  Socket: TSocket;
+  Socket: TPlatformSocket;
   Connected: Boolean;
 {$ENDIF}
 begin
@@ -170,7 +148,7 @@ begin
     Connected := ConnectToHost('www.google.com', 443, Socket);
     Check('连接到 www.google.com:443', Connected);
     if Connected then
-      closesocket(Socket);
+      platform_socket_close(Socket);
 
     // 测试连接到吊销证书的站点 (revoked.badssl.com)
     Connected := ConnectToHost('revoked.badssl.com', 443, Socket);
@@ -178,7 +156,7 @@ begin
     begin
       // 注意：实际吊销检查需要在 TLS 握手中进行
       Check('连接到 revoked.badssl.com:443', True, '需要在 TLS 握手中验证吊销状态');
-      closesocket(Socket);
+      platform_socket_close(Socket);
     end
     else
     begin

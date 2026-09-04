@@ -3,7 +3,7 @@ program test_performance;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Windows, WinSock2, nextpas.core.time,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.platform.socket, nextpas.core.time,
   nextpas.core.tls.base, nextpas.core.tls.winssl.lib;
 
 const
@@ -11,38 +11,28 @@ const
   TEST_PORT = 443;
   TEST_SIZE = 1024 * 1024; // 1MB
 
-function CreateTCPSocket(const AHost: string; APort: Word): TSocket;
+function CreateTCPSocket(const AHost: string; APort: Word): TPlatformSocket;
 var
-  HostEnt: PHostEnt;
-  SockAddr: TSockAddrIn;
-  WSAData: TWSAData;
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
-  Result := INVALID_SOCKET;
+  Result := PLATFORM_INVALID_SOCKET;
 
-  if WSAStartup($0202, WSAData) <> 0 then
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(AHost)), LIP) <> 0 then
     Exit;
 
-  Result := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if Result = INVALID_SOCKET then
-    Exit;
-
-  HostEnt := gethostbyname(PChar(AHost));
-  if HostEnt = nil then
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    Result) <> 0 then
   begin
-    closesocket(Result);
-    Result := INVALID_SOCKET;
+    Result := PLATFORM_INVALID_SOCKET;
     Exit;
   end;
 
-  FillChar(SockAddr, SizeOf(SockAddr), 0);
-  SockAddr.sin_family := AF_INET;
-  SockAddr.sin_port := htons(APort);
-  SockAddr.sin_addr.S_addr := PLongWord(HostEnt^.h_addr_list^)^;
-
-  if connect(Result, PSockAddr(@SockAddr)^, SizeOf(SockAddr)) <> 0 then
+  platform_sockaddr_ipv4(APort, LIP, LAddr);
+  if platform_socket_connect(Result, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin
-    closesocket(Result);
-    Result := INVALID_SOCKET;
+    platform_socket_close(Result);
+    Result := PLATFORM_INVALID_SOCKET;
   end;
 end;
 
@@ -52,7 +42,7 @@ var
   Context: ISSLContext;
   Connection: ISSLConnection;
   ClientConn: ISSLClientConnection;
-  Socket: TSocket;
+  Socket: TPlatformSocket;
   Request: AnsiString;
   Buffer: array[0..65535] of Byte; // 64KB buffer
   StartTime, EndTime: TDateTime;
@@ -79,7 +69,7 @@ begin
 
   // Create TCP connection
   Socket := CreateTCPSocket(TEST_HOST, TEST_PORT);
-  if Socket = INVALID_SOCKET then
+  if Socket.IsInvalid then
   begin
     WriteLn('Failed to create TCP connection');
     Exit;
@@ -87,7 +77,7 @@ begin
 
   try
     // Create SSL connection
-    Connection := Context.CreateConnection(Socket);
+    Connection := Context.CreateConnection(THandle(Socket.Value));
     ClientConn := Connection as ISSLClientConnection;
     ClientConn.SetServerName(TEST_HOST);
 
@@ -155,8 +145,7 @@ begin
     WriteLn('Larger buffers might not improve much due to SSL record size limits');
 
   finally
-    closesocket(Socket);
-    WSACleanup;
+    platform_socket_close(Socket);
   end;
 
   WriteLn;

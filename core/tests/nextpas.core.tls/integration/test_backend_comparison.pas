@@ -10,11 +10,7 @@ program test_backend_comparison;
 
 uses
   nextpas.core.tls.openssl.backed,
-  {$IFDEF WINDOWS}Windows,
-  WinSock2,
-  {$ENDIF}
-  {$IFNDEF WINDOWS}BaseUnix,
-  {$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.system.sysutils,
   nextpas.core.system.classes,
   StrUtils,
@@ -79,19 +75,19 @@ begin
     Result := LCode div 100;
 end;
 
-{$IFDEF WINDOWS}
+{ Socket helpers on nextpas.core.platform.socket (cross-platform;
+  Winsock init is owned by the platform layer). }
 function InitWinsock: Boolean;
-var
-  LWSAData: TWSAData;
 begin
-  Result := WSAStartup(MAKEWORD(2, 2), LWSAData) = 0;
+  Result := True;  // No-op: platform.socket owns Winsock lifetime
 end;
 
 procedure CleanupWinsock;
 begin
-  WSACleanup;
+  // No-op: platform.socket owns Winsock lifetime
 end;
 
+{$IFDEF WINDOWS}
 procedure EnsureWinSSLBackendRegistered;
 begin
   try
@@ -104,90 +100,46 @@ begin
     end;
   end;
 end;
-
-function ConnectToHost(const aHost: string; aPort: Word; out aSocket: TSocket): Boolean;
-var
-  LAddr: TSockAddrIn;
-  LHostEnt: PHostEnt;
-  LInAddr: TInAddr;
-  LTimeout: Integer;
-begin
-  Result := False;
-  aSocket := INVALID_SOCKET;
-
-  aSocket := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if aSocket = INVALID_SOCKET then
-    Exit;
-
-  LTimeout := 10000;
-  setsockopt(aSocket, SOL_SOCKET, SO_RCVTIMEO, @LTimeout, SizeOf(LTimeout));
-  setsockopt(aSocket, SOL_SOCKET, SO_SNDTIMEO, @LTimeout, SizeOf(LTimeout));
-
-  LHostEnt := gethostbyname(PAnsiChar(AnsiString(aHost)));
-  if LHostEnt = nil then
-  begin
-    closesocket(aSocket);
-    aSocket := INVALID_SOCKET;
-    Exit;
-  end;
-
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(aPort);
-  Move(LHostEnt^.h_addr_list^^, LInAddr, SizeOf(LInAddr));
-  LAddr.sin_addr := LInAddr;
-
-  Result := connect(aSocket, @LAddr, SizeOf(LAddr)) = 0;
-  if not Result then
-  begin
-    closesocket(aSocket);
-    aSocket := INVALID_SOCKET;
-  end;
-end;
-
-procedure CloseSSLSocket(aSocket: TSocket);
-begin
-  if aSocket <> INVALID_SOCKET then
-    closesocket(aSocket);
-end;
-{$ELSE}
-// Linux stubs - this test is Windows-only
-type
-  TSocket = Integer;
-const
-  INVALID_SOCKET = -1;
-
-function InitWinsock: Boolean;
-begin
-  Result := True;  // No-op on Linux
-end;
-
-procedure CleanupWinsock;
-begin
-  // No-op on Linux
-end;
-
-function ConnectToHost(const aHost: string; aPort: Word; out aSocket: TSocket): Boolean;
-begin
-  Result := False;  // Not implemented on Linux
-  aSocket := INVALID_SOCKET;
-end;
-
-procedure CloseSSLSocket(aSocket: TSocket);
-begin
-  if aSocket <> INVALID_SOCKET then
-    fpClose(aSocket);
-end;
 {$ENDIF}
 
+function ConnectToHost(const aHost: string; aPort: Word;
+  out aSocket: TPlatformSocket): Boolean;
+var
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
+begin
+  Result := False;
+  aSocket := PLATFORM_INVALID_SOCKET;
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(aHost)), LIP) <> 0 then
+    Exit;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    aSocket) <> 0 then
+    Exit;
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_RCVTIMEO, 10000);
+  platform_socket_set_timeout(aSocket, PLATFORM_SO_SNDTIMEO, 10000);
+  platform_sockaddr_ipv4(aPort, LIP, LAddr);
+  if platform_socket_connect(aSocket, @LAddr.Storage[0], LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(aSocket);
+    Exit;
+  end;
+  Result := True;
+end;
+
+procedure CloseSSLSocket(var aSocket: TPlatformSocket);
+begin
+  if aSocket.IsValid then
+    platform_socket_close(aSocket);
+end;
+
 procedure TestDeprecatedProtocolFailurePath(const aTestName, aHost: string;
-  aContext: ISSLContext; aSocket: TSocket);
+  aContext: ISSLContext; aSocket: TPlatformSocket);
 var
   LConn: ISSLConnection;
   LProtocol: TSSLProtocolVersion;
 begin
   try
-    LConn := aContext.CreateConnection(aSocket);
+    LConn := aContext.CreateConnection(THandle(aSocket.Value));
     (LConn as ISSLClientConnection).SetServerName(aHost);
 
     if LConn.Connect then
@@ -211,14 +163,14 @@ var
   LLib: ISSLLibrary;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
   LRequest: string;
   LBuffer: array[0..4095] of Byte;
   LBytesRead: Integer;
 begin
   Result := False;
   aResponse := '';
-  LSocket := INVALID_SOCKET;
+  LSocket := PLATFORM_INVALID_SOCKET;
 
   try
     // Create library
@@ -236,7 +188,7 @@ begin
       Exit;
 
     // Create SSL connection
-    LConn := LContext.CreateConnection(LSocket);
+    LConn := LContext.CreateConnection(THandle(LSocket.Value));
     (LConn as ISSLClientConnection).SetServerName(aHost);
     if not LConn.Connect then
       Exit;
@@ -265,8 +217,8 @@ begin
     LConn.Shutdown;
 
   finally
-    if LSocket <> INVALID_SOCKET then
-      {$IFDEF WINDOWS}CloseSSLSocket(LSocket){$ELSE}fpClose(LSocket){$ENDIF};
+    if LSocket.IsValid then
+      CloseSSLSocket(LSocket);
   end;
 end;
 
@@ -316,14 +268,14 @@ var
   LWinSSLLib, LOpenSSLLib: ISSLLibrary;
   LWinSSLCtx, LOpenSSLCtx: ISSLContext;
   LWinSSLConn, LOpenSSLConn: ISSLConnection;
-  LWinSSLSocket, LOpenSSLSocket: TSocket;
+  LWinSSLSocket, LOpenSSLSocket: TPlatformSocket;
   LWinSSLProto, LOpenSSLProto: TSSLProtocolVersion;
   LWinSSLCipher, LOpenSSLCipher: string;
 begin
   BeginSection('TLS 握手对比');
 
-  LWinSSLSocket := INVALID_SOCKET;
-  LOpenSSLSocket := INVALID_SOCKET;
+  LWinSSLSocket := PLATFORM_INVALID_SOCKET;
+  LOpenSSLSocket := PLATFORM_INVALID_SOCKET;
 
   try
     // WinSSL handshake
@@ -336,7 +288,7 @@ begin
 
       if ConnectToHost('www.google.com', 443, LWinSSLSocket) then
       begin
-        LWinSSLConn := LWinSSLCtx.CreateConnection(LWinSSLSocket);
+        LWinSSLConn := LWinSSLCtx.CreateConnection(THandle(LWinSSLSocket.Value));
         (LWinSSLConn as ISSLClientConnection).SetServerName('www.google.com');
         Test('WinSSL 握手成功', LWinSSLConn.Connect);
 
@@ -351,7 +303,7 @@ begin
         end;
 
         CloseSSLSocket(LWinSSLSocket);
-        LWinSSLSocket := INVALID_SOCKET;
+        LWinSSLSocket := PLATFORM_INVALID_SOCKET;
       end;
     end;
 
@@ -365,7 +317,7 @@ begin
 
       if ConnectToHost('www.google.com', 443, LOpenSSLSocket) then
       begin
-        LOpenSSLConn := LOpenSSLCtx.CreateConnection(LOpenSSLSocket);
+        LOpenSSLConn := LOpenSSLCtx.CreateConnection(THandle(LOpenSSLSocket.Value));
         (LOpenSSLConn as ISSLClientConnection).SetServerName('www.google.com');
         Test('OpenSSL 握手成功', LOpenSSLConn.Connect);
 
@@ -380,7 +332,7 @@ begin
         end;
 
         CloseSSLSocket(LOpenSSLSocket);
-        LOpenSSLSocket := INVALID_SOCKET;
+        LOpenSSLSocket := PLATFORM_INVALID_SOCKET;
       end;
     end;
 
@@ -395,9 +347,9 @@ begin
       Format('WinSSL: %s, OpenSSL: %s', [LWinSSLCipher, LOpenSSLCipher]));
 
   finally
-    if LWinSSLSocket <> INVALID_SOCKET then
+    if LWinSSLSocket.IsValid then
       CloseSSLSocket(LWinSSLSocket);
-    if LOpenSSLSocket <> INVALID_SOCKET then
+    if LOpenSSLSocket.IsValid then
       CloseSSLSocket(LOpenSSLSocket);
   end;
 end;
@@ -462,14 +414,14 @@ var
   LWinSSLLib, LOpenSSLLib: ISSLLibrary;
   LWinSSLCtx, LOpenSSLCtx: ISSLContext;
   LWinSSLConn, LOpenSSLConn: ISSLConnection;
-  LWinSSLSocket, LOpenSSLSocket: TSocket;
+  LWinSSLSocket, LOpenSSLSocket: TPlatformSocket;
   LWinSSLCert, LOpenSSLCert: ISSLCertificate;
   LWinSSLSubject, LOpenSSLSubject: string;
 begin
   BeginSection('证书处理对比');
 
-  LWinSSLSocket := INVALID_SOCKET;
-  LOpenSSLSocket := INVALID_SOCKET;
+  LWinSSLSocket := PLATFORM_INVALID_SOCKET;
+  LOpenSSLSocket := PLATFORM_INVALID_SOCKET;
 
   try
     // WinSSL certificate handling
@@ -482,7 +434,7 @@ begin
 
       if ConnectToHost('www.google.com', 443, LWinSSLSocket) then
       begin
-        LWinSSLConn := LWinSSLCtx.CreateConnection(LWinSSLSocket);
+        LWinSSLConn := LWinSSLCtx.CreateConnection(THandle(LWinSSLSocket.Value));
         (LWinSSLConn as ISSLClientConnection).SetServerName('www.google.com');
         if LWinSSLConn.Connect then
         begin
@@ -502,7 +454,7 @@ begin
         end;
 
         CloseSSLSocket(LWinSSLSocket);
-        LWinSSLSocket := INVALID_SOCKET;
+        LWinSSLSocket := PLATFORM_INVALID_SOCKET;
       end;
     end;
 
@@ -516,7 +468,7 @@ begin
 
       if ConnectToHost('www.google.com', 443, LOpenSSLSocket) then
       begin
-        LOpenSSLConn := LOpenSSLCtx.CreateConnection(LOpenSSLSocket);
+        LOpenSSLConn := LOpenSSLCtx.CreateConnection(THandle(LOpenSSLSocket.Value));
         (LOpenSSLConn as ISSLClientConnection).SetServerName('www.google.com');
         if LOpenSSLConn.Connect then
         begin
@@ -536,7 +488,7 @@ begin
         end;
 
         CloseSSLSocket(LOpenSSLSocket);
-        LOpenSSLSocket := INVALID_SOCKET;
+        LOpenSSLSocket := PLATFORM_INVALID_SOCKET;
       end;
     end;
 
@@ -546,9 +498,9 @@ begin
       (Pos('google', LowerCase(LOpenSSLSubject)) > 0));
 
   finally
-    if LWinSSLSocket <> INVALID_SOCKET then
+    if LWinSSLSocket.IsValid then
       CloseSSLSocket(LWinSSLSocket);
-    if LOpenSSLSocket <> INVALID_SOCKET then
+    if LOpenSSLSocket.IsValid then
       CloseSSLSocket(LOpenSSLSocket);
   end;
 end;
@@ -558,12 +510,12 @@ var
   LWinSSLLib, LOpenSSLLib: ISSLLibrary;
   LWinSSLCtx, LOpenSSLCtx: ISSLContext;
   LWinSSLConn, LOpenSSLConn: ISSLConnection;
-  LWinSSLSocket, LOpenSSLSocket: TSocket;
+  LWinSSLSocket, LOpenSSLSocket: TPlatformSocket;
 begin
   BeginSection('错误处理对比');
 
-  LWinSSLSocket := INVALID_SOCKET;
-  LOpenSSLSocket := INVALID_SOCKET;
+  LWinSSLSocket := PLATFORM_INVALID_SOCKET;
+  LOpenSSLSocket := PLATFORM_INVALID_SOCKET;
 
   try
     // Test invalid connection (HTTP port for HTTPS)
@@ -577,7 +529,7 @@ begin
       if ConnectToHost('www.google.com', 80, LWinSSLSocket) then
       begin
         try
-          LWinSSLConn := LWinSSLCtx.CreateConnection(LWinSSLSocket);
+          LWinSSLConn := LWinSSLCtx.CreateConnection(THandle(LWinSSLSocket.Value));
           (LWinSSLConn as ISSLClientConnection).SetServerName('www.google.com');
           Test('WinSSL HTTP 端口握手失败（预期）', not LWinSSLConn.Connect);
         except
@@ -586,7 +538,7 @@ begin
               DescribeException(E));
         end;
         CloseSSLSocket(LWinSSLSocket);
-        LWinSSLSocket := INVALID_SOCKET;
+        LWinSSLSocket := PLATFORM_INVALID_SOCKET;
       end;
     end;
 
@@ -600,7 +552,7 @@ begin
       if ConnectToHost('www.google.com', 80, LOpenSSLSocket) then
       begin
         try
-          LOpenSSLConn := LOpenSSLCtx.CreateConnection(LOpenSSLSocket);
+          LOpenSSLConn := LOpenSSLCtx.CreateConnection(THandle(LOpenSSLSocket.Value));
           (LOpenSSLConn as ISSLClientConnection).SetServerName('www.google.com');
           Test('OpenSSL HTTP 端口握手失败（预期）', not LOpenSSLConn.Connect);
         except
@@ -609,7 +561,7 @@ begin
               DescribeException(E));
         end;
         CloseSSLSocket(LOpenSSLSocket);
-        LOpenSSLSocket := INVALID_SOCKET;
+        LOpenSSLSocket := PLATFORM_INVALID_SOCKET;
       end;
     end;
 
@@ -623,7 +575,7 @@ begin
       TestDeprecatedProtocolFailurePath('WinSSL SSL3 握手失败（预期）',
         'www.google.com', LWinSSLCtx, LWinSSLSocket);
       CloseSSLSocket(LWinSSLSocket);
-      LWinSSLSocket := INVALID_SOCKET;
+      LWinSSLSocket := PLATFORM_INVALID_SOCKET;
     end;
 
     LOpenSSLCtx := LOpenSSLLib.CreateContext(sslCtxClient);
@@ -635,13 +587,13 @@ begin
       TestDeprecatedProtocolFailurePath('OpenSSL SSL3 握手失败（预期）',
         'www.google.com', LOpenSSLCtx, LOpenSSLSocket);
       CloseSSLSocket(LOpenSSLSocket);
-      LOpenSSLSocket := INVALID_SOCKET;
+      LOpenSSLSocket := PLATFORM_INVALID_SOCKET;
     end;
 
   finally
-    if LWinSSLSocket <> INVALID_SOCKET then
+    if LWinSSLSocket.IsValid then
       CloseSSLSocket(LWinSSLSocket);
-    if LOpenSSLSocket <> INVALID_SOCKET then
+    if LOpenSSLSocket.IsValid then
       CloseSSLSocket(LOpenSSLSocket);
   end;
 end;

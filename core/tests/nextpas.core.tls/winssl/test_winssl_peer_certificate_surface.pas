@@ -4,7 +4,8 @@ program test_winssl_peer_certificate_surface;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  Windows, nextpas.core.system.sysutils, WinSock2,
+  nextpas.core.platform.socket,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;
 
@@ -68,55 +69,38 @@ begin
 end;
 
 function InitWinsock: Boolean;
-var
-  LWSAData: TWSAData;
 begin
-  Result := WSAStartup(MAKEWORD(2, 2), LWSAData) = 0;
+  Result := True;
 end;
 
 procedure CleanupWinsock;
 begin
-  WSACleanup;
 end;
 
-function ConnectToHost(const AHost: string; APort: Word; out ASocket: TSocket): Boolean;
+function ConnectToHost(const AHost: string; APort: Word;
+  out ASocket: TPlatformSocket): Boolean;
 var
-  LAddr: TSockAddrIn;
-  LHostEnt: PHostEnt;
-  LInAddr: TInAddr;
-  LTimeout: Integer;
+  LAddr: TPlatformSockAddr;
+  LIP: UInt32;
 begin
   Result := False;
-  ASocket := INVALID_SOCKET;
+  ASocket := PLATFORM_INVALID_SOCKET;
 
-  ASocket := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if ASocket = INVALID_SOCKET then
+  if platform_socket_resolve_ipv4(PAnsiChar(AnsiString(AHost)), LIP) <> 0 then
+    Exit;
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    ASocket) <> 0 then
     Exit;
 
-  LTimeout := 10000;
-  setsockopt(ASocket, SOL_SOCKET, SO_RCVTIMEO, @LTimeout, SizeOf(LTimeout));
-  setsockopt(ASocket, SOL_SOCKET, SO_SNDTIMEO, @LTimeout, SizeOf(LTimeout));
+  platform_socket_set_timeout(ASocket, PLATFORM_SO_RCVTIMEO, 10000);
+  platform_socket_set_timeout(ASocket, PLATFORM_SO_SNDTIMEO, 10000);
 
-  LHostEnt := gethostbyname(PAnsiChar(AnsiString(AHost)));
-  if LHostEnt = nil then
-  begin
-    closesocket(ASocket);
-    ASocket := INVALID_SOCKET;
-    Exit;
-  end;
+  platform_sockaddr_ipv4(APort, LIP, LAddr);
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  Move(LHostEnt^.h_addr_list^^, LInAddr, SizeOf(LInAddr));
-  LAddr.sin_addr := LInAddr;
-
-  Result := connect(ASocket, @LAddr, SizeOf(LAddr)) = 0;
+  Result := platform_socket_connect(ASocket, @LAddr.Storage[0],
+    LAddr.Len) = 0;
   if not Result then
-  begin
-    closesocket(ASocket);
-    ASocket := INVALID_SOCKET;
-  end;
+    platform_socket_close(ASocket);
 end;
 
 function FindCertificateIndexByFingerprint(const AChain: TSSLCertificateArray;
@@ -162,7 +146,7 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LSocket: TSocket;
+  LSocket: TPlatformSocket;
   LPeerCert: ISSLCertificate;
   LPeerIssuer: ISSLCertificate;
   LChain: TSSLCertificateArray;
@@ -199,7 +183,7 @@ begin
     if LCtx = nil then
       Exit;
 
-    LSocket := INVALID_SOCKET;
+    LSocket := PLATFORM_INVALID_SOCKET;
     if not ConnectToHost(AHost, 443, LSocket) then
     begin
       Check('TCP connect', False, AHost);
@@ -207,7 +191,7 @@ begin
     end;
 
     try
-      LConn := LCtx.CreateConnection(LSocket);
+      LConn := LCtx.CreateConnection(THandle(LSocket.Value));
       Check('create client connection', LConn <> nil);
       if LConn = nil then
         Exit;
@@ -270,8 +254,8 @@ begin
 
       LConn.Shutdown;
     finally
-      if LSocket <> INVALID_SOCKET then
-        closesocket(LSocket);
+      if LSocket.IsValid then
+        platform_socket_close(LSocket);
     end;
   finally
     CleanupWinsock;

@@ -3,7 +3,7 @@ program test_interop_client;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
+  nextpas.core.thread.init, nextpas.core.platform.socket,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib,
@@ -16,8 +16,8 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LSock: Integer;
-  LAddr: TInetSockAddr;
+  LSock: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
   LReq: string;
   LRead: Integer;
   LBuffer: array[0..4095] of Byte;
@@ -50,33 +50,30 @@ begin
     LCtx.SetVerifyMode([sslVerifyPeer]);
   end;
 
-  LSock := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if LSock < 0 then
+  if platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0,
+    LSock) <> 0 then
   begin
     WriteLn('ERROR: socket creation failed');
     Halt(2);
   end;
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(Word(LPort));
-  LAddr.sin_addr.s_addr := HostToNet(Cardinal($7F000001));
+  platform_sockaddr_loopback4(Word(LPort), LAddr);
 
-  if fpConnect(LSock, @LAddr, SizeOf(LAddr)) <> 0 then
+  if platform_socket_connect(LSock, @LAddr.Storage[0], LAddr.Len) <> 0 then
   begin
     WriteLn('ERROR: connect failed');
-    fpClose(LSock);
+    platform_socket_close(LSock);
     Halt(3);
   end;
 
   LCtx.SetServerName(LHost);
 
-  LConn := LCtx.CreateConnection(THandle(LSock));
+  LConn := LCtx.CreateConnection(THandle(LSock.Value));
 
   if not LConn.Connect then
   begin
     WriteLn('ERROR: TLS handshake failed');
-    fpClose(LSock);
+    platform_socket_close(LSock);
     Halt(4);
   end;
 
@@ -91,5 +88,5 @@ begin
     WriteLn('Response: ', LRead, ' bytes');
 
   LConn.Shutdown;
-  fpClose(LSock);
+  platform_socket_close(LSock);
 end.

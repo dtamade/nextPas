@@ -23,7 +23,6 @@ uses
   nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
   nextpas.core.system.classes,
-  Sockets,
   benchmark_framework,
   nextpas.core.text.conv,
   nextpas.core.tls.base,
