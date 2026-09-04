@@ -4,6 +4,11 @@ unit nextpas.core.platform.which;
 
 interface
 
+{** @desc 检查路径是否有效可执行（effective access, X_OK 语义）
+    @param APath 待检查路径
+    @return True 当前进程可执行该路径 *}
+function platform_is_executable(const APath: PAnsiChar): Boolean;
+
 {** @desc 在 PATH 环境变量中查找可执行文件
     @param AName 程序名称（或绝对路径）
     @param ABuf 输出缓冲区，返回完整路径
@@ -31,8 +36,10 @@ const
 type
   TAnsiCharArray = array of AnsiChar;
 
-function IsExecutable(const APath: PAnsiChar): Boolean;
+function platform_is_executable(const APath: PAnsiChar): Boolean;
 begin
+  if (APath = nil) or (APath^ = #0) then
+    Exit(False);
 {$IFDEF NEXTPAS_UNIX}
   Result := access(APath, 1{X_OK}) = 0;
 {$ELSE}
@@ -90,7 +97,7 @@ begin
 
   if platform_path_is_absolute(AName) then
   begin
-    if IsExecutable(AName) then
+    if platform_is_executable(AName) then
       Exit(CopyFoundPath(AName, ABuf, ABufSize));
     Exit(PLATFORM_ERR_NOENT);
   end;
@@ -114,7 +121,7 @@ begin
     platform_path_join(@LPathBuf[LStart], AName, @LCandidate[0], 1024);
     LPathBuf[LStart + LDirLen] := PATH_SEP; // restore
 
-    if IsExecutable(@LCandidate[0]) then
+    if platform_is_executable(@LCandidate[0]) then
       Exit(CopyFoundPath(@LCandidate[0], ABuf, ABufSize));
   end;
 

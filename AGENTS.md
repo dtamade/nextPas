@@ -2,8 +2,10 @@
 
 > **铁律（lane 会话必守，违反停工上报）：**
 > 1. 只待在分给你的 worktree 和分支里干活，不新建分支，不碰别人的 worktree。
-> 2. **永远不碰 main**：不 checkout main、不 merge 进 main、不 push main。
->    你只报 `Ready`，合由总控在 main 的 worktree 里串行做。
+> 2. **合入 main 只走 landing 候选分支**：不在 main 上开发，不 raw merge lane 分支进 main。
+>    你报 `Ready` 后按 `docs/worktrees.md`“Lane 自主 Landing”节自行合入
+>   （cherry-pick 到 `landing/<lane>-YYYYMMDD` 候选分支、`make landing-check` 全绿后
+>    `git merge --ff-only` + push）；合坏会被 revert。
 > 3. 开工模板见 `docs/plans/LANE_TASK_TEMPLATE.md`，提示词里没给就按它要。
 > 4. 报 `Ready` 前：worktree clean、`make hygiene` 过、focused gate 绿。
 > 5. 不直接引用 FPC RTL：产品代码与测试只 `uses nextpas.core.*` owner 模块；
@@ -46,7 +48,7 @@
 
 - 先运行 `git status --short --branch`，确认当前分支和脏文件范围。
 - 先运行 `git worktree list --porcelain` 或 `scripts/worktree-audit.sh`，确认自己在哪个 worktree。
-- 不要在 `main` 上做普通模块开发。`main` 只用于总控 landing、仓库治理和明确授权的小修。
+- 不要在 `main` 上做普通模块开发。`main` 只用于 landing（各 lane 按 `docs/worktrees.md` 自主合入）、仓库治理和明确授权的小修。
 - 模块开发必须在项目根目录 `.worktrees/<module>` 下的专属 worktree 进行。
 - 每个模块默认只有一个长期 lane 分支，例如 `codex/core-http`、`codex/core-math`、`codex/compiler`。
 - 新建模块 worktree 使用 `scripts/worktree-add.sh <branch> [base]`，不要手写随机路径。

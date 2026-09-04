@@ -1,9 +1,6 @@
 unit nextpas.core.audio.resample;
 
 {$I nextpas.core.settings.inc}
-{$IF 0}
-{$mode objfpc}{$H+}
-{$ENDIF}
 
 interface
 

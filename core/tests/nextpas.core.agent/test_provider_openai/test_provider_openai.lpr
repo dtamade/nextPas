@@ -542,6 +542,57 @@ begin
   Check(Misused, 'decode after finalize is misuse');
 end;
 
+{ usage 回落：顶层缺席取 choices[0].usage；键名 Anthropic 式时取别名；
+  顶层一旦是对象即赢 }
+procedure TestDecoderUsageFallback;
+var
+  D: IAgentWireDecoder;
+  Arr: TStreamDeltaArray;
+begin
+  D := NewOpenAIWireDecoder(nil);
+  D.DecodeEvent(Ev('{"choices":[{"delta":{"content":"x"},' +
+    '"usage":{"input_tokens":7,"output_tokens":2}}]}'), Arr);
+  CheckEqual(Integer(2), Integer(Length(Arr)), 'text + usage');
+  Check(Arr[1].Kind = sdkUsage, 'usage kind');
+  CheckEqual(Int64(7), Arr[1].Usage.InputTokens, 'fallback in');
+  CheckEqual(Int64(2), Arr[1].Usage.OutputTokens, 'fallback out');
+
+  D := NewOpenAIWireDecoder(nil);
+  D.DecodeEvent(Ev('{"usage":{"prompt_tokens":99,"completion_tokens":8},' +
+    '"choices":[{"delta":{"content":"x"},' +
+    '"usage":{"input_tokens":7,"output_tokens":2}}]}'), Arr);
+  Check(Arr[High(Arr)].Kind = sdkUsage, 'top-level usage wins kind');
+  CheckEqual(Int64(99), Arr[High(Arr)].Usage.InputTokens, 'top-level wins in');
+  CheckEqual(Int64(8), Arr[High(Arr)].Usage.OutputTokens, 'top-level wins out');
+
+  D := NewOpenAIWireDecoder(nil);
+  D.DecodeEvent(Ev('{"usage":{"input_tokens":50,"output_tokens":9},' +
+    '"choices":[{"delta":{"content":"x"}}]}'), Arr);
+  CheckEqual(Int64(50), Arr[High(Arr)].Usage.InputTokens, 'alias in');
+  CheckEqual(Int64(9), Arr[High(Arr)].Usage.OutputTokens, 'alias out');
+
+  { 无 usage 处处缺席：仅正文增量，不崩溃（Default(TJsonValue) 的
+    FDoc=nil，绝不经它做回落赋值） }
+  D := NewOpenAIWireDecoder(nil);
+  D.DecodeEvent(Ev('{"choices":[{"delta":{"content":"hi"}}]}'), Arr);
+  CheckEqual(Integer(1), Integer(Length(Arr)), 'text only length');
+  Check(Arr[0].Kind = sdkTextDelta, 'text only kind');
+
+  { 空 choices 且无 usage：零增量，不崩溃 }
+  D := NewOpenAIWireDecoder(nil);
+  D.DecodeEvent(Ev('{"choices":[]}'), Arr);
+  CheckEqual(Integer(0), Integer(Length(Arr)), 'empty choices no usage');
+
+  { 顶层 usage 为 null：视同缺席，回落 choices[0] }
+  D := NewOpenAIWireDecoder(nil);
+  D.DecodeEvent(Ev('{"usage":null,' +
+    '"choices":[{"delta":{"content":"x"},' +
+    '"usage":{"prompt_tokens":4,"completion_tokens":1}}]}'), Arr);
+  Check(Arr[High(Arr)].Kind = sdkUsage, 'null top usage fallback kind');
+  CheckEqual(Int64(4), Arr[High(Arr)].Usage.InputTokens, 'null top fallback in');
+  CheckEqual(Int64(1), Arr[High(Arr)].Usage.OutputTokens, 'null top fallback out');
+end;
+
 procedure TestDecoderBucketsAndEmptyChoices;
 var
   D: IAgentWireDecoder;
@@ -967,6 +1018,7 @@ begin
   T.Test('decode violations', @TestDecodeViolations);
   T.Test('q-o7 multi choice', @TestQO7MultiChoice);
   T.Test('decoder sequence', @TestDecoderSequence);
+  T.Test('decoder usage fallback', @TestDecoderUsageFallback);
   T.Test('decoder buckets and q-o6', @TestDecoderBucketsAndEmptyChoices);
   T.Test('provider complete e2e', @TestProviderCompleteEndToEnd);
   T.Test('provider stream e2e', @TestProviderStreamEndToEnd);

@@ -7,9 +7,6 @@ unit nextpas.core.gtk3;
        纹理：显式 type 别名 + inline 转发 loader 函数，纯 re-export。 *}
 
 {$I nextpas.core.settings.inc}
-{$IF 0}
-{$mode objfpc}{$H+}
-{$ENDIF}
 
 interface
 

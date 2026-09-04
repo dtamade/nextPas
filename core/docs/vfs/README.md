@@ -95,7 +95,7 @@ nextpas.core.vfs.base.pas       ← TEntryInfo/TStatInfo record、规范路径�
 nextpas.core.vfs.intf.pas       ← IVfs 接口契约
 nextpas.core.vfs.errors.pas     ← EVfsError(含 Op/Path) 及子类
 nextpas.core.vfs.memtree.pas    ← 内存不可变树（embedded 底座 + 测试替身）+ Builder
-nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片
+nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片（respack 依赖经 backends 单缝复用）
 nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转换在此收口）
 nextpas.core.vfs.backends.pas   ← 后端族聚合：memtree/embedded/os 单缝收口（门面经 backends 单缝收敛 12→10）
 nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装

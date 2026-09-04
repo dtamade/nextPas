@@ -117,7 +117,7 @@ uses
   nextpas.core.http.mime,
   nextpas.core.time.httpdate,
   nextpas.core.platform.sendfile,
-  nextpas.core.platform.sendfile.base;
+  nextpas.core.platform.files.base;
 
 type
   TResponseWriterAdapter = class(TInterfacedObject, IWriter, nextpas.core.platform.sendfile.base.ISendfileSocketHandle)
@@ -757,7 +757,7 @@ begin
       Exit;
     end;
     LInfo := nextpas.core.fs.Stat(AFilePath);
-    if LInfo.FileType <> ftRegular then
+    if LInfo.FileType <> nextpas.core.fs.base.ftRegular then
     begin
       WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
       Exit;
@@ -825,6 +825,14 @@ begin
     end;
     { Build full path }
     LFullPath := ARoot + '/' + LRelative;
+    { Missing files short-circuit to 404 here: FsPathAbs resolves symlinks
+      only for existing paths, so the prefix gate below would misread a
+      missing leaf under a symlinked root as an escape (403). }
+    if not nextpas.core.fs.Exists(LFullPath) then
+    begin
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
+      Exit;
+    end;
     { Security: verify resolved path stays within root directory.
       This prevents symlink-based directory traversal attacks. }
     LNormalizedRoot := FsPathClean(FsPathAbs(ARoot));

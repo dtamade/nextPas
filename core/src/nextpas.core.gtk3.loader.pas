@@ -9,9 +9,6 @@ unit nextpas.core.gtk3.loader;
        依赖方向：ffi → loader；sonames 见实现。 *}
 
 {$I nextpas.core.settings.inc}
-{$IF 0}
-{$mode objfpc}{$H+}
-{$ENDIF}
 
 interface
 

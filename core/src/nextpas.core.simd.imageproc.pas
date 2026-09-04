@@ -1,7 +1,6 @@
 // Facade pure re-export – stable TBitmap reuse via base
 unit nextpas.core.simd.imageproc;
 
-{$mode ObjFPC}{$H+}
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 

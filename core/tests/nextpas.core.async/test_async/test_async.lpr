@@ -19,7 +19,8 @@ uses
   nextpas.core.io.poller,
   nextpas.core.net.base,
   nextpas.core.net.intf,
-  nextpas.core.net.tcp;
+  nextpas.core.net.tcp,
+  nextpas.core.net.async.tcp;
 
 var
   T: TTestSuite;
@@ -498,10 +499,13 @@ begin
     'wake;',
     'Post wakes after successful Enqueue');
 
-  CheckSourceOrder(LDrainBody, 'if (not fpendingready) or (fpending = nil) then',
+  { C-30: entry guard became a per-iteration liveness re-check: a callback
+    may Close the loop (queue freed+niled), so the old one-shot guard could
+    not cover self-teardown. }
+  CheckSourceOrder(LDrainBody, 'while (not fclosed) and fpendingready and (fpending <> nil) do',
     'fpending.trydequeue(litem)',
-    'DrainPending guards readiness before single-consumer TryDequeue');
-  CheckSourceOrder(LDrainBody, 'while fpending.trydequeue(litem) do',
+    'DrainPending re-checks liveness every iteration before single-consumer TryDequeue');
+  CheckSourceOrder(LDrainBody, 'if not fpending.trydequeue(litem) then',
     'litem.callback(litem.context)',
     'DrainPending invokes callbacks after successful TryDequeue');
 end;
@@ -1549,6 +1553,62 @@ begin
   LPoller.Close;
 end;
 
+{ C-29: async listener teardown must not crash the loop teardown.
+  AsyncTcpListen + Close drains reactor entries to zero; the following
+  loop Free runs ReleasePendingEntries on the empty state, which
+  underflowed `0 to FEntryCount - 1` (UInt32) into a 4-billion-iteration
+  OOB walk (AV + hung process). Multiple rounds: Close is idempotent. }
+procedure TestAsyncLoopTeardownAfterAsyncListen;
+var
+  LLoop: TAsyncLoop;
+  LListener: IAsyncTcpListener;
+  LRound: Integer;
+begin
+  for LRound := 1 to 3 do
+  begin
+    LLoop := TAsyncLoop.Create(32);
+    Check(LLoop.IsValid, 'loop valid');
+    LListener := AsyncTcpListen(LLoop, '127.0.0.1', 0);
+    Check(LListener <> nil, 'async listen ok');
+    Check(LListener.LocalAddr.Port <> 0, 'system assigned port');
+    LListener.Close;
+    LListener := nil;
+    LLoop.Free;
+  end;
+  Check(True, 'listen+close+free teardown x3 without crash');
+end;
+
+{ C-30: posted callback that Closes the loop must stop the drain, not
+  TryDequeue a freed+niled queue (nil Self AV). The item queued behind the
+  closer is discarded exactly once by Close itself, never fired here. }
+var
+  GCloseVictimFired: Boolean = False;
+
+procedure CloseLoopCallback(AContext: Pointer);
+begin
+  TAsyncLoop(AContext).Close;
+end;
+
+procedure CloseVictimCallback(AContext: Pointer);
+begin
+  GCloseVictimFired := True;
+end;
+
+procedure TestAsyncLoopDrainStopsAfterCloseFromCallback;
+var
+  LLoop: TAsyncLoop;
+begin
+  GCloseVictimFired := False;
+  LLoop := TAsyncLoop.Create(32);
+  Check(LLoop.IsValid, 'loop valid');
+  LLoop.Post(@CloseLoopCallback, LLoop);
+  LLoop.Post(@CloseVictimCallback, nil);
+  LLoop.Run;
+  Check(not GCloseVictimFired, 'post-close item discarded, not fired');
+  Check(not LLoop.IsValid, 'loop closed');
+  LLoop.Free;
+end;
+
 { Three-form PostRef/PostMethod/etc tests deferred: API not on main yet
   (merge 6c12e2d33 landed tests without loop/task implementations). }
 
@@ -1624,5 +1684,9 @@ begin
   T.Test('AsyncLoopAsyncRecvTimeoutExpired',
     @TestAsyncLoopAsyncRecvTimeoutExpired);
   T.Test('PollerDirectCreateAndBackend', @TestPollerDirectCreateAndBackend);
+  T.Test('AsyncLoopTeardownAfterAsyncListen',
+    @TestAsyncLoopTeardownAfterAsyncListen);
+  T.Test('AsyncLoopDrainStopsAfterCloseFromCallback',
+    @TestAsyncLoopDrainStopsAfterCloseFromCallback);
   if not T.Run then Halt(1);
 end.

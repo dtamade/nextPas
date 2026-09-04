@@ -9,7 +9,7 @@
 ## 概述
 
 泛型容器子系统。提供 20+ 种数据结构，包括数组、哈希表、链表、树、队列等。
-依赖 `system.typinfo` 进行 RTTI 驱动的元素管理。
+依赖 `nextpas.core.reflect` 进行 RTTI 驱动的元素管理。
 
 ---
 
@@ -135,7 +135,7 @@ procedure Reverse<T>(var AArr: array of T);
 
 ## 依赖关系
 
-- 依赖: base, mem, text.conv, system.typinfo, math
+- 依赖: base, mem, text.conv, nextpas.core.reflect, math
 - 被依赖: fs, http, json, config, 几乎所有高层模块
 
 ---

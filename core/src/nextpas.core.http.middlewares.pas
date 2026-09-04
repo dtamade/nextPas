@@ -48,7 +48,8 @@ uses
   nextpas.core.http.mem,
   nextpas.core.http.router,
   nextpas.core.thread.intf,
-  nextpas.core.log.intf;
+  nextpas.core.log,
+  nextpas.core.http.message;
 
 type
   TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
@@ -69,7 +70,7 @@ type
   IAllocator = nextpas.core.http.mem.IAllocator;
   TGrowingAllocator = nextpas.core.http.mem.TGrowingAllocator;
   IHttpContext = nextpas.core.http.intf.IHttpContext;
-  TLogger = nextpas.core.log.intf.ILogger;
+  TLogger = nextpas.core.log.TLogger;
   TLogExtrasProvider = nextpas.core.http.middleware.logger.TLogExtrasProvider;
 
 const

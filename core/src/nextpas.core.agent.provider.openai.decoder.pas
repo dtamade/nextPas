@@ -71,10 +71,15 @@ begin
   AgentInitUsageUnknown(AU);
   if not AV.IsObject then
     Exit;
+  { 兼容网关偶发 Anthropic 式键名：主鍵缺失才回落，不覆盖显式值 }
   if AV.Get('prompt_tokens').IsInt then
-    AU.InputTokens := AV.Get('prompt_tokens').AsInt;
+    AU.InputTokens := AV.Get('prompt_tokens').AsInt
+  else if AV.Get('input_tokens').IsInt then
+    AU.InputTokens := AV.Get('input_tokens').AsInt;
   if AV.Get('completion_tokens').IsInt then
-    AU.OutputTokens := AV.Get('completion_tokens').AsInt;
+    AU.OutputTokens := AV.Get('completion_tokens').AsInt
+  else if AV.Get('output_tokens').IsInt then
+    AU.OutputTokens := AV.Get('output_tokens').AsInt;
   LD := AV.Get('completion_tokens_details');
   if LD.IsObject and LD.Get('reasoning_tokens').IsInt then
     AU.ReasoningTokens := LD.Get('reasoning_tokens').AsInt;
@@ -308,7 +313,13 @@ begin
     end;
   end;
 
+  { 顶层 usage 缺席时回落 choices[0].usage（部分兼容网关随首条 delta 捎带）；
+    顶层一旦是对象即赢，不合并。取值一律经 Get（缺键返回文档内合法
+    无效值），绝不对 TJsonValue 用 Default（其 FDoc=nil 会使后续
+    IsObject 直接解引用空指针） }
   LU := Root.Get('usage');
+  if (not LU.IsObject) and LChoices.IsArray and (LChoices.ArrayLen > 0) then
+    LU := LChoices.ArrayGet(0).Get('usage');
   if LU.IsObject then
   begin
     LD := Default(TStreamDelta);

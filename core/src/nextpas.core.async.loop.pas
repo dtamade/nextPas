@@ -641,11 +641,16 @@ var
   LItem: TAsyncPendingItem;
 begin
   Result := 0;
-  { Single-consumer: only the loop thread may TryDequeue. }
-  if (not FPendingReady) or (FPending = nil) then
-    Exit;
-  while FPending.TryDequeue(LItem) do
+  { Single-consumer: only the loop thread may TryDequeue. A callback may
+    Close the loop (Stop-via-Post teardown): the queue is freed+niled by
+    Close, so liveness must be re-checked every iteration — the entry guard
+    alone cannot cover self-teardown (C-30: posted Stop closed the queue,
+    the next TryDequeue hit nil). Remaining items are discarded exactly once
+    by Close itself; breaking here does not lose or double-fire them. }
+  while (not FClosed) and FPendingReady and (FPending <> nil) do
   begin
+    if not FPending.TryDequeue(LItem) then
+      Break;
     try
       if Assigned(LItem.Callback) then
         LItem.Callback(LItem.Context)

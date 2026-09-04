@@ -60,8 +60,9 @@ choices[0].message.tool_calls[i]  → pkToolCall{ToolCallId=id, ToolName=functio
                                      ArgumentsJson=function.arguments}
 choices[0].finish_reason          → frStop|frLength|frToolCalls|frContentFilter
                                        ("stop"|"length"|"tool_calls"|"content_filter")
-usage.prompt_tokens               → InputTokens
-usage.completion_tokens           → OutputTokens
+usage.prompt_tokens               → InputTokens（缺席回落 usage.input_tokens）
+usage.completion_tokens           → OutputTokens（缺席回落 usage.output_tokens）
+choices[0].usage                  → 顶层 usage 缺席时的回落源（同上键位，别名规则同）
 usage.completion_tokens_details.reasoning_tokens → ReasoningTokens
 usage.prompt_tokens_details.cached_tokens → CacheReadInputTokens
 id/model                          → TMessage.Id/.Model
@@ -107,6 +108,7 @@ data: [DONE]                                                             → 终
 | Q-O5 | tool_calls 首片携带 id+name、后续片仅 index+args 片段 | Start 只在 **name 就绪时** 发一次；name 未到先缓冲 id/args（延迟命名——部分上游 id+args 先到、name 后到甚至缺失，Finalize 兜底冲刷）。条目缺 `index` **容忍按 0**（单工具流的省略形态，sub2api 生产确认）；负数仍违例。OpenAI 不产 End 事件，封槽由 fold 对 sdkFinish 隐式完成（API §4）|
 | Q-O6 | 空 `choices` 数组的中间 chunk 存在 | 跳过，不算协议错误 |
 | Q-O7 | `choices` 可能多于一条（n>1 场景） | v1 固定单选择：index>0 的 choice 丢弃并 warn（对"绝不静默丢弃"的显式豁免——多选择语义超出 v1 词表，记录在案）|
+| Q-O8 | 部分兼容网关把 usage 挂在 `choices[0]` 下随内容帧捎带，或用 Anthropic 式 `input_tokens/output_tokens` 键名 | 顶层 `usage` 对象优先；缺席回落 `choices[0].usage`；键名主鍵缺席回落别名。主鍵显式在场（含 0）不覆盖 |
 | Q-O8 | 上游发 `"stop"` 却带了 tool_calls | 归约为本流已开槽即 frToolCalls（流式看槽表；非流式看 pkToolCall 部件）——保住消费方循环判据（sub2api 同款纠正）|
 | Q-O9 | 订阅网关注入 `event: ping` 计费心跳帧，数据非 JSON | 解码器按 event 名跳过该帧；其余 event 名不拦截（方言载荷在 data 行）|
 

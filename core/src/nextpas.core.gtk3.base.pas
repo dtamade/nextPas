@@ -8,9 +8,6 @@ unit nextpas.core.gtk3.base;
        纹理：uses 仅允许 FPC RTL。 *}
 
 {$I nextpas.core.settings.inc}
-{$IF 0}
-{$mode objfpc}{$H+}
-{$ENDIF}
 
 interface
 

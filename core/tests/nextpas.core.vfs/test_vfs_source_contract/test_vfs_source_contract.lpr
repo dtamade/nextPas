@@ -216,8 +216,22 @@ begin
     'compressed declares compress.gzip dependency for GzipDecompress');
   Check(Pos('COMPRESSED_HEADER_PEEK', Src) = 0,
     'compressed must not define COMPRESSED_HEADER_PEEK alias (single source via transform.TRANSFORM_HEADER_PEEK)');
-  { decorator 聚合：门面扇出收敛单点收口，复用 transform/compressed 单源，bytes.ops 单源 inline 零拷贝，try-finally 不丢 }
-  Src := LoadSourceText('src/nextpas.core.vfs.decorator.pas');
+  { 枚举单源：TDecompressAlgo 唯一声明于 vfs.base，compressed 经别名复用，
+    门面经同名常量影子直通纯门面消费者；无二次声明无二义 }
+  Src := LoadSourceText('src/nextpas.core.vfs.base.pas');
+  Check(Pos('TDecompressAlgo = (daAuto, daGzip)', Src) > 0,
+    'vfs.base declares TDecompressAlgo single source');
+  Src := LoadSourceText('src/nextpas.core.vfs.compressed.pas');
+  Check(Pos('TDecompressAlgo = nextpas.core.vfs.base.TDecompressAlgo', Src) > 0,
+    'compressed aliases TDecompressAlgo via vfs.base (no redeclaration)');
+  Check(Pos('= (daAuto, daGzip)', Src) = 0,
+    'compressed must not redeclare enum values');
+  Src := LoadSourceText('src/nextpas.core.vfs.pas');
+  Check(Pos('daAuto: TDecompressAlgo = nextpas.core.vfs.base.daAuto', Src) > 0,
+    'facade re-exports daAuto value for facade-only consumers');
+  Check(Pos('daGzip: TDecompressAlgo = nextpas.core.vfs.base.daGzip', Src) > 0,
+    'facade re-exports daGzip value for facade-only consumers');
+  { decorator 聚合：门面扇出收敛单点收口，复用 transform/compressed 单源，bytes.ops 单源 inline 零拷贝，try-finally 不丢 }  Src := LoadSourceText('src/nextpas.core.vfs.decorator.pas');
   Check(Pos('nextpas.core.vfs.transform', Src) > 0,
     'decorator aggregates transform (single-point fan-out reduction)');
   Check(Pos('nextpas.core.vfs.compressed', Src) > 0,

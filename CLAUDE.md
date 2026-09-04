@@ -186,7 +186,7 @@ Snapshot golden 文件在 `tests/snapshots/*.stderr.txt`。
 
 **核心规则**: 所有模块开发必须在 `.worktrees/<module>` 下的专属 worktree 进行。
 
-- `main` 只用于总控 landing、仓库治理
+- `main` 只用于 landing（各 lane 按 `docs/worktrees.md` 自主合入）、仓库治理
 - 一个 worktree 只负责一个模块或一条治理线
 - 跨模块改动需说明原因、范围、风险、额外验证
 - 合并前必须：worktree clean、focused verification 通过、`git diff --check` 通过、`make hygiene` 通过

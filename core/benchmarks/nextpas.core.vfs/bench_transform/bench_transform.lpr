@@ -7,8 +7,6 @@ uses
   nextpas.core.bench,
   nextpas.core.bench.intf,
   nextpas.core.vfs,
-  nextpas.core.vfs.intf,
-  nextpas.core.vfs.compressed,
   nextpas.core.compress;
 
 var

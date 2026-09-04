@@ -191,7 +191,8 @@ begin
   LPos := SpanLastIndexOf(LSpan.Slice(0, LLimit), Byte('/'));
   while LPos >= 0 do
   begin
-    if SizeUInt(Length(AName) - LPos - 1) <= C_TAR_LAYOUT.Name.Len then
+    // 空后缀（名尾斜杠本身）不切：切出空 name 段会丢目录尾斜杠，留待更早斜杠或 pax 回退保真
+    if (Length(AName) - LPos - 1 > 0) and (SizeUInt(Length(AName) - LPos - 1) <= C_TAR_LAYOUT.Name.Len) then
       Exit(LPos);
     if LPos = 0 then Break;
     LPos := SpanLastIndexOf(LSpan.Slice(0, SizeUInt(LPos)), Byte('/'));
@@ -472,12 +473,8 @@ begin
       if FLogger = nil then
         FLogger := NullLogger;
       FLogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH);
-      // 稳定性：遗漏 Finish 自动补写两零块，避免截断归档被下游误判为有效 tar；幂等 IsFinished 单源，异常吞没永不抛，资源 try..finally 必释
-      try
-        Finish;
-      except
-        // 析构永不抛异常，可观测已 Warn，吞没 WriteChecked 短写/IO 异常
-      end;
+      // 语义：未 Finish 即析构不补写两零块，仅 Warn 可观测后释放资源；
+      // 调用方必须显式 Finish 取规范收尾，析构永不抛异常，资源 try..finally 必释
     end;
   finally
     BytesRelease(FIOBuf);

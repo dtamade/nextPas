@@ -1,6 +1,5 @@
 unit nextpas.core.simd.imageproc.impl;
 
-{$mode ObjFPC}{$H+}
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 

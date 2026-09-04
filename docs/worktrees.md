@@ -382,14 +382,39 @@ git tag archive/<短名称> <分支或提交>
 ```
 
 不要把长期模块 lane raw merge 到 `main`。主线集成必须通过干净候选分支、已审查
-cherry-pick 或 path-limited replay。除非明确授权，最终 mainline integration
-由总控负责。
+cherry-pick 或 path-limited replay。
+
+### Lane 自主 Landing
+
+Lane owner 可以自主把 landing 候选分支合入 `main`，不再需要总控逐个批准。
+合入前必须全部满足（缺一不可）：
+
+1. 候选分支已通过 `make landing-check`（自动含 `make hygiene`、`git diff --check`、
+   focused gate）；`core/src` 改动必须另加 source-contracts 门全绿。
+2. 满足上节"任何分支进入主线前必须满足"的 7 条（含 worktree clean、behind 为 0）。
+3. 受控跨模块修改已在提交信息里写清设计理由和验证证据。
+
+合入操作仍用 ff-only（先同步再合再推）：
+
+```bash
+git checkout main
+git pull --ff-only origin main
+git merge --ff-only landing/<lane>-YYYYMMDD
+git push origin main
+```
+
+合坏主线的提交会被直接 revert，不需要事先商量：总控巡检若发现 `main` 上
+hygiene、门禁或 smoke 变红，且能定位到某次 landing commit，会直接 revert 该提交
+并通知 lane owner 修好后重走 `landing-check`。revert 后重做 landing 不算违规。
+
+转达文件（`RELAY_*`）即日起停用：pin 以 `origin/main` 为准，各 lane 自己拉，
+不再经人传话。
 
 ## 汇报纪律
 
 模块负责人不要汇报每个小动作，只在状态变化时汇报：
 
-- `Ready`：实现和 focused verification 已完成，等待 landing review。
+- `Ready`：实现和 focused verification 已完成，可按“Lane 自主 Landing”节自行合入；需要设计复核时等 review。
 - `Blocked`：继续推进需要总控或用户决策。
 - `Landed`：改动已进入 `main`，验证已复跑，清理状态已知。
 - `Needs Review`：继续写代码前需要设计或跨模块决策。
@@ -397,7 +422,7 @@ cherry-pick 或 path-limited replay。除非明确授权，最终 mainline integ
 `Ready` 汇报必须包含分支、worktree 路径、`HEAD`、改动文件清单、不能带入主线的文件、
 focused verification 证据和 merge 建议。
 `scripts/report-envelope-check.sh --status <Ready|Blocked|Landed> <report.md>` 可用于本地检查这些
-汇报 envelope 的必填字段；它只做文本契约检查，不替代验证命令或 landing review。
+汇报 envelope 的必填字段；它只做文本契约检查，不替代验证命令、landing 条件或设计复核。
 
 如果包含受控跨模块修改，`Ready` 还必须包含：
 

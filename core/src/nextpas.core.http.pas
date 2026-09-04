@@ -26,6 +26,7 @@ uses
   nextpas.core.http.router.group,
   nextpas.core.json,
   nextpas.core.log.intf,
+  nextpas.core.log,
   nextpas.core.http.minimal,
   nextpas.core.http.messages,
   nextpas.core.http.transports,
@@ -131,7 +132,7 @@ type
 
   { Re-export log types (L0 seam) }
   ILogger = nextpas.core.log.intf.ILogger;
-  TLogger = nextpas.core.log.intf.ILogger;
+  TLogger = nextpas.core.log.TLogger;
   TLogLevel = nextpas.core.log.intf.TLogLevel;
 
   { Re-export URL types }

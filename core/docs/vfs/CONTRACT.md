@@ -9,7 +9,7 @@
 **层级**：L2（依赖 L0-L1；L2 双缝过渡白名单——`os→fs/path` 与 `embedded→respack.reader` 双缝并存，source-contract gated，L7 聚合为 `nextpas.core.vfs.backends` 后端独立族后收敛至单缝；`mount/overlay` 纯复合；L3 装饰器经 `vfs.decorator` 单点聚合）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-09-02
-**版本**：1.14（门面经 backends+decorator 双族单缝收敛，扇出 12→10，L7 单缝已落地）
+**版本**：1.16（枚举单源：`TDecompressAlgo` 唯一声明于 `vfs.base`，compressed 经别名复用，门面经同名常量直通 `daAuto`/`daGzip`，纯门面消费者可调双参重载；compressed/facade/bench 三处用例收敛至门面作用域）
 
 ---
 
@@ -22,7 +22,7 @@ vfs.base      ← TEntryInfo/TStatInfo、ValidPath、常量（VFS_DECOMPRESS_MAX
 vfs.intf      ← IVfs/IVfsETag/IVfsServeMeta
 vfs.errors    ← EVfsError(Op/Path) 及子类
 vfs.memtree   ← 内存不可变树 + Builder
-vfs.embedded  ← respack blob → IVfs（零拷贝切片，池化）
+vfs.embedded  ← respack blob → IVfs（零拷贝切片，池化；respack 依赖经 backends 单缝复用）
 vfs.os        ← nextpas.core.fs → IVfs 适配（L2→L2 单缝保留）
 vfs.backends  ← 三后端聚合：memtree/embedded/os 单缝收口（L2 双缝过渡白名单 → L7 单缝，source-contract gated）
 vfs.sub       ← 重定根视图包装
@@ -49,7 +49,7 @@ vfs.pas       ← 门面 re-export + 便利函数（经 backends+decorator 双�
 | 视图 | `CreateMountedVfs(AMounts): IVfs` | 挂载复合，最长匹配 |
 | 视图 | `CreateOverlayVfs(AList): IVfs` | 叠加视图，优先级叠加 |
 | 装饰 | `CreateTransformingVfs(AInner,ATransform,AShould,AHeaderPred): IVfs` | L3 通用变换装饰器 |
-| 装饰 | `CreateDecompressingVfs(AInner,AAlgo): IVfs` | 解压薄门面（daGzip/daAuto） |
+| 装饰 | `CreateDecompressingVfs(AInner,AAlgo): IVfs` | 解压薄门面（daGzip/daAuto；门面另有单参重载，默认 daAuto） |
 | 遍历 | `VfsWalk(AFs,ARoot,ACallback)` | 字典序全树遍历 |
 | 便利 | `VfsStat/VfsList/VfsReadAllBytes/VfsReadAllText` | 门面包函数 |
 
@@ -136,9 +136,9 @@ end;
 | 测试目录 | 用例数 | 说明 |
 |----------|--------|------|
 | test_vfs_memtree | 16 | Builder/Freeze/错误/`.` 根/IReaderAt |
-| test_vfs_embedded | 8 | 切片/双态生命期 |
+| test_vfs_embedded | 9 | 切片/双态生命期/ETag 直测 |
 | test_vfs_conformance | 7 | P1–P8 × {3 后端} × {整树,Sub} |
-| test_vfs_facade | 6 | 便利函数 + 切换 |
+| test_vfs_facade | 12 | 便利函数 + 切换 + 视图/装饰器/错误类全入口 |
 | test_vfs_mount | 10 | 挂载+叠加双视图 |
 | test_vfs_transform | 6 | 通用变换装饰器 |
 | test_vfs_compressed | 7 | 解压薄门面 |
@@ -172,3 +172,5 @@ end;
 | 2026-09-02 | 1.12 | 契约精简：规格与实现分离，L2→L2 双缝白名单过渡收敛至 L7 后端独立族单缝理想，移除行话堆砌 | AI |
 | 2026-09-02 | 1.13 | 后端独立族落地：`vfs.backends` 聚合三后端单缝收口，L2 双缝过渡白名单 L7 收敛单缝 source-contract gated | AI |
 | 2026-09-02 | 1.14 | 门面双族单缝收敛落地：`vfs.pas` 经 backends+decorator 双聚合，扇出 12→10，src 16 闭环补齐 | AI |
+| 2026-09-05 | 1.15 | 门面完备：`TDecompressAlgo`/`TBytes`/`IVfsView`/`TVfsMountArray`/`VFS_DECOMPRESS_MAX_BYTES` 重导出 + `CreateDecompressingVfs` 双参重载；embedded 单缝收敛经 backends（source-contract 5 门全绿）；facade 门 12 例、embedded 门 9 例 | AI |
+| 2026-09-05 | 1.16 | 枚举单源：`TDecompressAlgo` 唯一声明于 `vfs.base`，compressed 经别名复用，门面经同名常量直通 `daAuto`/`daGzip`（纯门面双参重载可调）；compressed/facade/bench 用例收敛至门面作用域，源契约锁声明顺序 | AI |

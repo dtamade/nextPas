@@ -407,6 +407,7 @@ require_sysutils_facade_surface_allowlist() {
 type Exception
 type ExceptClass
 type EConvertError
+type ERangeError
 type EAssertionFailed
 type TBytes
 type TStringArray
@@ -416,6 +417,8 @@ function SameText
 function IntToStr
 function Int64ToStr
 function IntToHex
+function HexStr
+function HexStr
 function StrToInt
 function StrToInt64
 function TryStrToInt
@@ -431,14 +434,49 @@ function StringOf
 function CompareMem
 function Supports
 function Supports
-function HexStr
-function HexStr
 function Trim
 function TrimLeft
 function TrimRight
 function UpperCase
 function LowerCase
 function Pos
+function Now
+function Date
+function Time
+function DateTimeToStr
+function DateToStr
+function TimeToStr
+function FormatDateTime
+function EncodeDate
+function FileExists
+function DirectoryExists
+function CreateDir
+function RemoveDir
+function ForceDirectories
+function DeleteFile
+function RenameFile
+function CopyFile
+const PathDelim
+function ExtractFilePath
+function ExtractFileName
+function ExtractFileExt
+function ExtractFileDir
+function ExtractFileDrive
+function ChangeFileExt
+function IncludeTrailingPathDelimiter
+function ExcludeTrailingPathDelimiter
+function ExpandFileName
+function GetTempDir
+function GetTempDir
+function GetCurrentDir
+function SetCurrentDir
+function ParamCount
+function ParamStr
+function GetEnvironmentVariable
+function GetProcessID
+procedure Sleep
+function SysErrorMessage
+function GetLastOSError
 function ExceptAddr
 function ExceptFrameCount
 function ExceptFrameAt
@@ -832,7 +870,7 @@ done
 # SECTION: Runtime contract name and helper mapping checks
 # ============================================================================
 
-require_repo_file "compiler/ir/np_system_contracts.pas"
+require_repo_file "compiler/src/nextpas.compiler.ir.system_contracts.pas"
 
 contract_ledger_tmp_dir="$(mktemp -d)"
 trap 'rm -rf -- "$contract_ledger_tmp_dir"' EXIT
@@ -849,7 +887,7 @@ awk '
   match($0, /^[ \t]*SemanticName:[ \t]*(NPSYSTEM_[A-Z0-9_]+)[ \t]*;/, parts) {
     print parts[1]
   }
-' "$REPO_ROOT/compiler/ir/np_system_contracts.pas" | sort >"$ledger_constants"
+' "$REPO_ROOT/compiler/src/nextpas.compiler.ir.system_contracts.pas" | sort >"$ledger_constants"
 [[ -s "$contract_constants" ]] || fail "system contract declarations are empty"
 [[ -s "$ledger_constants" ]] || fail "typed ledger semantic-name rows are empty"
 if ! diff -u "$contract_constants" "$ledger_constants"; then
@@ -1321,7 +1359,7 @@ require_repo_owner_family_token "compiler/src" "nextpas.compiler.ir.hir.llvm_emi
 require_repo_file "tests/hir/test_hir_object_free_contract.pas"
 require_repo_file "tests/semantic/test_semantic_call_bindings.pas"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-runtime"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np_system_contracts"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "nextpas.compiler.ir.system_contracts"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFree)"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeDestroy)"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeCleanup)"
@@ -1378,7 +1416,8 @@ for path in \
   "core/src/nextpas.core.collections.list.pas" \
   "core/src/nextpas.core.collections.node.pas" \
   "core/src/nextpas.core.collections.priorityqueue.pas"; do
-  require_repo_token "$path" "nextpas.core.system.typinfo"
+  # collections use FPC System intrinsics (TypeInfo/GetTypeKind) via
+  # nextpas.core.reflect owner, not the system.typinfo routing shim (§18).
   require_repo_reject_regex "$path" '^[[:space:]]*TypInfo[,;]'
   require_repo_reject_regex "$path" '^[[:space:]]*typinfo[,;]'
   require_repo_not_uses_unit "$path" "TypInfo"
@@ -1587,9 +1626,11 @@ require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base 
 require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base Supports(IInterface) should clear stale interfaces on unsupported queries"
 require_facade_surface_parser_regression
 require_root_facade_surface_allowlist
-reject_token "src/nextpas.core.system.pas" "SysUtils"
-reject_token "src/nextpas.core.system.pas" "TypInfo"
-reject_token "src/nextpas.core.system.pas" "Classes"
+# Bridging comment in system.pas header names SysUtils/Classes; enforce via
+# uses-clause check (comment-exempt) instead of raw substring reject.
+require_repo_not_uses_unit "core/src/nextpas.core.system.pas" "SysUtils"
+require_repo_not_uses_unit "core/src/nextpas.core.system.pas" "TypInfo"
+require_repo_not_uses_unit "core/src/nextpas.core.system.pas" "Classes"
 reject_token "src/nextpas.core.system.pas" "DynArraySetLength"
 reject_token "src/nextpas.core.system.pas" "DynArrayResize"
 reject_token "src/nextpas.core.system.pas" "DynArrayRelease"

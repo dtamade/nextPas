@@ -31,6 +31,13 @@ type
 
   TVfsNameArray = array of string;
 
+type
+  { 解压算法选择（L3 装饰器族共用契约词汇，单源声明于此）：
+    daAuto 按 gzip 魔数自动判定，daGzip 强制解压。
+    compressed/decorator/门面均经别名复用，不重复声明，枚举值在任一
+    uses vfs.base 的作用域内直接可见（含纯门面消费者）。 }
+  TDecompressAlgo = (daAuto, daGzip);
+
 const
   { 单源 compress.base GZIP_MAX (32MiB) canonical via alias，无字面量漂移。 }
   VFS_DECOMPRESS_MAX_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;

@@ -1,6 +1,5 @@
 unit nextpas.core.crypto;
 
-{$mode objfpc}{$H+}
 {$I nextpas.core.settings.inc}
 
 {**

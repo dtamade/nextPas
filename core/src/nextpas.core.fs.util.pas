@@ -528,10 +528,24 @@ end;
 procedure FsHardLinkVerified(const AOldPath, ANewPath: string);
 var
   LResult: Int32;
+  LStat: TPlatformFileStat;
 begin
   if (AOldPath = '') or (ANewPath = '') then
     raise EArgumentError.Create('HardLink path must not be empty');
   LResult := platform_file_link_verified(PAnsiChar(AOldPath), PAnsiChar(ANewPath));
+  if LResult = 0 then
+    Exit;
+  // 部分内核/fs 不支持 /proc|/dev/fd 魔法链接，同目录也会报 EXDEV；
+  // 此时立即重校验源（lstat 仍为 regular 即非 symlink）后退为普通 link，
+  // 真跨设备仍由普通 link 报 EXDEV，不掩盖；残余 TOCTOU 窗口已收窄并在此显式记录
+  if LResult <> PLATFORM_ERR_XDEV then
+    RaiseFsError(LResult, 'hardlink_verified', ANewPath);
+  LResult := platform_file_lstat(PAnsiChar(AOldPath), LStat);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'hardlink_verified', ANewPath);
+  if LStat.FileType <> nextpas.core.platform.files.base.ftRegular then
+    RaiseFsError(PLATFORM_ERR_INVALID, 'hardlink_verified', ANewPath);
+  LResult := platform_file_link(PAnsiChar(AOldPath), PAnsiChar(ANewPath));
   if LResult <> 0 then
     RaiseFsError(LResult, 'hardlink_verified', ANewPath);
 end;
