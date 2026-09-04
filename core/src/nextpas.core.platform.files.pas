@@ -1473,6 +1473,10 @@ begin
     Result := platform_get_last_error;
 end;
 
+// Windows 无 mkfifo/mknod 语义，返回不支持（与 mknod 内部分支同口径）
+function platform_file_mkfifo(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_mknod(const APath: PAnsiChar; AMode: UInt32; ADevMajor, ADevMinor: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+
 function platform_file_unlink(const APath: PAnsiChar): Int32;
 var
   LPath: UnicodeString;

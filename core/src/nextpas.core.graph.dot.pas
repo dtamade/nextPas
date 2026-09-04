@@ -154,7 +154,7 @@ begin
     Queue[QLen] := NodeIds[I];
     Inc(QLen);
   end;
-  if Length(Queue) <> QLen then SetLength(Queue, QLen);
+  { Kahn 主循环仍向 Queue 追加，容量由 QCap 记账，此处不得按 QLen 裁剪（否则首个入队即越界写）；松弛留待循环后统一裁剪 }
   OLen := 0; OCap := BytesGrowCapacityInt(0, Length(NodeIds));
   SetLength(Order, OCap);
   while QPos < QLen do

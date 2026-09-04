@@ -206,9 +206,9 @@ type
     procedure AfterConstruction; override;
     procedure BeforeDestruction; override;
     class function NewInstance: TObject; override;
-    function QueryInterface(constref Aiid: TGuid; out AObj): LongInt; cdecl; virtual;
-    function _AddRef: LongInt; cdecl; virtual;
-    function _Release: LongInt; cdecl; virtual;
+    function QueryInterface(constref Aiid: TGuid; out AObj): LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF}; virtual;
+    function _AddRef: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF}; virtual;
+    function _Release: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF}; virtual;
     property RefCount: LongInt read FRefCount;
   end;
 
@@ -688,7 +688,7 @@ end;
 
 { TRefCountedObject }
 
-function TRefCountedObject.QueryInterface(constref Aiid: TGuid; out AObj): LongInt; cdecl;
+function TRefCountedObject.QueryInterface(constref Aiid: TGuid; out AObj): LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
 begin
   if GetInterface(Aiid, AObj) then
     Result := 0 { S_OK }
@@ -696,7 +696,7 @@ begin
     Result := LongInt($80004002); { E_NOINTERFACE }
 end;
 
-function TRefCountedObject._AddRef: LongInt; cdecl;
+function TRefCountedObject._AddRef: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
 begin
   Result := FRefCount;
   if Result <> 0 then
@@ -709,7 +709,7 @@ begin
   Result := 1;
 end;
 
-function TRefCountedObject._Release: LongInt; cdecl;
+function TRefCountedObject._Release: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
 begin
   Result := FRefCount;
   if Result <> 1 then
