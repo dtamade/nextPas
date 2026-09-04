@@ -73,7 +73,8 @@ core/src/nextpas.core.git.native.{zlib,loose,pack,refs,objmodel,repo,write,index
   mergebase,show,shortlog,catfile,lsfiles,cherrypick,revert,archive,submodule,mailmap,
   trailer,attributes,bundle,grep,bisect,worktree,config,pktline,remote,advertise,negotiate,
   sideband,indexer,fetch,clone,checkout,push,reset,prune,clean,revparse,common,util,manager,repository}.pas
-  { `wildmatch` 已收敛至 L1 `nextpas.core.text.wildmatch` 单源 via `bytes.ops`；`git.native.wildmatch` 已移除，`ignore`/`attributes` 直连 L1 `WildSegment*` inline 零拷贝 }
+  { `commitgraph` 另按域分片为 `commitgraph.{base,cache,reader,writer,collect}`（各 <600 行，门面 inline 转发，调用方零改动）;
+  `wildmatch` 已收敛至 L1 `nextpas.core.text.wildmatch` 单源 via `bytes.ops`；`git.native.wildmatch` 已移除，`ignore`/`attributes` 直连 L1 `WildSegment*` inline 零拷贝 }
 ```
 
 四件套范式：`base ← intf ← 实现 ← 门面`；依赖只向下，禁止同层循环。
