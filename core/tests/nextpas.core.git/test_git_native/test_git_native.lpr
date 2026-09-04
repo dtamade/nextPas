@@ -4796,6 +4796,114 @@ begin
   end;
 end;
 
+procedure TestLsFilesMatchesGit;
+var
+  Work, GitDir, CliOut: string;
+  Files: TStringArray;
+  Opts: TGitLsFilesOptions;
+  Detailed: TGitIndexEntryArray;
+  Stage: TStringArray;
+begin
+  // covers ls-files plain/options/detailed/stage against git CLI
+  MakeTwoCommitRepo('nextpas_git_lsfiles', Work, GitDir);
+  try
+    Files := GitLsFiles(GitDir);
+    CheckEqual(1, Length(Files), 'one tracked file');
+    CheckEqual('f.txt', Files[0], 'tracked path');
+    Opts := DefaultGitLsFilesOptions;
+    Files := GitLsFiles(GitDir, Opts);
+    CheckEqual(1, Length(Files), 'options overload same');
+    CheckEqual('f.txt', Files[0], 'options path');
+    Detailed := GitLsFilesDetailed(GitDir);
+    CheckEqual(1, Length(Detailed), 'detailed one entry');
+    CheckEqual('f.txt', Detailed[0].Path, 'detailed path');
+    Stage := GitLsFilesStage(GitDir);
+    CheckEqual(1, Length(Stage), 'stage one line');
+    CheckTrue(Pos('f.txt', Stage[0]) > 0, 'stage has path');
+    CliOut := Trim(MustCaptureIn('git', ['ls-files'], Work));
+    CheckEqual('f.txt', CliOut, 'git ls-files agrees');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestTrailerRoundTrip;
+var
+  Work, GitDir, Body: string;
+  Trailers: TGitTrailerArray;
+begin
+  // covers trailer parse/find/has/format/append on a real commit message
+  MakeTwoCommitRepo('nextpas_git_trailer', Work, GitDir);
+  try
+    RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty',
+      '-m', 'subject', '-m', 'Reviewed-by: Alice <a@x>'], Work);
+    Body := MustCaptureIn('git', ['log', '--format=%B', '-1', 'HEAD'], Work);
+    Trailers := GitParseTrailers(Body);
+    CheckEqual(1, Length(Trailers), 'one trailer parsed');
+    CheckEqual('Reviewed-by', Trailers[0].Key, 'trailer key');
+    CheckTrue(GitHasTrailer(Trailers, 'reviewed-by'), 'case-insensitive has');
+    CheckEqual('Alice <a@x>', GitFindTrailer(Trailers, 'REVIEWED-BY'), 'case-insensitive find');
+    CheckEqual('Signed-off-by: Bob <b@x>', GitFormatTrailer('Signed-off-by', 'Bob <b@x>'), 'format line');
+    CheckTrue(Pos('Signed-off-by: Bob <b@x>',
+      GitAppendTrailer('subject'#10, 'Signed-off-by', 'Bob <b@x>')) > 0, 'append adds trailer');
+    CheckTrue(Pos('Signed-off-by',
+      GitFormatTrailers(GitParseTrailers(
+        GitAppendTrailer('subject'#10, 'Signed-off-by', 'Bob <b@x>')))) > 0, 'format round-trip');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestMailmapResolve;
+var
+  Work, GitDir, CliOut, OutName, OutEmail: string;
+  Map: TGitMailmap;
+begin
+  // covers mailmap parse/load/resolve against git check-mailmap
+  MakeTwoCommitRepo('nextpas_git_mailmap', Work, GitDir);
+  try
+    WriteFileText(PathJoin([Work, '.mailmap']), 'New Name <new@x> Old Name <old@x>'#10);
+    Map := GitLoadMailmap(GitDir);
+    CheckEqual(1, Length(Map), 'one mailmap entry loaded');
+    CheckTrue(GitMailmapResolve(Map, 'Old Name', 'old@x', OutName, OutEmail), 'resolves');
+    CheckEqual('New Name', OutName, 'resolved name');
+    CheckEqual('new@x', OutEmail, 'resolved email');
+    CheckEqual('New Name', GitMailmapResolveName(Map, 'Old Name', 'old@x'), 'name helper');
+    CheckEqual('new@x', GitMailmapResolveEmail(Map, 'Old Name', 'old@x'), 'email helper');
+    Map := GitParseMailmap('New Name <new@x> Old Name <old@x>'#10);
+    CheckEqual(1, Length(Map), 'text overload parses');
+    CliOut := Trim(MustCaptureIn('git', ['check-mailmap', 'Old Name <old@x>'], Work));
+    CheckEqual('New Name <new@x>', CliOut, 'git check-mailmap agrees');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestAttributesMatchGit;
+var
+  Work, GitDir, CliOut: string;
+  Entries: TGitAttrEntries;
+  Attrs: TGitAttrArray;
+begin
+  // covers attributes parse/load/for/get/has against git check-attr
+  MakeTwoCommitRepo('nextpas_git_attr', Work, GitDir);
+  try
+    WriteFileText(PathJoin([Work, '.gitattributes']), '*.txt text'#10);
+    Entries := GitLoadAttributes(GitDir);
+    CheckTrue(Length(Entries) >= 1, 'entries loaded from worktree');
+    Attrs := GitAttributesFor(GitDir, 'f.txt');
+    CheckTrue(Length(Attrs) >= 1, 'attrs for f.txt');
+    CheckEqual('set', GitAttributeGet(Entries, 'f.txt', 'text'), 'text is set');
+    CheckEqual('set', GitAttributeGet(GitDir, 'f.txt', 'text'), 'gitdir overload agrees');
+    Entries := GitParseAttributes('*.txt text'#10);
+    CheckEqual(1, Length(Entries), 'text overload parses');
+    CliOut := Trim(MustCaptureIn('git', ['check-attr', 'text', '--', 'f.txt'], Work));
+    CheckEqual('f.txt: text: set', CliOut, 'git check-attr agrees');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
 procedure TestLogMatchesGit;
 var
   Work, GitDir, CliOut: string;
@@ -5150,6 +5258,10 @@ begin
     T.Test('cherry-pick round-trip', @TestCherryPickRoundTrip);
     T.Test('revert round-trip', @TestRevertRoundTrip);
     T.Test('diff family matches git', @TestDiffFamilyMatchesGit);
+    T.Test('ls-files matches git', @TestLsFilesMatchesGit);
+    T.Test('trailer round-trip', @TestTrailerRoundTrip);
+    T.Test('mailmap resolve', @TestMailmapResolve);
+    T.Test('attributes match git', @TestAttributesMatchGit);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;
