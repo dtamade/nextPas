@@ -8,7 +8,8 @@ interface
 
 uses
   nextpas.core.vfs.base,
-  nextpas.core.vfs.intf;
+  nextpas.core.vfs.intf,
+  nextpas.core.text.view;
 
 type
   { 单源别名：复用 vfs.base 契约词汇（枚举值 daAuto/daGzip 单源声明于 vfs.base，
@@ -26,6 +27,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.io.intf,
@@ -53,16 +55,18 @@ begin
 end;
 
 type
-  TAutoDecompressingVfs = class(TInterfacedObject, IVfs, IVfsETag)
+  TAutoDecompressingVfs = class(TInterfacedObject, IVfs, IVfsView, IVfsETag)
   private
     FInner: IVfs;
     FTransformVfs: IVfs;
   public
     constructor Create(const AInner: IVfs);
     function Exists(const APath: string): Boolean; inline;
+    function ExistsView(const APath: TStringView): Boolean; inline;
     function Stat(const APath: string): TStatInfo; inline;
     function List(const ADirPath: string): TEntryArray; inline;
     function OpenRead(const APath: string): IStream; inline;
+    function OpenReadView(const APath: TStringView): IStream; inline;
     function CaseSensitive: Boolean; inline;
     function TryGetETag(const APath: string; out AETag: string): Boolean; inline;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean; inline;
@@ -81,6 +85,17 @@ begin
   Result := FInner.Exists(APath);
 end;
 
+{ 视图版存在探测：解压不改命名空间，内层支持视图则零拷贝直达，否则单次物化 }
+function TAutoDecompressingVfs.ExistsView(const APath: TStringView): Boolean; inline;
+var
+  V: IVfsView;
+begin
+  if not VfsValidPathView(APath, True) then Exit(False);
+  if Supports(FInner, IVfsView, V) then
+    Exit(V.ExistsView(APath));
+  Result := FInner.Exists(APath.ToString);
+end;
+
 function TAutoDecompressingVfs.Stat(const APath: string): TStatInfo; inline;
 begin
   // single 4K path: 复用 transform.TryPeekHeader/HeaderPred 单源，消除二次 OpenRead/Read/Close；资源释放由 transform 承载
@@ -95,6 +110,12 @@ end;
 function TAutoDecompressingVfs.OpenRead(const APath: string): IStream; inline;
 begin
   Result := FTransformVfs.OpenRead(APath);
+end;
+
+{ 视图版打开：单次物化后复用字符串版单源，行为逐字一致 }
+function TAutoDecompressingVfs.OpenReadView(const APath: TStringView): IStream; inline;
+begin
+  Result := OpenRead(APath.ToString);
 end;
 
 function TAutoDecompressingVfs.CaseSensitive: Boolean; inline;
@@ -117,12 +138,11 @@ end;
 function CreateDecompressingVfs(const AInner: IVfs; const AAlgo: TDecompressAlgo): IVfs;
 begin
   if AInner = nil then raise EVfsError.CreateCtx('wrap', '', 'inner VFS is nil');
-  case AAlgo of
-    daGzip: Result := CreateTransformingVfs(AInner, @GzipTransform, nil, nil);
-    daAuto: Result := TAutoDecompressingVfs.Create(AInner);
+  { 未来新增算法值默认走 auto（与 case 全覆盖等价，免不可达 else 警告） }
+  if AAlgo = daGzip then
+    Result := CreateTransformingVfs(AInner, @GzipTransform, nil, nil)
   else
-    Result := CreateTransformingVfs(AInner, @GzipTransform, nil, nil);
-  end;
+    Result := TAutoDecompressingVfs.Create(AInner);
 end;
 
 end.

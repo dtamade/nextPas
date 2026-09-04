@@ -9,6 +9,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.intf,
+  nextpas.core.text.view,
   nextpas.core.vfs.intf;
 
 type
@@ -29,6 +30,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.io.base,
   nextpas.core.io.memory,
@@ -43,7 +45,7 @@ const
 type
   THeaderResolve = (hrBypass, hrAcquired, hrFallback);
 
-  TTransformingVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
+  TTransformingVfs = class(TInterfacedObject, IVfs, IVfsView, IVfsETag, IVfsServeMeta)
   private
     FInner: IVfs;
     FTransform: TVfsTransformFunc;
@@ -61,9 +63,11 @@ type
   public
     constructor Create(const AInner: IVfs; const ATransform: TVfsTransformFunc; const AShould: TVfsShouldTransformFunc; const AHeaderPred: TVfsHeaderPredicateFunc);
     function Exists(const APath: string): Boolean;
+    function ExistsView(const APath: TStringView): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
+    function OpenReadView(const APath: TStringView): IStream;
     function CaseSensitive: Boolean;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
@@ -221,7 +225,9 @@ function TTransformingVfs.TryFillLargeFile(const APath, AOp: string; ATotal: Int
 var LOff, LRem: SizeUInt;
 begin
   Result := False;
-  if (ATotal <= TRANSFORM_HEADER_PEEK) or (Length(AHeader) <> TRANSFORM_HEADER_PEEK) or (ATotal > High(SizeInt)) or (ATotal < 0) then Exit(False);
+  if (ATotal <= TRANSFORM_HEADER_PEEK) or (Length(AHeader) <> TRANSFORM_HEADER_PEEK) or (ATotal < 0) then Exit(False);
+  { 可寻址上限守卫（与 util.VfsCheckDeclaredSize 同式：UInt64 域比较，32/64 位皆有效，64 位下无恒假警告） }
+  if UInt64(ATotal) > UInt64(High(SizeInt)) then Exit(False);
   if ATotal > Int64(VFS_DECOMPRESS_MAX_BYTES) then
     raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
   // perf: 单次精确分配，无 BytesNextCapacity 几何扩容多次 Move；限幅前置，bytes.ops BytesCopy inline 零拷贝复用 4K 头
@@ -418,6 +424,18 @@ begin
   Result := FInner.Exists(APath);
 end;
 
+{ 视图版存在探测：变换不改命名空间，内层支持视图则零拷贝直达，
+  否则单次物化兜底（与 util.VfsExistsView 同策略） }
+function TTransformingVfs.ExistsView(const APath: TStringView): Boolean; inline;
+var
+  V: IVfsView;
+begin
+  if not VfsValidPathView(APath, True) then Exit(False);
+  if Supports(FInner, IVfsView, V) then
+    Exit(V.ExistsView(APath));
+  Result := FInner.Exists(APath.ToString);
+end;
+
 function TTransformingVfs.Stat(const APath: string): TStatInfo;
 var
   LInfo: TStatInfo;
@@ -461,6 +479,13 @@ end;
 function TTransformingVfs.List(const ADirPath: string): TEntryArray;
 begin
   Result := FInner.List(ADirPath);
+end;
+
+{ 视图版打开：单次物化后复用字符串版单流单源（校验/变换判定/错误类与坐标
+  皆由字符串版承载，行为逐字一致） }
+function TTransformingVfs.OpenReadView(const APath: TStringView): IStream;
+begin
+  Result := OpenRead(APath.ToString);
 end;
 
 function TTransformingVfs.OpenRead(const APath: string): IStream;

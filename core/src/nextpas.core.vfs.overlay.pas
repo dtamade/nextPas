@@ -12,7 +12,9 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.intf,
+  nextpas.core.text.view,
   nextpas.core.vfs.base,
+  nextpas.core.vfs.cache,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
 
@@ -30,22 +32,27 @@ type
   TOverlayIndex = specialize THashMap<string, Integer>;
 
 type
-  TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
+  TOverlayVfs = class(TInterfacedObject, IVfs, IVfsView, IVfsETag, IVfsServeMeta)
   private
     FList: array of IVfs;
     FIndex: TObject; { lazy hash 索引：path->winning层(-1=miss)；SpinLock守并发，inline热路径，零拷贝 SpanCompare 单源 }
     FIndexLock: ISpinLock;
+    FListCache: TVfsListCache; { 热点目录缓存单源 helper：与 mount 同源 via vfs.cache，快照不可变故无失效问题 }
     function TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
     procedure CacheResult(const APath: string; const AIdx: Integer); inline;
+    function TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
+    procedure CacheList(const ADirPath: string; const AEntries: TEntryArray); inline;
     function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
     function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
   public
     constructor Create(const AList: array of IVfs);
     destructor Destroy; override;
     function Exists(const APath: string): Boolean;
+    function ExistsView(const APath: TStringView): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
+    function OpenReadView(const APath: TStringView): IStream;
     function CaseSensitive: Boolean; inline;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
@@ -73,10 +80,16 @@ begin
   end;
   FIndex := TOverlayIndex.Create(16);
   FIndexLock := SpinLock;
+  FListCache := TVfsListCache.Create;
 end;
 
 destructor TOverlayVfs.Destroy;
 begin
+  if FListCache <> nil then
+  begin
+    FListCache.Free;
+    FListCache := nil;
+  end;
   if FIndex <> nil then
   begin
     TOverlayIndex(FIndex).Free;
@@ -109,6 +122,19 @@ begin
   finally
     FIndexLock.Release;
   end;
+end;
+
+{ 热点目录缓存单源 helper（与 mount 同源 via vfs.cache）：读并发零争用 + 阻塞写 +
+  Put 侧 Copy 隔离，调用方只读契约，inline 热路径 }
+function TOverlayVfs.TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
+begin
+  Result := (FListCache <> nil) and FListCache.TryGet(ADirPath, AEntries);
+end;
+
+procedure TOverlayVfs.CacheList(const ADirPath: string; const AEntries: TEntryArray); inline;
+begin
+  if FListCache = nil then Exit;
+  FListCache.Put(ADirPath, AEntries);
 end;
 
 { 索引加速首命中：hash O(1) 首命中避 m 次二分；miss/layer负缓存防穿透；
@@ -172,6 +198,14 @@ begin
   Result := FindFirstStat(APath, LInfo, LFs);
 end;
 
+{ 视图版存在探测：单次物化后复用字符串版首命中单源（叠加优先级需完整路径） }
+function TOverlayVfs.ExistsView(const APath: TStringView): Boolean; inline;
+begin
+  if VfsIsRootView(APath) then Exit(True);
+  if not VfsValidPathView(APath, True) then Exit(False);
+  Result := Exists(APath.ToString);
+end;
+
 function TOverlayVfs.Stat(const APath: string): TStatInfo;
 begin
   if not VfsValidPath(APath, True) then
@@ -222,6 +256,8 @@ var
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
+  { 热点目录缓存：重复 List 免多层扇出 + Sort/Dedup（与 mount 同源 helper，inline 热路径） }
+  if TryGetListCached(ADirPath, Result) then Exit;
   if not VfsIsRoot(ADirPath) then
   begin
     if not FindStat(ADirPath, LStat) then
@@ -230,6 +266,7 @@ begin
       raise EVfsNotADirectory.CreateCtx('list', ADirPath, 'target is a file');
   end;
   TempN := 0;
+  Temp := nil;
   for I := 0 to High(FList) do
   begin
     try Cur := FList[I].List(ADirPath);
@@ -244,7 +281,12 @@ begin
       Inc(TempN);
     end;
   end;
-  if TempN = 0 then Exit(nil);
+  if TempN = 0 then
+  begin
+    Result := nil;
+    CacheList(ADirPath, Result);
+    Exit;
+  end;
   SetLength(Temp, TempN);
   specialize Sort<TOverlayTemp>(Temp, @CompareOverlayTemp, nil);
   TempN := specialize Unique<TOverlayTemp>(Temp, @CompareOverlayTempNameOnly, nil);
@@ -252,6 +294,7 @@ begin
   SetLength(Result, TempN);
   for I := 0 to TempN - 1 do
     Result[I] := Temp[I].Entry;
+  CacheList(ADirPath, Result);
 end;
 
 function TOverlayVfs.OpenRead(const APath: string): IStream;
@@ -271,6 +314,13 @@ begin
     Exit(LFs.OpenRead(APath));
   end;
   raise EVfsNotFound.CreateCtx('open', APath, 'not found');
+end;
+
+{ 视图版打开：单次物化后复用字符串版首命中单源（校验/根判定/错误类与坐标
+  皆由字符串版承载，行为逐字一致） }
+function TOverlayVfs.OpenReadView(const APath: TStringView): IStream;
+begin
+  Result := OpenRead(APath.ToString);
 end;
 
 { 同根优先级：CaseSensitive 取首层优先，与 Exists/Stat/OpenRead 首命中一致；

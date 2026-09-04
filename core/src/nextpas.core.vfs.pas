@@ -8,6 +8,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.text.view,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf,
@@ -85,6 +86,9 @@ function VfsStat(const AFs: IVfs; const APath: string): TStatInfo; inline;
 function VfsList(const AFs: IVfs; const ADirPath: string): TEntryArray; inline;
 function VfsReadAllBytes(const AFs: IVfs; const APath: string): TBytes; inline;
 function VfsReadAllText(const AFs: IVfs; const APath: string): string; inline;
+function VfsExistsView(const AFs: IVfs; const AView: TStringView): Boolean; inline;
+function VfsReadAllBytesView(const AFs: IVfs; const AView: TStringView): TBytes; inline;
+function VfsReadAllTextView(const AFs: IVfs; const AView: TStringView): string; inline;
 procedure VfsWalk(const AFs: IVfs; const ARoot: string;
   const AVisit: TVfsVisitProc); inline;
 
@@ -196,6 +200,21 @@ end;
 function VfsReadAllText(const AFs: IVfs; const APath: string): string;
 begin
   Result := nextpas.core.vfs.util.VfsReadAllText(AFs, APath);
+end;
+
+function VfsExistsView(const AFs: IVfs; const AView: TStringView): Boolean;
+begin
+  Result := nextpas.core.vfs.util.VfsExistsView(AFs, AView);
+end;
+
+function VfsReadAllBytesView(const AFs: IVfs; const AView: TStringView): TBytes;
+begin
+  Result := nextpas.core.vfs.util.VfsReadAllBytesView(AFs, AView);
+end;
+
+function VfsReadAllTextView(const AFs: IVfs; const AView: TStringView): string;
+begin
+  Result := nextpas.core.vfs.util.VfsReadAllTextView(AFs, AView);
 end;
 
 procedure VfsWalk(const AFs: IVfs; const ARoot: string;

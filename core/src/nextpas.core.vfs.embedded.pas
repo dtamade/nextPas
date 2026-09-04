@@ -559,26 +559,20 @@ begin
   Result := SizeInt(FRp.LowerBound(APath));
 end;
 
+{ 前向声明：LowerBoundView 单源委托需早于定义点引用 EmbeddedGetter（定义在后） }
+function EmbeddedGetter(AIdx: SizeInt; AUserData: Pointer): TByteSpan; forward;
+
 function TEmbeddedVfs.LowerBoundView(const AView: TStringView): SizeUInt; inline;
 var
-  Lo, Hi, Mid: SizeUInt;
-  S: TByteSpan;
-  C: Integer;
+  Key: TByteSpan;
 begin
-  { perf: 零拷贝二分：StoredPathSpan 直取 blob 内视图，CompareBytesOrdered 单源视图比较，零堆分配 }
-  Lo := 0;
-  Hi := FRp.Count;
-  while Lo < Hi do
-  begin
-    Mid := Lo + (Hi - Lo) div 2;
-    S := FRp.StoredPathSpan(Mid);
-    C := CompareBytesOrdered(S.Data, Pointer(AView.Data), S.Len, AView.Len);
-    if C < 0 then
-      Lo := Mid + 1
-    else
-      Hi := Mid;
-  end;
-  Result := Lo;
+  { perf: 单源委托 vfs.base VfsLowerBoundSpan（StoredPathSpan 直取 blob 内视图，
+    CompareBytesOrdered 单源视图比较，零堆分配，O(log n)） }
+  if AView.Len = 0 then
+    Key := TByteSpan.Empty
+  else
+    Key := TByteSpan.Create(PByte(AView.Data), AView.Len);
+  Result := SizeUInt(VfsLowerBoundSpan(SizeInt(FRp.Count), @EmbeddedGetter, Self, Key));
 end;
 
 function TEmbeddedVfs.HasSubtreePath(const APath: string): Boolean; inline;
