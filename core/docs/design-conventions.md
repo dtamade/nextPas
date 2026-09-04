@@ -1296,6 +1296,11 @@ entry 分别由 host/shared `.ffi` 声明：Windows 使用 `GetCurrentThreadId` 
 业务代码一律直引 owner 模块；缺能力就反哺 core（补 owner 模块）或抽出新模块，
 不要引用路由 shim 做捷径。测试里 `heaptrc` 允许保留（泄漏证据门需要）。
 
+**system 子单元禁区（硬门禁）：** `nextpas.core.system.*` 名下的一切子单元，
+除 `system` 模块自身实现之外，不得被任何模块引用（含 `uses` 直接引用与别名转发）。
+`system` 门面的职责是向 owner 委派，不是向外提供能力；业务代码缺什么就反哺 owner，
+不要绕到 system 取。由 source-contract 门禁对全仓执行引用审计（system 自身目录除外）。
+
 ---
 
 ## 19. 许可证
