@@ -10,7 +10,8 @@ uses
 
 type
   { revwalk pure data types — owner L1 bytes.ops via git.native.base }
-  TGitOidArray = array of TGitOid;
+  { TGitOidArray canonical declaration lives in git.native.base; alias here }
+  TGitOidArray = nextpas.core.git.native.base.TGitOidArray;
 
   TWalkEntry = record
     Oid: TGitOid;

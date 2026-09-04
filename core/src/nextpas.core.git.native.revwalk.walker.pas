@@ -18,8 +18,8 @@ uses
   nextpas.core.git.native.commitgraph;
 
 type
-  { canonical owner is revwalk.base (commitgraph.base carries an identical
-    duplicate); explicit alias pins body resolution to the canonical type }
+  { canonical owner is git.native.base; explicit alias pins body resolution
+    to the canonical type (commitgraph.base/revwalk.base alias here) }
   TGitOidArray = nextpas.core.git.native.revwalk.base.TGitOidArray;
 
 { ── History.HeapWalker: committer-date max-heap O(log N) pointer moves, bytes.ops single source ── }

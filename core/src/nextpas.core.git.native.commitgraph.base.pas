@@ -30,7 +30,7 @@ const
   EDGE_INDEX_MASK = $7FFFFFFF;
 
 type
-  TGitOidArray = array of TGitOid;
+  TGitOidArray = nextpas.core.git.native.base.TGitOidArray;
 
   TCommitGraphEntry = record
     Oid: TGitOid;

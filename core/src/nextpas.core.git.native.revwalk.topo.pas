@@ -13,8 +13,8 @@ uses
   nextpas.core.git.native.repo;
 
 type
-  { canonical owner is revwalk.base (commitgraph.base carries an identical
-    duplicate); explicit alias pins body resolution to the canonical type }
+  { canonical owner is git.native.base; explicit alias pins body resolution
+    to the canonical type (commitgraph.base/revwalk.base alias here) }
   TGitOidArray = nextpas.core.git.native.revwalk.base.TGitOidArray;
 
 { one-shot topological order (children always precede parents, ready set

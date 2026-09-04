@@ -11,8 +11,8 @@ unit nextpas.core.git.native.revwalk;
   - walker: committer-date 堆游标 + 单游标一次收集.
   - collect: 日期序边界收集 (自带堆与隐藏集).
   - topo: 拓扑序收集.
-  TGitOidArray 显式别名至 revwalk.base (commitgraph.base 有同名副本,
-  显式别名钉死实现签名解析, 见分片注释); 存量调用方零改动,
+  TGitOidArray 显式别名至 revwalk.base（其本体即 git.native.base 单源，
+  commitgraph.base 历史副本已同步收敛至同一单源；显式别名钉死实现签名解析, 见分片注释); 存量调用方零改动,
   新代码可直引分片. }
 
 interface
