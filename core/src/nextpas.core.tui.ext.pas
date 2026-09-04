@@ -16,6 +16,10 @@ uses
   nextpas.core.tui.frame_budget,
   nextpas.core.tui.task,
   nextpas.core.tui.loading,
+  nextpas.core.tui.terminal,
+  nextpas.core.tui.color,
+  nextpas.core.tui.event,
+  nextpas.core.tui.style,
   nextpas.core.tui.app,
   nextpas.core.tui.app.screen,
   nextpas.core.tui.widget.panel,
@@ -54,9 +58,9 @@ type
   ETui = nextpas.core.tui.error.ETui;
   ETuiBackend = nextpas.core.tui.error.ETuiBackend;
   TApp = nextpas.core.tui.app.TApp;
-  TFrame = nextpas.core.tui.TFrame;
-  TTuiEnterFailure = nextpas.core.tui.TTuiEnterFailure;
-  TTuiEnterResult = nextpas.core.tui.TTuiEnterResult;
+  TFrame = nextpas.core.tui.terminal.TFrame;
+  TTuiEnterFailure = nextpas.core.tui.terminal.TTuiEnterFailure;
+  TTuiEnterResult = nextpas.core.tui.terminal.TTuiEnterResult;
   TRect = nextpas.core.tui.TRect;
   TBuffer = nextpas.core.tui.TBuffer;
   TEvent = nextpas.core.tui.TEvent;
@@ -240,17 +244,17 @@ implementation
 
 function ColorIsSet(const AColor: nextpas.core.tui.TColor): Boolean;
 begin
-  Result := nextpas.core.tui.ColorIsSet(AColor);
+  Result := nextpas.core.tui.color.ColorIsSet(AColor);
 end;
 
 function IsQuit(const AEv: TEvent): Boolean;
 begin
-  Result := nextpas.core.tui.IsQuit(AEv);
+  Result := nextpas.core.tui.event.IsQuit(AEv);
 end;
 
 function StyleDefault: TStyle;
 begin
-  Result := nextpas.core.tui.StyleDefault;
+  Result := nextpas.core.tui.style.StyleDefault;
 end;
 
 function IsCancelled(const Ctx: TTaskContext): Boolean;
