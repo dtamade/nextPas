@@ -38,6 +38,8 @@ type
   git_diff = nextpas.core.git.libgit2.base.git_diff;
   git_status_list = nextpas.core.git.libgit2.base.git_status_list;
   git_branch_iterator = nextpas.core.git.libgit2.base.git_branch_iterator;
+  git_note = nextpas.core.git.libgit2.base.git_note;
+  git_note_iterator = nextpas.core.git.libgit2.base.git_note_iterator;
   git_revwalk = nextpas.core.git.libgit2.base.git_revwalk;
   git_worktree = nextpas.core.git.libgit2.base.git_worktree;
   git_patch = nextpas.core.git.libgit2.base.git_patch;

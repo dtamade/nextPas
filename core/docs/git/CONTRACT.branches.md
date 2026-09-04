@@ -16,9 +16,15 @@
 
 ## 3. 性能契约
 - 列表类按需惰性读，仅触 `refs` 目录与 `packed-refs`，零重复 `ReadFile`；归并去重 `bytes.ops` 单源比较。
+- `stash push` reflog 追加写（`AppendFile`），不全量读回重写；push 耗时与历史 stash 次数无关（bench `Workflow/StashPushDrop` 回归覆盖）。
 
 ## 4. 稳定性
-- `stash push/pop` 经 `WriteAtomic` + `reflog` 精确重写，异常 `try..finally` 不丢 refs；`notes` 读写 `try..finally` 关文件句柄。
+- `stash push/pop` 经 `WriteAtomic` 更新 refs + reflog 追加写，异常 `try..finally` 不丢 refs；`notes` 读写 `try..finally` 关文件句柄。
 
 ## 5. 与总约关系
 - 本域权威：分支/标签/贮藏/笔记语义以本文件为准；跨域仍以总 CONTRACT 为准。
+
+## 6. 双后端工作流门面（`IGitWorkflowOps`，20 ops）
+- native 与 libgit2 双后端同契约：`ListTags/CreateBranch/DeleteBranch/RenameBranch/CreateLightweightTag/CreateAnnotatedTag/DeleteTag/StashCount/StashList/StashPush/StashApply/StashPop/StashDrop/StashClear/ResetHard/PushBranch/NotesForTarget/NotesAdd/NotesRemove/NotesList`，空 spec 默认 HEAD，空 message 注解/笔记直接拒绝。
+- libgit2 签名缺名时回落 `git_signature_default`（读仓库 `user.name/user.email`）；无笔记时 `NotesList` 返回空数组（`GIT_ENOTFOUND` 吞掉）；`AddWorktree` 显式拒绝 detach 与非分支 ref；`GetCurrentBranch` 持有引用必须释放（heaptrc 零泄漏门禁）。
+- 覆盖：`test_git` `TestWorkflowOps` 全序列金对（git CLI 交叉验证）+ `test_git_bindings` C 探针金数（worktree 选项 168/reset 枚举/版本常量）+ `bench_git` `Workflow/*` 9 项计时。

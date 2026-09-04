@@ -115,6 +115,8 @@ begin
     'sizeof(git_remote_callbacks) = 128');
   CheckTrue(SizeOf(TGitFetchOptions) = 216,
     'sizeof(git_fetch_options) = 216');
+  CheckTrue(SizeOf(TGitWorktreeAddOptions) = 168,
+    'sizeof(git_worktree_add_options) = 168');
 end;
 
 procedure TestFieldOffsets;
@@ -143,6 +145,12 @@ begin
   CheckTrue(GIT_CHECKOUT_OPTIONS_VERSION = 1,
     'GIT_CHECKOUT_OPTIONS_VERSION = 1');
   CheckTrue(GIT_CLONE_OPTIONS_VERSION = 1, 'GIT_CLONE_OPTIONS_VERSION = 1');
+  CheckTrue(GIT_WORKTREE_ADD_OPTIONS_VERSION = 1,
+    'GIT_WORKTREE_ADD_OPTIONS_VERSION = 1');
+  CheckTrue(GIT_PUSH_OPTIONS_VERSION = 1, 'GIT_PUSH_OPTIONS_VERSION = 1');
+  CheckTrue(GIT_RESET_SOFT = 1, 'GIT_RESET_SOFT = 1');
+  CheckTrue(GIT_RESET_MIXED = 2, 'GIT_RESET_MIXED = 2');
+  CheckTrue(GIT_RESET_HARD = 3, 'GIT_RESET_HARD = 3');
 end;
 
 { Referencing the externals forces the linker to see them; the test binary

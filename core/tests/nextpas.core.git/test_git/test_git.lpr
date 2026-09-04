@@ -763,6 +763,208 @@ begin
   Check(LSeen, 'ConfigEntries should resolve include.path content');
 end;
 
+procedure TestWorkflowOps;
+var
+  LMgr: IGitManager;
+  LDir, LRemoteDir: string;
+  LRepo: IGitRepository;
+  LOps: IGitWorkflowOps;
+  LRaised: Boolean;
+  LOid, LHead: string;
+  LTags, LList: TStringArray;
+
+  function GitOut(const AArgs: array of string): string;
+  begin
+    Result := nextpas.core.text.conv.Trim(
+      nextpas.core.process.MustCaptureIn('/usr/bin/git', AArgs, LDir));
+  end;
+
+  function GitOutIn(const ADir: string; const AArgs: array of string): string;
+  begin
+    Result := nextpas.core.text.conv.Trim(
+      nextpas.core.process.MustCaptureIn('/usr/bin/git', AArgs, ADir));
+  end;
+
+begin
+  LDir := nextpas.core.fs.PathJoin([GTmpDir, 'wf-repo']);
+  nextpas.core.fs.MkdirAll(LDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for workflow test');
+  LRepo := LMgr.InitRepository(LDir, False);
+  if LRepo.QueryInterface(IGitWorkflowOps, LOps) <> 0 then
+  begin
+    Check(False, 'libgit2 repository should support IGitWorkflowOps');
+    Exit;
+  end;
+  CheckGitOk(LDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
+  CheckGitOk(LDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LDir, 'a.txt']), BytesOfString('v1' + #10));
+  CheckGitOk(LDir, ['add', 'a.txt'], 'git add a.txt');
+  CheckGitOk(LDir, ['commit', '-m', 'first'], 'git commit first');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LDir, 'b.txt']), BytesOfString('b' + #10));
+  CheckGitOk(LDir, ['add', 'b.txt'], 'git add b.txt');
+  CheckGitOk(LDir, ['commit', '-m', 'second'], 'git commit second');
+  LHead := GitOut(['rev-parse', 'HEAD']);
+
+  CheckEqual(0, Length(LOps.ListTags), 'no tags initially');
+  LOid := LOps.CreateBranch('feature', 'HEAD', False);
+  CheckEqual(LHead, LOid, 'created branch points at HEAD');
+  Check(Pos('feature', GitOut(['branch', '--list'])) > 0, 'git sees feature');
+  LRaised := False;
+  try LOps.CreateBranch('feature', 'HEAD', False); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'duplicate branch without force raises');
+  LOid := LOps.CreateBranch('feature', 'HEAD~1', True);
+  CheckEqual(GitOut(['rev-parse', 'HEAD~1']), LOid, 'force recreates at new tip');
+  LOps.RenameBranch('feature', 'renamed', False);
+  CheckEqual(LOid, GitOut(['rev-parse', 'renamed']), 'git resolves renamed ref');
+  LOps.CreateBranch('other', 'HEAD', False);
+  LRaised := False;
+  try LOps.RenameBranch('renamed', 'other', False); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'rename onto existing without force raises');
+  LOps.RenameBranch('renamed', 'other', True);
+  LOps.DeleteBranch('other');
+  LRaised := False;
+  try LOps.DeleteBranch('no-such-branch'); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'delete missing branch raises');
+  LRaised := False;
+  try LOps.DeleteBranch(LRepo.CurrentBranch); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'delete current branch raises');
+
+  LOid := LOps.CreateLightweightTag('v1', 'HEAD', False);
+  CheckEqual(LHead, LOid, 'lightweight tag points at HEAD');
+  LTags := LOps.ListTags;
+  Check(ContainsPath(LTags, 'v1'), 'ListTags contains v1');
+  CheckEqual(LOid, GitOut(['rev-parse', 'v1']), 'git resolves v1');
+  LRaised := False;
+  try LOps.CreateLightweightTag('v1', 'HEAD', False); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'duplicate tag without force raises');
+  LOps.CreateAnnotatedTag('v2', 'HEAD', 'release two', 'NextPas Tester', 'nextpas@example.invalid', False);
+  CheckEqual('tag', GitOut(['cat-file', '-t', 'v2']), 'annotated tag object type');
+  Check(ContainsPath(LOps.ListTags, 'v2'), 'ListTags contains v2');
+  LRaised := False;
+  try LOps.CreateAnnotatedTag('v3', 'HEAD', '', 'A', 'a@b.c', False); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'annotated tag without message raises');
+  LOps.DeleteTag('v2');
+  Check(not ContainsPath(LOps.ListTags, 'v2'), 'v2 gone after delete');
+  LRaised := False;
+  try LOps.DeleteTag('no-such-tag'); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'delete missing tag raises');
+
+  CheckEqual(0, LOps.StashCount, 'no stashes initially');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LDir, 'a.txt']), BytesOfString('modified' + #10));
+  LOid := LOps.StashPush('wip work');
+  CheckEqual(40, Length(LOid), 'stash push returns 40-hex');
+  CheckEqual(1, LOps.StashCount, 'one stash after push');
+  LList := LOps.StashList;
+  CheckEqual(1, Length(LList), 'stash list has one entry');
+  Check(Pos('wip work', LList[0]) > 0, 'stash entry carries message');
+  Check(Pos('wip work', GitOut(['stash', 'list'])) > 0, 'git sees the stash');
+  LOps.StashApply(0);
+  LOps.StashDrop(0);
+  CheckEqual(0, LOps.StashCount, 'empty after drop');
+  LOps.StashPush('second stash');
+  LOps.StashPop(0);
+  CheckEqual(0, LOps.StashCount, 'empty after pop');
+  LRaised := False;
+  try LOps.StashApply(7); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'apply out-of-range index raises');
+  LOps.StashPush('x');
+  LOps.StashClear;
+  CheckEqual(0, LOps.StashCount, 'empty after clear');
+  CheckGitOk(LDir, ['checkout', '--', 'a.txt'], 'git checkout restore a.txt');
+
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LDir, 'c.txt']), BytesOfString('c' + #10));
+  CheckGitOk(LDir, ['add', 'c.txt'], 'git add c.txt');
+  CheckGitOk(LDir, ['commit', '-m', 'third'], 'git commit third');
+  LOps.ResetHard('HEAD~1');
+  CheckEqual(LHead, GitOut(['rev-parse', 'HEAD']), 'reset moves HEAD back');
+  Check(not nextpas.core.fs.FileExists(nextpas.core.fs.PathJoin([LDir, 'c.txt'])), 'reset removes newer file');
+  LRaised := False;
+  try LOps.ResetHard(''); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'reset empty target raises');
+
+  LRemoteDir := nextpas.core.fs.PathJoin([GTmpDir, 'wf-remote.git']);
+  LMgr.InitRepository(LRemoteDir, True);
+  CheckGitOk(LDir, ['remote', 'add', 'origin', LRemoteDir], 'git remote add origin');
+  Check(LOps.PushBranch('origin', LRepo.CurrentBranch), 'first push moves remote');
+  CheckEqual(GitOut(['rev-parse', LRepo.CurrentBranch]),
+    GitOutIn(LRemoteDir, ['rev-parse', LRepo.CurrentBranch]), 'remote tip matches after push');
+  Check(not LOps.PushBranch('origin', LRepo.CurrentBranch), 'second push is no-op');
+  LRaised := False;
+  try LOps.PushBranch('no-such-remote', 'main'); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'push unknown remote raises');
+  LRaised := False;
+  try LOps.PushBranch('origin', ''); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'push empty branch raises');
+
+  LHead := GitOut(['rev-parse', 'HEAD']);
+  CheckEqual('', LOps.NotesForTarget(LHead), 'no note initially');
+  CheckEqual(0, Length(LOps.NotesList), 'notes list empty');
+  LOps.NotesAdd(LHead, 'looks good');
+  CheckEqual('looks good', nextpas.core.text.conv.Trim(LOps.NotesForTarget(LHead)), 'note reads back');
+  Check(ContainsPath(LOps.NotesList, LHead), 'notes list carries target');
+  Check(Pos(LHead, GitOut(['notes', 'list'])) > 0, 'git sees the note');
+  Check(LOps.NotesRemove(LHead), 'remove reports True');
+  CheckEqual('', LOps.NotesForTarget(LHead), 'note gone after remove');
+  Check(not LOps.NotesRemove(LHead), 'second remove reports False');
+  LRaised := False;
+  try LOps.NotesAdd(LHead, '   '); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'empty note raises');
+  LRaised := False;
+  try LOps.NotesForTarget('not-hex'); except on E: EGitError do LRaised := True; end;
+  Check(LRaised, 'non-hex target raises');
+end;
+
+procedure TestAddWorktreeHonorsRef;
+var
+  LMgr: IGitManager;
+  LMainDir, LWtDir: string;
+  LRepo, LWtRepo: IGitRepository;
+  LWtExt: IGitWorktreeExt;
+  LWt: IGitWorktree;
+  LRaised: Boolean;
+begin
+  LMainDir := nextpas.core.fs.PathJoin([GTmpDir, 'wt-ref-main']);
+  LWtDir := nextpas.core.fs.PathJoin([GTmpDir, 'wt-ref-linked']);
+  nextpas.core.fs.MkdirAll(LMainDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for worktree ref test');
+  LRepo := LMgr.InitRepository(LMainDir, False);
+  CheckGitOk(LMainDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
+  CheckGitOk(LMainDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LMainDir, 'seed.txt']), BytesOfString('seed'));
+  CheckGitOk(LMainDir, ['add', 'seed.txt'], 'git add seed');
+  CheckGitOk(LMainDir, ['commit', '-m', 'seed'], 'git commit seed');
+  CheckGitOk(LMainDir, ['branch', 'feature'], 'git branch feature');
+  if LRepo.QueryInterface(IGitWorktreeExt, LWtExt) <> 0 then
+  begin
+    Check(False, 'IGitRepository should support IGitWorktreeExt');
+    Exit;
+  end;
+  LWt := LWtExt.AddWorktree('ref-wt', LWtDir, 'feature', False);
+  Check(LWt <> nil, 'AddWorktree with branch ref should return a worktree');
+  LWtRepo := LMgr.OpenRepository(LWtDir);
+  CheckEqual('feature', LWtRepo.CurrentBranch, 'linked worktree checks out the requested branch');
+  LWt := nil;
+  LWtRepo := nil;
+  nextpas.core.fs.RemoveAll(LWtDir);
+  CheckGitOk(LMainDir, ['worktree', 'prune'], 'git worktree prune');
+  LRaised := False;
+  try
+    LWtExt.AddWorktree('det-wt', nextpas.core.fs.PathJoin([GTmpDir, 'wt-det']), '', True);
+  except
+    on E: EGitError do LRaised := True;
+  end;
+  Check(LRaised, 'detached worktree raises explicit EGitError on libgit2 backend');
+  LRaised := False;
+  try
+    LWtExt.AddWorktree('tag-wt', nextpas.core.fs.PathJoin([GTmpDir, 'wt-tag']), 'refs/tags/v1', False);
+  except
+    on E: EGitError do LRaised := True;
+  end;
+  Check(LRaised, 'non-branch ref raises explicit EGitError on libgit2 backend');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -787,6 +989,8 @@ begin
     T.Test('RevWalk and parent OIDs', @TestRevWalkAndParents);
     T.Test('ConfigEntries reads repo config (k42)', @TestConfigEntriesReadsRepoConfig);
     T.Test('ConfigEntries resolves include (k42)', @TestConfigEntriesResolvesInclude);
+    T.Test('Workflow ops branch/tag/stash/notes/reset/push', @TestWorkflowOps);
+    T.Test('AddWorktree honors ref and rejects detach', @TestAddWorktreeHonorsRef);
   if not T.Run then Halt(1);
   finally
     CleanupTmpDir;

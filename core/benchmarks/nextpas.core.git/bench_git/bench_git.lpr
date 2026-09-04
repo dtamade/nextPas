@@ -15,6 +15,10 @@ uses
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bytes.ops,
+  nextpas.core.process,
+  nextpas.core.git.intf,
+  nextpas.core.git.base,
+  nextpas.core.git.factory,
   nextpas.core.git.native.base,
   nextpas.core.git.native.blame,
   nextpas.core.git.native.zlib,
@@ -325,6 +329,150 @@ begin
   ACtx.SetBytes(UInt64(Length(GBlameOld3K)) * UInt64(Length(GBlameNew3K)));
 end;
 
+{ workflow ops on the native backend — end-to-end branch/tag/stash/notes/
+  reset/push through IGitWorkflowOps against a scratch repo. Setup shells
+  out to git CLI once (untimed); each iteration uses unique ref names so
+  repeated calls stay on the success path. }
+
+var
+  GWfOps: IGitWorkflowOps;
+  GWfRepo: IGitRepository;
+  GWfDir, GWfHead1, GWfHead2, GWfBranch: string;
+  GWfCounter: Integer;
+  GWfToggle: Boolean;
+
+procedure WfGit(const AArgs: array of string);
+begin
+  nextpas.core.process.MustCaptureIn('/usr/bin/git', AArgs, GWfDir);
+end;
+
+procedure InitWorkflowBench;
+var
+  LMgr: IGitManager;
+  LRemote: string;
+begin
+  GWfDir := nextpas.core.fs.PathJoin([
+    nextpas.core.fs.GetTempDir, 'nextpas_bench_git_wf']);
+  nextpas.core.fs.RemoveAll(GWfDir);
+  nextpas.core.fs.MkdirAll(GWfDir);
+  LMgr := nextpas.core.git.factory.NewNativeGitManager;
+  if not LMgr.Initialize then
+    raise EGitError.Create('workflow bench: manager init failed');
+  GWfRepo := LMgr.InitRepository(GWfDir, False);
+  if GWfRepo.QueryInterface(IGitWorkflowOps, GWfOps) <> 0 then
+    raise EGitError.Create('workflow bench: native repo lacks IGitWorkflowOps');
+  GWfBranch := GWfRepo.CurrentBranch;
+  WfGit(['config', 'user.name', 'NextPas Bench']);
+  WfGit(['config', 'user.email', 'bench@example.invalid']);
+  nextpas.core.fs.WriteFileText(
+    nextpas.core.fs.PathJoin([GWfDir, 'a.txt']), 'v1' + #10);
+  WfGit(['add', 'a.txt']);
+  WfGit(['commit', '-m', 'first']);
+  GWfHead1 := nextpas.core.text.conv.Trim(
+    nextpas.core.process.MustCaptureIn('/usr/bin/git', ['rev-parse', 'HEAD'], GWfDir));
+  nextpas.core.fs.WriteFileText(
+    nextpas.core.fs.PathJoin([GWfDir, 'b.txt']), 'b' + #10);
+  WfGit(['add', 'b.txt']);
+  WfGit(['commit', '-m', 'second']);
+  GWfHead2 := nextpas.core.text.conv.Trim(
+    nextpas.core.process.MustCaptureIn('/usr/bin/git', ['rev-parse', 'HEAD'], GWfDir));
+  LRemote := GWfDir + '-remote.git';
+  nextpas.core.fs.RemoveAll(LRemote);
+  nextpas.core.process.MustCaptureIn('/usr/bin/git',
+    ['init', '--bare', LRemote], nextpas.core.fs.GetTempDir);
+  WfGit(['remote', 'add', 'origin', LRemote]);
+  GWfOps.PushBranch('origin', GWfBranch);
+  GWfCounter := 0;
+  GWfToggle := False;
+end;
+
+procedure BenchWfBranchCreateDelete(const ACtx: IBenchContext);
+var LName: string;
+begin
+  Inc(GWfCounter);
+  LName := 'wb' + IntToStr(GWfCounter);
+  GWfOps.CreateBranch(LName, 'HEAD', False);
+  GWfOps.DeleteBranch(LName);
+  GSink := GSink xor UInt64(GWfCounter);
+  ACtx.SetBytes(2);
+end;
+
+procedure BenchWfTagCreateDelete(const ACtx: IBenchContext);
+var LName: string;
+begin
+  Inc(GWfCounter);
+  LName := 'wt' + IntToStr(GWfCounter);
+  GWfOps.CreateLightweightTag(LName, 'HEAD', False);
+  GWfOps.DeleteTag(LName);
+  GSink := GSink xor UInt64(GWfCounter);
+  ACtx.SetBytes(2);
+end;
+
+procedure BenchWfStashPushDrop(const ACtx: IBenchContext);
+begin
+  Inc(GWfCounter);
+  nextpas.core.fs.WriteFileText(
+    nextpas.core.fs.PathJoin([GWfDir, 'a.txt']),
+    'dirty ' + IntToStr(GWfCounter) + #10);
+  GWfOps.StashPush('bench stash');
+  GWfOps.StashDrop(0);
+  GSink := GSink xor UInt64(GWfCounter);
+  ACtx.SetBytes(2);
+end;
+
+procedure BenchWfNotesAddRemove(const ACtx: IBenchContext);
+begin
+  Inc(GWfCounter);
+  GWfOps.NotesAdd(GWfHead1, 'bench note');
+  GSink := GSink xor UInt64(Length(GWfOps.NotesForTarget(GWfHead1)));
+  GWfOps.NotesRemove(GWfHead1);
+  ACtx.SetBytes(3);
+end;
+
+procedure BenchWfResetHardToggle(const ACtx: IBenchContext);
+begin
+  GWfToggle := not GWfToggle;
+  if GWfToggle then
+    GWfOps.ResetHard(GWfHead1)
+  else
+    GWfOps.ResetHard(GWfHead2);
+  GSink := GSink xor UInt64(Ord(GWfToggle));
+  ACtx.SetBytes(1);
+end;
+
+procedure BenchWfPushNoop(const ACtx: IBenchContext);
+begin
+  if GWfOps.PushBranch('origin', GWfBranch) then
+    GSink := GSink xor 1;
+  ACtx.SetBytes(1);
+end;
+
+procedure BenchWfListTags(const ACtx: IBenchContext);
+begin
+  GSink := GSink xor UInt64(Length(GWfOps.ListTags));
+  ACtx.SetBytes(1);
+end;
+
+procedure BenchWfStashCount(const ACtx: IBenchContext);
+begin
+  GSink := GSink xor UInt64(GWfOps.StashCount);
+  ACtx.SetBytes(1);
+end;
+
+procedure BenchWfNotesList(const ACtx: IBenchContext);
+begin
+  GSink := GSink xor UInt64(Length(GWfOps.NotesList));
+  ACtx.SetBytes(1);
+end;
+
+procedure DoneWorkflowBench;
+begin
+  GWfOps := nil;
+  GWfRepo := nil;
+  nextpas.core.fs.RemoveAll(GWfDir);
+  nextpas.core.fs.RemoveAll(GWfDir + '-remote.git');
+end;
+
 var
   LResults: IBenchResults;
   LBaseline: TBaselineManager;
@@ -336,6 +484,7 @@ var
   LAll: TBenchResultArray;
 begin
   InitData;
+  InitWorkflowBench;
   GSink := 0;
   LResults := TBenchSuite.Create('git-native')
     .SetQuiet(True)
@@ -365,6 +514,15 @@ begin
     .Add('Blame/ComputeMatches:1001×1k:fallback@1M', @BenchBlame1001x1K)
     .Add('Blame/ComputeMatches:2k×2k:fallback', @BenchBlame2Kx2K)
     .Add('Blame/ComputeMatches:3k×3k:fallback', @BenchBlame3Kx3K)
+    .Add('Workflow/BranchCreateDelete', @BenchWfBranchCreateDelete)
+    .Add('Workflow/TagCreateDelete', @BenchWfTagCreateDelete)
+    .Add('Workflow/StashPushDrop', @BenchWfStashPushDrop)
+    .Add('Workflow/NotesAddRemove', @BenchWfNotesAddRemove)
+    .Add('Workflow/ResetHardToggle', @BenchWfResetHardToggle)
+    .Add('Workflow/PushNoop', @BenchWfPushNoop)
+    .Add('Workflow/ListTags', @BenchWfListTags)
+    .Add('Workflow/StashCount', @BenchWfStashCount)
+    .Add('Workflow/NotesList', @BenchWfNotesList)
     .Run;
   WriteLn(LResults.PrintToConsole);
   MkdirAll('build');
@@ -413,4 +571,5 @@ begin
     GParseCache1K.Free;
     GParseCache1K := nil;
   end;
+  DoneWorkflowBench;
 end.

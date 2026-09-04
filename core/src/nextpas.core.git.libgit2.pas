@@ -46,7 +46,7 @@ type
     function VerifySSL: Boolean;
   end;
 
-  TGitRepositoryImpl = class(TInterfacedObject, IGitRepository, IGitRepositoryExt, IGitWorktreeExt)
+  TGitRepositoryImpl = class(TInterfacedObject, IGitRepository, IGitRepositoryExt, IGitWorktreeExt, IGitWorkflowOps)
   private
     FRepo: TGitRepository;
     FOwner: IGitManager;
@@ -107,6 +107,32 @@ type
     function PruneWorktree(const AName: string): Boolean;
     function CommitOnHead(const AMessage: string;
       const AAuthorName, AAuthorEmail: string): string;
+
+    // Workflow operations (IGitWorkflowOps)
+    function ListTags: TStringArray;
+    function CreateBranch(const AName, AStartRef: string;
+      AForce: Boolean = False): string;
+    procedure DeleteBranch(const AName: string);
+    function RenameBranch(const AOldName, ANewName: string;
+      AForce: Boolean = False): string;
+    function CreateLightweightTag(const AName, ATarget: string;
+      AForce: Boolean = False): string;
+    function CreateAnnotatedTag(const AName, ATarget, AMessage,
+      AAuthorName, AAuthorEmail: string; AForce: Boolean = False): string;
+    procedure DeleteTag(const AName: string);
+    function StashCount: Integer;
+    function StashList: TStringArray;
+    function StashPush(const AMessage: string): string;
+    procedure StashApply(AIndex: Integer);
+    procedure StashPop(AIndex: Integer);
+    procedure StashDrop(AIndex: Integer);
+    procedure StashClear;
+    procedure ResetHard(const ATarget: string);
+    function PushBranch(const ARemoteName, ABranch: string): Boolean;
+    function NotesForTarget(const ATargetOid: string): string;
+    procedure NotesAdd(const ATargetOid, ANote: string);
+    function NotesRemove(const ATargetOid: string): Boolean;
+    function NotesList: TStringArray;
   end;
 
   TGitCommitImpl = class(TInterfacedObject, IGitCommit)
@@ -178,6 +204,7 @@ function NewGitManager: IGitManager;
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.git.factory,
   nextpas.core.git.native.refs,
@@ -705,17 +732,47 @@ function TGitRepositoryImpl.AddWorktree(const AName, APath, ARef: string;
   ADetach: Boolean): IGitWorktree;
 var
   Wt: git_worktree;
+  BranchRef: git_reference;
+  AddOpts: git_worktree_add_options;
+  OptsPtr: Pointer;
+  RefName: string;
   rc: cint;
 begin
   Result := nil;
   if (AName = '') or (APath = '') then
     raise EGitError.Create(GIT_EINVALIDSPEC, 'AddWorktree: name and path required');
-
-  Wt := nil;
-  { Passing nil opts uses libgit2 defaults (safe checkout, no lock, no ref override) }
-  rc := git_worktree_add(Wt, FRepo.RawHandle, PChar(AName), PChar(APath), nil);
-  if rc <> GIT_OK then
-    raise EGitError.Create(rc, 'AddWorktree: git_worktree_add failed for "' + AName + '" at "' + APath + '"');
+  if ADetach then
+    raise EGitError.Create(GIT_EINVALID,
+      'AddWorktree: detached worktrees are not supported by the libgit2 backend (use the native backend)');
+  BranchRef := nil;
+  OptsPtr := nil;
+  try
+    if Trim(ARef) <> '' then
+    begin
+      RefName := Trim(ARef);
+      if Pos('refs/', RefName) <> 1 then
+        RefName := 'refs/heads/' + RefName;
+      if Copy(RefName, 1, 11) <> 'refs/heads/' then
+        raise EGitError.Create(GIT_EINVALIDSPEC,
+          'AddWorktree: only branch refs are supported by the libgit2 backend, got "' + ARef + '"');
+      rc := git_branch_lookup(BranchRef, FRepo.RawHandle, PChar(Copy(RefName, 12, MaxInt)), GIT_BRANCH_LOCAL);
+      if rc <> GIT_OK then
+        raise EGitError.Create(rc, 'AddWorktree: branch not found "' + ARef + '"');
+      FillChar(AddOpts, SizeOf(AddOpts), 0);
+      rc := git_worktree_add_options_init(@AddOpts, GIT_WORKTREE_ADD_OPTIONS_VERSION);
+      if rc <> GIT_OK then
+        raise EGitError.Create(rc, 'AddWorktree: options init failed');
+      AddOpts.ref_ := BranchRef;
+      OptsPtr := @AddOpts;
+    end;
+    Wt := nil;
+    rc := git_worktree_add(Wt, FRepo.RawHandle, PChar(AName), PChar(APath), OptsPtr);
+    if rc <> GIT_OK then
+      raise EGitError.Create(rc, 'AddWorktree: git_worktree_add failed for "' + AName + '" at "' + APath + '"');
+  finally
+    if BranchRef <> nil then
+      git_reference_free(BranchRef);
+  end;
 
   Result := TGitWorktreeImpl.Create(Self as IGitRepository, Wt);
 end;
@@ -886,6 +943,241 @@ begin
     if Index <> nil then
       git_index_free(Index);
   end;
+end;
+
+{ TGitRepositoryImpl - Workflow operations }
+
+function TGitRepositoryImpl.ListTags: TStringArray;
+begin
+  Result := FRepo.TagList;
+end;
+
+function TGitRepositoryImpl.CreateBranch(const AName, AStartRef: string;
+  AForce: Boolean): string;
+var
+  Ref: string;
+begin
+  Result := '';
+  Ref := Trim(AStartRef);
+  if Ref = '' then
+    Ref := 'HEAD';
+  try
+    Result := GitOIDToString(FRepo.BranchCreateFromSpec(AName, Ref, AForce));
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+procedure TGitRepositoryImpl.DeleteBranch(const AName: string);
+begin
+  try
+    FRepo.BranchDelete(AName);
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+function TGitRepositoryImpl.RenameBranch(const AOldName, ANewName: string;
+  AForce: Boolean): string;
+begin
+  Result := '';
+  try
+    Result := GitOIDToString(FRepo.BranchMove(AOldName, ANewName, AForce));
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+function TGitRepositoryImpl.CreateLightweightTag(const AName, ATarget: string;
+  AForce: Boolean): string;
+var
+  Ref: string;
+begin
+  Result := '';
+  Ref := Trim(ATarget);
+  if Ref = '' then
+    Ref := 'HEAD';
+  try
+    Result := GitOIDToString(FRepo.TagCreate(AName, FRepo.RevParseOid(Ref), AForce));
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+function TGitRepositoryImpl.CreateAnnotatedTag(const AName, ATarget, AMessage,
+  AAuthorName, AAuthorEmail: string; AForce: Boolean): string;
+var
+  Ref: string;
+begin
+  Result := '';
+  Ref := Trim(ATarget);
+  if Ref = '' then
+    Ref := 'HEAD';
+  if Trim(AMessage) = '' then
+    raise EGitError.Create(GIT_EINVALID, 'tag: message required for annotated tag');
+  try
+    Result := GitOIDToString(FRepo.TagCreateAnnotated(AName, FRepo.RevParseOid(Ref),
+      AMessage, AAuthorName, AAuthorEmail, AForce));
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+procedure TGitRepositoryImpl.DeleteTag(const AName: string);
+begin
+  try
+    FRepo.TagDelete(AName);
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+function TGitRepositoryImpl.StashCount: Integer;
+begin
+  Result := FRepo.StashCount;
+end;
+
+function TGitRepositoryImpl.StashList: TStringArray;
+begin
+  Result := FRepo.StashList;
+end;
+
+function TGitRepositoryImpl.StashPush(const AMessage: string): string;
+begin
+  Result := '';
+  try
+    Result := GitOIDToString(FRepo.StashSave(AMessage, '', ''));
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+procedure TGitRepositoryImpl.StashApply(AIndex: Integer);
+begin
+  try
+    FRepo.StashApply(AIndex);
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+procedure TGitRepositoryImpl.StashPop(AIndex: Integer);
+begin
+  try
+    FRepo.StashPop(AIndex);
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+procedure TGitRepositoryImpl.StashDrop(AIndex: Integer);
+begin
+  try
+    FRepo.StashDrop(AIndex);
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+procedure TGitRepositoryImpl.StashClear;
+begin
+  FRepo.StashClear;
+end;
+
+procedure TGitRepositoryImpl.ResetHard(const ATarget: string);
+var
+  Ref: string;
+begin
+  Ref := Trim(ATarget);
+  if Ref = '' then
+    raise EGitError.Create(GIT_EINVALID, 'reset: target required');
+  try
+    FRepo.ResetHardSpec(Ref);
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+function TGitRepositoryImpl.PushBranch(const ARemoteName, ABranch: string): Boolean;
+var
+  RName, BName: string;
+begin
+  RName := Trim(ARemoteName);
+  if RName = '' then
+    RName := 'origin';
+  BName := Trim(ABranch);
+  if BName = '' then
+    raise EGitError.Create(GIT_EINVALID, 'push: branch required');
+  try
+    Result := FRepo.PushBranch(RName, BName);
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+function TGitRepositoryImpl.NotesForTarget(const ATargetOid: string): string;
+var
+  LOid: TGitOID;
+begin
+  Result := '';
+  try
+    LOid := CreateGitOIDFromString(ATargetOid);
+  except
+    on E: Exception do
+      raise EGitError.CreateFmt('notes: invalid target "%s"', [ATargetOid]);
+  end;
+  Result := FRepo.NoteRead(LOid);
+end;
+
+procedure TGitRepositoryImpl.NotesAdd(const ATargetOid, ANote: string);
+var
+  LOid: TGitOID;
+begin
+  if Trim(ANote) = '' then
+    raise EGitError.Create(GIT_EINVALID, 'notes: note text required');
+  try
+    LOid := CreateGitOIDFromString(ATargetOid);
+  except
+    on E: Exception do
+      raise EGitError.CreateFmt('notes: invalid target "%s"', [ATargetOid]);
+  end;
+  try
+    FRepo.NoteCreate(LOid, ANote, '', '', True);
+  except
+    on E: EGitError do raise;
+    on E: Exception do raise EGitError.Create(GIT_EINVALID, E.Message);
+  end;
+end;
+
+function TGitRepositoryImpl.NotesRemove(const ATargetOid: string): Boolean;
+var
+  LOid: TGitOID;
+begin
+  Result := False;
+  try
+    LOid := CreateGitOIDFromString(ATargetOid);
+  except
+    on E: Exception do
+      raise EGitError.CreateFmt('notes: invalid target "%s"', [ATargetOid]);
+  end;
+  Result := FRepo.NoteRemove(LOid, '', '');
+end;
+
+function TGitRepositoryImpl.NotesList: TStringArray;
+begin
+  Result := FRepo.NoteList;
 end;
 
 function NewGitManager: IGitManager;
