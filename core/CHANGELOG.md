@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — nextpas.core.git BREAKING gbAuto → gbNative
+
+- **BREAKING**: `factory.NewGitManager(gbAuto)` 与门面 `git.NewGitManager` 默认后端由 `gbLibGit2` 切换为 `gbNative`；未显式 `uses nextpas.core.git.libgit2` 注册时不再 fail-closed，直接返回纯 Pascal 管理器；需 libgit2 轨道时显式传 `gbLibGit2` 并注册。
+- 迁移：新代码显式传 `gbNative` 或 `gbLibGit2`；仅“跟随默认”场景用 `gbAuto`。
+
 ## 1.1.0 (2026-09-03) — nextpas.core.tar 1.0.0 独立 L2 晋升
 
 `nextpas.core.compress.tar` 寄生抽离为独立 `nextpas.core.tar`  परिवार，6 维打磨对齐 `zip` 标杆：四件套 `base/intf/reader/writer/fs` + 薄门面 `tar.pas` + 兼容转发 `compress.tar`，`L2` 归一 `IWriter/IReader/IStream`。

@@ -4,8 +4,8 @@ unit nextpas.core.git.factory;
 
 { 选择层静态汇聚 — 依赖隔离见 PURE-BACKEND.md §1-§2 / CONTRACT.md §1.1
   - 静态仅 native.manager，libgit2 经 RegisterLibGit2Creator 注册注入
-  - gbNative/NewNativeGitManager 零 libgit2 (inline 值类型枚举零拷贝分发, 接口引用计数零泄漏)
-  - gbLibGit2/gbAuto 未注册时 fail-closed 抛 EGitError (native.base 单源, 零 {$IFDEF}) }
+  - gbNative/gbAuto 零 libgit2 (inline 值类型枚举零拷贝分发, 接口引用计数零泄漏)
+  - gbLibGit2 未注册时 fail-closed 抛 EGitError (native.base 单源, 零 {$IFDEF}) }
 
 interface
 
@@ -52,16 +52,16 @@ var
   LCreator: TLibGit2Creator;
 begin
   case ABackend of
-    gbNative:
+    gbNative, gbAuto:
       Result := TNativeGitManager.Create;
-    gbLibGit2, gbAuto:
+    gbLibGit2:
       begin
         { thread-safe: single acquire snapshot, inline zero-copy, no TOCTOU }
         LCreator := GetLibGit2Creator;
         if Assigned(LCreator) then
           Result := LCreator()
         else
-          raise EGitError.Create('libgit2 backend not registered (uses nextpas.core.git.libgit2 required for gbLibGit2/gbAuto)');
+          raise EGitError.Create('libgit2 backend not registered (uses nextpas.core.git.libgit2 required for gbLibGit2)');
       end;
   end;
 end;

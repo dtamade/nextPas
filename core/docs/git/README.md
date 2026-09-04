@@ -4,7 +4,7 @@
 
 - 层级：L2，依赖 L0-L1（`base`/`text`/`bytes`/`fs`/`io`）；`native` 子家族另用同层单向 `compress`/`hash`/`zlib`/`checksum` owner 能力（mmap、Deflate、SHA-1、Adler-32 等，`core/docs/core-module-registry.md` 显式豁免 `L0-L1 plus same-layer one-way compress/hash/zlib/checksum`），不自建重复实现。
 - 门面：`nextpas.core.git`（纯 re-export + `inline NewGitManager → factory.NewGitManager(gbAuto)`，impl 零 libgit2，`base←intf←factory←facade` 隔离）。
-- 选择层：`nextpas.core.git.factory`（`TGitBackend = (gbNative, gbLibGit2, gbAuto)` + `RegisterLibGit2Creator` 注册注入 + `NewNativeGitManager` 纯别名，首版 `gbAuto = gbLibGit2` 需显式注册）。
+- 选择层：`nextpas.core.git.factory`（`TGitBackend = (gbNative, gbLibGit2, gbAuto)` + `RegisterLibGit2Creator` 注册注入 + `NewNativeGitManager` 纯别名，`gbAuto = gbNative`，`gbLibGit2` 需显式注册）。
 - 纯路径：`nextpas.core.git`（未显式 uses libgit2）/`factory(gbNative)`/`NewNativeGitManager`/`native.manager` → `native.*` 零 `libgit2`（`scripts/git-contract-check.sh` C4 三重闭环：`grep` + `fpc -va Loading libgit2` + `nm -D` 产物零命中；`core/tests/common.mk:75-78` `haltonnotreleased+log` 双 pin 因 FPC trunk `FlushFunc` 设备语义；三零证据 `fpc -va`/`nm` 双零，门面/ factory 纯路径/直连三重三零，`inline` 值类型枚举零拷贝分发，`bytes.ops` 单源，`try..finally` 资源不丢）。
 - 文档真源：契约见 [CONTRACT.md](CONTRACT.md)（总索引，89 源/40+ 能力按不变量域 6 shard 拆分）+ 6 shard 独立契约；纯后端隔离见 [PURE-BACKEND.md](PURE-BACKEND.md).
 

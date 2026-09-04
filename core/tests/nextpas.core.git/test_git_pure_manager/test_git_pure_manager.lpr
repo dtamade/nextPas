@@ -205,30 +205,31 @@ end;
 
 procedure TestFactoryGbAutoCompat;
 var
-  LMgr: IGitManager;
+  LMgr, LLibMgr: IGitManager;
   LRaised: Boolean;
 begin
+  LMgr := NewGitManager(gbAuto);
+  Check(LMgr <> nil, 'NewGitManager(gbAuto) should return native manager by default');
+  Check(LMgr.Initialize, 'gbAuto Initialize should succeed');
+  Check(LMgr.Initialized, 'gbAuto should report Initialized');
+  LMgr.Finalize;
+  CheckFalse(LMgr.Initialized, 'gbAuto Finalize should clear Initialized');
   LRaised := False;
   try
-    LMgr := NewGitManager(gbAuto);
-    Check(LMgr <> nil, 'NewGitManager(gbAuto) should not be nil when backend registered');
-    Check(LMgr.Initialize, 'gbAuto Initialize should succeed');
-    Check(LMgr.Initialized, 'gbAuto should report Initialized');
-    LMgr.Finalize;
-    CheckFalse(LMgr.Initialized, 'gbAuto Finalize should clear Initialized');
+    LLibMgr := NewGitManager(gbLibGit2);
   except
     on E: EGitError do
     begin
       LRaised := True;
-      Check(Pos('not registered', LowerCase(E.Message)) > 0, 'gbAuto fail-closed EGitError must mention not registered');
+      Check(Pos('not registered', LowerCase(E.Message)) > 0, 'gbLibGit2 fail-closed EGitError must mention not registered');
     end;
     on E: Exception do
       LRaised := True;
   end;
   if LRaised then
-    Check(True, 'gbAuto fail-closed when backend not registered (pure triple-zero)')
+    Check(True, 'gbLibGit2 fail-closed when backend not registered (pure triple-zero)')
   else
-    Check(True, 'gbAuto succeeded via registered backend');
+    Check(True, 'gbLibGit2 succeeded via registered backend');
 end;
 
 // CONTRACT INV-O4/E2/M4: DiscoverRepository pure query, no throw, PathClean absolute
