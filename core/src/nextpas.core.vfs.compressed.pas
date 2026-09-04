@@ -11,7 +11,9 @@ uses
   nextpas.core.vfs.intf;
 
 type
-  TDecompressAlgo = (daAuto, daGzip);
+  { 单源别名：复用 vfs.base 契约词汇（枚举值 daAuto/daGzip 单源声明于 vfs.base，
+    纯门面消费者经门面 uses 链直接可见，无二次声明无二义）。 }
+  TDecompressAlgo = nextpas.core.vfs.base.TDecompressAlgo;
 
 const
   { 单源别名：复用 vfs.base 32MiB（canonical 为 compress.base GZIP_MAX）。 }
