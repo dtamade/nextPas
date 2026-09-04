@@ -192,7 +192,7 @@ begin
   end
   else
   begin
-    LVfs := CreateEmbeddedVfs(@DEMO_ASSETS[0], SizeUInt(DEMO_ASSETS_SIZE), False);
+    LVfs := CreateEmbeddedVfsBorrowed(@DEMO_ASSETS[0], SizeUInt(DEMO_ASSETS_SIZE));
     WriteLn('backend: embedded (prod, serves in-blob pack)');
   end;
 
@@ -215,7 +215,7 @@ var
   LPort: UInt16;
 begin
   LPort := UInt16(StrToIntDef(ParamStr(2), 8080));
-  LVfs := CreateEmbeddedVfs(@DEMO_ASSETS[0], SizeUInt(DEMO_ASSETS_SIZE), False);
+  LVfs := CreateEmbeddedVfsBorrowed(@DEMO_ASSETS[0], SizeUInt(DEMO_ASSETS_SIZE));
   LRouter := THttpRouter.Create;
   LRouter.Get('/assets/*filepath', ServeVfs(LVfs));
   LServer := THttpServer.Create(LRouter as IHttpHandler, THttpServerOptions.Default);

@@ -366,8 +366,134 @@ begin
   end;
 end;
 
-procedure TestExtractRoundtrip;
+{ Hex payload decoder: inverse of the .inc emitter (independent path, no
+  shared sizing code). Proves the shipped text is well-formed for any blob. }
+function HexNibble(const C: Byte): Integer;
+begin
+  if (C >= Byte('0')) and (C <= Byte('9')) then
+    Exit(Integer(C) - Integer(Byte('0')));
+  if (C >= Byte('A')) and (C <= Byte('F')) then
+    Exit(Integer(C) - Integer(Byte('A')) + 10);
+  Result := -1;
+end;
+
+function DecodeIncHex(const AText: TBytes): TBytes;
 var
+  I, N, Hi, Lo: SizeInt;
+begin
+  Result := nil;
+  N := 0;
+  for I := 0 to Length(AText) - 1 do
+    if AText[I] = Byte('$') then
+      Inc(N);
+  SetLength(Result, N);
+  N := 0;
+  I := 0;
+  while I < Length(AText) do
+  begin
+    if AText[I] <> Byte('$') then
+    begin
+      Inc(I);
+      Continue;
+    end;
+    if I + 2 >= Length(AText) then
+    begin
+      Check(False, 'hex pair in bounds');
+      Exit;
+    end;
+    Hi := HexNibble(AText[I + 1]);
+    Lo := HexNibble(AText[I + 2]);
+    if (Hi < 0) or (Lo < 0) then
+    begin
+      Check(False, 'hex pair valid');
+      Exit;
+    end;
+    Result[N] := Byte(Hi * 16 + Lo);
+    Inc(N);
+    Inc(I, 3);
+  end;
+end;
+
+procedure CheckIncHexRoundtrip(const ALabel: string; const B: TResPackBlob);
+var
+  Opts: TResPackIncOptions;
+  T1, T2, Back: TBytes;
+begin
+  Opts := ResPackDefaultIncOptions;
+  Opts.ConstName := 'RP_INC_RT';
+  T1 := ResPackEmbedIncSource(B, Opts);
+  T2 := ResPackEmbedIncSource(B, Opts);
+  Check((Length(T1) > SizeInt(B.Size)) and SameBytes(T1, T2),
+    ALabel + ': deterministic hex expansion');
+  Back := DecodeIncHex(T1);
+  Check(Length(Back) = SizeInt(B.Size), ALabel + ': decoded length matches blob');
+  if Length(Back) = SizeInt(B.Size) then
+    Check(SameRaw(@Back[0], B.Data, B.Size), ALabel + ': decoded bytes identical');
+end;
+
+procedure TestIncTinyBlobHexRoundtrip;
+var
+  Entries: array[0..0] of TResPackInputEntry;
+  B: TResPackBlob;
+  D1: TBytes;
+begin
+  { Single 1-byte file: exercises the smallest multi-line .inc through the
+    shipped IncSource entry point (rp_pack inc --const path). }
+  D1 := BytesOf('x');
+  FillChar(Entries, SizeOf(Entries), 0);
+  Entries[0].Path := 'x';
+  Entries[0].Data := @D1[0];
+  Entries[0].DataSize := SizeUInt(Length(D1));
+  Entries[0].ModTime := 0;
+  B := ResPackBuild(Entries, ResPackDefaultOptions);
+  try
+    CheckIncHexRoundtrip('tiny', B);
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure TestIncMediumBlobHexRoundtrip;
+var
+  Entries: array[0..3] of TResPackInputEntry;
+  B: TResPackBlob;
+  D1, D2, D3: TBytes;
+  K: Integer;
+begin
+  { Empty + duplicate + text + full binary sweep: multi-line emission with
+    dedup off, mirroring the rp_pack sample tree shape. }
+  D1 := BytesOf('same-content');
+  D2 := BytesOf('same-content');
+  D3 := nil;
+  SetLength(D3, 256);
+  for K := 0 to 255 do
+    D3[K] := Byte(K);
+  FillChar(Entries, SizeOf(Entries), 0);
+  Entries[0].Path := 'empty.txt';
+  Entries[0].Data := nil;
+  Entries[0].DataSize := 0;
+  Entries[0].ModTime := 0;
+  Entries[1].Path := 'a/dup1.bin';
+  Entries[1].Data := @D1[0];
+  Entries[1].DataSize := SizeUInt(Length(D1));
+  Entries[1].ModTime := 0;
+  Entries[2].Path := 'a/b/dup2.bin';
+  Entries[2].Data := @D2[0];
+  Entries[2].DataSize := SizeUInt(Length(D2));
+  Entries[2].ModTime := 0;
+  Entries[3].Path := 'bin/all256.bin';
+  Entries[3].Data := @D3[0];
+  Entries[3].DataSize := SizeUInt(Length(D3));
+  Entries[3].ModTime := 0;
+  B := ResPackBuild(Entries, ResPackDefaultOptions);
+  try
+    CheckIncHexRoundtrip('medium', B);
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure TestExtractRoundtrip;var
   Opts: TResPackEmbedOptions;
   B1, B2: TResPackBlob;
   RP: TResPack;
@@ -438,6 +564,8 @@ begin
   T.Test('identifier validation', @TestIdentValidation);
   T.Test('.inc golden snapshot', @TestIncGolden);
   T.Test('.inc bad name raises', @TestIncBadNameRaises);
+  T.Test('.inc tiny blob hex roundtrip', @TestIncTinyBlobHexRoundtrip);
+  T.Test('.inc medium blob hex roundtrip', @TestIncMediumBlobHexRoundtrip);
   T.Test('extract roundtrip identical blob', @TestExtractRoundtrip);
   T.Test('extract creates dirs and content', @TestExtractCreatesDirsAndContent);
   if not T.Run then Halt(1);
