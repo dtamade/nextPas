@@ -132,6 +132,10 @@ begin
   LOldHashes := FHashes;
   LOldStates := FStates;
   LOldCap := FCap;
+  // fresh tables: SetLength preserves on grow, nil first so reinsert starts zeroed
+  FBuckets := nil;
+  FHashes := nil;
+  FStates := nil;
   SetLength(FBuckets, ANewCap);
   SetLength(FHashes, ANewCap);
   SetLength(FStates, ANewCap);
@@ -224,6 +228,11 @@ begin
   LOldValues := FValues;
   LOldStates := FStates;
   LOldCap := FCap;
+  // fresh tables: SetLength preserves on grow, nil first so reinsert starts zeroed
+  FBuckets := nil;
+  FHashes := nil;
+  FValues := nil;
+  FStates := nil;
   SetLength(FBuckets, ANewCap);
   SetLength(FHashes, ANewCap);
   SetLength(FValues, ANewCap);

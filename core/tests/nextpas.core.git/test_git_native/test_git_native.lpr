@@ -25,7 +25,8 @@ uses
   nextpas.core.git.native.pktline,
   nextpas.core.git.native.negotiate,
   nextpas.core.git.native.sideband,
-  nextpas.core.git.native.blame;
+  nextpas.core.git.native.blame,
+  nextpas.core.git.native.revwalk;
 
 const
   // git hash-object of "blob 6\0hello\n"
@@ -4464,6 +4465,61 @@ begin
   // synthetic repo large-file blame path is covered via fallback correctness above; integration blob-cache reuse validated via threshold edge
 end;
 
+procedure TestParseCacheGrowthNoDuplicates;
+var
+  Cache: TCommitParseCache;
+  OidSet: TGitOidSet;
+  OidMap: TOidIndexMap;
+  Oids: array[0..99] of TGitOid;
+  I, V: Integer;
+  W: Int64;
+  P: TGitOidArray;
+begin
+  // growth regression: Rehash must rebuild from zeroed tables (SetLength
+  // preserves on grow); 100 puts cross 16->32->64->128 caps without
+  // duplicate slots, lost keys, or access violations
+  for I := 0 to 99 do
+  begin
+    Oids[I] := GitOidFromHex(KBlobHello);
+    Oids[I].Bytes[0] := Byte(I);
+    Oids[I].Bytes[1] := Byte(I shr 8);
+  end;
+  Cache := TCommitParseCache.Create;
+  try
+    for I := 0 to 99 do
+      Cache.Put(Oids[I], Int64(1600000000 + I), nil);
+    for I := 0 to 99 do
+    begin
+      CheckTrue(Cache.TryGet(Oids[I], W, P), 'parse cache retains key ' + IntToStr(I));
+      CheckEqual(Int64(1600000000 + I), W, 'parse cache when matches ' + IntToStr(I));
+    end;
+  finally
+    Cache.Free;
+  end;
+  OidSet := TGitOidSet.Create;
+  try
+    for I := 0 to 99 do
+      OidSet.Add(Oids[I]);
+    for I := 0 to 99 do
+      CheckTrue(OidSet.Contains(Oids[I]), 'oid set retains key ' + IntToStr(I));
+    CheckEqual(100, OidSet.Count, 'oid set count exact after growth');
+  finally
+    OidSet.Free;
+  end;
+  OidMap := TOidIndexMap.Create;
+  try
+    for I := 0 to 99 do
+      OidMap.Add(Oids[I], I);
+    for I := 0 to 99 do
+    begin
+      CheckTrue(OidMap.TryGet(Oids[I], V), 'oid map retains key ' + IntToStr(I));
+      CheckEqual(I, V, 'oid map value matches ' + IntToStr(I));
+    end;
+  finally
+    OidMap.Free;
+  end;
+end;
+
 procedure SetupFixture;
 begin
   GRepo := PathJoin([GetTempDir,
@@ -4629,6 +4685,7 @@ begin
     T.Test('bisect golden', @TestBisectGolden);
     T.Test('blame threshold edge 1M', @TestBlameThresholdEdge);
     T.Test('blame large-file fallback 3k×3k', @TestBlameLargeFileFallback);
+    T.Test('parse cache growth no duplicates', @TestParseCacheGrowthNoDuplicates);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;

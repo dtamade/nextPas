@@ -171,6 +171,13 @@ begin
   LOldStates := FStates;
   LOldTicks := FTicks;
   LOldCap := FCap;
+  // fresh tables: SetLength preserves on grow, nil first so reinsert starts zeroed
+  FBuckets := nil;
+  FHashes := nil;
+  FWhens := nil;
+  FParents := nil;
+  FStates := nil;
+  FTicks := nil;
   SetLength(FBuckets, ANewCap);
   SetLength(FHashes, ANewCap);
   SetLength(FWhens, ANewCap);
