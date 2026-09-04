@@ -14,7 +14,7 @@
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
 | `TTarReader` | `Create(PByte,Count)` / `WithOptions` 双形态；`Next(out H):Boolean` 迭代；`TrySlice(out TByteSpan):Boolean` 零拷贝视图（单一规范，生命周期绑 Reader）/ `EntryDataSlice` 薄转发；`OpenEntryStream:IReader` 零拷贝持有流（FBuf 时持有型零拷贝、外部 PByte 时按需 SpanClone 自包含持有防 UAF，inline/零拷贝，bytes.ops 单源）；`EntryDataOfs:SizeUInt`；`ClearGlobalPax` / `AcquireGlobalPaxGuard:IInterface` RAII 隔离 |
-| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，推荐显式 `Finish`；析构自动补写两零块幂等 `ILogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH)` 可观测（文案单源 `nextpas.core.tar.log`，不驻留 `base` 类型层）、永不抛异常 `try..finally` 必释） |
+| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，必须显式 `Finish`；析构不补写，仅 `ILogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH)` 可观测（文案单源 `nextpas.core.tar.log`，不驻留 `base` 类型层）、永不抛异常 `try..finally` 必释） |
 
 ### 1.2 常量与谓词
 
@@ -25,7 +25,7 @@
 `TarPackDirInto/TarPackDir/TarExtractToDirWithOptions/TarExtractToDir`（`nextpas.core.tar.fs`，目录递归确定性排序，deferred dir 逆序定稿）。
 
 - 单源联邦：`tar.fs` 仅 `uses nextpas.core.archive.fs`，Walk/排序/防劫持/零拷贝落盘经 `archive.fs` 单源；`PackWalks` 外联单源（真实循环+文件IO分发遵设计公约红线2禁inline避I-Cache膨胀，零拷贝语义不变）；`bytes.ops` 单源，`try..finally` 不丢句柄。
-- 硬链接 TOCTOU 闭环：`tekHardLink` 经 `archive.fs` 统一谓词 `ArchiveValidateHardlinkSource` + `ArchiveHardLinkVerified` fd 级原子落盘（`O_NOFOLLOW|O_CLOEXEC`）。
+- 硬链接 TOCTOU 闭环：`tekHardLink` 经 `archive.fs` 统一谓词 `ArchiveValidateHardlinkSource` + `ArchiveHardLinkVerified` fd 级原子落盘（`O_NOFOLLOW|O_CLOEXEC`；fd-link 机制不可用报 `EXDEV` 时经 `fs.util` 重校验后普通 link 降级，真跨设备仍失败）。
 
 ### 1.4 链式构造器
 
@@ -52,7 +52,7 @@
 | 名不安全（读端/落盘） | `EParseError('tar: refusing unsafe entry name: ...')` |
 | 落盘路径含符号链接段 | `EParseError('tar extract: symlink in path: ...')` |
 | 目标 writer 为 nil / 已 Finish 后再写入 | `EArgumentError` / `EInvalidOperationError('tar: writer already finished')` |
-| `TTarWriter`/`ITarBuilder` 未 `Finish` 即析构 | `log.intf ILogger.Warn` 可观测（`TTarWriter` 额外自动补写两零块幂等），析构永不抛异常，`try..finally` 必释资源 |
+| `TTarWriter`/`ITarBuilder` 未 `Finish` 即析构 | `log.intf ILogger.Warn` 可观测（不补写两零块，调用方必须显式 `Finish`），析构永不抛异常，`try..finally` 必释资源 |
 | 单条目/总量超限 | `EIOError`（总量分支携带 `ACum/ANext/AMaxTotal` 上下文） |
 | Short write | `EIOError('tar: short write')` |
 
@@ -68,6 +68,7 @@
 make focused FOCUS=core/tests/nextpas.core.tar/test_tar_reader
 make focused FOCUS=core/tests/nextpas.core.tar/test_tar_writer
 make focused FOCUS=core/tests/nextpas.core.tar/test_tar_fs
+make focused FOCUS=core/tests/nextpas.core.tar/test_tar_fuzz
 make focused FOCUS=core/tests/nextpas.core.tar/test_tar_contract
 make focused FOCUS=core/tests/nextpas.core.compress/test_compress_tar
 make -C core/benchmarks/nextpas.core.tar/bench_tar run
