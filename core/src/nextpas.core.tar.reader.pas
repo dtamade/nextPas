@@ -110,7 +110,7 @@ type
     procedure NoteSparsePending; // out-of-line: x 中 GNU.sparse.* 建 pending，畸形即 EIOError
     procedure ParseSparseOldHeader(out ASegs: TSparseSegArray; out AReal: Int64; out AExtBlocks: Integer); // out-of-line: S 头 map+扩展链
     procedure ParseSparseMapText(AStored: PByte; AStoredLen: SizeUInt; AReal: Int64; out ASegs: TSparseSegArray; out AMapLen: SizeUInt); // out-of-line: 1.0 文本 map
-    procedure ReconstructSparse(const ASegs: TSparseSegArray; AReal: Int64; ABase: PByte; ADataOff, AStoredLen: SizeUInt); // out-of-line: bomb 后分配+回填
+    procedure ReconstructSparse(const ASegs: TSparseSegArray; AReal: Int64; ABase: PByte; ADataOff, AStoredLen: SizeUInt; APadSegs: Boolean); // out-of-line: bomb 后分配+回填，1.0 段按 512 步进，S 紧凑拼接
   public
     procedure ClearGlobalPax; inline;
     {** @desc Acquires guard that clears global pax on scope exit. *}
@@ -962,11 +962,11 @@ begin
   AMapLen := SizeUInt(PtrUInt(P) - PtrUInt(AStored));
 end;
 
-procedure TTarReader.ReconstructSparse(const ASegs: TSparseSegArray; AReal: Int64; ABase: PByte; ADataOff, AStoredLen: SizeUInt);
+procedure TTarReader.ReconstructSparse(const ASegs: TSparseSegArray; AReal: Int64; ABase: PByte; ADataOff, AStoredLen: SizeUInt; APadSegs: Boolean);
 var
   LBuf: TBytes;
   I: Integer;
-  LRun: UInt64;
+  LRun, LStride: UInt64;
 begin
   // 调用方已对 stored 与 real 做 entry/total 双守卫；此处精确装配，run 对账不平即 EIOError
   SetLength(LBuf, AReal);
@@ -978,7 +978,13 @@ begin
     if LRun + UInt64(ASegs[I].Len) > UInt64(AStoredLen) - UInt64(ADataOff) then
       raise EIOError.Create('tar: sparse data overrun');
     CopyMemory(ABase + ADataOff + SizeUInt(LRun), @LBuf[SizeInt(ASegs[I].Off)], SizeUInt(ASegs[I].Len));
-    LRun := LRun + UInt64(ASegs[I].Len);
+    if APadSegs then
+    begin
+      LStride := (UInt64(ASegs[I].Len) + 511) and not UInt64(511);
+      LRun := LRun + LStride;
+    end
+    else
+      LRun := LRun + UInt64(ASegs[I].Len);
   end;
   if LRun + UInt64(ADataOff) <> UInt64(AStoredLen) then
     raise EIOError.Create('tar: sparse stored size mismatch');
@@ -1173,7 +1179,7 @@ begin
       GuardTarTotalSize(FCumTotal, UInt64(LReal), FMaxTotal);
       FCumTotal := FCumTotal + UInt64(LReal);
       LHdr.PaxRecords := nil;
-      ReconstructSparse(LSegs, LReal, @FData[FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE))], 0, SizeUInt(Size));
+      ReconstructSparse(LSegs, LReal, @FData[FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE))], 0, SizeUInt(Size), False);
       FExtDirty := True;
       FEntrySize := LReal;
       FEntryDataOfs := FPos + (SizeUInt(1 + LExtBlocks) * SizeUInt(C_TAR_BLOCK_SIZE));
@@ -1302,7 +1308,7 @@ begin
       if LIsSparse then
       begin
         ParseSparseMapText(@FData[FEntryDataOfs], SizeUInt(Size), FSparseRealSize, LSegs, LMapLen);
-        ReconstructSparse(LSegs, FSparseRealSize, @FData[FEntryDataOfs], SizeUInt(AlignUp(LMapLen, SizeUInt(C_TAR_BLOCK_SIZE))), SizeUInt(Size));
+        ReconstructSparse(LSegs, FSparseRealSize, @FData[FEntryDataOfs], SizeUInt(AlignUp(LMapLen, SizeUInt(C_TAR_BLOCK_SIZE))), SizeUInt(Size), True);
         FExtDirty := True;
       end;
       FPos := FPos + C_TAR_BLOCK_SIZE + SizeUInt(Size) + SizeUInt(TarPadToBlock(Size));
