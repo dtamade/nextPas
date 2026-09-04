@@ -3,7 +3,10 @@ program test_winssl_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.platform.socket,
+  nextpas.core.platform.socket,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.time,
   nextpas.core.tls.base, nextpas.core.tls.winssl.lib;
 
 const

@@ -18,7 +18,8 @@ program tls_client;
   ============================================================================ }
 
 uses
-  SysUtils, Classes, StrUtils,
+  Classes,
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.time,
   fafafa.ssl,
   nextpas.core.tls.context.builder,
   fafafa.examples.tcp;
@@ -72,25 +73,25 @@ function ReadAll(AStream: TStream): RawByteString;
 var
   Buffer: array[0..BUFFER_SIZE - 1] of Byte;
   N: Longint;
-  Mem: TMemoryStream;
+  Data: TBytes;
+  OldLen: SizeInt;
 begin
   Result := '';
-  Mem := TMemoryStream.Create;
-  try
-    repeat
-      N := AStream.Read(Buffer[0], SizeOf(Buffer));
-      if N > 0 then
-        Mem.WriteBuffer(Buffer[0], N);
-    until N = 0;
-
-    if Mem.Size > 0 then
+  SetLength(Data, 0);
+  repeat
+    N := AStream.Read(Buffer[0], SizeOf(Buffer));
+    if N > 0 then
     begin
-      SetLength(Result, Mem.Size);
-      Mem.Position := 0;
-      Mem.ReadBuffer(Result[1], Mem.Size);
+      OldLen := Length(Data);
+      SetLength(Data, OldLen + N);
+      Move(Buffer[0], Data[OldLen], N);
     end;
-  finally
-    Mem.Free;
+  until N = 0;
+
+  if Length(Data) > 0 then
+  begin
+    SetLength(Result, Length(Data));
+    Move(Data[0], Result[1], Length(Data));
   end;
 end;
 
@@ -126,8 +127,8 @@ begin
     HeaderBlock := ARawResp;
 
   Text := string(HeaderBlock);
-  Text := StringReplace(Text, #13#10, #10, [rfReplaceAll]);
-  Text := StringReplace(Text, #13, #10, [rfReplaceAll]);
+  Text := StringReplace(Text, #13#10, #10, True);
+  Text := StringReplace(Text, #13, #10, True);
 
   Lines := TStringList.Create;
   try
@@ -172,10 +173,10 @@ begin
     Halt(2);
   end;
 
-  WriteLn(StringOfChar('=', 80));
+  WriteLn(TextOfChar('=', 80));
   WriteLn('示例 1: TLS 客户端连接');
   WriteLn('URL: ', URL);
-  WriteLn(StringOfChar('=', 80));
+  WriteLn(TextOfChar('=', 80));
   WriteLn;
 
   if not InitNetwork(NetErr) then
@@ -248,9 +249,9 @@ begin
 
     WriteLn;
     WriteLn('响应头预览(前 10 行)：');
-    WriteLn(StringOfChar('-', 80));
+    WriteLn(TextOfChar('-', 80));
     PrintHeaderPreview(RawResp, 10);
-    WriteLn(StringOfChar('-', 80));
+    WriteLn(TextOfChar('-', 80));
 
   finally
     if TLS <> nil then

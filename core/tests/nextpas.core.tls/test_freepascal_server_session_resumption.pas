@@ -3,7 +3,13 @@ program test_freepascal_server_session_resumption;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -19,8 +25,6 @@ uses
   nextpas.core.tls.tls13.posthandshake,
   nextpas.core.crypto.hash,
   nextpas.core.tls.freepascal.session,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 type
   TOfflineClientMode = (ocmInitial, ocmResumed, ocmResumedBadBinder);
@@ -116,7 +120,7 @@ begin
 end;
 
 type
-  TOfflineTLS13ClientStream = class(TStream)
+  TOfflineTLS13ClientStream = class(TInterfacedObject, IStream)
   private
     FMode: TOfflineClientMode;
     FReadBuffer: TBytes;
@@ -145,9 +149,13 @@ type
     constructor CreateResumed(const ASession: ISSLSession);
     constructor CreateResumedWithBadBinder(const ASession: ISSLSession);
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
 
     property CapturedSession: ISSLSession read FCapturedSession;
     property ObservedServerSelectedPSK: Boolean read FObservedServerSelectedPSK;
@@ -224,7 +232,7 @@ begin
   if FMode in [ocmResumed, ocmResumedBadBinder] then
   begin
     FillChar(LPskOffer, SizeOf(LPskOffer), 0);
-    LSessionAgeMs := DateTimeMillisecondsBetween(Now, FResumeBaseSession.GetCreationTime);
+    LSessionAgeMs := DateTimeMillisecondsBetween(DateTimeNow, FResumeBaseSession.GetCreationTime);
     if LSessionAgeMs < 0 then
       LSessionAgeMs := 0;
 
@@ -529,42 +537,42 @@ begin
     LResumptionPSK,
     LTicket.TicketLifetime,
     LTicket.TicketAgeAdd,
-    Now,
+    DateTimeNow,
     Integer(LTicket.TicketLifetime)
   );
   FCapturedSession := LSession;
   FObservedTicketIssued := True;
 end;
 
-function TOfflineTLS13ClientStream.Read(var Buffer; Count: Longint): Longint;
+function TOfflineTLS13ClientStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TOfflineTLS13ClientStream.Write(const Buffer; Count: Longint): Longint;
+function TOfflineTLS13ClientStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
   LOffset, LRecLen: Integer;
   LRecord: TBytes;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   LOffset := 0;
   while LOffset + 5 <= Length(LData) do
@@ -593,17 +601,36 @@ begin
     Inc(LOffset, 5 + LRecLen);
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TOfflineTLS13ClientStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TOfflineTLS13ClientStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TOfflineTLS13ClientStream.Close;
+begin
+end;
+
+function TOfflineTLS13ClientStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TOfflineTLS13ClientStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TOfflineTLS13ClientStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 procedure TestFreePascalServerIssuesTicketAndAcceptsResumedPSK;
@@ -627,34 +654,26 @@ begin
   LCtx.LoadPrivateKey('certificate/test_certs/signer_key.pem');
 
   LStream1 := TOfflineTLS13ClientStream.CreateInitial;
-  try
-    LConn1 := LCtx.CreateConnection(TStreamWrapper.Create(LStream1, False));
-    AssertTrue(LConn1 <> nil, 'Initial server connection should be created');
-    AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
-      'Initial server connection should expose ISSLSessionResumption');
-    AssertTrue(LConn1.Accept, 'Initial server accept should succeed');
-    AssertTrue(not LResumption1.IsSessionReused, 'Initial server accept must not report session reuse');
-    AssertTrue(LStream1.ObservedTicketIssued, 'Initial server accept should issue a NewSessionTicket');
-    LSession := LStream1.CapturedSession;
-    AssertTrue(LSession <> nil, 'Initial server accept should yield a resumable client-captured session');
-    AssertTrue(LSession.IsResumable, 'Client-captured session should be resumable');
-  finally
-    LStream1.Free;
-  end;
+  LConn1 := LCtx.CreateConnection(LStream1);
+  AssertTrue(LConn1 <> nil, 'Initial server connection should be created');
+  AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
+    'Initial server connection should expose ISSLSessionResumption');
+  AssertTrue(LConn1.Accept, 'Initial server accept should succeed');
+  AssertTrue(not LResumption1.IsSessionReused, 'Initial server accept must not report session reuse');
+  AssertTrue(LStream1.ObservedTicketIssued, 'Initial server accept should issue a NewSessionTicket');
+  LSession := LStream1.CapturedSession;
+  AssertTrue(LSession <> nil, 'Initial server accept should yield a resumable client-captured session');
+  AssertTrue(LSession.IsResumable, 'Client-captured session should be resumable');
 
   LStream2 := TOfflineTLS13ClientStream.CreateResumed(LSession);
-  try
-    LConn2 := LCtx.CreateConnection(TStreamWrapper.Create(LStream2, False));
-    AssertTrue(LConn2 <> nil, 'Resumed server connection should be created');
-    AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
-      'Resumed server connection should expose ISSLSessionResumption');
-    AssertTrue(LConn2.Accept, 'Resumed server accept should succeed');
-    AssertTrue(LResumption2.IsSessionReused, 'Resumed server accept should report session reuse');
-    AssertTrue(LStream2.ObservedServerSelectedPSK,
-      'Resumed server accept should emit pre_shared_key(selected_identity=0) in ServerHello');
-  finally
-    LStream2.Free;
-  end;
+  LConn2 := LCtx.CreateConnection(LStream2);
+  AssertTrue(LConn2 <> nil, 'Resumed server connection should be created');
+  AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
+    'Resumed server connection should expose ISSLSessionResumption');
+  AssertTrue(LConn2.Accept, 'Resumed server accept should succeed');
+  AssertTrue(LResumption2.IsSessionReused, 'Resumed server accept should report session reuse');
+  AssertTrue(LStream2.ObservedServerSelectedPSK,
+    'Resumed server accept should emit pre_shared_key(selected_identity=0) in ServerHello');
 end;
 
 procedure TestFreePascalServerRejectsInvalidResumptionBinder;
@@ -678,31 +697,23 @@ begin
   LCtx.LoadPrivateKey('certificate/test_certs/signer_key.pem');
 
   LStream1 := TOfflineTLS13ClientStream.CreateInitial;
-  try
-    LConn1 := LCtx.CreateConnection(TStreamWrapper.Create(LStream1, False));
-    AssertTrue(LConn1 <> nil, 'Initial server connection should be created');
-    AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
-      'Initial server connection should expose ISSLSessionResumption');
-    AssertTrue(LConn1.Accept, 'Initial server accept should succeed');
-    LSession := LStream1.CapturedSession;
-    AssertTrue(LSession <> nil, 'Initial server accept should yield a resumable client-captured session');
-  finally
-    LStream1.Free;
-  end;
+  LConn1 := LCtx.CreateConnection(LStream1);
+  AssertTrue(LConn1 <> nil, 'Initial server connection should be created');
+  AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
+    'Initial server connection should expose ISSLSessionResumption');
+  AssertTrue(LConn1.Accept, 'Initial server accept should succeed');
+  LSession := LStream1.CapturedSession;
+  AssertTrue(LSession <> nil, 'Initial server accept should yield a resumable client-captured session');
 
   LStream2 := TOfflineTLS13ClientStream.CreateResumedWithBadBinder(LSession);
-  try
-    LConn2 := LCtx.CreateConnection(TStreamWrapper.Create(LStream2, False));
-    AssertTrue(LConn2 <> nil, 'Tampered-binder server connection should be created');
-    AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
-      'Tampered-binder server connection should expose ISSLSessionResumption');
-    AssertTrue(not LConn2.Accept, 'Server accept with tampered PSK binder should fail closed');
-    AssertTrue(not LResumption2.IsSessionReused, 'Failed PSK accept must not report session reuse');
-    AssertTrue(LConn2.GetError(-1) = sslErrHandshake,
-      'Tampered PSK binder should surface handshake error');
-  finally
-    LStream2.Free;
-  end;
+  LConn2 := LCtx.CreateConnection(LStream2);
+  AssertTrue(LConn2 <> nil, 'Tampered-binder server connection should be created');
+  AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
+    'Tampered-binder server connection should expose ISSLSessionResumption');
+  AssertTrue(not LConn2.Accept, 'Server accept with tampered PSK binder should fail closed');
+  AssertTrue(not LResumption2.IsSessionReused, 'Failed PSK accept must not report session reuse');
+  AssertTrue(LConn2.GetError(-1) = sslErrHandshake,
+    'Tampered PSK binder should surface handshake error');
 end;
 
 begin

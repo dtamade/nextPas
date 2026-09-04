@@ -3,7 +3,13 @@ program test_ocsp_connection_verification_regression;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Dynlibs, ctypes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory, Dynlibs, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
@@ -107,8 +113,6 @@ end;
 function LoadSuccessfulBasicOCSPFixture(out ADer: TBytes): Boolean;
 const
   FIXTURE_PATH = './tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
-var
-  LStream: TFileStream;
 begin
   Result := False;
   SetLength(ADer, 0);
@@ -116,15 +120,7 @@ begin
   if not FileExists(FIXTURE_PATH) then
     Exit;
 
-  LStream := TFileStream.Create(FIXTURE_PATH, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(ADer, LStream.Size);
-    if Length(ADer) > 0 then
-      LStream.ReadBuffer(ADer[0], Length(ADer));
-  finally
-    LStream.Free;
-  end;
-
+  ADer := ReadFile(FIXTURE_PATH);
   Result := Length(ADer) > 0;
 end;
 
@@ -174,7 +170,7 @@ var
   LContext: ISSLContext;
   LConn: ISSLConnection;
   LNativeConn: ISSLNativeHandleAccess;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LCtxHandle: PSSL_CTX;
   LSSL: PSSL;
   LOptions: TSSLOptions;
@@ -242,7 +238,7 @@ begin
       Exit;
     end;
 
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     LConn := LContext.CreateConnection(LStream);
     if LConn = nil then
     begin
@@ -300,8 +296,7 @@ begin
   end;
 
   LConn := nil;
-  if Assigned(LStream) then
-    LStream.Free;
+  LStream := nil;
 
   if Assigned(LLibrary) then
     LLibrary.Finalize;
@@ -313,7 +308,7 @@ var
   LContext: ISSLContext;
   LOptions: TSSLOptions;
   LConnAccess: TOpenSSLConnectionAccess;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LSSL: PSSL;
   LResponseDER: TBytes;
   LOpenSSLResp: Pointer;
@@ -394,7 +389,7 @@ begin
       Exit;
     end;
 
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     LConnAccess := TOpenSSLConnectionAccess.Create(LContext, LStream);
 
     LSSL := PSSL(LConnAccess.GetNativeHandle);
@@ -469,8 +464,7 @@ begin
   CleanupOpenSSLMemory(LOpenSSLResp);
   if Assigned(LConnAccess) then
     LConnAccess.Free;
-  if Assigned(LStream) then
-    LStream.Free;
+  LStream := nil;
 
   if Assigned(LLibrary) then
     LLibrary.Finalize;
@@ -482,7 +476,7 @@ var
   LContext: ISSLContext;
   LConn: ISSLConnection;
   LNative: ISSLNativeHandleAccess;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LSSL: PSSL;
   LResponseDER: TBytes;
   LOpenSSLResp: Pointer;
@@ -562,7 +556,7 @@ begin
       Exit;
     end;
 
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     LConn := LContext.CreateConnection(LStream);
     if LConn = nil then
     begin
@@ -625,8 +619,7 @@ begin
 
   CleanupOpenSSLMemory(LOpenSSLResp);
   LConn := nil;
-  if Assigned(LStream) then
-    LStream.Free;
+  LStream := nil;
 
   if Assigned(LLibrary) then
     LLibrary.Finalize;

@@ -4,7 +4,7 @@ program test_winssl_handshake_debug;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
 
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib,

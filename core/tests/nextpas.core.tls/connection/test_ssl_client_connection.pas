@@ -3,7 +3,8 @@ program test_ssl_client_connection;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
+  nextpas.core.exception,
+  nextpas.core.base.utils, Sockets, ssockets,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,

@@ -3,7 +3,14 @@ program test_freepascal_client_ct_sct_surface;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
   nextpas.core.tls.asn1,
   nextpas.core.tls.base,
   nextpas.core.tls.ocsp,
@@ -29,8 +36,6 @@ uses
   nextpas.core.tls.tls13.servercertverify,
   nextpas.core.crypto.hash,
   nextpas.core.tls.x509,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 const
   TLS_EXTENSION_SIGNED_CERTIFICATE_TIMESTAMP = $0012;
@@ -311,18 +316,8 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  Result := nil;
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function BytesToAnsiString(const AData: TBytes): AnsiString;
@@ -361,8 +356,8 @@ begin
   LOptions.CommonName := ACommonName;
   LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
-  LOptions.NotBefore := Now - 1;
-  LOptions.NotAfter := Now + 30;
+  LOptions.NotBefore := DateTimeNow - 1;
+  LOptions.NotAfter := DateTimeNow + 30;
   SetLength(LOptions.SubjectAltNames, 0);
   try
     for I := Low(ASANs) to High(ASANs) do
@@ -536,7 +531,7 @@ begin
     LLeafCertificate.LoadFromDER(LCertificates[0]);
     LIssuerCertificate.LoadFromDER(LCertificates[1]);
     LCertID := TOCSPCertID.Create(LLeafCertificate, LIssuerCertificate);
-    LNow := Now;
+    LNow := DateTimeNow;
 
     LBasicWriter := TASN1Writer.Create;
     try
@@ -749,7 +744,7 @@ begin
 end;
 
 type
-  TScriptedCTServerStream = class(TStream)
+  TScriptedCTServerStream = class(TInterfacedObject, IStream)
   private
     FCipherSuite: Word;
     FReadBuffer: TBytes;
@@ -773,9 +768,13 @@ type
       const ACertificateBlob, APrivateKeyBlob, ASCTExtensionData, AStapledOCSPResponse: TBytes
     );
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
 
     property ObservedSCTRequest: Boolean read FObservedSCTRequest;
   end;
@@ -987,34 +986,34 @@ begin
   FWriteStage := 2;
 end;
 
-function TScriptedCTServerStream.Read(var Buffer; Count: Longint): Longint;
+function TScriptedCTServerStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TScriptedCTServerStream.Write(const Buffer; Count: Longint): Longint;
+function TScriptedCTServerStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
   LOffset, LRecLen: Integer;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   case FWriteStage of
     0: HandleClientHello(LData);
@@ -1034,17 +1033,36 @@ begin
       end;
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TScriptedCTServerStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TScriptedCTServerStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TScriptedCTServerStream.Close;
+begin
+end;
+
+function TScriptedCTServerStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TScriptedCTServerStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TScriptedCTServerStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 function NewClientContextWithVerifyMode(const AVerifyMode: TSSLVerifyModes): ISSLContext;
@@ -1068,50 +1086,48 @@ var
   LConn: ISSLConnection;
   LCT: ISSLCertificateTransparency;
   LCTValidation: ISSLCertificateTransparencyValidation;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
+  LScripted: TScriptedCTServerStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('ct.example.com', ['DNS:ct.example.com']);
   LCtx := NewClientContext;
-  LStream := TScriptedCTServerStream.Create(
+  LScripted := TScriptedCTServerStream.Create(
     LMaterial.CertificateBlob,
     LMaterial.PrivateKeyBlob,
     nil,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'CT surface connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'CT surface connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(LConn.Connect,
-      'Missing SCT extension should not fail the handshake in bounded surface mode');
-    AssertTrue(LStream.ObservedSCTRequest,
-      'ClientHello should include signed_certificate_timestamp extension when verify-peer is enabled');
-    AssertTrue(Supports(LConn, ISSLCertificateTransparency, LCT),
-      'Connection should support ISSLCertificateTransparency');
-    AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
-      'Connection should support ISSLCertificateTransparencyValidation');
-    AssertTrue(not LCT.GetCertificateTransparencyEnabled,
-      'Missing SCT extension should surface CT as disabled');
-    AssertEqualsInt(0, Length(LCT.GetSignedCertificateTimestampList),
-      'Missing SCT extension should surface empty SCT list bytes');
-    AssertEqualsInt(0, LCT.GetSignedCertificateTimestampCount,
-      'Missing SCT extension should surface zero SCT count');
-    AssertTrue(
-      ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'no sct') or
-      ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'not provided'),
-      'Missing SCT extension should surface a no-SCT status'
-    );
-    AssertTrue(True, //
-      'Missing SCT list should not surface a CT validation result');
-    AssertTrue(
-      ContainsTextInsensitive(LCTValidation.GetCertificateTransparencyValidationStatus, 'not attempted') or
-      ContainsTextInsensitive(LCTValidation.GetCertificateTransparencyValidationStatus, 'no sct'),
-      'Missing SCT list should surface a not-attempted CT validation status'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Missing SCT extension should not fail the handshake in bounded surface mode');
+  AssertTrue(LScripted.ObservedSCTRequest,
+    'ClientHello should include signed_certificate_timestamp extension when verify-peer is enabled');
+  AssertTrue(Supports(LConn, ISSLCertificateTransparency, LCT),
+    'Connection should support ISSLCertificateTransparency');
+  AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
+    'Connection should support ISSLCertificateTransparencyValidation');
+  AssertTrue(not LCT.GetCertificateTransparencyEnabled,
+    'Missing SCT extension should surface CT as disabled');
+  AssertEqualsInt(0, Length(LCT.GetSignedCertificateTimestampList),
+    'Missing SCT extension should surface empty SCT list bytes');
+  AssertEqualsInt(0, LCT.GetSignedCertificateTimestampCount,
+    'Missing SCT extension should surface zero SCT count');
+  AssertTrue(
+    ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'no sct') or
+    ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'not provided'),
+    'Missing SCT extension should surface a no-SCT status'
+  );
+  AssertTrue(True, //
+    'Missing SCT list should not surface a CT validation result');
+  AssertTrue(
+    ContainsTextInsensitive(LCTValidation.GetCertificateTransparencyValidationStatus, 'not attempted') or
+    ContainsTextInsensitive(LCTValidation.GetCertificateTransparencyValidationStatus, 'no sct'),
+    'Missing SCT list should surface a not-attempted CT validation status'
+  );
 end;
 
 procedure TestTLSSCTListSurfacesRawBytesAndCount;
@@ -1120,7 +1136,8 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LCT: ISSLCertificateTransparency;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
+  LScripted: TScriptedCTServerStream;
   LSCT1: TBytes;
   LSCT2: TBytes;
   LSCTList: TBytes;
@@ -1141,36 +1158,33 @@ begin
   LSCTList := BuildSignedCertificateTimestampList([LSCT1, LSCT2]);
 
   LCtx := NewClientContext;
-  LStream := TScriptedCTServerStream.Create(
+  LScripted := TScriptedCTServerStream.Create(
     LMaterial.CertificateBlob,
     LMaterial.PrivateKeyBlob,
     LSCTList,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'TLS SCT surface connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'TLS SCT surface connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(LConn.Connect,
-      'TLS SCT extension should not fail the handshake in bounded surface mode');
-    AssertTrue(LStream.ObservedSCTRequest,
-      'ClientHello should include signed_certificate_timestamp extension when SCT list is expected');
-    AssertTrue(Supports(LConn, ISSLCertificateTransparency, LCT),
-      'Connection should support ISSLCertificateTransparency when SCT list is present');
-    AssertTrue(LCT.GetCertificateTransparencyEnabled,
-      'Present SCT list should surface CT as enabled');
-    AssertBytesEqual(LSCTList, LCT.GetSignedCertificateTimestampList,
-      'Surface should return the raw TLS SCT list bytes');
-    AssertEqualsInt(2, LCT.GetSignedCertificateTimestampCount,
-      'Surface should report the parsed TLS SCT count');
-    AssertTrue(
-      ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'tls'),
-      'Present TLS SCT list should mention the TLS extension source'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'TLS SCT extension should not fail the handshake in bounded surface mode');
+  AssertTrue(LScripted.ObservedSCTRequest,
+    'ClientHello should include signed_certificate_timestamp extension when SCT list is expected');
+  AssertTrue(Supports(LConn, ISSLCertificateTransparency, LCT),
+    'Connection should support ISSLCertificateTransparency when SCT list is present');
+  AssertTrue(LCT.GetCertificateTransparencyEnabled,
+    'Present SCT list should surface CT as enabled');
+  AssertBytesEqual(LSCTList, LCT.GetSignedCertificateTimestampList,
+    'Surface should return the raw TLS SCT list bytes');
+  AssertEqualsInt(2, LCT.GetSignedCertificateTimestampCount,
+    'Surface should report the parsed TLS SCT count');
+  AssertTrue(
+    ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'tls'),
+    'Present TLS SCT list should mention the TLS extension source'
+  );
 end;
 
 procedure TestTLSSCTListSurfacesValidationPolicyFailure;
@@ -1179,7 +1193,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LCTValidation: ISSLCertificateTransparencyValidation;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
   LSCT1: TBytes;
   LSCT2: TBytes;
   LSCTList: TBytes;
@@ -1212,20 +1226,16 @@ begin
     LSCTList,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'TLS SCT validation connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'TLS SCT validation connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(LConn.Connect,
-      'TLS SCT validation surface should not change the bounded handshake outcome');
-    AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
-      'Connection should support ISSLCertificateTransparencyValidation when SCT list is present');
-    AssertTrue(True,
-      'Pure Pascal CT signature verification is now implemented');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'TLS SCT validation surface should not change the bounded handshake outcome');
+  AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
+    'Connection should support ISSLCertificateTransparencyValidation when SCT list is present');
+  AssertTrue(True,
+    'Pure Pascal CT signature verification is now implemented');
 end;
 
 procedure TestTLSSCTListValidationStaysAvailableWhenServerOmitsIssuerChain;
@@ -1234,7 +1244,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LCTValidation: ISSLCertificateTransparencyValidation;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
   LSCT1: TBytes;
   LSCT2: TBytes;
   LSCTList: TBytes;
@@ -1267,20 +1277,16 @@ begin
     LSCTList,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Leaf-only TLS SCT validation connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Leaf-only TLS SCT validation connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(LConn.Connect,
-      'TLS SCT validation should keep working when issuer only exists in trust store');
-    AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
-      'Leaf-only SCT validation path should support ISSLCertificateTransparencyValidation');
-    AssertTrue(LCTValidation.GetCertificateTransparencyValidationStatus <> '',
-      'Leaf-only SCT validation path should report a non-empty CT validation status');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'TLS SCT validation should keep working when issuer only exists in trust store');
+  AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
+    'Leaf-only SCT validation path should support ISSLCertificateTransparencyValidation');
+  AssertTrue(LCTValidation.GetCertificateTransparencyValidationStatus <> '',
+    'Leaf-only SCT validation path should report a non-empty CT validation status');
 end;
 
 procedure TestCTValidationUsesTrustStoreIssuerWhenServerOmitsIssuerChain;
@@ -1289,7 +1295,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LCTValidation: ISSLCertificateTransparencyValidation;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
   LSCT1: TBytes;
   LSCT2: TBytes;
   LSCTList: TBytes;
@@ -1325,20 +1331,16 @@ begin
       LSCTList,
       nil
     );
-    try
-      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-      AssertTrue(LConn <> nil, 'CT issuer-source connection should be created');
-      (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+    LConn := LCtx.CreateConnection(LStream);
+    AssertTrue(LConn <> nil, 'CT issuer-source connection should be created');
+    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-      AssertTrue(LConn.Connect,
-        'CT issuer-source contract should keep the handshake green when issuer only exists in trust store');
-      AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
-        'CT issuer-source path should support ISSLCertificateTransparencyValidation');
-      AssertTrue(LCTValidation.GetCertificateTransparencyValidationStatus <> '',
-        'CT issuer-source path should report a non-empty CT validation status');
-    finally
-      LStream.Free;
-    end;
+    AssertTrue(LConn.Connect,
+      'CT issuer-source contract should keep the handshake green when issuer only exists in trust store');
+    AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
+      'CT issuer-source path should support ISSLCertificateTransparencyValidation');
+    AssertTrue(LCTValidation.GetCertificateTransparencyValidationStatus <> '',
+      'CT issuer-source path should report a non-empty CT validation status');
   finally
     RestoreCTIssuerObservation(LObservationState);
   end;
@@ -1351,7 +1353,7 @@ var
   LConn: ISSLConnection;
   LCT: ISSLCertificateTransparency;
   LCTValidation: ISSLCertificateTransparencyValidation;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
   LSCT1: TBytes;
   LSCT2: TBytes;
   LSCTList: TBytes;
@@ -1384,33 +1386,29 @@ begin
     nil,
     LOCSPResponse
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'OCSP-delivered SCT surface connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'OCSP-delivered SCT surface connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(LConn.Connect,
-      'OCSP-delivered SCT list should keep the handshake green in bounded surface mode');
-    AssertTrue(Supports(LConn, ISSLCertificateTransparency, LCT),
-      'OCSP-delivered SCT path should support ISSLCertificateTransparency');
-    AssertTrue(LCT.GetCertificateTransparencyEnabled,
-      'OCSP-delivered SCT list should surface CT as enabled');
-    AssertBytesEqual(LSCTList, LCT.GetSignedCertificateTimestampList,
-      'OCSP-delivered SCT path should surface the raw SCT list bytes');
-    AssertEqualsInt(2, LCT.GetSignedCertificateTimestampCount,
-      'OCSP-delivered SCT path should report the parsed SCT count');
-    AssertTrue(
-      ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'ocsp'),
-      'OCSP-delivered SCT path should mention the OCSP source'
-    );
+  AssertTrue(LConn.Connect,
+    'OCSP-delivered SCT list should keep the handshake green in bounded surface mode');
+  AssertTrue(Supports(LConn, ISSLCertificateTransparency, LCT),
+    'OCSP-delivered SCT path should support ISSLCertificateTransparency');
+  AssertTrue(LCT.GetCertificateTransparencyEnabled,
+    'OCSP-delivered SCT list should surface CT as enabled');
+  AssertBytesEqual(LSCTList, LCT.GetSignedCertificateTimestampList,
+    'OCSP-delivered SCT path should surface the raw SCT list bytes');
+  AssertEqualsInt(2, LCT.GetSignedCertificateTimestampCount,
+    'OCSP-delivered SCT path should report the parsed SCT count');
+  AssertTrue(
+    ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'ocsp'),
+    'OCSP-delivered SCT path should mention the OCSP source'
+  );
 
-    AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
-      'OCSP-delivered SCT path should support ISSLCertificateTransparencyValidation');
-    AssertTrue(True, //
-      'CT validation now implemented (OCSP-delivered path)');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(Supports(LConn, ISSLCertificateTransparencyValidation, LCTValidation),
+    'OCSP-delivered SCT path should support ISSLCertificateTransparencyValidation');
+  AssertTrue(True, //
+    'CT validation now implemented (OCSP-delivered path)');
 end;
 
 procedure TestRequiredCertificateTransparencyFailsWithoutSCT;
@@ -1418,34 +1416,32 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
+  LScripted: TScriptedCTServerStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('ct.example.com', ['DNS:ct.example.com']);
   LCtx := NewClientContext;
   LCtx.SetOptions(LCtx.GetOptions + [ssoRequireCertificateTransparency]);
-  LStream := TScriptedCTServerStream.Create(
+  LScripted := TScriptedCTServerStream.Create(
     LMaterial.CertificateBlob,
     LMaterial.PrivateKeyBlob,
     nil,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Required-CT connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Required-CT connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Required certificate transparency should fail-closed when server omits SCT material');
-    AssertTrue(LStream.ObservedSCTRequest,
-      'Required-CT path should still request signed_certificate_timestamp');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'certificate transparency') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'sct'),
-      'Required-CT missing-SCT failure should mention certificate transparency/SCT'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Required certificate transparency should fail-closed when server omits SCT material');
+  AssertTrue(LScripted.ObservedSCTRequest,
+    'Required-CT path should still request signed_certificate_timestamp');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'certificate transparency') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'sct'),
+    'Required-CT missing-SCT failure should mention certificate transparency/SCT'
+  );
 end;
 
 procedure TestRequiredCertificateTransparencyFailsWhenPolicyNotSatisfied;
@@ -1453,7 +1449,8 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
+  LScripted: TScriptedCTServerStream;
   LSCT1: TBytes;
   LSCT2: TBytes;
   LSCTList: TBytes;
@@ -1475,31 +1472,28 @@ begin
 
   LCtx := NewClientContext;
   LCtx.SetOptions(LCtx.GetOptions + [ssoRequireCertificateTransparency]);
-  LStream := TScriptedCTServerStream.Create(
+  LScripted := TScriptedCTServerStream.Create(
     LMaterial.CertificateBlob,
     LMaterial.PrivateKeyBlob,
     LSCTList,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Required-CT policy connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Required-CT policy connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Required certificate transparency should fail-closed when CT policy is not satisfied');
-    AssertTrue(LStream.ObservedSCTRequest,
-      'Required-CT policy path should still request signed_certificate_timestamp');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'certificate transparency') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'sct') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'policy') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'validation'),
-      'Required-CT policy failure should mention CT policy/validation'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Required certificate transparency should fail-closed when CT policy is not satisfied');
+  AssertTrue(LScripted.ObservedSCTRequest,
+    'Required-CT policy path should still request signed_certificate_timestamp');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'certificate transparency') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'sct') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'policy') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'validation'),
+    'Required-CT policy failure should mention CT policy/validation'
+  );
 end;
 
 procedure TestRequiredCertificateTransparencyIsIgnoredWhenVerifyPeerDisabled;
@@ -1507,29 +1501,27 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
+  LScripted: TScriptedCTServerStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('ct.example.com', ['DNS:ct.example.com']);
   LCtx := NewClientContextWithVerifyMode([]);
   LCtx.SetOptions(LCtx.GetOptions + [ssoRequireCertificateTransparency]);
-  LStream := TScriptedCTServerStream.Create(
+  LScripted := TScriptedCTServerStream.Create(
     LMaterial.CertificateBlob,
     LMaterial.PrivateKeyBlob,
     nil,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Verify-none required-CT connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Verify-none required-CT connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(LConn.Connect,
-      'CT required should stay inert when verify-peer is disabled');
-    AssertTrue(not LStream.ObservedSCTRequest,
-      'ClientHello should not request signed_certificate_timestamp when verify-peer is disabled');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'CT required should stay inert when verify-peer is disabled');
+  AssertTrue(not LScripted.ObservedSCTRequest,
+    'ClientHello should not request signed_certificate_timestamp when verify-peer is disabled');
 end;
 
 procedure TestMalformedTLSSCTListFailsClosed;
@@ -1537,36 +1529,34 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
+  LScripted: TScriptedCTServerStream;
   LMalformedSCTList: TBytes;
 begin
   LMaterial := GenerateCASignedServerMaterial('ct.example.com', ['DNS:ct.example.com']);
   LMalformedSCTList := [$00, $05, $00, $04, $11, $22, $33];
 
   LCtx := NewClientContext;
-  LStream := TScriptedCTServerStream.Create(
+  LScripted := TScriptedCTServerStream.Create(
     LMaterial.CertificateBlob,
     LMaterial.PrivateKeyBlob,
     LMalformedSCTList,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Malformed SCT connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Malformed SCT connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Malformed TLS SCT list should fail-closed');
-    AssertTrue(LStream.ObservedSCTRequest,
-      'Malformed-SCT path should still request signed_certificate_timestamp');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'signed_certificate_timestamp') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'sct'),
-      'Malformed SCT failure should mention signed_certificate_timestamp/SCT'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Malformed TLS SCT list should fail-closed');
+  AssertTrue(LScripted.ObservedSCTRequest,
+    'Malformed-SCT path should still request signed_certificate_timestamp');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'signed_certificate_timestamp') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'sct'),
+    'Malformed SCT failure should mention signed_certificate_timestamp/SCT'
+  );
 end;
 
 procedure TestEmbeddedSCTListFallsBackWhenTLSExtensionMissing;
@@ -1575,7 +1565,8 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LCT: ISSLCertificateTransparency;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
+  LScripted: TScriptedCTServerStream;
   LExpectedSCTList: TBytes;
 begin
   LMaterial := LoadStaticServerMaterial(
@@ -1585,37 +1576,34 @@ begin
   LExpectedSCTList := BuildFixtureEmbeddedSCTList;
 
   LCtx := NewClientContext;
-  LStream := TScriptedCTServerStream.Create(
+  LScripted := TScriptedCTServerStream.Create(
     LMaterial.CertificateBlob,
     LMaterial.PrivateKeyBlob,
     nil,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Embedded SCT fallback connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Embedded SCT fallback connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(LConn.Connect,
-      'Valid embedded SCT should keep the handshake green when TLS SCT extension is absent');
-    AssertTrue(LStream.ObservedSCTRequest,
-      'Embedded-SCT fallback path should still request signed_certificate_timestamp');
-    AssertTrue(Supports(LConn, ISSLCertificateTransparency, LCT),
-      'Embedded-SCT fallback connection should support ISSLCertificateTransparency');
-    AssertTrue(LCT.GetCertificateTransparencyEnabled,
-      'Valid embedded SCT should surface CT as enabled');
-    AssertBytesEqual(LExpectedSCTList, LCT.GetSignedCertificateTimestampList,
-      'Fallback should surface the embedded SCT list bytes');
-    AssertEqualsInt(2, LCT.GetSignedCertificateTimestampCount,
-      'Fallback should report the parsed embedded SCT count');
-    AssertTrue(
-      ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'embedded') or
-      ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'x509'),
-      'Fallback status should mention the embedded/X.509 source'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Valid embedded SCT should keep the handshake green when TLS SCT extension is absent');
+  AssertTrue(LScripted.ObservedSCTRequest,
+    'Embedded-SCT fallback path should still request signed_certificate_timestamp');
+  AssertTrue(Supports(LConn, ISSLCertificateTransparency, LCT),
+    'Embedded-SCT fallback connection should support ISSLCertificateTransparency');
+  AssertTrue(LCT.GetCertificateTransparencyEnabled,
+    'Valid embedded SCT should surface CT as enabled');
+  AssertBytesEqual(LExpectedSCTList, LCT.GetSignedCertificateTimestampList,
+    'Fallback should surface the embedded SCT list bytes');
+  AssertEqualsInt(2, LCT.GetSignedCertificateTimestampCount,
+    'Fallback should report the parsed embedded SCT count');
+  AssertTrue(
+    ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'embedded') or
+    ContainsTextInsensitive(LCT.GetCertificateTransparencyStatus, 'x509'),
+    'Fallback status should mention the embedded/X.509 source'
+  );
 end;
 
 procedure TestMalformedEmbeddedSCTListFailsClosed;
@@ -1623,7 +1611,8 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedCTServerStream;
+  LStream: IStream;
+  LScripted: TScriptedCTServerStream;
 begin
   LMaterial := LoadStaticServerMaterial(
     'certificate/test_certs/ct_embedded_sct_malformed_leaf_cert.pem',
@@ -1631,29 +1620,26 @@ begin
   );
 
   LCtx := NewClientContext;
-  LStream := TScriptedCTServerStream.Create(
+  LScripted := TScriptedCTServerStream.Create(
     LMaterial.CertificateBlob,
     LMaterial.PrivateKeyBlob,
     nil,
     nil
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Malformed embedded SCT connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('ct.example.com');
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Malformed embedded SCT connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Malformed embedded SCT list should fail-closed');
-    AssertTrue(LStream.ObservedSCTRequest,
-      'Malformed embedded SCT path should still request signed_certificate_timestamp');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'signed_certificate_timestamp') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'sct'),
-      'Malformed embedded SCT failure should mention signed_certificate_timestamp/SCT'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Malformed embedded SCT list should fail-closed');
+  AssertTrue(LScripted.ObservedSCTRequest,
+    'Malformed embedded SCT path should still request signed_certificate_timestamp');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'signed_certificate_timestamp') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'sct'),
+    'Malformed embedded SCT failure should mention signed_certificate_timestamp/SCT'
+  );
 end;
 
 begin

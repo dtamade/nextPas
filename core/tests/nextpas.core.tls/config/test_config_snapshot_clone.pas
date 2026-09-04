@@ -16,12 +16,14 @@ program test_config_snapshot_clone;
  *}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.json.types,
   nextpas.core.json.parser,
   nextpas.core.json.value,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.backend.selector,
   nextpas.core.tls.context.builder,

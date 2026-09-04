@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   ctypes,
   {$ENDIF}
-  nextpas.core.system.sysutils;
+  nextpas.core.base;
 
 {$IFDEF UNIX}
 const

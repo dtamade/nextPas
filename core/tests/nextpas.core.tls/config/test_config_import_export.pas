@@ -21,13 +21,16 @@ program test_config_import_export;
  *}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.json.types,
   nextpas.core.json.parser,
   nextpas.core.json.value,
   nextpas.core.json.builder,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.tls.base,
   nextpas.core.tls.backend.selector,
   nextpas.core.tls.context.builder,

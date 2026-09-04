@@ -14,7 +14,10 @@ uses
   nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.time,
+  nextpas.core.fs,
   nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
@@ -149,7 +152,7 @@ begin
             sslHsInProgress:
               begin
                 WriteLn('[Server] ⏳ Handshake in progress, retry...');
-                Sleep(100);
+                MsSleep(100);
                 Inc(LRetry);
               end;
           end;
@@ -221,7 +224,7 @@ begin
     WriteLn('[Main] Starting server thread...');
     LServer := TServerThread.Create(TEST_PORT, GLib);
     LServer.Start;
-    Sleep(2000);
+    MsSleep(2000);
     WriteLn('[Main] Server should be listening now');
     WriteLn;
 
@@ -288,7 +291,7 @@ begin
           sslHsInProgress:
             begin
               WriteLn('[Client] ⏳ Handshake in progress, retry...');
-              Sleep(100);
+              MsSleep(100);
               Inc(LRetry);
             end;
         end;

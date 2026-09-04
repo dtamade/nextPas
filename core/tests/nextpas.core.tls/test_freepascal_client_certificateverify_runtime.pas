@@ -3,7 +3,11 @@ program test_freepascal_client_certificateverify_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -18,8 +22,6 @@ uses
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify,
   nextpas.core.crypto.hash,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 const
   TEST_TLS13_SIG_RSA_PSS_RSAE_SHA384 = $0805;
@@ -86,18 +88,8 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  Result := nil;
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function BytesToString(const AData: TBytes): AnsiString;
@@ -131,7 +123,7 @@ begin
 end;
 
 type
-  TScriptedCertificateVerifyServerStream = class(TStream)
+  TScriptedCertificateVerifyServerStream = class(TInterfacedObject, IStream)
   private
     FCipherSuite: Word;
     FReadBuffer: TBytes;
@@ -158,9 +150,13 @@ type
       AExpectedSelectedSignatureScheme: Word = 0
     );
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
   end;
 
 constructor TScriptedCertificateVerifyServerStream.Create(
@@ -383,34 +379,34 @@ begin
   FWriteStage := 2;
 end;
 
-function TScriptedCertificateVerifyServerStream.Read(var Buffer; Count: Longint): Longint;
+function TScriptedCertificateVerifyServerStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TScriptedCertificateVerifyServerStream.Write(const Buffer; Count: Longint): Longint;
+function TScriptedCertificateVerifyServerStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
   LOffset, LRecLen: Integer;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   case FWriteStage of
     0: HandleClientHello(LData);
@@ -430,20 +426,39 @@ begin
       end;
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
 function TScriptedCertificateVerifyServerStream.Seek(
-  const Offset: Int64;
-  Origin: TSeekOrigin
+  const AOffset: Int64;
+  const AOrigin: TSeekOrigin
 ): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TScriptedCertificateVerifyServerStream.Close;
+begin
+end;
+
+function TScriptedCertificateVerifyServerStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TScriptedCertificateVerifyServerStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TScriptedCertificateVerifyServerStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 procedure ExpectHandshakeResultForCipherSuite(
@@ -457,7 +472,7 @@ procedure ExpectHandshakeResultForCipherSuite(
 var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedCertificateVerifyServerStream;
+  LStream: IStream;
   LConnected: Boolean;
   LError: TSSLErrorCode;
 begin
@@ -474,27 +489,23 @@ begin
     AForcedSignatureScheme,
     AExpectedSelectedSignatureScheme
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, ALabel + ': connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, ALabel + ': connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    LConnected := LConn.Connect;
-    if AShouldConnect then
-      AssertTrue(LConnected, ALabel + ': handshake should succeed')
-    else
-    begin
-      AssertTrue(not LConnected, ALabel + ': handshake should fail');
-      LError := LConn.GetError(-1);
-      AssertTrue(
-        (LError = sslErrHandshake) or
-        (LError = sslErrProtocol) or
-        (LError = sslErrUnsupported),
-        ALabel + ': failure should map to handshake/protocol/unsupported error'
-      );
-    end;
-  finally
-    LStream.Free;
+  LConnected := LConn.Connect;
+  if AShouldConnect then
+    AssertTrue(LConnected, ALabel + ': handshake should succeed')
+  else
+  begin
+    AssertTrue(not LConnected, ALabel + ': handshake should fail');
+    LError := LConn.GetError(-1);
+    AssertTrue(
+      (LError = sslErrHandshake) or
+      (LError = sslErrProtocol) or
+      (LError = sslErrUnsupported),
+      ALabel + ': failure should map to handshake/protocol/unsupported error'
+    );
   end;
 end;
 

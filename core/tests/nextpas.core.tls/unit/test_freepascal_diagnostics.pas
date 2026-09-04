@@ -3,8 +3,11 @@ program test_freepascal_diagnostics;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.thread.init, nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.thread.init,
+  nextpas.core.platform.socket,
+  nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib;
@@ -131,7 +134,7 @@ begin
   Check(LConn.Connect, 'TLS handshake');
 
   // Test ISSLDiagnostics interface
-  Check(Supports(LConn, ISSLDiagnostics), 'Supports ISSLDiagnostics');
+  Check(Supports(LConn, ISSLDiagnostics, LDiag), 'Supports ISSLDiagnostics');
 
   if Supports(LConn, ISSLDiagnostics, LDiag) then
   begin

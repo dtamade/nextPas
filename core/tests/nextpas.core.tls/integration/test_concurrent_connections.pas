@@ -14,7 +14,11 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.time, nextpas.core.system.classes, SyncObjs,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.crypto.utils,
@@ -341,7 +345,7 @@ begin
   WriteLn('----------------------------------------');
 
   SetLength(Threads, NUM_STRESS_THREADS);
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   try
     // 创建并启动线程
@@ -369,7 +373,7 @@ begin
       Threads[i].Free;
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     if AllSuccess then
       AddResult(Format('Multithreaded context creation (%d threads)', [NUM_STRESS_THREADS]),
@@ -400,7 +404,7 @@ begin
   WriteLn('----------------------------------------');
 
   SetLength(Threads, 10);
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   try
     // 创建并启动线程
@@ -428,7 +432,7 @@ begin
       Threads[i].Free;
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     if AllSuccess then
       AddResult(Format('Connection pool thread safety (%d total ops)', [TotalOps]),
@@ -459,7 +463,7 @@ begin
   WriteLn('----------------------------------------');
 
   SetLength(Threads, NUM_STRESS_THREADS);
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   try
     // 创建并启动线程
@@ -489,7 +493,7 @@ begin
       Threads[i].Free;
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     if AllSuccess then
       AddResult(Format('High concurrency crypto ops (%d threads, %d ops)', [NUM_STRESS_THREADS, TotalOps]),
@@ -519,7 +523,7 @@ begin
   WriteLn('----------------------------------------');
 
   SetLength(Threads, 15);
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   try
     // 创建并启动线程
@@ -547,7 +551,7 @@ begin
       Threads[i].Free;
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     if AllSuccess then
       AddResult(Format('Mixed operations concurrency (%d ops)', [TotalOps]),
@@ -575,7 +579,7 @@ begin
   WriteLn('Test: Mass Context Creation');
   WriteLn('----------------------------------------');
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   try
     SetLength(Contexts, NUM_CONCURRENT_CONTEXTS);
@@ -590,7 +594,7 @@ begin
         Inc(SuccessCount);
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     // 清理
     for i := 0 to High(Contexts) do
@@ -623,7 +627,7 @@ begin
   WriteLn('Test: Random Generator Concurrency');
   WriteLn('----------------------------------------');
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   try
     // 并发生成随机数
@@ -632,7 +636,7 @@ begin
     for i := 0 to 99 do
       Results[i] := TCryptoUtils.SecureRandom(32);
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     // 验证所有结果都是唯一的（非常高概率）
     AllUnique := True;
@@ -674,7 +678,7 @@ begin
   WriteLn('Test: Memory Pressure');
   WriteLn('----------------------------------------');
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   try
     // 多轮创建和释放
@@ -695,7 +699,7 @@ begin
       SetLength(Contexts, 0);
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     AddResult('Memory pressure test (5 batches x 20 contexts)', True, '',
       (EndTime - StartTime) * 86400000);

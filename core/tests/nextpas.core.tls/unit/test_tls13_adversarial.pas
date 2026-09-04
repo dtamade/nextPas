@@ -4,8 +4,9 @@ program test_tls13_adversarial;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.platform.socket, nextpas.core.platform.signal,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.platform.socket,
+  nextpas.core.platform.signal,
+  nextpas.core.exception,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib;
 

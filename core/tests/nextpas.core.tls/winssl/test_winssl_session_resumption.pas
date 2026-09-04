@@ -7,7 +7,11 @@ uses
   {$IFDEF WINDOWS}
   Windows, WinSock2,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Process,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.time,
+  nextpas.core.os.env, nextpas.core.system.classes, Process,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
@@ -308,7 +312,7 @@ begin
     while LProcess.Running do
     begin
       AppendAvailableProcessOutput(LProcess, AOutput);
-      Sleep(10);
+      MsSleep(10);
     end;
     AppendAvailableProcessOutput(LProcess, AOutput);
     LProcess.WaitOnExit;

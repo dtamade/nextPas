@@ -5,7 +5,9 @@ program test_winssl_integration_multi;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.time,
 
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
@@ -674,7 +676,7 @@ begin
 
   WriteLn('=========================================');
   WriteLn('WinSSL 多场景集成测试');
-  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn('=========================================');
 
   // Initialize Winsock

@@ -6,13 +6,13 @@ program test_context_builder_merge_advanced_option_snapshot_semantics;
   merge semantics coverage for the compatibility-only builder surface. }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.json.types,
   nextpas.core.json.parser,
   nextpas.core.json.value,
   nextpas.core.json.builder,
+  nextpas.core.exception,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder;
 

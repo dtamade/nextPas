@@ -15,7 +15,7 @@ program test_mbedtls_lowlevel;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
+  nextpas.core.exception,
   TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,

@@ -21,8 +21,9 @@ program benchmark_tls_handshake_diagnostic;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.path,
   benchmark_framework,
   nextpas.core.text.conv,
   nextpas.core.tls.base,

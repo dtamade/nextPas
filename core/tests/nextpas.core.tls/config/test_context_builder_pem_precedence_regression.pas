@@ -3,8 +3,12 @@ program test_context_builder_pem_precedence_regression;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.json.builder,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
@@ -39,7 +43,7 @@ end;
 function MakeMissingPath(const APrefix, AExtension: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(GetTempDir()) +
-    APrefix + '_' + FormatDateTime('yyyymmddhhnnsszzz', Now) + '_' +
+    APrefix + '_' + FormatDateTime('yyyymmddhhnnsszzz', DateTimeNow) + '_' +
     IntToStr(Random(1000000)) + AExtension;
 end;
 

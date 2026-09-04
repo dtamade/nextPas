@@ -9,7 +9,12 @@ program test_freepascal_resumed_session_hostname_binding;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -24,8 +29,6 @@ uses
   nextpas.core.tls.tls13.appschedule,
   nextpas.core.crypto.hash,
   nextpas.core.tls.freepascal.session,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 var
   GPassCount: Integer = 0;
@@ -206,7 +209,7 @@ begin
 end;
 
 type
-  TOfflineTLS13ServerStream = class(TStream)
+  TOfflineTLS13ServerStream = class(TInterfacedObject, IStream)
   private
     FMode: TOfflineHandshakeMode;
     FCipherSuite: Word;
@@ -227,9 +230,13 @@ type
     constructor CreateInitial(ACipherSuite: Word);
     constructor CreateResumed(const ASession: ISSLSession);
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
   end;
 
 constructor TOfflineTLS13ServerStream.CreateInitial(ACipherSuite: Word);
@@ -438,43 +445,67 @@ begin
   FWriteStage := 2;
 end;
 
-function TOfflineTLS13ServerStream.Read(var Buffer; Count: Longint): Longint;
+function TOfflineTLS13ServerStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then Exit(0);
+  if ACount = 0 then
+    Exit(0);
+
   LAvailable := Length(FReadBuffer) - FReadPosition;
-  if LAvailable <= 0 then Exit(0);
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if LAvailable <= 0 then
+    Exit(0);
+
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+    Result := SizeUInt(LAvailable);
+
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TOfflineTLS13ServerStream.Write(const Buffer; Count: Longint): Longint;
+function TOfflineTLS13ServerStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
   case FWriteStage of
     0: HandleClientHello(LData);
     1: HandleClientFinished(LData);
   end;
-  Result := Count;
+  Result := ACount;
 end;
 
-function TOfflineTLS13ServerStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TOfflineTLS13ServerStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TOfflineTLS13ServerStream.Close;
+begin
+end;
+
+function TOfflineTLS13ServerStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TOfflineTLS13ServerStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TOfflineTLS13ServerStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 { Helper: establish initial session with a given server name }
@@ -483,7 +514,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LResumption: ISSLSessionResumption;
-  LStream: TOfflineTLS13ServerStream;
+  LStream: IStream;
   LBuf: array[0..15] of Byte;
 begin
   LCtx := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
@@ -491,20 +522,16 @@ begin
   LCtx.SetVerifyMode([]);
 
   LStream := TOfflineTLS13ServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    (LConn as ISSLClientConnection).SetServerName(AServerName);
-    if not LConn.Connect then
-      raise Exception.Create('Initial handshake failed for ' + AServerName);
-    LConn.Read(LBuf, SizeOf(LBuf));
-    if not Supports(LConn, ISSLSessionResumption, LResumption) then
-      raise Exception.Create('Connection does not support ISSLSessionResumption');
-    Result := LResumption.GetSession;
-    if Result = nil then
-      raise Exception.Create('No session captured for ' + AServerName);
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  (LConn as ISSLClientConnection).SetServerName(AServerName);
+  if not LConn.Connect then
+    raise Exception.Create('Initial handshake failed for ' + AServerName);
+  LConn.Read(LBuf, SizeOf(LBuf));
+  if not Supports(LConn, ISSLSessionResumption, LResumption) then
+    raise Exception.Create('Connection does not support ISSLSessionResumption');
+  Result := LResumption.GetSession;
+  if Result = nil then
+    raise Exception.Create('No session captured for ' + AServerName);
 end;
 
 { Test 1: Resumed session with same hostname should succeed }
@@ -513,7 +540,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LResumption: ISSLSessionResumption;
-  LStream: TOfflineTLS13ServerStream;
+  LStream: IStream;
   LSession: ISSLSession;
 begin
   WriteLn('=== Test 1: Resumed session with same hostname succeeds ===');
@@ -525,19 +552,15 @@ begin
   LCtx.SetVerifyMode([sslVerifyPeer]);
 
   LStream := TOfflineTLS13ServerStream.CreateResumed(LSession);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    Supports(LConn, ISSLSessionResumption, LResumption);
-    LResumption.SetSession(LSession);
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  Supports(LConn, ISSLSessionResumption, LResumption);
+  LResumption.SetSession(LSession);
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    Check(LConn.Connect,
-      'Resumed session with same hostname should succeed');
-    Check(LResumption.IsSessionReused,
-      'Session should be reported as reused');
-  finally
-    LStream.Free;
-  end;
+  Check(LConn.Connect,
+    'Resumed session with same hostname should succeed');
+  Check(LResumption.IsSessionReused,
+    'Session should be reported as reused');
 end;
 
 { Test 2: Resumed session with different hostname should FAIL }
@@ -546,7 +569,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LResumption: ISSLSessionResumption;
-  LStream: TOfflineTLS13ServerStream;
+  LStream: IStream;
   LSession: ISSLSession;
 begin
   WriteLn('=== Test 2: Resumed session with different hostname fails ===');
@@ -558,18 +581,14 @@ begin
   LCtx.SetVerifyMode([sslVerifyPeer]);
 
   LStream := TOfflineTLS13ServerStream.CreateResumed(LSession);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    Supports(LConn, ISSLSessionResumption, LResumption);
-    LResumption.SetSession(LSession);
-    { Attack scenario: use ticket from legit.example.com to connect to evil.example.com }
-    (LConn as ISSLClientConnection).SetServerName('evil.example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  Supports(LConn, ISSLSessionResumption, LResumption);
+  LResumption.SetSession(LSession);
+  { Attack scenario: use ticket from legit.example.com to connect to evil.example.com }
+  (LConn as ISSLClientConnection).SetServerName('evil.example.com');
 
-    Check(not LConn.Connect,
-      'Resumed session with different hostname MUST fail (hostname binding check)');
-  finally
-    LStream.Free;
-  end;
+  Check(not LConn.Connect,
+    'Resumed session with different hostname MUST fail (hostname binding check)');
 end;
 
 { Test 3: Resumed session with hostname verification disabled should succeed }
@@ -578,7 +597,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LResumption: ISSLSessionResumption;
-  LStream: TOfflineTLS13ServerStream;
+  LStream: IStream;
   LSession: ISSLSession;
 begin
   WriteLn('=== Test 3: Resumed session with hostname verification disabled succeeds ===');
@@ -591,17 +610,13 @@ begin
   LCtx.SetCertVerifyFlags(LCtx.GetCertVerifyFlags + [sslCertVerifyIgnoreHostname]);
 
   LStream := TOfflineTLS13ServerStream.CreateResumed(LSession);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    Supports(LConn, ISSLSessionResumption, LResumption);
-    LResumption.SetSession(LSession);
-    (LConn as ISSLClientConnection).SetServerName('server-b.example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  Supports(LConn, ISSLSessionResumption, LResumption);
+  LResumption.SetSession(LSession);
+  (LConn as ISSLClientConnection).SetServerName('server-b.example.com');
 
-    Check(LConn.Connect,
-      'Resumed session with sslCertVerifyIgnoreHostname should succeed even with different hostname');
-  finally
-    LStream.Free;
-  end;
+  Check(LConn.Connect,
+    'Resumed session with sslCertVerifyIgnoreHostname should succeed even with different hostname');
 end;
 
 { Test 4: Resumed session with case-insensitive same hostname should succeed }
@@ -610,7 +625,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LResumption: ISSLSessionResumption;
-  LStream: TOfflineTLS13ServerStream;
+  LStream: IStream;
   LSession: ISSLSession;
 begin
   WriteLn('=== Test 4: Resumed session with case-insensitive same hostname succeeds ===');
@@ -622,17 +637,13 @@ begin
   LCtx.SetVerifyMode([sslVerifyPeer]);
 
   LStream := TOfflineTLS13ServerStream.CreateResumed(LSession);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    Supports(LConn, ISSLSessionResumption, LResumption);
-    LResumption.SetSession(LSession);
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  Supports(LConn, ISSLSessionResumption, LResumption);
+  LResumption.SetSession(LSession);
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    Check(LConn.Connect,
-      'Resumed session with case-different but same hostname should succeed');
-  finally
-    LStream.Free;
-  end;
+  Check(LConn.Connect,
+    'Resumed session with case-different but same hostname should succeed');
 end;
 
 begin

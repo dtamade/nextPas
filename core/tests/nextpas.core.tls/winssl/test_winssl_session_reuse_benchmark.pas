@@ -4,7 +4,10 @@ program test_winssl_session_reuse_benchmark;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  Windows, nextpas.core.system.sysutils, nextpas.core.system.classes, WinSock2, Math,
+  Windows,  nextpas.core.text.conv,
+  nextpas.core.base.utils,
+  nextpas.core.time,
+  nextpas.core.os.env, WinSock2, Math,
 
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;
@@ -420,7 +423,7 @@ var
 begin
   WriteLn('=========================================');
   WriteLn('WinSSL Session 复用性能基准测试');
-  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn('=========================================');
   WriteLn;
 

@@ -3,7 +3,9 @@ program test_performance;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.platform.socket, nextpas.core.time,
+  nextpas.core.platform.socket,
+  nextpas.core.time,
+  nextpas.core.exception,
   nextpas.core.tls.base, nextpas.core.tls.winssl.lib;
 
 const
@@ -82,13 +84,13 @@ begin
     ClientConn.SetServerName(TEST_HOST);
 
     // Perform handshake
-    StartTime := Now;
+    StartTime := DateTimeNow;
     if not Connection.Connect then
     begin
       WriteLn('SSL handshake failed');
       Exit;
     end;
-    EndTime := Now;
+    EndTime := DateTimeNow;
     ElapsedMs := DateTimeMillisecondsBetween(EndTime, StartTime);
     WriteLn('Handshake completed in ', ElapsedMs, ' ms');
     WriteLn;
@@ -107,7 +109,7 @@ begin
     // Read response and measure throughput
     TotalBytes := 0;
     ReadCount := 0;
-    StartTime := Now;
+    StartTime := DateTimeNow;
 
     repeat
       BytesRead := Connection.Read(Buffer[0], SizeOf(Buffer));
@@ -118,7 +120,7 @@ begin
       end;
     until BytesRead <= 0;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
     ElapsedMs := DateTimeMillisecondsBetween(EndTime, StartTime);
 
     // Calculate throughput

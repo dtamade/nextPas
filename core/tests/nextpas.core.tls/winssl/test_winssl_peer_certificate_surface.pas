@@ -5,7 +5,8 @@ program test_winssl_peer_certificate_surface;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;
 

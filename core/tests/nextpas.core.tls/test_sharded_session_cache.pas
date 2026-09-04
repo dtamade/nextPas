@@ -16,7 +16,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs, nextpas.core.time,
+  nextpas.core.base, nextpas.core.text.conv, Classes, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.session.cache.sharded;
 
@@ -75,7 +75,7 @@ begin
   FID := AID;
   FValid := True;
   FTimeout := 300;
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
 end;
 
 function TMockSession.GetID: string;
@@ -125,12 +125,12 @@ end;
 
 function TMockSession.Serialize: TBytes;
 begin
-  Result := BytesOf(FID);
+  Result := StringToUTF8Bytes(FID);
 end;
 
 function TMockSession.Deserialize(const AData: TBytes): Boolean;
 begin
-  FID := StringOf(AData);
+  FID := UTF8BytesToString(AData);
   Result := True;
 end;
 
@@ -309,7 +309,7 @@ begin
     for I := 0 to THREAD_COUNT - 1 do
       Threads[I] := TConcurrentTestThread.Create(Cache, I * PerThread, PerThread);
 
-    StartTime := Now;
+    StartTime := DateTimeNow;
 
     // 启动所有线程
     for I := 0 to THREAD_COUNT - 1 do
@@ -319,7 +319,7 @@ begin
     for I := 0 to THREAD_COUNT - 1 do
       Threads[I].WaitFor;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     // 计算总操作数
     TotalOps := 0;

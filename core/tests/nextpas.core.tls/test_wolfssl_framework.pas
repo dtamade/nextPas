@@ -22,8 +22,7 @@ program test_wolfssl_framework;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, nextpas.core.text.conv,
-  nextpas.core.io.stream_adapter, ctypes,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.io.intf, nextpas.core.io.memory, nextpas.core.time, nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -132,7 +131,7 @@ end;
 function StubWolfSSLSessionGetTime(const session: PWOLFSSL_SESSION): LongInt; cdecl;
 begin
   if GStubWolfSSLSessionUnixTime = 0 then
-    GStubWolfSSLSessionUnixTime := DateTimeToUnix(Now);
+    GStubWolfSSLSessionUnixTime := DateTimeToUnix(DateTimeNow);
   Result := GStubWolfSSLSessionUnixTime;
 end;
 
@@ -692,7 +691,7 @@ var
   LStreamCert: TWolfSSLCertificate;
   LPEMAnsi: AnsiString;
   LExpectedFingerprint: string;
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   WriteLn('');
   WriteLn('=== WolfSSL Certificate Stream/Memory Truth Contract ===');
@@ -708,7 +707,7 @@ begin
   LCert := TWolfSSLCertificate.Create;
   LMemoryCert := TWolfSSLCertificate.Create;
   LStreamCert := TWolfSSLCertificate.Create;
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   try
     if not LCert.LoadFromFile('certs/server-cert.pem') then
     begin
@@ -733,17 +732,16 @@ begin
       SameText(LMemoryCert.GetFingerprintSHA256, LExpectedFingerprint));
 
     Test('SaveToStream writes PEM stream',
-      LCert.SaveToStream(TStreamWrapper.Create(LStream)) and (LStream.Size > 0));
+      LCert.SaveToStream(LStream) and (LStream.Size > 0));
     if LStream.Size = 0 then
       Exit;
 
     LStream.Position := 0;
     Test('LoadFromStream accepts PEM stream roundtrip',
-      LStreamCert.LoadFromStream(TStreamWrapper.Create(LStream)));
+      LStreamCert.LoadFromStream(LStream));
     Test('LoadFromStream roundtrip preserves fingerprint truth',
       SameText(LStreamCert.GetFingerprintSHA256, LExpectedFingerprint));
   finally
-    LStream.Free;
     LStreamCert.Free;
     LMemoryCert.Free;
     LCert.Free;
@@ -1261,7 +1259,7 @@ var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   WriteLn('');
   WriteLn('=== WolfSSL Pre-Handshake Verify Status Contract ===');
@@ -1271,15 +1269,14 @@ begin
   if LLib.Initialize then
   begin
     LCtx := LLib.CreateContext(sslCtxClient);
-    LStream := TMemoryStream.Create;
+    LStream := CreateBytesStream;
     try
-      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
+      LConn := LCtx.CreateConnection(LStream);
       Test('Fresh WolfSSL connection does not report verify success before handshake',
         LConn.GetVerifyResult = -1);
       Test('Fresh WolfSSL connection reports not-verified diagnostic before handshake',
         Pos('not verified', LowerCase(LConn.GetVerifyResultString)) > 0);
     finally
-      LStream.Free;
       LLib.Finalize;
     end;
   end

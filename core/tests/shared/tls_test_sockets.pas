@@ -12,7 +12,10 @@ unit tls_test_sockets;
 interface
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.platform.error,
+  nextpas.core.text.conv,
   {$IFDEF MSWINDOWS}
   WinSock2,
   {$ELSE}
@@ -45,13 +48,16 @@ function InitNetwork(out AError: string): Boolean;
 var
   WSAData: TWSAData;
   Code: Integer;
+  LBuf: array[0..255] of AnsiChar;
 begin
   Code := WSAStartup($0202, WSAData);
   Result := (Code = 0);
   if Result then
     AError := ''
+  else if platform_error_message(Code, @LBuf[0], SizeOf(LBuf)) > 0 then
+    AError := string(PAnsiChar(@LBuf[0]))
   else
-    AError := SysErrorMessage(Code);
+    AError := 'unknown error ' + IntToStr(Code);
 end;
 
 procedure CleanupNetwork;

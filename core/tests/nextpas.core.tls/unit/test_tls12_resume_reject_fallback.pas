@@ -4,7 +4,9 @@ program test_tls12_resume_reject_fallback;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
+  nextpas.core.exception,
+  nextpas.core.base,
+  nextpas.core.base.utils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.server,
   nextpas.core.tls.x509,

@@ -3,7 +3,13 @@ program test_freepascal_client_certificate_flight_requirements;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -18,8 +24,6 @@ uses
   nextpas.core.tls.encoding,
   nextpas.core.crypto.hash,
   nextpas.core.tls.freepascal.session,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 type
   TScriptedHandshakeMode = (shmFullWithoutCertificate, shmResumedWithoutCertificate);
@@ -121,7 +125,7 @@ begin
     LPSK,
     7200,
     $01020304,
-    Now,
+    DateTimeNow,
     7200,
     0
   );
@@ -130,7 +134,7 @@ begin
 end;
 
 type
-  TScriptedServerFlightStream = class(TStream)
+  TScriptedServerFlightStream = class(TInterfacedObject, IStream)
   private
     FMode: TScriptedHandshakeMode;
     FCipherSuite: Word;
@@ -151,9 +155,13 @@ type
     constructor CreateFullHandshake;
     constructor CreateResumed(const ASession: ISSLSession);
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
 
     property ObservedPskClientHello: Boolean read FObservedPskClientHello;
   end;
@@ -374,53 +382,72 @@ begin
   FWriteStage := 2;
 end;
 
-function TScriptedServerFlightStream.Read(var Buffer; Count: Longint): Longint;
+function TScriptedServerFlightStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  WriteLn('DEBUG Read called: count=', Count, ' pos=', FReadPosition, ' buflen=', Length(FReadBuffer));
-  if Count <= 0 then
+  WriteLn('DEBUG Read called: count=', ACount, ' pos=', FReadPosition, ' buflen=', Length(FReadBuffer));
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TScriptedServerFlightStream.Write(const Buffer; Count: Longint): Longint;
+function TScriptedServerFlightStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
 begin
-  WriteLn('DEBUG Write called: count=', Count, ' stage=', FWriteStage);
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  WriteLn('DEBUG Write called: count=', ACount, ' stage=', FWriteStage);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   case FWriteStage of
     0: HandleClientHello(LData);
     1: HandleClientFinished(LData);
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TScriptedServerFlightStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TScriptedServerFlightStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  WriteLn('DEBUG Seek called: offset=', Offset, ' origin=', Ord(Origin));
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  WriteLn('DEBUG Seek called: offset=', AOffset, ' origin=', Ord(AOrigin));
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TScriptedServerFlightStream.Close;
+begin
+end;
+
+function TScriptedServerFlightStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TScriptedServerFlightStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TScriptedServerFlightStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 procedure TestFullHandshakeRequiresCertificateFlight;
@@ -428,7 +455,7 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LCertVerify: ISSLCertificateVerification;
-  LStream: TScriptedServerFlightStream;
+  LStream: IStream;
   LVerifyText: string;
 begin
   LCtx := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
@@ -436,23 +463,17 @@ begin
   LCtx.SetPreferredVersion(sslProtocolTLS13);
 
   LStream := TScriptedServerFlightStream.CreateFullHandshake;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Full-handshake connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Full-handshake connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Full handshake without Certificate/CertificateVerify should fail');
-    AssertTrue(Supports(LConn, ISSLCertificateVerification, LCertVerify),
-      'Full-handshake connection should expose certificate verification interface');
-    LVerifyText := LowerCase(LCertVerify.GetVerifyResultString);
-    AssertTrue(Pos('certificate', LVerifyText) > 0,
-      'Failure should mention missing certificate flight');
-  finally
-    LCertVerify := nil;
-    LConn := nil;
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Full handshake without Certificate/CertificateVerify should fail');
+  AssertTrue(Supports(LConn, ISSLCertificateVerification, LCertVerify),
+    'Full-handshake connection should expose certificate verification interface');
+  LVerifyText := LowerCase(LCertVerify.GetVerifyResultString);
+  AssertTrue(Pos('certificate', LVerifyText) > 0,
+    'Failure should mention missing certificate flight');
 end;
 
 procedure TestResumedHandshakeStillAllowsCertificateOmission;
@@ -460,7 +481,8 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LResumption: ISSLSessionResumption;
-  LStream: TScriptedServerFlightStream;
+  LStream: IStream;
+  LScripted: TScriptedServerFlightStream;
   LSession: ISSLSession;
 begin
   LSession := BuildManualSession('resumed-no-cert');
@@ -469,24 +491,21 @@ begin
   AssertTrue(LCtx <> nil, 'Resumed FreePascal client context should be created');
   LCtx.SetPreferredVersion(sslProtocolTLS13);
 
-  LStream := TScriptedServerFlightStream.CreateResumed(LSession);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Resumed connection should be created');
-    AssertTrue(Supports(LConn, ISSLSessionResumption, LResumption),
-      'Resumed connection should expose ISSLSessionResumption');
-    LResumption.SetSession(LSession);
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedServerFlightStream.CreateResumed(LSession);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Resumed connection should be created');
+  AssertTrue(Supports(LConn, ISSLSessionResumption, LResumption),
+    'Resumed connection should expose ISSLSessionResumption');
+  LResumption.SetSession(LSession);
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Resumed PSK handshake should still succeed without Certificate/CertificateVerify');
-    AssertTrue(LResumption.IsSessionReused,
-      'Resumed PSK handshake should report session reuse');
-    AssertTrue(LStream.ObservedPskClientHello,
-      'Resumed PSK handshake should send pre_shared_key in ClientHello');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Resumed PSK handshake should still succeed without Certificate/CertificateVerify');
+  AssertTrue(LResumption.IsSessionReused,
+    'Resumed PSK handshake should report session reuse');
+  AssertTrue(LScripted.ObservedPskClientHello,
+    'Resumed PSK handshake should send pre_shared_key in ClientHello');
 end;
 
 begin

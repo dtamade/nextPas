@@ -11,7 +11,8 @@ program test_ssh_session_async;
 uses
   cthreads,
   Classes, SysUtils,
-  nextpas.core.system.sysutils,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.bytes.ops,
   nextpas.core.io.intf,
   nextpas.core.net,

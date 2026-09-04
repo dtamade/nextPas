@@ -4,8 +4,11 @@ program test_tls13_psk_negative;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  nextpas.core.thread.init, nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.thread.init,
+  nextpas.core.platform.socket,
+  nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -158,7 +161,7 @@ begin
   LBadSession.ConfigureResumption(
     $1302, 'TLS_AES_256_GCM_SHA384',
     LFakeNonce, LFakeTicket, LFakePSK,
-    7200, 12345, Now, 7200, 0
+    7200, 12345, DateTimeNow, 7200, 0
   );
   LSession := LBadSession;
 
@@ -217,7 +220,7 @@ begin
     $1302, 'TLS_AES_256_GCM_SHA384',
     LFakeNonce, LFakeTicket, LFakePSK,
     1, 0,
-    Now - 1, 1, 0
+    DateTimeNow - 1, 1, 0
   );
   LSession := LBadSession;
 

@@ -3,7 +3,10 @@ program test_winssl_context_config;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
 
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
@@ -73,7 +76,7 @@ procedure TestLoadCertificateFromMemory;
 var
   LLib: ISSLLibrary;
   LContext: ISSLContext;
-  LMemStream: TMemoryStream;
+  LMemStream: IStream;
 begin
   WriteLn('=== Test: LoadCertificate 从内存加载 ===');
 
@@ -86,14 +89,10 @@ begin
     end;
 
     LContext := LLib.CreateContext(sslCtxServer);
-    LMemStream := TMemoryStream.Create;
-    try
-      // 注意：需要有效的证书数据
-      // 这个测试验证接口可用性
-      TestPass('LoadCertificate 从内存 - 接口可用（使用 TMemoryStream）');
-    finally
-      LMemStream.Free;
-    end;
+    LMemStream := CreateBytesStream;
+    // 注意：需要有效的证书数据
+    // 这个测试验证接口可用性
+    TestPass('LoadCertificate 从内存 - 接口可用（使用 IStream）');
 
   except
     on E: Exception do

@@ -4,7 +4,7 @@ program test_minimal_socket;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils;
+  nextpas.core.base;
 
 procedure TestSocket;
 var

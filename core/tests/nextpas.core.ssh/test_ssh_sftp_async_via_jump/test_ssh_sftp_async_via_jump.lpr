@@ -1,7 +1,8 @@
 program test_ssh_sftp_async_via_jump;
 {$I nextpas.core.settings.inc}
 uses cthreads,
-  nextpas.core.bytes.ops, Classes, SysUtils, nextpas.core.system.sysutils, nextpas.core.io.intf,
+  nextpas.core.bytes.ops, Classes, SysUtils, nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception,
+  nextpas.core.text.conv, nextpas.core.io.intf,
   nextpas.core.net, nextpas.core.net.tcp, nextpas.core.async.loop, nextpas.core.ssh.base, nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer, nextpas.core.ssh.cipher, nextpas.core.ssh.kex,
   nextpas.core.ssh.kex.curve25519, nextpas.core.ssh.hostkey, nextpas.core.ssh.keys, nextpas.core.ssh.auth,
@@ -64,7 +65,7 @@ type PSftpTargetScenario=^TSftpTargetScenario;
   private FStream:IReadWriteCloser; FPipe:TMemPipeEnd; FSc:PSftpTargetScenario; FClientChannelId:UInt32; FRecvSeq,FSendSeq:UInt32; FRecv:ISshPacketReceiver; FSend:ISshPacketSender; FEncrypted:Boolean; FSessionId:TBytes; FBuf:TBytes; FSftpHandle:TBytes; FSftpDirPos:Integer;
     procedure Fail(const AMsg:string); procedure SendPlainPayload(const APayload:TBytes); function RecvRaw(out AData:TBytes; ATimeoutMs:Integer):Boolean; function ReadPlainFrameBody:TBytes; function ReadAnyPayload:TBytes; procedure ReplyPayload(const APayload:TBytes); procedure Handshake; procedure ServeApp; procedure HandleSftpPacket(const APkt:TBytes); procedure SendSftpReply(const APkt:TBytes);
   public constructor Create(AStream:IReadWriteCloser; ASc:PSftpTargetScenario); procedure SetPipe(APipe:TMemPipeEnd); procedure Run; end;
-constructor TSftpTargetServer.Create(AStream:IReadWriteCloser; ASc:PSftpTargetScenario); begin inherited Create; FStream:=AStream; FSc:=ASc; FEncrypted:=False; SetLength(FBuf,0); FSftpHandle:=BytesOf('hdl1'); end;
+constructor TSftpTargetServer.Create(AStream:IReadWriteCloser; ASc:PSftpTargetScenario); begin inherited Create; FStream:=AStream; FSc:=ASc; FEncrypted:=False; SetLength(FBuf,0); FSftpHandle:=StringToUTF8Bytes('hdl1'); end;
 procedure TSftpTargetServer.SetPipe(APipe:TMemPipeEnd); begin FPipe:=APipe; end;
 procedure TSftpTargetServer.Fail(const AMsg:string); begin if not FSc^.Failed then begin FSc^.Failed:=True; FSc^.FailMsg:=AMsg; end; end;
 procedure TSftpTargetServer.SendPlainPayload(const APayload:TBytes); var LW:TsshWriter; LPad,I:Integer; LWire:TBytes; begin LPad:=8-((4+1+Length(APayload)) mod 8); if LPad<SSH_MIN_PADDING then Inc(LPad,8); LW:=TsshWriter.Create(64+Length(APayload)); try LW.PutUInt32(UInt32(1+Length(APayload)+SizeUInt(LPad))); LW.PutByte(Byte(LPad)); LW.PutRaw(APayload); for I:=1 to LPad do LW.PutByte($30); LWire:=LW.ToBytes; FStream.Write(LWire[0], SizeUInt(Length(LWire))); finally LW.Free; end; end;
@@ -116,7 +117,7 @@ var LJumpListener:ITcpListener; LJumpPort:Word; LFwdA,LFwdB:TMemPipeEnd; LFwdSha
 begin
   Result:=False; AErrKind:=sekIO; APathRes:=''; AData:=nil; AAttrs:=Default(TSftpAttrs);
   New(LScJump); LScJump^:=Default(TSshJumpScenario); LScJump^.HostSeed:=AJumpSeed; LScJump^.AcceptUser:=AJumpUser; LScJump^.AcceptPassword:=AJumpPass; LScJump^.PasswordOk:=AJumpPassOk;
-  New(LScTarget); LScTarget^:=Default(TSftpTargetScenario); LScTarget^.HostSeed:=ATargetSeed; LScTarget^.AcceptUser:=ATargetUser; LScTarget^.AcceptPassword:=ATargetPass; LScTarget^.PasswordOk:=ATargetPassOk; LScTarget^.FileData:=BytesOf('hello sftp via jump');
+  New(LScTarget); LScTarget^:=Default(TSftpTargetScenario); LScTarget^.HostSeed:=ATargetSeed; LScTarget^.AcceptUser:=ATargetUser; LScTarget^.AcceptPassword:=ATargetPass; LScTarget^.PasswordOk:=ATargetPassOk; LScTarget^.FileData:=StringToUTF8Bytes('hello sftp via jump');
   MakePipe(LFwdA, LFwdB, LFwdShared); LScJump^.FwdPipe:=LFwdA;
   LJumpListener:=NetTcpListen('127.0.0.1',0); LJumpPort:=LJumpListener.LocalAddr.Port;
   LTargetThread:=TThread.CreateAnonymousThread(procedure var Srv:TSftpTargetServer; begin Srv:=TSftpTargetServer.Create(LFwdB as IReadWriteCloser, LScTarget); Srv.SetPipe(LFwdB); try Srv.Run; finally Srv.Free; end; end);

@@ -16,12 +16,13 @@ program test_transformation_methods;
  *}
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.json.types,
   nextpas.core.json.parser,
   nextpas.core.json.value,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,

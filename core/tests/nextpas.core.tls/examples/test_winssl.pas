@@ -3,7 +3,10 @@ program test_winssl_debug;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.platform.socket,
+  nextpas.core.platform.socket,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.time,
   nextpas.core.tls.base, nextpas.core.tls.winssl.lib;
 
 const
@@ -186,7 +189,7 @@ begin
                 WriteLn('  No data after 10 attempts, assuming connection closed');
                 Break;
               end;
-              Sleep(200);  // Wait a bit before retrying
+              MsSleep(200);  // Wait a bit before retrying
               Continue;
             end
             else

@@ -8,8 +8,14 @@ program test_real_https_connection;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.platform.socket,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.time,
+  nextpas.core.fs,
+  nextpas.core.os.env,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.loader,
@@ -156,7 +162,7 @@ begin
                'Connection: close' + #13#10 +
                #13#10;
 
-    RequestBytes := BytesOf(Request);
+    RequestBytes := StringToUTF8Bytes(Request);
     BytesWritten := Conn.Write(RequestBytes[0], Length(RequestBytes));
     if BytesWritten <= 0 then
     begin
@@ -313,7 +319,7 @@ begin
         CertInfo := PeerCert.GetInfo;
         Runner.Check('Get certificate subject', CertInfo.Subject <> '', 'Subject: ' + CertInfo.Subject);
         Runner.Check('Get certificate issuer', CertInfo.Issuer <> '', 'Issuer: ' + CertInfo.Issuer);
-        Runner.Check('Certificate validity', CertInfo.NotAfter > Now, 'Valid until: ' + DateTimeToStr(CertInfo.NotAfter));
+        Runner.Check('Certificate validity', CertInfo.NotAfter > DateTimeNow, 'Valid until: ' + DateTimeToStr(CertInfo.NotAfter));
       end
       else
         Runner.Check('Get server certificate', False, 'Cannot get peer certificate');

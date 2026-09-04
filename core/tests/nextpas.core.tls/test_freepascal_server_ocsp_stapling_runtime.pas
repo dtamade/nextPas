@@ -3,7 +3,13 @@ program test_freepascal_server_ocsp_stapling_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.factory,
@@ -18,8 +24,6 @@ uses
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.crypto.hash,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 procedure Fail(const AMessage: string);
 begin
@@ -105,22 +109,12 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  Result := nil;
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 type
-  TOfflineStaplingObserveClientStream = class(TStream)
+  TOfflineStaplingObserveClientStream = class(TInterfacedObject, IStream)
   private
     FRequestStapling: Boolean;
     FReadBuffer: TBytes;
@@ -142,9 +136,13 @@ type
   public
     constructor Create(ARequestStapling: Boolean);
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
 
     property ObservedCertificateMessage: Boolean read FObservedCertificateMessage;
     property ObservedCertificateInfo: TTLS13ServerCertificateInfo read FObservedCertificateInfo;
@@ -357,33 +355,33 @@ begin
   AppendHandshakeBytes(FTranscriptData, LClientFinished);
 end;
 
-function TOfflineStaplingObserveClientStream.Read(var Buffer; Count: Longint): Longint;
+function TOfflineStaplingObserveClientStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TOfflineStaplingObserveClientStream.Write(const Buffer; Count: Longint): Longint;
+function TOfflineStaplingObserveClientStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   case FWriteStage of
     0:
@@ -398,17 +396,36 @@ begin
       end;
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TOfflineStaplingObserveClientStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TOfflineStaplingObserveClientStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TOfflineStaplingObserveClientStream.Close;
+begin
+end;
+
+function TOfflineStaplingObserveClientStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TOfflineStaplingObserveClientStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TOfflineStaplingObserveClientStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 function NewServerContext: ISSLContext;
@@ -457,23 +474,19 @@ begin
   LStaplingContext.SetServerStapledOCSPResponse(LFixture);
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Server connection should be created');
-    AssertTrue(LConn.Accept, 'Server accept should succeed when stapled response is configured');
-    AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
-    AssertTrue(
-      LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
-      'Configured stapled response should be emitted on the leaf CertificateEntry when requested'
-    );
-    AssertBytesEqual(
-      LFixture,
-      LStream.ObservedCertificateInfo.LeafOCSPStapledResponse,
-      'Emitted stapled response bytes should match configured material'
-    );
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Server connection should be created');
+  AssertTrue(LConn.Accept, 'Server accept should succeed when stapled response is configured');
+  AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
+  AssertTrue(
+    LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
+    'Configured stapled response should be emitted on the leaf CertificateEntry when requested'
+  );
+  AssertBytesEqual(
+    LFixture,
+    LStream.ObservedCertificateInfo.LeafOCSPStapledResponse,
+    'Emitted stapled response bytes should match configured material'
+  );
 end;
 
 procedure TestServerDoesNotEmitStapledOCSPWhenClientDidNotRequestIt;
@@ -494,18 +507,14 @@ begin
   LStaplingContext.SetServerStapledOCSPResponse(LFixture);
 
   LStream := TOfflineStaplingObserveClientStream.Create(False);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Server connection should be created');
-    AssertTrue(LConn.Accept, 'Server accept should succeed without client status_request');
-    AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
-    AssertTrue(
-      not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
-      'Server must not emit stapled response when client did not request status_request'
-    );
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Server connection should be created');
+  AssertTrue(LConn.Accept, 'Server accept should succeed without client status_request');
+  AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
+  AssertTrue(
+    not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
+    'Server must not emit stapled response when client did not request status_request'
+  );
 end;
 
 procedure TestServerKeepsCertificateEntryUnchangedWithoutStapledMaterial;
@@ -516,18 +525,14 @@ var
 begin
   LCtx := NewServerContext;
   LStream := TOfflineStaplingObserveClientStream.Create(True);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Server connection should be created');
-    AssertTrue(LConn.Accept, 'Server accept should succeed without configured stapled response');
-    AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
-    AssertTrue(
-      not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
-      'Server should keep CertificateEntry unchanged when stapled response is not configured'
-    );
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Server connection should be created');
+  AssertTrue(LConn.Accept, 'Server accept should succeed without configured stapled response');
+  AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
+  AssertTrue(
+    not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
+    'Server should keep CertificateEntry unchanged when stapled response is not configured'
+  );
 end;
 
 procedure TestBuilderBuildServerLoadsConfiguredStapledOCSPFile;
@@ -557,23 +562,19 @@ begin
   );
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Builder-built server connection should be created');
-    AssertTrue(LConn.Accept, 'Builder-built server accept should succeed with stapled response file');
-    AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
-    AssertTrue(
-      LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
-      'Builder-driven server context should emit stapled response when requested'
-    );
-    AssertBytesEqual(
-      LFixture,
-      LStream.ObservedCertificateInfo.LeafOCSPStapledResponse,
-      'Builder-driven emitted stapled response bytes should match configured file contents'
-    );
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Builder-built server connection should be created');
+  AssertTrue(LConn.Accept, 'Builder-built server accept should succeed with stapled response file');
+  AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
+  AssertTrue(
+    LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
+    'Builder-driven server context should emit stapled response when requested'
+  );
+  AssertBytesEqual(
+    LFixture,
+    LStream.ObservedCertificateInfo.LeafOCSPStapledResponse,
+    'Builder-driven emitted stapled response bytes should match configured file contents'
+  );
 end;
 
 begin

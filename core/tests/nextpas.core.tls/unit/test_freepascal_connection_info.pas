@@ -3,8 +3,11 @@ program test_freepascal_connection_info;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  nextpas.core.thread.init, nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.thread.init,
+  nextpas.core.platform.socket,
+  nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib;
@@ -121,6 +124,8 @@ var
   LLib: ISSLLibrary;
   LServerCtx, LClientCtx: ISSLContext;
   LConn: ISSLConnection;
+  LCT: ISSLCertificateTransparency;
+  LCTV: ISSLCertificateTransparencyValidation;
   LSession: ISSLSession;
   LPeerCert: ISSLCertificate;
   LChain: TSSLCertificateArray;
@@ -200,7 +205,7 @@ begin
 
   // CT/SCT (FreePascal backend implements ISSLCertificateTransparency)
   WriteLn('--- CT/SCT ---');
-  if Supports(LConn, ISSLCertificateTransparency) then
+  if Supports(LConn, ISSLCertificateTransparency, LCT) then
   begin
     Check(True, 'Connection supports ISSLCertificateTransparency');
     Check((LConn as ISSLCertificateTransparency).GetSignedCertificateTimestampCount >= 0,
@@ -212,7 +217,7 @@ begin
     Check(True, 'CT interface not available (acceptable)');
 
   // CT Validation
-  if Supports(LConn, ISSLCertificateTransparencyValidation) then
+  if Supports(LConn, ISSLCertificateTransparencyValidation, LCTV) then
   begin
     Check(True, 'Connection supports ISSLCertificateTransparencyValidation');
     Check((LConn as ISSLCertificateTransparencyValidation).GetCertificateTransparencyValidationStatus <> '',

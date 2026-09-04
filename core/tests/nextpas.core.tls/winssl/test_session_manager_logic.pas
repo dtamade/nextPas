@@ -16,7 +16,7 @@ program test_session_manager_logic;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.system.classes, SyncObjs;
+  nextpas.core.text.conv, nextpas.core.time, nextpas.core.system.classes, SyncObjs;
 
 type
   TSSLProtocolVersion = (
@@ -79,7 +79,7 @@ constructor TMockSession.Create(const AID: string; ATimeout: Integer);
 begin
   inherited Create;
   FID := AID;
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
   FTimeout := ATimeout;
   FProtocolVersion := sslProtocolTLS12;
   FCipherName := 'TLS_AES_128_GCM_SHA256';
@@ -92,7 +92,7 @@ end;
 
 function TMockSession.IsValid: Boolean;
 begin
-  Result := (FID <> '') and ((Now - FCreationTime) * 86400 < FTimeout);
+  Result := (FID <> '') and ((DateTimeNow - FCreationTime) * 86400 < FTimeout);
 end;
 
 function TMockSession.GetProtocolVersion: TSSLProtocolVersion;
@@ -360,7 +360,7 @@ begin
 
     // 等待 2 秒让 session2 过期
     WriteLn('    等待 2 秒让会话过期...');
-    Sleep(2000);
+    MsSleep(2000);
 
     // 清理过期会话
     LManager.CleanupExpired;
@@ -476,7 +476,7 @@ begin
 
     // 等待 2 秒让会话过期
     WriteLn('    等待 2 秒让会话过期...');
-    Sleep(2000);
+    MsSleep(2000);
 
     // 尝试获取过期会话(应该自动清理)
     LSession := LManager.GetSession('session1');

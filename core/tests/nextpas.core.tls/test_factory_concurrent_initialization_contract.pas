@@ -6,8 +6,11 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs,
-  nextpas.core.system,
+  Classes, SyncObjs,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.factory;
 
@@ -350,7 +353,7 @@ begin
       'First GetLibrary call entered Initialize');
 
     LThread2.Start;
-    Sleep(200);
+    MsSleep(200);
     GAllowInitializeFinishEvent.SetEvent;
 
     WaitForThreadSuccess(LThread1, 'First GetLibrary worker');
@@ -388,7 +391,7 @@ begin
       'First IsLibraryAvailable call entered Initialize');
 
     LThread2.Start;
-    Sleep(200);
+    MsSleep(200);
     GAllowInitializeFinishEvent.SetEvent;
 
     WaitForThreadSuccess(LThread1, 'First IsLibraryAvailable worker');

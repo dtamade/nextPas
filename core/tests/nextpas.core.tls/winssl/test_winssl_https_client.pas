@@ -4,7 +4,9 @@ program test_winssl_https_client;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.base.utils,
 
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;

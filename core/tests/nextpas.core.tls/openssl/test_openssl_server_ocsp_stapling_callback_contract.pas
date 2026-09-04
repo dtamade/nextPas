@@ -4,8 +4,11 @@ program test_openssl_server_ocsp_stapling_callback_contract;
 
 uses
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
   ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
@@ -76,20 +79,8 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  Result := nil;
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
-  try
-    if LStream.Size > 0 then
-    begin
-      SetLength(Result, LStream.Size);
-      LStream.ReadBuffer(Result[0], LStream.Size);
-    end;
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function BytesEqual(const ALeft, ARight: TBytes): Boolean;

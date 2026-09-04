@@ -11,9 +11,9 @@ program test_backend_comparison;
 uses
   nextpas.core.tls.openssl.backed,
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
-  StrUtils,
+  nextpas.core.exception,
+  nextpas.core.time,
+  nextpas.core.text.utils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
@@ -631,7 +631,7 @@ begin
     end;
 
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
-    WriteLn('Test Date: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+    WriteLn('Test Date: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
 
     {$IFDEF WINDOWS}
     if not InitWinsock then

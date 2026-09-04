@@ -4,8 +4,7 @@ program test_wolfssl_connection_session_reused_contract;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
-  nextpas.core.io.stream_adapter,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,
@@ -119,7 +118,7 @@ var
   LNativeAccess: ISSLNativeHandleAccess;
   LNativeHandle: Pointer;
   LInfo: TSSLConnectionInfo;
-  LStream: TMemoryStream;
+  LStream: IStream;
   LOriginalD2I: TwolfSSL_d2i_SSL_SESSION;
   LOriginalSessionFree: TwolfSSL_SESSION_free;
   LOriginalSessionGetId: TwolfSSL_SESSION_get_id;
@@ -148,7 +147,7 @@ begin
     Exit;
   end;
 
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   LResumption := nil;
   LConnInfo := nil;
@@ -163,7 +162,7 @@ begin
   LOriginalSetSession := wolfSSL_set_session;
   LOriginalSessionReused := wolfSSL_session_reused;
   try
-    LConn := TWolfSSLConnection.Create(LCtx, TStreamWrapper.Create(LStream, False));
+    LConn := TWolfSSLConnection.Create(LCtx, LStream);
     AssertTrue('WolfSSL connection exposes ISSLSessionResumption owner path',
       Supports(LConn, ISSLSessionResumption, LResumption));
     AssertTrue('WolfSSL connection exposes ISSLConnectionInfo owner path',
@@ -240,7 +239,6 @@ begin
     if LLib <> nil then
       LLib.Finalize;
     LLib := nil;
-    LStream.Free;
   end;
 end;
 

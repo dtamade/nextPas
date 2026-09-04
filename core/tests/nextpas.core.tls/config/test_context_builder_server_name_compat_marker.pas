@@ -6,12 +6,12 @@ program test_context_builder_server_name_compat_marker;
   marker coverage for the compatibility-only builder surface. }
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.json.types,
   nextpas.core.json.parser,
   nextpas.core.json.value,
+  nextpas.core.exception,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder;
 

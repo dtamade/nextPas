@@ -4,8 +4,8 @@ program test_openssl_https;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.platform.socket,
+  nextpas.core.text.format,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed;
 
@@ -155,7 +155,7 @@ begin
   TestOpenSSLRealHTTPS;
 
   WriteLn;
-  WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GPass, GFail]));
   if GFail > 0 then
     Halt(1);
 end.

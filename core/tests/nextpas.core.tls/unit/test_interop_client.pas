@@ -3,8 +3,9 @@ program test_interop_client;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.thread.init, nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.thread.init,
+  nextpas.core.platform.socket,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib,
   nextpas.core.tls.freepascal.context;

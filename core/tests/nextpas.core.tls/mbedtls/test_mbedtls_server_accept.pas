@@ -21,7 +21,9 @@ uses
   nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
+  nextpas.core.exception,
+  nextpas.core.time,
+  nextpas.core.fs,
   nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
@@ -190,7 +192,7 @@ begin
     // Start server thread
     LServer := TServerThread.Create(TEST_PORT, GLib);
     LServer.Start;
-    Sleep(2000);  // Give server time to start and listen
+    MsSleep(2000);  // Give server time to start and listen
 
     WriteLn('[Client] Starting...');
 

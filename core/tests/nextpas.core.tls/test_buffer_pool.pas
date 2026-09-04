@@ -6,7 +6,9 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs, nextpas.core.time, Math,
+  Classes, Math,
+  nextpas.core.base.utils,
+  nextpas.core.time,
   nextpas.core.tls.buffer.pool;
 
 const
@@ -137,7 +139,7 @@ begin
   WriteLn('=== Test 3: Performance Comparison ===');
 
   // 池化分配
-  StartTime := Now;
+  StartTime := DateTimeNow;
   for I := 1 to ITERATIONS do
   begin
     Buf := AcquireBuffer(4096);
@@ -145,11 +147,11 @@ begin
     Buf^.Write(I, SizeOf(I));
     ReleaseBuffer(Buf);
   end;
-  EndTime := Now;
+  EndTime := DateTimeNow;
   PoolTime := DateTimeMillisecondsBetween(EndTime, StartTime);
 
   // 直接分配
-  StartTime := Now;
+  StartTime := DateTimeNow;
   for I := 1 to ITERATIONS do
   begin
     GetMem(DirectBuf, 4096);
@@ -157,7 +159,7 @@ begin
     Move(I, DirectBuf^, SizeOf(I));
     FreeMem(DirectBuf);
   end;
-  EndTime := Now;
+  EndTime := DateTimeNow;
   DirectTime := DateTimeMillisecondsBetween(EndTime, StartTime);
 
   WriteLn('  Iterations: ', ITERATIONS);
@@ -231,7 +233,7 @@ begin
   for I := 0 to THREAD_COUNT - 1 do
     Threads[I] := TConcurrentTestThread.Create(ITERATIONS div THREAD_COUNT);
 
-  StartTime := Now;
+  StartTime := DateTimeNow;
 
   // 启动所有线程
   for I := 0 to THREAD_COUNT - 1 do
@@ -241,7 +243,7 @@ begin
   for I := 0 to THREAD_COUNT - 1 do
     Threads[I].WaitFor;
 
-  EndTime := Now;
+  EndTime := DateTimeNow;
 
   // 检查所有线程完成
   AllCompleted := True;

@@ -30,7 +30,10 @@ uses
   nextpas.core.tls.winssl.lib,
   nextpas.core.tls.winssl.certstore,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.os.env,
   nextpas.core.tls.base;
 
 var

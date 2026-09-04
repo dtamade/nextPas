@@ -5,7 +5,9 @@ program test_winssl_error_mapping_online;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
+  nextpas.core.os.env,
 
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib,

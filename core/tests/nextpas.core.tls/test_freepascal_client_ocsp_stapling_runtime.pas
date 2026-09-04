@@ -3,7 +3,13 @@ program test_freepascal_client_ocsp_stapling_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
   nextpas.core.time,
   nextpas.core.tls.asn1,
   nextpas.core.tls.base,
@@ -23,8 +29,6 @@ uses
   nextpas.core.tls.tls13.servercertverify,
   nextpas.core.crypto.hash,
   nextpas.core.tls.x509,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 type
   TServerMaterial = record
@@ -119,18 +123,8 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  Result := nil;
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function BytesToAnsiString(const AData: TBytes): AnsiString;
@@ -168,8 +162,8 @@ begin
   LOptions.CommonName := ACommonName;
   LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
-  LOptions.NotBefore := Now - 1;
-  LOptions.NotAfter := Now + 30;
+  LOptions.NotBefore := DateTimeNow - 1;
+  LOptions.NotAfter := DateTimeNow + 30;
   SetLength(LOptions.SubjectAltNames, 0);
   try
     for I := Low(ASANs) to High(ASANs) do
@@ -433,7 +427,7 @@ begin
 end;
 
 type
-  TScriptedOCSPServerStream = class(TStream)
+  TScriptedOCSPServerStream = class(TInterfacedObject, IStream)
   private
     FCipherSuite: Word;
     FReadBuffer: TBytes;
@@ -454,9 +448,13 @@ type
   public
     constructor Create(const ACertificateBlob, APrivateKeyBlob, AStapledOCSPResponse: TBytes);
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
 
     property ObservedStatusRequest: Boolean read FObservedStatusRequest;
   end;
@@ -663,34 +661,34 @@ begin
   FWriteStage := 2;
 end;
 
-function TScriptedOCSPServerStream.Read(var Buffer; Count: Longint): Longint;
+function TScriptedOCSPServerStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TScriptedOCSPServerStream.Write(const Buffer; Count: Longint): Longint;
+function TScriptedOCSPServerStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
   LOffset, LRecLen: Integer;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   case FWriteStage of
     0: HandleClientHello(LData);
@@ -710,17 +708,36 @@ begin
       end;
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TScriptedOCSPServerStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TScriptedOCSPServerStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TScriptedOCSPServerStream.Close;
+begin
+end;
+
+function TScriptedOCSPServerStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TScriptedOCSPServerStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TScriptedOCSPServerStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 function NewClientContextWithVerifyMode(
@@ -768,30 +785,28 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LOCSP: ISSLOCSPStapling;
-  LStream: TScriptedOCSPServerStream;
+  LStream: IStream;
+  LScripted: TScriptedOCSPServerStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LCtx := NewClientContext(True, False);
-  LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, nil);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Optional OCSP connection should be created');
-    AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, nil);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Optional OCSP connection should be created');
+  AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Optional OCSP stapling without stapled response should still connect');
-    AssertTrue(LStream.ObservedStatusRequest,
-      'ClientHello should include status_request when ssoEnableOCSPStapling is enabled');
-    AssertTrue(not LOCSP.GetOCSPStaplingEnabled,
-      'OCSP stapling should report disabled when no stapled response is present');
-    AssertEqualsInt(0, Length(LOCSP.GetOCSPResponse),
-      'Missing stapled response should surface empty OCSP response bytes');
-    AssertTrue(not LOCSP.IsOCSPResponseVerified,
-      'Missing stapled response should not verify');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Optional OCSP stapling without stapled response should still connect');
+  AssertTrue(LScripted.ObservedStatusRequest,
+    'ClientHello should include status_request when ssoEnableOCSPStapling is enabled');
+  AssertTrue(not LOCSP.GetOCSPStaplingEnabled,
+    'OCSP stapling should report disabled when no stapled response is present');
+  AssertEqualsInt(0, Length(LOCSP.GetOCSPResponse),
+    'Missing stapled response should surface empty OCSP response bytes');
+  AssertTrue(not LOCSP.IsOCSPResponseVerified,
+    'Missing stapled response should not verify');
 end;
 
 procedure TestOptionalStapledResponseSurfacesRawBytes;
@@ -800,34 +815,32 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LOCSP: ISSLOCSPStapling;
-  LStream: TScriptedOCSPServerStream;
+  LStream: IStream;
+  LScripted: TScriptedOCSPServerStream;
   LFixture: TBytes;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LFixture := LoadOCSPFixture('fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
   LCtx := NewClientContext(True, False);
-  LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Optional stapled-response connection should be created');
-    AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Optional stapled-response connection should be created');
+  AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Optional stapled response should not fail the handshake');
-    AssertTrue(LStream.ObservedStatusRequest,
-      'ClientHello should include status_request when stapled response is expected');
-    AssertTrue(LOCSP.GetOCSPStaplingEnabled,
-      'Present stapled response should surface OCSP stapling as enabled');
-    AssertBytesEqual(LFixture, LOCSP.GetOCSPResponse,
-      'Stapled OCSP response bytes should be surfaced back to the caller');
-    AssertTrue(not LOCSP.IsOCSPResponseVerified,
-      'Successful/basic fixture without full verification context should not verify');
-    AssertTrue(Trim(LOCSP.GetOCSPResponseStatus) <> '',
-      'Stapled OCSP response should expose a non-empty status string');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Optional stapled response should not fail the handshake');
+  AssertTrue(LScripted.ObservedStatusRequest,
+    'ClientHello should include status_request when stapled response is expected');
+  AssertTrue(LOCSP.GetOCSPStaplingEnabled,
+    'Present stapled response should surface OCSP stapling as enabled');
+  AssertBytesEqual(LFixture, LOCSP.GetOCSPResponse,
+    'Stapled OCSP response bytes should be surfaced back to the caller');
+  AssertTrue(not LOCSP.IsOCSPResponseVerified,
+    'Successful/basic fixture without full verification context should not verify');
+  AssertTrue(Trim(LOCSP.GetOCSPResponseStatus) <> '',
+    'Stapled OCSP response should expose a non-empty status string');
 end;
 
 procedure TestRequiredStaplingFailsWithoutResponse;
@@ -835,28 +848,26 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedOCSPServerStream;
+  LStream: IStream;
+  LScripted: TScriptedOCSPServerStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LCtx := NewClientContext(True, True);
-  LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, nil);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Required-stapling connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, nil);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Required-stapling connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Required stapling should fail-closed when server omits stapled OCSP response');
-    AssertTrue(LStream.ObservedStatusRequest,
-      'Required stapling path should still request status_request');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'ocsp') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'stapling'),
-      'Required stapling failure should mention OCSP/stapling'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Required stapling should fail-closed when server omits stapled OCSP response');
+  AssertTrue(LScripted.ObservedStatusRequest,
+    'Required stapling path should still request status_request');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'ocsp') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'stapling'),
+    'Required stapling failure should mention OCSP/stapling'
+  );
 end;
 
 procedure TestRequiredStaplingFailsWhenFixtureDoesNotVerify;
@@ -864,30 +875,28 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedOCSPServerStream;
+  LStream: IStream;
+  LScripted: TScriptedOCSPServerStream;
   LFixture: TBytes;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LFixture := LoadOCSPFixture('fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
   LCtx := NewClientContext(True, True);
-  LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Required stapled-response connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Required stapled-response connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Required stapling should fail-closed when stapled response is not accepted by the bounded verifier');
-    AssertTrue(LStream.ObservedStatusRequest,
-      'Required stapling path should request status_request before failure');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'ocsp') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'stapling'),
-      'Unaccepted stapled response failure should mention OCSP/stapling'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Required stapling should fail-closed when stapled response is not accepted by the bounded verifier');
+  AssertTrue(LScripted.ObservedStatusRequest,
+    'Required stapling path should request status_request before failure');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'ocsp') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'stapling'),
+    'Unaccepted stapled response failure should mention OCSP/stapling'
+  );
 end;
 
 procedure TestOptionalStapledGoodStatusWithoutCryptographicProofStaysUnverified;
@@ -896,44 +905,42 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LOCSP: ISSLOCSPStapling;
-  LStream: TScriptedOCSPServerStream;
+  LStream: IStream;
+  LScripted: TScriptedOCSPServerStream;
   LFixture: TBytes;
   LStatus: string;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LFixture := BuildOCSPResponseForCertificateBlob(LMaterial.CertificateBlob, ocspGood);
   LCtx := NewClientContext(True, False);
-  LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Optional good-status stapled-response connection should be created');
-    AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Optional good-status stapled-response connection should be created');
+  AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Optional stapled response should keep the handshake alive even when cryptographic verification fails');
-    AssertTrue(LStream.ObservedStatusRequest,
-      'Optional good-status stapled-response path should request status_request');
-    AssertTrue(LOCSP.GetOCSPStaplingEnabled,
-      'Present stapled response should surface OCSP stapling as enabled');
-    AssertBytesEqual(LFixture, LOCSP.GetOCSPResponse,
-      'Good-status stapled response bytes should be surfaced back to the caller');
-    AssertTrue(not LOCSP.IsOCSPResponseVerified,
-      'Good-status stapled response without cryptographic proof must not be marked as verified');
-    LStatus := Trim(LOCSP.GetOCSPResponseStatus);
-    AssertTrue(LStatus <> '', 'Cryptographic stapling failure should surface a non-empty status string');
-    AssertTrue(not SameText(LStatus, 'Verified'),
-      'Good-status stapled response without cryptographic proof must not surface as plain Verified');
-    AssertTrue(
-      ContainsTextInsensitive(LStatus, 'verification') or
-      ContainsTextInsensitive(LStatus, 'signature') or
-      ContainsTextInsensitive(LStatus, 'responder') or
-      ContainsTextInsensitive(LStatus, 'ocsp'),
-      'Cryptographic stapling failure should be reflected in the surfaced OCSP status'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Optional stapled response should keep the handshake alive even when cryptographic verification fails');
+  AssertTrue(LScripted.ObservedStatusRequest,
+    'Optional good-status stapled-response path should request status_request');
+  AssertTrue(LOCSP.GetOCSPStaplingEnabled,
+    'Present stapled response should surface OCSP stapling as enabled');
+  AssertBytesEqual(LFixture, LOCSP.GetOCSPResponse,
+    'Good-status stapled response bytes should be surfaced back to the caller');
+  AssertTrue(not LOCSP.IsOCSPResponseVerified,
+    'Good-status stapled response without cryptographic proof must not be marked as verified');
+  LStatus := Trim(LOCSP.GetOCSPResponseStatus);
+  AssertTrue(LStatus <> '', 'Cryptographic stapling failure should surface a non-empty status string');
+  AssertTrue(not SameText(LStatus, 'Verified'),
+    'Good-status stapled response without cryptographic proof must not surface as plain Verified');
+  AssertTrue(
+    ContainsTextInsensitive(LStatus, 'verification') or
+    ContainsTextInsensitive(LStatus, 'signature') or
+    ContainsTextInsensitive(LStatus, 'responder') or
+    ContainsTextInsensitive(LStatus, 'ocsp'),
+    'Cryptographic stapling failure should be reflected in the surfaced OCSP status'
+  );
 end;
 
 procedure TestRequiredStaplingFailsWhenGoodStatusStapledResponseLacksCryptographicProof;
@@ -941,32 +948,30 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedOCSPServerStream;
+  LStream: IStream;
+  LScripted: TScriptedOCSPServerStream;
   LFixture: TBytes;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LFixture := BuildOCSPResponseForCertificateBlob(LMaterial.CertificateBlob, ocspGood);
   LCtx := NewClientContext(True, True);
-  LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Required good-status stapled-response connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Required good-status stapled-response connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Required stapling should fail-closed when a good-status stapled response lacks cryptographic proof');
-    AssertTrue(LStream.ObservedStatusRequest,
-      'Required good-status stapled-response path should request status_request before failure');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'ocsp') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'stapling') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'signature') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'verification'),
-      'Cryptographic stapling failure should mention OCSP/stapling/signature/verification'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Required stapling should fail-closed when a good-status stapled response lacks cryptographic proof');
+  AssertTrue(LScripted.ObservedStatusRequest,
+    'Required good-status stapled-response path should request status_request before failure');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'ocsp') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'stapling') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'signature') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'verification'),
+    'Cryptographic stapling failure should mention OCSP/stapling/signature/verification'
+  );
 end;
 
 procedure TestOptionalStapledResponseWithUnknownCertStatusSurfacesFailure;
@@ -975,42 +980,40 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LOCSP: ISSLOCSPStapling;
-  LStream: TScriptedOCSPServerStream;
+  LStream: IStream;
+  LScripted: TScriptedOCSPServerStream;
   LFixture: TBytes;
   LStatus: string;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LFixture := BuildOCSPResponseForCertificateBlob(LMaterial.CertificateBlob, ocspUnknown);
   LCtx := NewClientContext(True, False);
-  LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Optional unknown-status stapled-response connection should be created');
-    AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Optional unknown-status stapled-response connection should be created');
+  AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Optional stapled response with unknown cert status should still connect');
-    AssertTrue(LStream.ObservedStatusRequest,
-      'Optional unknown-status stapled-response path should request status_request');
-    AssertTrue(LOCSP.GetOCSPStaplingEnabled,
-      'Present stapled response should still surface OCSP stapling as enabled');
-    AssertBytesEqual(LFixture, LOCSP.GetOCSPResponse,
-      'Unknown-status stapled response bytes should be surfaced back to the caller');
-    AssertTrue(not LOCSP.IsOCSPResponseVerified,
-      'Unknown cert status must not be marked as verified');
-    LStatus := Trim(LOCSP.GetOCSPResponseStatus);
-    AssertTrue(LStatus <> '', 'Unknown cert status should surface a non-empty status string');
-    AssertTrue(not SameText(LStatus, 'Verified'),
-      'Unknown cert status must not surface as plain Verified');
-    AssertTrue(
-      ContainsTextInsensitive(LStatus, 'unknown') or
-      ContainsTextInsensitive(LStatus, 'verification failed'),
-      'Unknown cert status should be reflected in the surfaced OCSP status'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Optional stapled response with unknown cert status should still connect');
+  AssertTrue(LScripted.ObservedStatusRequest,
+    'Optional unknown-status stapled-response path should request status_request');
+  AssertTrue(LOCSP.GetOCSPStaplingEnabled,
+    'Present stapled response should still surface OCSP stapling as enabled');
+  AssertBytesEqual(LFixture, LOCSP.GetOCSPResponse,
+    'Unknown-status stapled response bytes should be surfaced back to the caller');
+  AssertTrue(not LOCSP.IsOCSPResponseVerified,
+    'Unknown cert status must not be marked as verified');
+  LStatus := Trim(LOCSP.GetOCSPResponseStatus);
+  AssertTrue(LStatus <> '', 'Unknown cert status should surface a non-empty status string');
+  AssertTrue(not SameText(LStatus, 'Verified'),
+    'Unknown cert status must not surface as plain Verified');
+  AssertTrue(
+    ContainsTextInsensitive(LStatus, 'unknown') or
+    ContainsTextInsensitive(LStatus, 'verification failed'),
+    'Unknown cert status should be reflected in the surfaced OCSP status'
+  );
 end;
 
 procedure TestRequiredStaplingFailsWhenStapledResponseCertStatusIsUnknown;
@@ -1018,31 +1021,29 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedOCSPServerStream;
+  LStream: IStream;
+  LScripted: TScriptedOCSPServerStream;
   LFixture: TBytes;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LFixture := BuildOCSPResponseForCertificateBlob(LMaterial.CertificateBlob, ocspUnknown);
   LCtx := NewClientContext(True, True);
-  LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Required unknown-status stapled-response connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Required unknown-status stapled-response connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Required stapling should fail-closed when stapled response cert status is unknown');
-    AssertTrue(LStream.ObservedStatusRequest,
-      'Required unknown-status stapled-response path should request status_request before failure');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'ocsp') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'stapling') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'unknown'),
-      'Unknown cert-status failure should mention OCSP/stapling/unknown'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Required stapling should fail-closed when stapled response cert status is unknown');
+  AssertTrue(LScripted.ObservedStatusRequest,
+    'Required unknown-status stapled-response path should request status_request before failure');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'ocsp') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'stapling') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'unknown'),
+    'Unknown cert-status failure should mention OCSP/stapling/unknown'
+  );
 end;
 
 procedure TestRequiredStaplingIsIgnoredWhenVerifyPeerDisabled;
@@ -1051,28 +1052,26 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LOCSP: ISSLOCSPStapling;
-  LStream: TScriptedOCSPServerStream;
+  LStream: IStream;
+  LScripted: TScriptedOCSPServerStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LCtx := NewClientContextWithVerifyMode(True, True, []);
-  LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, nil);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Verify-none required-stapling connection should be created');
-    AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LScripted := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, nil);
+  LStream := LScripted;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Verify-none required-stapling connection should be created');
+  AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Required OCSP stapling should not fail-closed when verify-peer is disabled');
-    AssertTrue(LStream.ObservedStatusRequest,
-      'Verify-none required-stapling path should preserve current status_request trigger');
-    AssertEqualsInt(0, Length(LOCSP.GetOCSPResponse),
-      'Verify-none required-stapling path should still surface empty OCSP response bytes');
-    AssertTrue(not LOCSP.IsOCSPResponseVerified,
-      'Verify-none required-stapling path should not mark missing OCSP response as verified');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Required OCSP stapling should not fail-closed when verify-peer is disabled');
+  AssertTrue(LScripted.ObservedStatusRequest,
+    'Verify-none required-stapling path should preserve current status_request trigger');
+  AssertEqualsInt(0, Length(LOCSP.GetOCSPResponse),
+    'Verify-none required-stapling path should still surface empty OCSP response bytes');
+  AssertTrue(not LOCSP.IsOCSPResponseVerified,
+    'Verify-none required-stapling path should not mark missing OCSP response as verified');
 end;
 
 begin

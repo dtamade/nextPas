@@ -30,7 +30,9 @@ program test_winssl_connection_edge_cases;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
@@ -728,7 +730,7 @@ end;
 begin
   WriteLn('=========================================');
   WriteLn('WinSSL 连接边界情况测试');
-  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
+  WriteLn('测试日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', DateTimeNow));
   WriteLn('=========================================');
   WriteLn;
 

@@ -3,7 +3,12 @@ program test_freepascal_client_session_resumption;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -18,8 +23,6 @@ uses
   nextpas.core.tls.tls13.appschedule,
   nextpas.core.crypto.hash,
   nextpas.core.tls.freepascal.session,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 type
   TOfflineHandshakeMode = (ohmInitial, ohmResumed);
@@ -232,7 +235,7 @@ begin
 end;
 
 type
-  TOfflineTLS13ServerStream = class(TStream)
+  TOfflineTLS13ServerStream = class(TInterfacedObject, IStream)
   private
     FMode: TOfflineHandshakeMode;
     FCipherSuite: Word;
@@ -256,9 +259,13 @@ type
     constructor CreateInitial(ACipherSuite: Word; const ASelectedALPNProtocol: string = '');
     constructor CreateResumed(const ASession: ISSLSession; const ASelectedALPNProtocol: string = '');
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
 
     property ObservedPskClientHello: Boolean read FObservedPskClientHello;
     property ObservedTicketIdentityMatch: Boolean read FObservedTicketIdentityMatch;
@@ -557,34 +564,34 @@ begin
   FWriteStage := 2;
 end;
 
-function TOfflineTLS13ServerStream.Read(var Buffer; Count: Longint): Longint;
+function TOfflineTLS13ServerStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TOfflineTLS13ServerStream.Write(const Buffer; Count: Longint): Longint;
+function TOfflineTLS13ServerStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
   LOffset, LRecLen: Integer;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   case FWriteStage of
     0: HandleClientHello(LData);
@@ -604,17 +611,36 @@ begin
       end;
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TOfflineTLS13ServerStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TOfflineTLS13ServerStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TOfflineTLS13ServerStream.Close;
+begin
+end;
+
+function TOfflineTLS13ServerStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TOfflineTLS13ServerStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TOfflineTLS13ServerStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 procedure TestOfflineSessionCaptureAndResume;
@@ -626,8 +652,9 @@ var
   LResumption1: ISSLSessionResumption;
   LResumption2: ISSLSessionResumption;
   LInfo: TSSLConnectionInfo;
-  LStream1: TOfflineTLS13ServerStream;
-  LStream2: TOfflineTLS13ServerStream;
+  LStream1: IStream;
+  LStream2: IStream;
+  LScripted2: TOfflineTLS13ServerStream;
   LSession: ISSLSession;
   LSessionInfo: IFreePascalResumptionSession;
   LBuf: array[0..15] of Byte;
@@ -640,82 +667,75 @@ begin
   LCtx1.SetVerifyMode([]);
 
   LStream1 := TOfflineTLS13ServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
-  try
-    LConn1 := LCtx1.CreateConnection(TStreamWrapper.Create(LStream1, False));
-    AssertTrue(LConn1 <> nil, 'Initial connection should be created');
-    (LConn1 as ISSLClientConnection).SetServerName('example.com');
+  LConn1 := LCtx1.CreateConnection(LStream1);
+  AssertTrue(LConn1 <> nil, 'Initial connection should be created');
+  (LConn1 as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn1.Connect, 'Initial offline TLS 1.3 handshake should succeed');
-    AssertTrue(LConn1.GetProtocolVersion = sslProtocolTLS13,
-      'Initial offline handshake should negotiate TLS 1.3');
-    AssertTrue(LConn1.GetCipherName = 'TLS_CHACHA20_POLY1305_SHA256',
-      'Initial offline handshake should negotiate CHACHA20');
-    AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
-      'Initial connection should expose ISSLSessionResumption');
-    AssertTrue(not LResumption1.IsSessionReused,
-      'Initial handshake must not report session reuse');
+  AssertTrue(LConn1.Connect, 'Initial offline TLS 1.3 handshake should succeed');
+  AssertTrue(LConn1.GetProtocolVersion = sslProtocolTLS13,
+    'Initial offline handshake should negotiate TLS 1.3');
+  AssertTrue(LConn1.GetCipherName = 'TLS_CHACHA20_POLY1305_SHA256',
+    'Initial offline handshake should negotiate CHACHA20');
+  AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
+    'Initial connection should expose ISSLSessionResumption');
+  AssertTrue(not LResumption1.IsSessionReused,
+    'Initial handshake must not report session reuse');
 
-    LRead := LConn1.Read(LBuf, SizeOf(LBuf));
-    AssertEqualsInt(4, LRead, 'Reading post-handshake app data should return 4 bytes');
-    AssertTrue((LBuf[0] = $50) and (LBuf[1] = $4F) and (LBuf[2] = $4E) and (LBuf[3] = $47),
-      'Offline app data should be PONG');
+  LRead := LConn1.Read(LBuf, SizeOf(LBuf));
+  AssertEqualsInt(4, LRead, 'Reading post-handshake app data should return 4 bytes');
+  AssertTrue((LBuf[0] = $50) and (LBuf[1] = $4F) and (LBuf[2] = $4E) and (LBuf[3] = $47),
+    'Offline app data should be PONG');
 
-    LSession := LResumption1.GetSession;
-    AssertTrue(LSession <> nil, 'GetSession should return resumable session after NewSessionTicket');
-    AssertTrue(LSession.IsResumable, 'Captured session should be resumable');
-    AssertTrue(Supports(LSession, IFreePascalResumptionSession, LSessionInfo),
-      'Captured session should expose FreePascal resumption internals');
-    AssertTrue(Length(LSessionInfo.GetTicket) > 0, 'Captured session ticket should not be empty');
-    AssertTrue(Length(LSessionInfo.GetResumptionPSK) > 0, 'Captured session PSK should not be empty');
-    AssertEqualsInt(16384, LSessionInfo.GetMaxEarlyDataSize,
-      'Captured session should preserve max_early_data_size from NewSessionTicket');
-    LSerialized := LSession.Serialize;
-    AssertTrue(Length(LSerialized) > 0, 'Captured session should serialize to non-empty bytes');
-    LInfo := CaptureConnectionInfo('Initial handshake', LConn1);
-    AssertConnectionInfo(
-      'Initial handshake',
-      LInfo,
-      TLS13_CIPHER_CHACHA20_POLY1305_SHA256,
-      256,
-      False,
-      LSession.GetID
-    );
-  finally
-    LStream1.Free;
-  end;
+  LSession := LResumption1.GetSession;
+  AssertTrue(LSession <> nil, 'GetSession should return resumable session after NewSessionTicket');
+  AssertTrue(LSession.IsResumable, 'Captured session should be resumable');
+  AssertTrue(Supports(LSession, IFreePascalResumptionSession, LSessionInfo),
+    'Captured session should expose FreePascal resumption internals');
+  AssertTrue(Length(LSessionInfo.GetTicket) > 0, 'Captured session ticket should not be empty');
+  AssertTrue(Length(LSessionInfo.GetResumptionPSK) > 0, 'Captured session PSK should not be empty');
+  AssertEqualsInt(16384, LSessionInfo.GetMaxEarlyDataSize,
+    'Captured session should preserve max_early_data_size from NewSessionTicket');
+  LSerialized := LSession.Serialize;
+  AssertTrue(Length(LSerialized) > 0, 'Captured session should serialize to non-empty bytes');
+  LInfo := CaptureConnectionInfo('Initial handshake', LConn1);
+  AssertConnectionInfo(
+    'Initial handshake',
+    LInfo,
+    TLS13_CIPHER_CHACHA20_POLY1305_SHA256,
+    256,
+    False,
+    LSession.GetID
+  );
 
   LCtx2 := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
   AssertTrue(LCtx2 <> nil, 'Resumed FreePascal client context should be created');
   LCtx2.SetPreferredVersion(sslProtocolTLS13);
   LCtx2.SetVerifyMode([]);
 
-  LStream2 := TOfflineTLS13ServerStream.CreateResumed(LSession);
-  try
-    LConn2 := LCtx2.CreateConnection(TStreamWrapper.Create(LStream2, False));
-    AssertTrue(LConn2 <> nil, 'Resumed connection should be created');
-    AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
-      'Resumed connection should expose ISSLSessionResumption');
-    LResumption2.SetSession(LSession);
-    (LConn2 as ISSLClientConnection).SetServerName('example.com');
+  LScripted2 := TOfflineTLS13ServerStream.CreateResumed(LSession);
+  LStream2 := LScripted2;
+  LConn2 := LCtx2.CreateConnection(LStream2);
+  AssertTrue(LConn2 <> nil, 'Resumed connection should be created');
+  AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
+    'Resumed connection should expose ISSLSessionResumption');
+  LResumption2.SetSession(LSession);
+  (LConn2 as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn2.Connect, 'Resumed offline TLS 1.3 handshake should succeed');
-    AssertTrue(LResumption2.IsSessionReused, 'Resumed handshake should report session reuse');
-    AssertTrue(LStream2.ObservedPskClientHello,
-      'Resumed client handshake should send pre_shared_key in ClientHello');
-    AssertTrue(LStream2.ObservedTicketIdentityMatch,
-      'Resumed ClientHello identity should match previous ticket');
-    LInfo := CaptureConnectionInfo('Resumed handshake', LConn2);
-    AssertConnectionInfo(
-      'Resumed handshake',
-      LInfo,
-      TLS13_CIPHER_CHACHA20_POLY1305_SHA256,
-      256,
-      True,
-      LSession.GetID
-    );
-  finally
-    LStream2.Free;
-  end;
+  AssertTrue(LConn2.Connect, 'Resumed offline TLS 1.3 handshake should succeed');
+  AssertTrue(LResumption2.IsSessionReused, 'Resumed handshake should report session reuse');
+  AssertTrue(LScripted2.ObservedPskClientHello,
+    'Resumed client handshake should send pre_shared_key in ClientHello');
+  AssertTrue(LScripted2.ObservedTicketIdentityMatch,
+    'Resumed ClientHello identity should match previous ticket');
+  LInfo := CaptureConnectionInfo('Resumed handshake', LConn2);
+  AssertConnectionInfo(
+    'Resumed handshake',
+    LInfo,
+    TLS13_CIPHER_CHACHA20_POLY1305_SHA256,
+    256,
+    True,
+    LSession.GetID
+  );
 end;
 
 procedure TestResumedSessionSkipsRequiredCertificateTransparency;
@@ -726,8 +746,9 @@ var
   LConn2: ISSLConnection;
   LResumption1: ISSLSessionResumption;
   LResumption2: ISSLSessionResumption;
-  LStream1: TOfflineTLS13ServerStream;
-  LStream2: TOfflineTLS13ServerStream;
+  LStream1: IStream;
+  LStream2: IStream;
+  LScripted2: TOfflineTLS13ServerStream;
   LSession: ISSLSession;
   LBuf: array[0..15] of Byte;
   LRead: Integer;
@@ -738,21 +759,17 @@ begin
   LCtx1.SetVerifyMode([]);
 
   LStream1 := TOfflineTLS13ServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
-  try
-    LConn1 := LCtx1.CreateConnection(TStreamWrapper.Create(LStream1, False));
-    AssertTrue(LConn1 <> nil, 'Initial CT-boundary connection should be created');
-    (LConn1 as ISSLClientConnection).SetServerName('example.com');
+  LConn1 := LCtx1.CreateConnection(LStream1);
+  AssertTrue(LConn1 <> nil, 'Initial CT-boundary connection should be created');
+  (LConn1 as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn1.Connect, 'Initial offline handshake should succeed before CT boundary check');
-    LRead := LConn1.Read(LBuf, SizeOf(LBuf));
-    AssertEqualsInt(4, LRead, 'Initial handshake should still read post-handshake app data');
-    AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
-      'Initial CT-boundary connection should expose ISSLSessionResumption');
-    LSession := LResumption1.GetSession;
-    AssertTrue(LSession <> nil, 'Initial handshake should still capture a resumable session');
-  finally
-    LStream1.Free;
-  end;
+  AssertTrue(LConn1.Connect, 'Initial offline handshake should succeed before CT boundary check');
+  LRead := LConn1.Read(LBuf, SizeOf(LBuf));
+  AssertEqualsInt(4, LRead, 'Initial handshake should still read post-handshake app data');
+  AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
+    'Initial CT-boundary connection should expose ISSLSessionResumption');
+  LSession := LResumption1.GetSession;
+  AssertTrue(LSession <> nil, 'Initial handshake should still capture a resumable session');
 
   LCtx2 := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
   AssertTrue(LCtx2 <> nil, 'Resumed CT-boundary context should be created');
@@ -760,26 +777,23 @@ begin
   LCtx2.SetVerifyMode([sslVerifyPeer]);
   LCtx2.SetOptions(LCtx2.GetOptions + [ssoRequireCertificateTransparency]);
 
-  LStream2 := TOfflineTLS13ServerStream.CreateResumed(LSession);
-  try
-    LConn2 := LCtx2.CreateConnection(TStreamWrapper.Create(LStream2, False));
-    AssertTrue(LConn2 <> nil, 'Resumed CT-boundary connection should be created');
-    AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
-      'Resumed CT-boundary connection should expose ISSLSessionResumption');
-    LResumption2.SetSession(LSession);
-    (LConn2 as ISSLClientConnection).SetServerName('example.com');
+  LScripted2 := TOfflineTLS13ServerStream.CreateResumed(LSession);
+  LStream2 := LScripted2;
+  LConn2 := LCtx2.CreateConnection(LStream2);
+  AssertTrue(LConn2 <> nil, 'Resumed CT-boundary connection should be created');
+  AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
+    'Resumed CT-boundary connection should expose ISSLSessionResumption');
+  LResumption2.SetSession(LSession);
+  (LConn2 as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn2.Connect,
-      'CT required should not block resumed TLS 1.3 handshakes without certificate/SCT flight');
-    AssertTrue(LResumption2.IsSessionReused,
-      'CT-boundary resumed handshake should still report session reuse');
-    AssertTrue(LStream2.ObservedPskClientHello,
-      'CT-boundary resumed handshake should still send pre_shared_key');
-    AssertTrue(LStream2.ObservedTicketIdentityMatch,
-      'CT-boundary resumed handshake should still use the previous ticket identity');
-  finally
-    LStream2.Free;
-  end;
+  AssertTrue(LConn2.Connect,
+    'CT required should not block resumed TLS 1.3 handshakes without certificate/SCT flight');
+  AssertTrue(LResumption2.IsSessionReused,
+    'CT-boundary resumed handshake should still report session reuse');
+  AssertTrue(LScripted2.ObservedPskClientHello,
+    'CT-boundary resumed handshake should still send pre_shared_key');
+  AssertTrue(LScripted2.ObservedTicketIdentityMatch,
+    'CT-boundary resumed handshake should still use the previous ticket identity');
 end;
 
 procedure TestResumedSessionSkipsRequiredOCSPStapling;
@@ -790,8 +804,9 @@ var
   LConn2: ISSLConnection;
   LResumption1: ISSLSessionResumption;
   LResumption2: ISSLSessionResumption;
-  LStream1: TOfflineTLS13ServerStream;
-  LStream2: TOfflineTLS13ServerStream;
+  LStream1: IStream;
+  LStream2: IStream;
+  LScripted2: TOfflineTLS13ServerStream;
   LSession: ISSLSession;
   LBuf: array[0..15] of Byte;
   LRead: Integer;
@@ -802,21 +817,17 @@ begin
   LCtx1.SetVerifyMode([]);
 
   LStream1 := TOfflineTLS13ServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
-  try
-    LConn1 := LCtx1.CreateConnection(TStreamWrapper.Create(LStream1, False));
-    AssertTrue(LConn1 <> nil, 'Initial OCSP-boundary connection should be created');
-    (LConn1 as ISSLClientConnection).SetServerName('example.com');
+  LConn1 := LCtx1.CreateConnection(LStream1);
+  AssertTrue(LConn1 <> nil, 'Initial OCSP-boundary connection should be created');
+  (LConn1 as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn1.Connect, 'Initial offline handshake should succeed before OCSP boundary check');
-    LRead := LConn1.Read(LBuf, SizeOf(LBuf));
-    AssertEqualsInt(4, LRead, 'Initial handshake should still read post-handshake app data');
-    AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
-      'Initial OCSP-boundary connection should expose ISSLSessionResumption');
-    LSession := LResumption1.GetSession;
-    AssertTrue(LSession <> nil, 'Initial handshake should still capture a resumable session');
-  finally
-    LStream1.Free;
-  end;
+  AssertTrue(LConn1.Connect, 'Initial offline handshake should succeed before OCSP boundary check');
+  LRead := LConn1.Read(LBuf, SizeOf(LBuf));
+  AssertEqualsInt(4, LRead, 'Initial handshake should still read post-handshake app data');
+  AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
+    'Initial OCSP-boundary connection should expose ISSLSessionResumption');
+  LSession := LResumption1.GetSession;
+  AssertTrue(LSession <> nil, 'Initial handshake should still capture a resumable session');
 
   LCtx2 := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
   AssertTrue(LCtx2 <> nil, 'Resumed OCSP-boundary context should be created');
@@ -824,26 +835,23 @@ begin
   LCtx2.SetVerifyMode([sslVerifyPeer]);
   LCtx2.SetOptions(LCtx2.GetOptions + [ssoRequireOCSPStapling]);
 
-  LStream2 := TOfflineTLS13ServerStream.CreateResumed(LSession);
-  try
-    LConn2 := LCtx2.CreateConnection(TStreamWrapper.Create(LStream2, False));
-    AssertTrue(LConn2 <> nil, 'Resumed OCSP-boundary connection should be created');
-    AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
-      'Resumed OCSP-boundary connection should expose ISSLSessionResumption');
-    LResumption2.SetSession(LSession);
-    (LConn2 as ISSLClientConnection).SetServerName('example.com');
+  LScripted2 := TOfflineTLS13ServerStream.CreateResumed(LSession);
+  LStream2 := LScripted2;
+  LConn2 := LCtx2.CreateConnection(LStream2);
+  AssertTrue(LConn2 <> nil, 'Resumed OCSP-boundary connection should be created');
+  AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
+    'Resumed OCSP-boundary connection should expose ISSLSessionResumption');
+  LResumption2.SetSession(LSession);
+  (LConn2 as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn2.Connect,
-      'Required OCSP stapling should not block resumed TLS 1.3 handshakes without certificate/stapled-response flight');
-    AssertTrue(LResumption2.IsSessionReused,
-      'OCSP-boundary resumed handshake should still report session reuse');
-    AssertTrue(LStream2.ObservedPskClientHello,
-      'OCSP-boundary resumed handshake should still send pre_shared_key');
-    AssertTrue(LStream2.ObservedTicketIdentityMatch,
-      'OCSP-boundary resumed handshake should still use the previous ticket identity');
-  finally
-    LStream2.Free;
-  end;
+  AssertTrue(LConn2.Connect,
+    'Required OCSP stapling should not block resumed TLS 1.3 handshakes without certificate/stapled-response flight');
+  AssertTrue(LResumption2.IsSessionReused,
+    'OCSP-boundary resumed handshake should still report session reuse');
+  AssertTrue(LScripted2.ObservedPskClientHello,
+    'OCSP-boundary resumed handshake should still send pre_shared_key');
+  AssertTrue(LScripted2.ObservedTicketIdentityMatch,
+    'OCSP-boundary resumed handshake should still use the previous ticket identity');
 end;
 
 procedure TestALPNAndSNISelection;
@@ -851,11 +859,11 @@ var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
   LInfo: TSSLConnectionInfo;
-  LStream: TOfflineTLS13ServerStream;
+  LStream: IStream;
   LCtxNoOverlap: ISSLContext;
   LConnNoOverlap: ISSLConnection;
   LInfoNoOverlap: TSSLConnectionInfo;
-  LStreamNoOverlap: TOfflineTLS13ServerStream;
+  LStreamNoOverlap: IStream;
 begin
   LCtx := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
   AssertTrue(LCtx <> nil, 'ALPN client context should be created');
@@ -867,22 +875,18 @@ begin
     TLS13_CIPHER_CHACHA20_POLY1305_SHA256,
     'http/1.1'
   );
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'ALPN client connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'ALPN client connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect, 'ALPN client handshake should succeed');
-    AssertTrue(CaptureSelectedALPN('ALPN handshake', LConn) = 'http/1.1',
-      'Client connection should record the negotiated ALPN');
-    LInfo := CaptureConnectionInfo('ALPN handshake', LConn);
-    AssertTrue(LInfo.ALPNProtocol = 'http/1.1',
-      'Connection info should mirror the negotiated ALPN');
-    AssertTrue(LInfo.ServerName = 'example.com',
-      'Connection info should mirror the configured server name');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect, 'ALPN client handshake should succeed');
+  AssertTrue(CaptureSelectedALPN('ALPN handshake', LConn) = 'http/1.1',
+    'Client connection should record the negotiated ALPN');
+  LInfo := CaptureConnectionInfo('ALPN handshake', LConn);
+  AssertTrue(LInfo.ALPNProtocol = 'http/1.1',
+    'Connection info should mirror the negotiated ALPN');
+  AssertTrue(LInfo.ServerName = 'example.com',
+    'Connection info should mirror the configured server name');
 
   LCtxNoOverlap := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
   AssertTrue(LCtxNoOverlap <> nil, 'ALPN no-overlap context should be created');
@@ -894,22 +898,18 @@ begin
     TLS13_CIPHER_CHACHA20_POLY1305_SHA256,
     ''
   );
-  try
-    LConnNoOverlap := LCtxNoOverlap.CreateConnection(TStreamWrapper.Create(LStreamNoOverlap, False));
-    AssertTrue(LConnNoOverlap <> nil, 'ALPN no-overlap connection should be created');
-    (LConnNoOverlap as ISSLClientConnection).SetServerName('example.com');
+  LConnNoOverlap := LCtxNoOverlap.CreateConnection(LStreamNoOverlap);
+  AssertTrue(LConnNoOverlap <> nil, 'ALPN no-overlap connection should be created');
+  (LConnNoOverlap as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConnNoOverlap.Connect, 'ALPN no-overlap handshake should still succeed');
-    AssertTrue(CaptureSelectedALPN('ALPN no-overlap handshake', LConnNoOverlap) = '',
-      'Client connection should leave ALPN empty when the server does not select one');
-    LInfoNoOverlap := CaptureConnectionInfo('ALPN no-overlap handshake', LConnNoOverlap);
-    AssertTrue(LInfoNoOverlap.ALPNProtocol = '',
-      'Connection info should leave ALPN empty when the server does not select one');
-    AssertTrue(LInfoNoOverlap.ServerName = 'example.com',
-      'Connection info should still mirror the configured server name');
-  finally
-    LStreamNoOverlap.Free;
-  end;
+  AssertTrue(LConnNoOverlap.Connect, 'ALPN no-overlap handshake should still succeed');
+  AssertTrue(CaptureSelectedALPN('ALPN no-overlap handshake', LConnNoOverlap) = '',
+    'Client connection should leave ALPN empty when the server does not select one');
+  LInfoNoOverlap := CaptureConnectionInfo('ALPN no-overlap handshake', LConnNoOverlap);
+  AssertTrue(LInfoNoOverlap.ALPNProtocol = '',
+    'Connection info should leave ALPN empty when the server does not select one');
+  AssertTrue(LInfoNoOverlap.ServerName = 'example.com',
+    'Connection info should still mirror the configured server name');
 end;
 
 begin

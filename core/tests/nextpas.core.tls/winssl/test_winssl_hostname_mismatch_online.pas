@@ -5,7 +5,8 @@ program test_winssl_hostname_mismatch_online;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
 
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib,

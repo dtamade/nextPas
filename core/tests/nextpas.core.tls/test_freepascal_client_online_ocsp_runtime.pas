@@ -3,7 +3,14 @@ program test_freepascal_client_online_ocsp_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,
@@ -28,8 +35,6 @@ uses
   nextpas.core.tls.openssl.api.ocsp,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.stack,
-  Classes,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.freepascal.lib;
 type
   TServerMaterial = record
@@ -71,7 +76,7 @@ type
     CheckValidity: TOCSP_check_validity;
   end;
 
-  TScriptedOnlineOCSPServerStream = class(TStream)
+  TScriptedOnlineOCSPServerStream = class(TInterfacedObject, IStream)
   private
     FCipherSuite: Word;
     FReadBuffer: TBytes;
@@ -90,9 +95,13 @@ type
   public
     constructor Create(const ACertificateBlob, APrivateKeyBlob: TBytes);
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
   end;
 
 var
@@ -188,18 +197,8 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  Result := nil;
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function BytesToAnsiString(const AData: TBytes): AnsiString;
@@ -239,8 +238,8 @@ begin
   LOptions.CommonName := ACommonName;
   LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
-  LOptions.NotBefore := Now - 1;
-  LOptions.NotAfter := Now + 30;
+  LOptions.NotBefore := DateTimeNow - 1;
+  LOptions.NotAfter := DateTimeNow + 30;
   LOptions.OCSPResponderURL := AOCSPResponderURL;
   SetLength(LOptions.SubjectAltNames, 0);
   try
@@ -689,34 +688,34 @@ begin
   FWriteStage := 2;
 end;
 
-function TScriptedOnlineOCSPServerStream.Read(var Buffer; Count: Longint): Longint;
+function TScriptedOnlineOCSPServerStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TScriptedOnlineOCSPServerStream.Write(const Buffer; Count: Longint): Longint;
+function TScriptedOnlineOCSPServerStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
   LOffset, LRecLen: Integer;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   case FWriteStage of
     0: HandleClientHello(LData);
@@ -736,17 +735,36 @@ begin
       end;
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TScriptedOnlineOCSPServerStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TScriptedOnlineOCSPServerStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TScriptedOnlineOCSPServerStream.Close;
+begin
+end;
+
+function TScriptedOnlineOCSPServerStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TScriptedOnlineOCSPServerStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TScriptedOnlineOCSPServerStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 function NewClientContextWithOnlineOCSP(AHTTPPost: TSSLHTTPPostCallback): ISSLContext;
@@ -769,7 +787,7 @@ var
   LContext: ISSLContext;
   LHookAccess: ISSLHttpHooksAccess;
   LConn: ISSLConnection;
-  LStream: TScriptedOnlineOCSPServerStream;
+  LStream: IStream;
   LStubState: TOCSPStubState;
 begin
   LMaterial := GenerateCASignedServerMaterial(
@@ -789,7 +807,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
+    LConn := LContext.CreateConnection(LStream);
     AssertTrue(LConn <> nil, 'Online-OCSP connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -797,7 +815,6 @@ begin
       'Online OCSP should fail-closed when pure Pascal OCSP is not yet implemented');
   finally
     RestoreOCSPStubs(LStubState);
-    LStream.Free;
     LHook.Free;
   end;
 end;
@@ -808,7 +825,7 @@ var
   LHook: THTTPPostHookStub;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedOnlineOCSPServerStream;
+  LStream: IStream;
   LStubState: TOCSPStubState;
 begin
   LMaterial := GenerateCASignedServerMaterial(
@@ -827,7 +844,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
+    LConn := LContext.CreateConnection(LStream);
     AssertTrue(LConn <> nil, 'Leaf-only online-OCSP connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -835,7 +852,6 @@ begin
       'Online OCSP should fail-closed when pure Pascal OCSP is not yet implemented (leaf-only path)');
   finally
     RestoreOCSPStubs(LStubState);
-    LStream.Free;
     LHook.Free;
   end;
 end;
@@ -846,7 +862,7 @@ var
   LHook: THTTPPostHookStub;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedOnlineOCSPServerStream;
+  LStream: IStream;
   LStubState: TOCSPStubState;
   LVerifyText: string;
 begin
@@ -865,7 +881,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
+    LConn := LContext.CreateConnection(LStream);
     AssertTrue(LConn <> nil, 'Online-OCSP revoked-status connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -881,7 +897,6 @@ begin
     );
   finally
     RestoreOCSPStubs(LStubState);
-    LStream.Free;
     LHook.Free;
   end;
 end;
@@ -892,7 +907,7 @@ var
   LHook: THTTPPostHookStub;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedOnlineOCSPServerStream;
+  LStream: IStream;
   LStubState: TOCSPStubState;
   LVerifyText: string;
 begin
@@ -912,7 +927,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
+    LConn := LContext.CreateConnection(LStream);
     AssertTrue(LConn <> nil, 'Online-OCSP signature-failure connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -928,7 +943,6 @@ begin
     );
   finally
     RestoreOCSPStubs(LStubState);
-    LStream.Free;
     LHook.Free;
   end;
 end;
@@ -939,7 +953,7 @@ var
   LHook: THTTPPostHookStub;
   LContext: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedOnlineOCSPServerStream;
+  LStream: IStream;
   LStubState: TOCSPStubState;
   LVerifyText: string;
 begin
@@ -959,7 +973,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
+    LConn := LContext.CreateConnection(LStream);
     AssertTrue(LConn <> nil, 'Online-OCSP responder-failure connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -974,7 +988,6 @@ begin
     );
   finally
     RestoreOCSPStubs(LStubState);
-    LStream.Free;
     LHook.Free;
   end;
 end;

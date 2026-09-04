@@ -19,7 +19,8 @@ program test_ssh_e2e;
   由 run_e2e.sh 编排（remote 直连 / local sshd fixture）；本程序不做门控。
 }
 uses
-  nextpas.core.system.sysutils, Classes,
+  Classes, nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv,
+  nextpas.core.os.env,
   nextpas.core.ssh,
   nextpas.core.ssh.transport,
   nextpas.core.ssh.channel,
@@ -330,7 +331,7 @@ begin
       LFfs := LSess.OpenFileSystem;
       LRoot := LFfs.RealPath('.');
       LPath := LRoot + '/np-e2e-sftp-marker.txt';
-      LData := BytesOf('sftp-roundtrip-' + MARKER);
+      LData := StringToUTF8Bytes('sftp-roundtrip-' + MARKER);
       LFfs.WriteFile(LPath, LData);
       try
         LGot := LFfs.ReadFile(LPath);

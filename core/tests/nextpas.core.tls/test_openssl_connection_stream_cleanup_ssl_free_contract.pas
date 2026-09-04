@@ -3,9 +3,7 @@ program test_openssl_connection_stream_cleanup_ssl_free_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
-  nextpas.core.io.stream_adapter,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.exception, nextpas.core.io.intf, nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -62,22 +60,18 @@ end;
 
 procedure WarmupStreamConnectionConstructor(AContext: ISSLContext);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: ISSLConnection;
 begin
-  LStream := TMemoryStream.Create;
-  try
-    LConn := AContext.CreateConnection(TStreamWrapper.Create(LStream));
-    if LConn = nil then
-      raise Exception.Create('stream CreateConnection warmup returned nil');
-  finally
-    LStream.Free;
-  end;
+  LStream := CreateBytesStream;
+  LConn := AContext.CreateConnection(LStream);
+  if LConn = nil then
+    raise Exception.Create('stream CreateConnection warmup returned nil');
 end;
 
 procedure AssertPublicStreamCleanupPreservesMemoryFailure(const AName: string; AContext: ISSLContext);
 var
-  LStream: TMemoryStream;
+  LStream: IStream;
   LConn: ISSLConnection;
   LRaised: Boolean;
   LControlled: Boolean;
@@ -85,7 +79,7 @@ var
   LMentionsAccessViolation: Boolean;
   LDetail: string;
 begin
-  LStream := TMemoryStream.Create;
+  LStream := CreateBytesStream;
   LConn := nil;
   LRaised := False;
   LControlled := False;
@@ -93,7 +87,7 @@ begin
   LMentionsAccessViolation := False;
   LDetail := '';
   try
-    LConn := AContext.CreateConnection(TStreamWrapper.Create(LStream));
+    LConn := AContext.CreateConnection(LStream);
   except
     on E: Exception do
     begin
@@ -106,13 +100,12 @@ begin
   end;
 
   AssertTrue(AName + ' should raise', LRaised,
-    'expected CreateConnection(TMemoryStream) to fail');
+    'expected CreateConnection(IStream) to fail');
   AssertTrue(AName + ' should raise controlled ESSLOutOfMemoryException', LControlled, LDetail);
   AssertTrue(AName + ' should not raise EAccessViolation', not LWasAccessViolation, LDetail);
   AssertTrue(AName + ' should not surface raw access violation text',
     not LMentionsAccessViolation, LDetail);
 
-  LStream.Free;
 end;
 
 procedure TestStreamCleanupShouldPreserveMemoryFailureWhenSSLFreeIsUnavailable;

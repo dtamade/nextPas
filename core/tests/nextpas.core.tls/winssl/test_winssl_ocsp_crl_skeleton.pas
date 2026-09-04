@@ -25,7 +25,7 @@ program test_winssl_ocsp_crl_skeleton;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.os.env,
   nextpas.core.tls.base;
 
 var

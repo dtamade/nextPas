@@ -15,7 +15,11 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs,
+  Classes,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.crypto.utils,
@@ -133,7 +137,7 @@ var
 begin
   try
     SetLength(Contexts, NUM_CONNECTIONS);
-    StartTime := Now;
+    StartTime := DateTimeNow;
 
     // Create 100 concurrent contexts
     for i := 0 to NUM_CONNECTIONS - 1 do
@@ -142,7 +146,7 @@ begin
       Contexts[i] := Builder.WithVerifyNone.BuildClient;
     end;
 
-    EndTime := Now;
+    EndTime := DateTimeNow;
 
     // Cleanup
     for i := 0 to High(Contexts) do

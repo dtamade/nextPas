@@ -12,7 +12,8 @@ program test_ssh_sftp_async;
 uses
   cthreads,
   Classes, SysUtils,
-  nextpas.core.system.sysutils,
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.bytes.ops,
   nextpas.core.io.intf,
   nextpas.core.net,
@@ -108,7 +109,7 @@ begin
   except end;
 end;
 
-constructor TSshLoopSftpServer.Create(AStream:IReadWriteCloser; ASc:PSshLoopSftpScenario); begin inherited Create; FStream:=AStream; FSc:=ASc; FEncrypted:=False; SetLength(FBuf,0); FSftpHandle:=BytesOf('hdl1'); end;
+constructor TSshLoopSftpServer.Create(AStream:IReadWriteCloser; ASc:PSshLoopSftpScenario); begin inherited Create; FStream:=AStream; FSc:=ASc; FEncrypted:=False; SetLength(FBuf,0); FSftpHandle:=StringToUTF8Bytes('hdl1'); end;
 procedure TSshLoopSftpServer.Fail(const AMsg:string); begin if not FSc^.Failed then begin FSc^.Failed:=True; FSc^.FailMsg:=AMsg; end; end;
 procedure TSshLoopSftpServer.SendPlainPayload(const APayload:TBytes);
 var LW:TsshWriter; LPad,I:Integer; LWire:TBytes; begin LPad:=8-((4+1+Length(APayload)) mod 8); if LPad<SSH_MIN_PADDING then Inc(LPad,8); LW:=TsshWriter.Create(64+Length(APayload)); try LW.PutUInt32(UInt32(1+Length(APayload)+SizeUInt(LPad))); LW.PutByte(Byte(LPad)); LW.PutRaw(APayload); for I:=1 to LPad do LW.PutByte($30); LWire:=LW.ToBytes; FStream.Write(LWire[0], SizeUInt(Length(LWire))); finally LW.Free; end; end;
@@ -279,7 +280,7 @@ begin
   Result:=False; AErrKind:=sekIO; APathRes:=''; AData:=nil; ADir:=nil;
   LServerThread:=nil; LLoop:=nil; LLoopThread:=nil; LListener:=nil;
   LOpts:=Default(TSshConnectOptions);
-  New(LSc); LSc^:=Default(TSshLoopSftpScenario); LSc^.HostSeed:=AHostSeed; LSc^.FileData:=BytesOf('hello sftp async'); LSc^.FileName:='/tmp/test';
+  New(LSc); LSc^:=Default(TSshLoopSftpScenario); LSc^.HostSeed:=AHostSeed; LSc^.FileData:=StringToUTF8Bytes('hello sftp async'); LSc^.FileName:='/tmp/test';
   LListener:=NetTcpListen('127.0.0.1',0);
   try
     LPort:=LListener.LocalAddr.Port;
@@ -307,7 +308,7 @@ begin
         else if AOp='stat-notfound' then GState.Fs.StatAsync('/notfound', @OnStat, nil)
         else if AOp='listdir' then GState.Fs.ListDirAsync('/dir', @OnDir, nil)
         else if AOp='read' then GState.Fs.ReadFileAsync('/tmp/test', @OnData, nil)
-        else if AOp='write' then GState.Fs.WriteFileAsync('/tmp/out', BytesOf('payload'), @OnVoid, nil)
+        else if AOp='write' then GState.Fs.WriteFileAsync('/tmp/out', StringToUTF8Bytes('payload'), @OnVoid, nil)
         else if AOp='remove' then GState.Fs.RemoveAsync('/tmp/x', @OnVoid, nil)
         else Exit;
         if not WaitForFlag(GState.FsDone, GState.Event, 15000) then begin AErrKind:=sekTimeout; Exit; end;

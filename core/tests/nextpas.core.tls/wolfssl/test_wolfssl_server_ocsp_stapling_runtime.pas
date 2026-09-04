@@ -3,18 +3,22 @@ program test_wolfssl_server_ocsp_stapling_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.tls.openssl.backed,
-  nextpas.core.system.sysutils,
-  nextpas.core.system.classes,
   Classes,
   ctypes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.factory,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,
   nextpas.core.platform.dl,
-  nextpas.core.io.stream_adapter,
   nextpas.core.tls.wolfssl.lib,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello,
@@ -170,18 +174,9 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
   SetLength(Result, 0);
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function CompareVersionTriple(AMajor, AMinor, APatch: Integer;
@@ -351,7 +346,7 @@ begin
 end;
 
 type
-  TOfflineStaplingObserveClientStream = class(TStream)
+  TOfflineStaplingObserveClientStream = class(TInterfacedObject, IStream)
   private
     FRequestStapling: Boolean;
     FReadBuffer: TBytes;
@@ -383,9 +378,13 @@ type
   public
     constructor Create(ARequestStapling: Boolean);
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
 
     property ObservedCertificateMessage: Boolean read FObservedCertificateMessage;
     property ObservedCertificateInfo: TTLS13ServerCertificateInfo read FObservedCertificateInfo;
@@ -655,35 +654,35 @@ begin
   end;
 end;
 
-function TOfflineStaplingObserveClientStream.Read(var Buffer; Count: Longint): Longint;
+function TOfflineStaplingObserveClientStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TOfflineStaplingObserveClientStream.Write(const Buffer; Count: Longint): Longint;
+function TOfflineStaplingObserveClientStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
   LRecord: TBytes;
   LOldLen: Integer;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   if Length(LData) > 0 then
   begin
@@ -703,18 +702,37 @@ begin
     end;
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TOfflineStaplingObserveClientStream.Seek(const Offset: Int64;
-  Origin: TSeekOrigin): Int64;
+function TOfflineStaplingObserveClientStream.Seek(const AOffset: Int64;
+  const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TOfflineStaplingObserveClientStream.Close;
+begin
+end;
+
+function TOfflineStaplingObserveClientStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TOfflineStaplingObserveClientStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TOfflineStaplingObserveClientStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 function NewServerContext: ISSLContext;
@@ -772,51 +790,47 @@ begin
   LStaplingContext.SetServerStapledOCSPResponse(LFixture);
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'WolfSSL server connection should be created');
-    if not LConn.Accept then
-      Fail(Format(
-        'WolfSSL server accept should succeed when stapled response is configured ' +
-        '(state=%s verify=%d/%s conn_status=%d status_call_delta=%d last_set_resp_result=%d)',
-        [
-          {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
-          LConn.GetStateString,
-          {$POP}
-          LConn.GetVerifyResult,
-          LConn.GetVerifyResultString,
-          GetWolfSSLConnectionStatusType(LConn),
-          GStatusOCSPRespCallCount - LStatusCallCountBefore,
-          GLastWolfSSLSetStatusOCSPRespResult
-        ]
-      ));
-    AssertTrue(LStream.ObservedCertificateMessage,
-      'Scripted client should observe the Certificate message');
-    if not (GStatusOCSPRespCallCount > LStatusCallCountBefore) then
-      Fail(Format(
-        'WolfSSL server handshake should invoke wolfSSL_set_tlsext_status_ocsp_resp when response is configured and requested ' +
-        '(conn_status=%d status_call_delta=%d observed_leaf_stapled=%s extra_handshakes=%s)',
-        [
-          GetWolfSSLConnectionStatusType(LConn),
-          GStatusOCSPRespCallCount - LStatusCallCountBefore,
-          BoolToStr(LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse, True),
-          LStream.ObservedExtraHandshakeTypes
-        ]
-      ));
-    if not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse then
-      Fail(Format(
-        'Configured stapled response should be emitted on the leaf CertificateEntry when requested ' +
-        '(extra_handshakes=%s)',
-        [LStream.ObservedExtraHandshakeTypes]
-      ));
-    AssertBytesEqual(
-      LFixture,
-      LStream.ObservedCertificateInfo.LeafOCSPStapledResponse,
-      'Emitted stapled response bytes should match configured material'
-    );
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'WolfSSL server connection should be created');
+  if not LConn.Accept then
+    Fail(Format(
+      'WolfSSL server accept should succeed when stapled response is configured ' +
+      '(state=%s verify=%d/%s conn_status=%d status_call_delta=%d last_set_resp_result=%d)',
+      [
+        {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
+        LConn.GetStateString,
+        {$POP}
+        LConn.GetVerifyResult,
+        LConn.GetVerifyResultString,
+        GetWolfSSLConnectionStatusType(LConn),
+        GStatusOCSPRespCallCount - LStatusCallCountBefore,
+        GLastWolfSSLSetStatusOCSPRespResult
+      ]
+    ));
+  AssertTrue(LStream.ObservedCertificateMessage,
+    'Scripted client should observe the Certificate message');
+  if not (GStatusOCSPRespCallCount > LStatusCallCountBefore) then
+    Fail(Format(
+      'WolfSSL server handshake should invoke wolfSSL_set_tlsext_status_ocsp_resp when response is configured and requested ' +
+      '(conn_status=%d status_call_delta=%d observed_leaf_stapled=%s extra_handshakes=%s)',
+      [
+        GetWolfSSLConnectionStatusType(LConn),
+        GStatusOCSPRespCallCount - LStatusCallCountBefore,
+        BoolToStr(LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse),
+        LStream.ObservedExtraHandshakeTypes
+      ]
+    ));
+  if not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse then
+    Fail(Format(
+      'Configured stapled response should be emitted on the leaf CertificateEntry when requested ' +
+      '(extra_handshakes=%s)',
+      [LStream.ObservedExtraHandshakeTypes]
+    ));
+  AssertBytesEqual(
+    LFixture,
+    LStream.ObservedCertificateInfo.LeafOCSPStapledResponse,
+    'Emitted stapled response bytes should match configured material'
+  );
 end;
 
 procedure TestServerAcceptsWithoutOCSPConfigurationOrRequest;
@@ -827,29 +841,25 @@ var
 begin
   LCtx := NewServerContext;
   LStream := TOfflineStaplingObserveClientStream.Create(False);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'WolfSSL server connection without OCSP should be created');
-    if not LConn.Accept then
-      Fail(Format(
-        'WolfSSL server accept should succeed without OCSP configuration or request ' +
-        '(state=%s verify=%d/%s want_read=%s want_write=%s stream_error=%s)',
-        [
-          {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
-          LConn.GetStateString,
-          {$POP}
-          LConn.GetVerifyResult,
-          LConn.GetVerifyResultString,
-          BoolToStr(LConn.WantRead, True),
-          BoolToStr(LConn.WantWrite, True),
-          LStream.LastWriteError
-        ]
-      ));
-    AssertTrue(LStream.ObservedCertificateMessage,
-      'Scripted client should observe the Certificate message for baseline WolfSSL stream handshake');
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'WolfSSL server connection without OCSP should be created');
+  if not LConn.Accept then
+    Fail(Format(
+      'WolfSSL server accept should succeed without OCSP configuration or request ' +
+      '(state=%s verify=%d/%s want_read=%s want_write=%s stream_error=%s)',
+      [
+        {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
+        LConn.GetStateString,
+        {$POP}
+        LConn.GetVerifyResult,
+        LConn.GetVerifyResultString,
+        BoolToStr(LConn.WantRead),
+        BoolToStr(LConn.WantWrite),
+        LStream.LastWriteError
+      ]
+    ));
+  AssertTrue(LStream.ObservedCertificateMessage,
+    'Scripted client should observe the Certificate message for baseline WolfSSL stream handshake');
 end;
 
 procedure TestServerDoesNotEmitStapledOCSPWhenClientDidNotRequestIt;
@@ -870,33 +880,29 @@ begin
   LStaplingContext.SetServerStapledOCSPResponse(LFixture);
 
   LStream := TOfflineStaplingObserveClientStream.Create(False);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'WolfSSL server connection should be created');
-    if not LConn.Accept then
-      Fail(Format(
-        'WolfSSL server accept should succeed without client status_request ' +
-        '(state=%s verify=%d/%s want_read=%s want_write=%s stream_error=%s)',
-        [
-          {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
-          LConn.GetStateString,
-          {$POP}
-          LConn.GetVerifyResult,
-          LConn.GetVerifyResultString,
-          BoolToStr(LConn.WantRead, True),
-          BoolToStr(LConn.WantWrite, True),
-          LStream.LastWriteError
-        ]
-      ));
-    AssertTrue(LStream.ObservedCertificateMessage,
-      'Scripted client should observe the Certificate message');
-    AssertTrue(
-      not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
-      'Server must not emit stapled response when client did not request status_request'
-    );
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'WolfSSL server connection should be created');
+  if not LConn.Accept then
+    Fail(Format(
+      'WolfSSL server accept should succeed without client status_request ' +
+      '(state=%s verify=%d/%s want_read=%s want_write=%s stream_error=%s)',
+      [
+        {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
+        LConn.GetStateString,
+        {$POP}
+        LConn.GetVerifyResult,
+        LConn.GetVerifyResultString,
+        BoolToStr(LConn.WantRead),
+        BoolToStr(LConn.WantWrite),
+        LStream.LastWriteError
+      ]
+    ));
+  AssertTrue(LStream.ObservedCertificateMessage,
+    'Scripted client should observe the Certificate message');
+  AssertTrue(
+    not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
+    'Server must not emit stapled response when client did not request status_request'
+  );
 end;
 
 procedure TestServerKeepsCertificateEntryUnchangedWithoutStapledMaterial;
@@ -907,33 +913,29 @@ var
 begin
   LCtx := NewServerContext;
   LStream := TOfflineStaplingObserveClientStream.Create(True);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'WolfSSL server connection should be created');
-    if not LConn.Accept then
-      Fail(Format(
-        'WolfSSL server accept should succeed without configured stapled response ' +
-        '(state=%s verify=%d/%s want_read=%s want_write=%s stream_error=%s)',
-        [
-          {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
-          LConn.GetStateString,
-          {$POP}
-          LConn.GetVerifyResult,
-          LConn.GetVerifyResultString,
-          BoolToStr(LConn.WantRead, True),
-          BoolToStr(LConn.WantWrite, True),
-          LStream.LastWriteError
-        ]
-      ));
-    AssertTrue(LStream.ObservedCertificateMessage,
-      'Scripted client should observe the Certificate message');
-    AssertTrue(
-      not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
-      'Server should keep CertificateEntry unchanged when stapled response is not configured'
-    );
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'WolfSSL server connection should be created');
+  if not LConn.Accept then
+    Fail(Format(
+      'WolfSSL server accept should succeed without configured stapled response ' +
+      '(state=%s verify=%d/%s want_read=%s want_write=%s stream_error=%s)',
+      [
+        {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
+        LConn.GetStateString,
+        {$POP}
+        LConn.GetVerifyResult,
+        LConn.GetVerifyResultString,
+        BoolToStr(LConn.WantRead),
+        BoolToStr(LConn.WantWrite),
+        LStream.LastWriteError
+      ]
+    ));
+  AssertTrue(LStream.ObservedCertificateMessage,
+    'Scripted client should observe the Certificate message');
+  AssertTrue(
+    not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
+    'Server should keep CertificateEntry unchanged when stapled response is not configured'
+  );
 end;
 
 procedure TestBuilderBuildServerWithoutStapledOCSPStillAccepts;
@@ -945,31 +947,27 @@ begin
   LCtx := NewServerContextFromBuilder;
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Builder-built WolfSSL server connection without stapled file should be created');
-    if not LConn.Accept then
-      Fail(Format(
-        'Builder-built WolfSSL server accept should succeed without stapled response file ' +
-        '(state=%s verify=%d/%s conn_status=%d)',
-        [
-          {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
-          LConn.GetStateString,
-          {$POP}
-          LConn.GetVerifyResult,
-          LConn.GetVerifyResultString,
-          GetWolfSSLConnectionStatusType(LConn)
-        ]
-      ));
-    AssertTrue(LStream.ObservedCertificateMessage,
-      'Scripted client should observe the Certificate message for builder-built context without stapled file');
-    AssertTrue(
-      not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
-      'Builder-built context without stapled file should not emit stapled response'
-    );
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Builder-built WolfSSL server connection without stapled file should be created');
+  if not LConn.Accept then
+    Fail(Format(
+      'Builder-built WolfSSL server accept should succeed without stapled response file ' +
+      '(state=%s verify=%d/%s conn_status=%d)',
+      [
+        {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
+        LConn.GetStateString,
+        {$POP}
+        LConn.GetVerifyResult,
+        LConn.GetVerifyResultString,
+        GetWolfSSLConnectionStatusType(LConn)
+      ]
+    ));
+  AssertTrue(LStream.ObservedCertificateMessage,
+    'Scripted client should observe the Certificate message for builder-built context without stapled file');
+  AssertTrue(
+    not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse,
+    'Builder-built context without stapled file should not emit stapled response'
+  );
 end;
 
 procedure TestBuilderBuildServerLoadsConfiguredStapledOCSPFile;
@@ -1005,50 +1003,46 @@ begin
   );
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Builder-built WolfSSL server connection should be created');
-    if not LConn.Accept then
-      Fail(Format(
-        'Builder-built WolfSSL server accept should succeed with stapled response file ' +
-        '(state=%s verify=%d/%s conn_status=%d status_call_delta=%d)',
-        [
-          {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
-          LConn.GetStateString,
-          {$POP}
-          LConn.GetVerifyResult,
-          LConn.GetVerifyResultString,
-          GetWolfSSLConnectionStatusType(LConn),
-          GStatusOCSPRespCallCount - LStatusCallCountBefore
-        ]
-      ));
-    AssertTrue(LStream.ObservedCertificateMessage,
-      'Scripted client should observe the Certificate message');
-    if not (GStatusOCSPRespCallCount > LStatusCallCountBefore) then
-      Fail(Format(
-        'Builder-driven WolfSSL server handshake should invoke wolfSSL_set_tlsext_status_ocsp_resp when response is configured and requested ' +
-        '(conn_status=%d status_call_delta=%d observed_leaf_stapled=%s extra_handshakes=%s)',
-        [
-          GetWolfSSLConnectionStatusType(LConn),
-          GStatusOCSPRespCallCount - LStatusCallCountBefore,
-          BoolToStr(LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse, True),
-          LStream.ObservedExtraHandshakeTypes
-        ]
-      ));
-    if not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse then
-      Fail(Format(
-        'Builder-driven server context should emit stapled response when requested ' +
-        '(extra_handshakes=%s)',
-        [LStream.ObservedExtraHandshakeTypes]
-      ));
-    AssertBytesEqual(
-      LFixture,
-      LStream.ObservedCertificateInfo.LeafOCSPStapledResponse,
-      'Builder-driven emitted stapled response bytes should match configured file contents'
-    );
-  finally
-    LStream.Free;
-  end;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Builder-built WolfSSL server connection should be created');
+  if not LConn.Accept then
+    Fail(Format(
+      'Builder-built WolfSSL server accept should succeed with stapled response file ' +
+      '(state=%s verify=%d/%s conn_status=%d status_call_delta=%d)',
+      [
+        {$PUSH}{$WARN 6058 off}{$WARN SYMBOL_DEPRECATED OFF}
+        LConn.GetStateString,
+        {$POP}
+        LConn.GetVerifyResult,
+        LConn.GetVerifyResultString,
+        GetWolfSSLConnectionStatusType(LConn),
+        GStatusOCSPRespCallCount - LStatusCallCountBefore
+      ]
+    ));
+  AssertTrue(LStream.ObservedCertificateMessage,
+    'Scripted client should observe the Certificate message');
+  if not (GStatusOCSPRespCallCount > LStatusCallCountBefore) then
+    Fail(Format(
+      'Builder-driven WolfSSL server handshake should invoke wolfSSL_set_tlsext_status_ocsp_resp when response is configured and requested ' +
+      '(conn_status=%d status_call_delta=%d observed_leaf_stapled=%s extra_handshakes=%s)',
+      [
+        GetWolfSSLConnectionStatusType(LConn),
+        GStatusOCSPRespCallCount - LStatusCallCountBefore,
+        BoolToStr(LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse),
+        LStream.ObservedExtraHandshakeTypes
+      ]
+    ));
+  if not LStream.ObservedCertificateInfo.HasLeafOCSPStapledResponse then
+    Fail(Format(
+      'Builder-driven server context should emit stapled response when requested ' +
+      '(extra_handshakes=%s)',
+      [LStream.ObservedExtraHandshakeTypes]
+    ));
+  AssertBytesEqual(
+    LFixture,
+    LStream.ObservedCertificateInfo.LeafOCSPStapledResponse,
+    'Builder-driven emitted stapled response bytes should match configured file contents'
+  );
 end;
 
 begin

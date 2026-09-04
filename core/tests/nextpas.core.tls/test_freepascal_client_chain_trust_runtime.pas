@@ -3,7 +3,16 @@ program test_freepascal_client_chain_trust_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.fs,
+  nextpas.core.path,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -19,9 +28,7 @@ uses
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.crypto.hash,
-  Classes,
-  nextpas.core.io.stream_adapter;
+  nextpas.core.crypto.hash;
 
 type
   TServerMaterial = record
@@ -97,18 +104,8 @@ begin
 end;
 
 function ReadFileBytes(const AFileName: string): TBytes;
-var
-  LStream: TFileStream;
 begin
-  Result := nil;
-  LStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[0], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFile(AFileName);
 end;
 
 function BytesToAnsiString(const AData: TBytes): AnsiString;
@@ -169,8 +166,8 @@ begin
   LOptions.CommonName := ACommonName;
   LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
-  LOptions.NotBefore := Now - 1;
-  LOptions.NotAfter := Now + 30;
+  LOptions.NotBefore := DateTimeNow - 1;
+  LOptions.NotAfter := DateTimeNow + 30;
   SetLength(LOptions.SubjectAltNames, 0);
   try
     for I := Low(ASANs) to High(ASANs) do
@@ -206,8 +203,8 @@ begin
   LOptions.CommonName := ACommonName;
   LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
-  LOptions.NotBefore := Now - 1;
-  LOptions.NotAfter := Now + 30;
+  LOptions.NotBefore := DateTimeNow - 1;
+  LOptions.NotAfter := DateTimeNow + 30;
   SetLength(LOptions.SubjectAltNames, 0);
   try
     for I := Low(ASANs) to High(ASANs) do
@@ -223,16 +220,8 @@ begin
 end;
 
 procedure WriteBytesToFile(const AFileName: string; const AData: TBytes);
-var
-  LStream: TFileStream;
 begin
-  LStream := TFileStream.Create(AFileName, fmCreate);
-  try
-    if Length(AData) > 0 then
-      LStream.WriteBuffer(AData[0], Length(AData));
-  finally
-    LStream.Free;
-  end;
+  WriteFile(AFileName, AData);
 end;
 
 function EnsureCAPathFixture: string;
@@ -246,7 +235,7 @@ begin
 end;
 
 type
-  TScriptedChainTrustServerStream = class(TStream)
+  TScriptedChainTrustServerStream = class(TInterfacedObject, IStream)
   private
     FCipherSuite: Word;
     FReadBuffer: TBytes;
@@ -265,9 +254,13 @@ type
   public
     constructor Create(const ACertificateBlob, APrivateKeyBlob: TBytes);
 
-    function Read(var Buffer; Count: Longint): Longint; override;
-    function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
   end;
 
 constructor TScriptedChainTrustServerStream.Create(const ACertificateBlob, APrivateKeyBlob: TBytes);
@@ -459,34 +452,34 @@ begin
   FWriteStage := 2;
 end;
 
-function TScriptedChainTrustServerStream.Read(var Buffer; Count: Longint): Longint;
+function TScriptedChainTrustServerStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: Int64;
 begin
-  if Count <= 0 then
+  if ACount = 0 then
     Exit(0);
 
   LAvailable := Length(FReadBuffer) - FReadPosition;
   if LAvailable <= 0 then
     Exit(0);
 
-  if Count > LAvailable then
-    Result := Longint(LAvailable)
+  if SizeUInt(LAvailable) > ACount then
+    Result := ACount
   else
-    Result := Count;
+    Result := SizeUInt(LAvailable);
 
-  Move(FReadBuffer[Integer(FReadPosition)], Buffer, Result);
+  Move(FReadBuffer[FReadPosition], ABuf, Result);
   Inc(FReadPosition, Result);
 end;
 
-function TScriptedChainTrustServerStream.Write(const Buffer; Count: Longint): Longint;
+function TScriptedChainTrustServerStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LData: TBytes;
   LOffset, LRecLen: Integer;
 begin
-  SetLength(LData, Count);
-  if Count > 0 then
-    Move(Buffer, LData[0], Count);
+  SetLength(LData, ACount);
+  if ACount > 0 then
+    Move(ABuf, LData[0], ACount);
 
   case FWriteStage of
     0: HandleClientHello(LData);
@@ -506,17 +499,36 @@ begin
       end;
   end;
 
-  Result := Count;
+  Result := ACount;
 end;
 
-function TScriptedChainTrustServerStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+function TScriptedChainTrustServerStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
-  case Origin of
-    soBeginning: FReadPosition := Offset;
-    soCurrent: Inc(FReadPosition, Offset);
-    soEnd: FReadPosition := Length(FReadBuffer) + Offset;
+  case AOrigin of
+    soBeginning: FReadPosition := AOffset;
+    soCurrent: Inc(FReadPosition, AOffset);
+    soEnd: FReadPosition := Length(FReadBuffer) + AOffset;
   end;
   Result := FReadPosition;
+end;
+
+procedure TScriptedChainTrustServerStream.Close;
+begin
+end;
+
+function TScriptedChainTrustServerStream.GetSize: Int64;
+begin
+  Result := Length(FReadBuffer);
+end;
+
+function TScriptedChainTrustServerStream.GetPosition: Int64;
+begin
+  Result := FReadPosition;
+end;
+
+procedure TScriptedChainTrustServerStream.SetPosition(const AValue: Int64);
+begin
+  FReadPosition := AValue;
 end;
 
 function NewClientContext(const AVerifyFlags: TSSLCertVerifyFlags): ISSLContext;
@@ -630,48 +642,40 @@ procedure AssertCASignedHandshakePassesWithContext(
 var
   LMaterial: TServerMaterial;
   LConn: ISSLConnection;
-  LStream: TScriptedChainTrustServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := ALCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, ALabel + ' should create a connection');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := ALCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, ALabel + ' should create a connection');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      ALabel + ' should allow scripted CA-signed certificate to connect');
-    AssertEqualsInt(0, GetCertificateVerifyResult(LConn),
-      ALabel + ' should surface verify success');
-    AssertTrue(
-      SameText(GetCertificateVerifyResultString(LConn), 'OK'),
-      ALabel + ' should surface verify OK string'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    ALabel + ' should allow scripted CA-signed certificate to connect');
+  AssertEqualsInt(0, GetCertificateVerifyResult(LConn),
+    ALabel + ' should surface verify success');
+  AssertTrue(
+    SameText(GetCertificateVerifyResultString(LConn), 'OK'),
+    ALabel + ' should surface verify OK string'
+  );
 end;
 
 procedure TestVerifyResultDoesNotPretendSuccessBeforeHandshake;
 var
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TMemoryStream;
+  LStream: IStream;
 begin
   LCtx := NewClientContext([sslCertVerifyDefault]);
-  LStream := TMemoryStream.Create;
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Fresh FreePascal connection should be created');
-    AssertEqualsInt(-1, GetCertificateVerifyResult(LConn),
-      'Fresh connection must not report verify success before handshake');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'not verified'),
-      'Fresh connection should surface not-verified diagnostic before handshake'
-    );
-  finally
-    LStream.Free;
-  end;
+  LStream := CreateBytesStream;
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Fresh FreePascal connection should be created');
+  AssertEqualsInt(-1, GetCertificateVerifyResult(LConn),
+    'Fresh connection must not report verify success before handshake');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'not verified'),
+    'Fresh connection should surface not-verified diagnostic before handshake'
+  );
 end;
 
 procedure TestCASignedCertificateFailsWithoutTrust;
@@ -679,28 +683,24 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedChainTrustServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LCtx := NewClientContext([sslCertVerifyDefault]);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Untrusted CA-signed connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Untrusted CA-signed connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'CA-signed certificate should fail when no trust material is configured');
-    AssertEqualsInt(Ord(sslErrCertificateUntrusted), GetCertificateVerifyResult(LConn),
-      'Untrusted CA-signed certificate should surface sslErrCertificateUntrusted');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'trust') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'untrusted'),
-      'Untrusted CA-signed certificate should mention trust failure'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'CA-signed certificate should fail when no trust material is configured');
+  AssertEqualsInt(Ord(sslErrCertificateUntrusted), GetCertificateVerifyResult(LConn),
+    'Untrusted CA-signed certificate should surface sslErrCertificateUntrusted');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'trust') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'untrusted'),
+    'Untrusted CA-signed certificate should mention trust failure'
+  );
 end;
 
 procedure TestCASignedCertificatePassesWithCAFile;
@@ -708,28 +708,24 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedChainTrustServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LCtx := NewClientContext([sslCertVerifyDefault]);
   ApplyTrustConfig(LCtx, tcCAFile, '');
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'CA-file connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'CA-file connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Configured CA file should allow scripted CA-signed certificate to connect');
-    AssertEqualsInt(0, GetCertificateVerifyResult(LConn),
-      'Trusted scripted handshake should surface verify success');
-    AssertTrue(
-      SameText(GetCertificateVerifyResultString(LConn), 'OK'),
-      'Trusted scripted handshake should surface verify OK string'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Configured CA file should allow scripted CA-signed certificate to connect');
+  AssertEqualsInt(0, GetCertificateVerifyResult(LConn),
+    'Trusted scripted handshake should surface verify success');
+  AssertTrue(
+    SameText(GetCertificateVerifyResultString(LConn), 'OK'),
+    'Trusted scripted handshake should surface verify OK string'
+  );
 end;
 
 procedure TestCASignedCertificatePassesWithCAPath(const ACAPath: string);
@@ -737,22 +733,18 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedChainTrustServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LCtx := NewClientContext([sslCertVerifyDefault]);
   ApplyTrustConfig(LCtx, tcCAPath, ACAPath);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'CA-path connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'CA-path connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Configured CA path should allow scripted CA-signed certificate to connect');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Configured CA path should allow scripted CA-signed certificate to connect');
 end;
 
 procedure TestCASignedCertificatePassesWithCertificateStore;
@@ -760,22 +752,18 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedChainTrustServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LCtx := NewClientContext([sslCertVerifyDefault]);
   ApplyTrustConfig(LCtx, tcStore, '');
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Certificate-store connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Certificate-store connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Configured certificate store should allow scripted CA-signed certificate to connect');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Configured certificate store should allow scripted CA-signed certificate to connect');
 end;
 
 procedure TestFactoryOneShotConfigPassesWithCAPath(const ACAPath: string);
@@ -860,28 +848,24 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedChainTrustServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateSelfSignedServerMaterial('example.com', ['DNS:example.com']);
   LCtx := NewClientContext([sslCertVerifyDefault]);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Self-signed connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Self-signed connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(not LConn.Connect,
-      'Self-signed certificate should fail when allow-self-signed flag is absent');
-    AssertEqualsInt(Ord(sslErrCertificateUntrusted), GetCertificateVerifyResult(LConn),
-      'Untrusted self-signed certificate should surface sslErrCertificateUntrusted');
-    AssertTrue(
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'trust') or
-      ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'untrusted'),
-      'Self-signed failure should mention trust'
-    );
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(not LConn.Connect,
+    'Self-signed certificate should fail when allow-self-signed flag is absent');
+  AssertEqualsInt(Ord(sslErrCertificateUntrusted), GetCertificateVerifyResult(LConn),
+    'Untrusted self-signed certificate should surface sslErrCertificateUntrusted');
+  AssertTrue(
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'trust') or
+    ContainsTextInsensitive(GetCertificateVerifyResultString(LConn), 'untrusted'),
+    'Self-signed failure should mention trust'
+  );
 end;
 
 procedure TestSelfSignedCertificatePassesWhenAllowed;
@@ -889,21 +873,17 @@ var
   LMaterial: TServerMaterial;
   LCtx: ISSLContext;
   LConn: ISSLConnection;
-  LStream: TScriptedChainTrustServerStream;
+  LStream: IStream;
 begin
   LMaterial := GenerateSelfSignedServerMaterial('example.com', ['DNS:example.com']);
   LCtx := NewClientContext([sslCertVerifyAllowSelfSigned]);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
-  try
-    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
-    AssertTrue(LConn <> nil, 'Allow-self-signed connection should be created');
-    (LConn as ISSLClientConnection).SetServerName('example.com');
+  LConn := LCtx.CreateConnection(LStream);
+  AssertTrue(LConn <> nil, 'Allow-self-signed connection should be created');
+  (LConn as ISSLClientConnection).SetServerName('example.com');
 
-    AssertTrue(LConn.Connect,
-      'Allow-self-signed flag should allow scripted self-signed certificate to connect');
-  finally
-    LStream.Free;
-  end;
+  AssertTrue(LConn.Connect,
+    'Allow-self-signed flag should allow scripted self-signed certificate to connect');
 end;
 
 var
