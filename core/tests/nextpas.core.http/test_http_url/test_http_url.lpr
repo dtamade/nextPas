@@ -7,6 +7,8 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.http.base,
+  nextpas.core.http.intf,
+  nextpas.core.http.message,
   nextpas.core.http.url;
 
 var
@@ -372,6 +374,178 @@ begin
   CheckEqual('token=abc', LResult.RawQuery, 'query set');
 end;
 
+function MakeReq(const ARawQuery: string): IHttpRequest;
+var
+  LUrl: TUrl;
+begin
+  if ARawQuery = '' then
+    LUrl := TUrl.Parse('http://example.com/path')
+  else
+    LUrl := TUrl.Parse('http://example.com/path?' + ARawQuery);
+  Result := THttpRequest.Create(hmGet, LUrl, hvHttp11, nil, nil, 0);
+end;
+
+procedure TestQueryLimitMissing;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('');
+  CheckEqual(Int64(50), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'no query');
+  LReq := MakeReq('other=1');
+  CheckEqual(Int64(50), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'key absent');
+end;
+
+procedure TestQueryLimitNonInteger;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('limit=abc');
+  CheckEqual(Int64(50), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'alpha');
+  LReq := MakeReq('limit=12x');
+  CheckEqual(Int64(50), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'trailing junk');
+  LReq := MakeReq('limit=');
+  CheckEqual(Int64(50), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'empty value');
+  LReq := MakeReq('limit=%2010');
+  CheckEqual(Int64(10), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'Val skips leading space');
+end;
+
+procedure TestQueryLimitZeroNegative;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('limit=0');
+  CheckEqual(Int64(50), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'zero');
+  LReq := MakeReq('limit=-5');
+  CheckEqual(Int64(50), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'negative');
+end;
+
+procedure TestQueryLimitOverMax;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('limit=600');
+  CheckEqual(Int64(500), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'over max clamps');
+  LReq := MakeReq('limit=9999999999');
+  CheckEqual(Int64(500), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'beyond int32 clamps');
+  LReq := MakeReq('limit=9999999999999999999999');
+  CheckEqual(Int64(50), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'beyond int64 fails to default');
+end;
+
+procedure TestQueryLimitValid;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('limit=10');
+  CheckEqual(Int64(10), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'plain');
+  LReq := MakeReq('limit=1');
+  CheckEqual(Int64(1), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'lower bound');
+  LReq := MakeReq('limit=500');
+  CheckEqual(Int64(500), Int64(QueryLimitClamped(LReq, 'limit', 50, 500)), 'at max');
+end;
+
+procedure TestQueryLimitCustomDefault;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('');
+  CheckEqual(Int64(25), Int64(QueryLimitClamped(LReq, 'limit', 25, 500)), 'custom default');
+  LReq := MakeReq('limit=oops');
+  CheckEqual(Int64(25), Int64(QueryLimitClamped(LReq, 'limit', 25, 500)), 'custom default on junk');
+end;
+
+procedure TestQueryOffsetMissing;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('');
+  CheckEqual(Int64(0), Int64(QueryOffsetClamped(LReq, 'offset')), 'default default');
+  CheckEqual(Int64(7), Int64(QueryOffsetClamped(LReq, 'offset', 7)), 'custom default');
+end;
+
+procedure TestQueryOffsetNonInteger;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('offset=abc');
+  CheckEqual(Int64(0), Int64(QueryOffsetClamped(LReq, 'offset')), 'alpha');
+  LReq := MakeReq('offset=');
+  CheckEqual(Int64(3), Int64(QueryOffsetClamped(LReq, 'offset', 3)), 'empty keeps custom default');
+end;
+
+procedure TestQueryOffsetNegative;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('offset=-1');
+  CheckEqual(Int64(0), Int64(QueryOffsetClamped(LReq, 'offset')), 'negative');
+end;
+
+procedure TestQueryOffsetHuge;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('offset=9999999999');
+  CheckEqual(Int64(0), Int64(QueryOffsetClamped(LReq, 'offset')), 'beyond int32 fails to default');
+  LReq := MakeReq('offset=9999999999999999999999');
+  CheckEqual(Int64(4), Int64(QueryOffsetClamped(LReq, 'offset', 4)), 'beyond int64 keeps default');
+end;
+
+procedure TestQueryOffsetValid;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := MakeReq('offset=30');
+  CheckEqual(Int64(30), Int64(QueryOffsetClamped(LReq, 'offset')), 'plain');
+  LReq := MakeReq('offset=0');
+  CheckEqual(Int64(0), Int64(QueryOffsetClamped(LReq, 'offset')), 'zero is valid offset');
+end;
+
+procedure TestQueryClampBadMaxRaises;
+var
+  LReq: IHttpRequest;
+  LCaught: Boolean;
+begin
+  LReq := MakeReq('limit=10');
+  LCaught := False;
+  try
+    QueryLimitClamped(LReq, 'limit', 50, 0);
+  except
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
+  end;
+  Check(LCaught, 'max 0 raises hekArgument');
+  LCaught := False;
+  try
+    QueryLimitClamped(LReq, 'limit', 50, -1);
+  except
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
+  end;
+  Check(LCaught, 'negative max raises hekArgument');
+end;
+
+procedure TestQueryClampNilReqRaises;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    QueryLimitClamped(nil, 'limit', 50, 500);
+  except
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
+  end;
+  Check(LCaught, 'nil req raises hekArgument (limit)');
+  LCaught := False;
+  try
+    QueryOffsetClamped(nil, 'offset');
+  except
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
+  end;
+  Check(LCaught, 'nil req raises hekArgument (offset)');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.url');
   T.Test('UrlEncode simple', @TestUrlEncodeSimple);
@@ -407,5 +581,18 @@ begin
   T.Test('TUrl.HasQueryParam', @TestUrlHasQueryParam);
   T.Test('TUrl.HasQueryParam no query', @TestUrlHasQueryParamNoQuery);
   T.Test('TUrl.AddQuery preserves other fields', @TestUrlAddQueryPreservesOtherFields);
+  T.Test('QueryLimitClamped missing', @TestQueryLimitMissing);
+  T.Test('QueryLimitClamped non-integer', @TestQueryLimitNonInteger);
+  T.Test('QueryLimitClamped zero/negative', @TestQueryLimitZeroNegative);
+  T.Test('QueryLimitClamped over max', @TestQueryLimitOverMax);
+  T.Test('QueryLimitClamped valid', @TestQueryLimitValid);
+  T.Test('QueryLimitClamped custom default', @TestQueryLimitCustomDefault);
+  T.Test('QueryOffsetClamped missing', @TestQueryOffsetMissing);
+  T.Test('QueryOffsetClamped non-integer', @TestQueryOffsetNonInteger);
+  T.Test('QueryOffsetClamped negative', @TestQueryOffsetNegative);
+  T.Test('QueryOffsetClamped huge', @TestQueryOffsetHuge);
+  T.Test('QueryOffsetClamped valid', @TestQueryOffsetValid);
+  T.Test('QueryLimitClamped bad max raises', @TestQueryClampBadMaxRaises);
+  T.Test('QueryClamped nil req raises', @TestQueryClampNilReqRaises);
   if not T.Run then Halt(1);
 end.

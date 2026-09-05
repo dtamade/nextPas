@@ -5,7 +5,9 @@ unit nextpas.core.http.url;
 interface
 
 uses
-  nextpas.core.http.base;
+  nextpas.core.http.base,
+  nextpas.core.http.intf,
+  nextpas.core.text.conv;
 
 type
   TQueryParam = record
@@ -22,6 +24,17 @@ function ParseQueryString(const AQuery: string): TQueryParams;
 function EncodeQueryString(const AParams: TQueryParams): string;
 function QueryParamValue(const AParams: TQueryParams; const AName: string): string;
 function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean;
+{ Pagination clamps (query owned here; extensions/umbrella only forward).
+  Wire input never raises: missing/non-integer/<=0 fail to ADefault, limit
+  >AMax clamps to AMax, offset <0 or >High(Integer) fails to ADefault.
+  AReq = nil and AMax <= 0 are caller programming errors: raise
+  EHttpError(hekArgument), matching http invalid-argument discipline
+  (ValidateBufferSize / HttpWriteStream nil guards). Parse is Val-based
+  (text.conv.TryStrToInt64, no trim). }
+function QueryLimitClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault, AMax: Integer): Integer;
+function QueryOffsetClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault: Integer = 0): Integer;
 
 implementation
 
@@ -238,6 +251,43 @@ begin
       Exit;
     end;
   Result := False;
+end;
+
+function QueryLimitClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault, AMax: Integer): Integer;
+var
+  LVal: Int64;
+begin
+  if AReq = nil then
+    raise EHttpError.Create(hekArgument, 'QueryLimitClamped: request is nil');
+  if AMax <= 0 then
+    raise EHttpError.Create(hekArgument, 'QueryLimitClamped: max must be positive');
+  Result := ADefault;
+  if not TryStrToInt64(AReq.QueryParam(AName), LVal) then
+    Exit;
+  if LVal <= 0 then
+    Exit;
+  if LVal > AMax then
+  begin
+    Result := AMax;
+    Exit;
+  end;
+  Result := Integer(LVal);
+end;
+
+function QueryOffsetClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault: Integer): Integer;
+var
+  LVal: Int64;
+begin
+  if AReq = nil then
+    raise EHttpError.Create(hekArgument, 'QueryOffsetClamped: request is nil');
+  Result := ADefault;
+  if not TryStrToInt64(AReq.QueryParam(AName), LVal) then
+    Exit;
+  if (LVal < 0) or (LVal > High(Integer)) then
+    Exit;
+  Result := Integer(LVal);
 end;
 
 end.

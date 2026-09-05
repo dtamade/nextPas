@@ -283,6 +283,12 @@ function EncodeQueryString(const AParams: TQueryParams): string; inline;
 function QueryParamValue(const AParams: TQueryParams; const AName: string): string; inline;
 {** @desc Check if query parameter exists }
 function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean; inline;
+{** @desc Clamp integer query param to 1..AMax (missing/invalid/<=0 → ADefault) }
+function QueryLimitClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault, AMax: Integer): Integer; inline;
+{** @desc Clamp integer query param to >=0 (missing/invalid/negative → ADefault) }
+function QueryOffsetClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault: Integer = 0): Integer; inline;
 
 { === Section B: Minimal — router (→ minimal) === }
 {** @desc Create a new HTTP router (path-pattern → handler mapping) }
@@ -874,6 +880,18 @@ end;
 function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean;
 begin
   Result := nextpas.core.http.extensions.QueryParamHas(AParams, AName);
+end;
+
+function QueryLimitClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault, AMax: Integer): Integer;
+begin
+  Result := nextpas.core.http.extensions.QueryLimitClamped(AReq, AName, ADefault, AMax);
+end;
+
+function QueryOffsetClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault: Integer): Integer;
+begin
+  Result := nextpas.core.http.extensions.QueryOffsetClamped(AReq, AName, ADefault);
 end;
 
 { === Impl B: Minimal router (→ minimal) === }

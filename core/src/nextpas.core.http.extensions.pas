@@ -98,6 +98,10 @@ function ParseQueryString(const AQuery: string): TQueryParams; inline;
 function EncodeQueryString(const AParams: TQueryParams): string; inline;
 function QueryParamValue(const AParams: TQueryParams; const AName: string): string; inline;
 function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean; inline;
+function QueryLimitClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault, AMax: Integer): Integer; inline;
+function QueryOffsetClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault: Integer = 0): Integer; inline;
 
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
@@ -209,6 +213,18 @@ end;
 function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean;
 begin
   Result := nextpas.core.http.url.QueryParamHas(AParams, AName);
+end;
+
+function QueryLimitClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault, AMax: Integer): Integer;
+begin
+  Result := nextpas.core.http.url.QueryLimitClamped(AReq, AName, ADefault, AMax);
+end;
+
+function QueryOffsetClamped(const AReq: IHttpRequest; const AName: string;
+  ADefault: Integer): Integer;
+begin
+  Result := nextpas.core.http.url.QueryOffsetClamped(AReq, AName, ADefault);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;
