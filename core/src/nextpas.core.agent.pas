@@ -237,18 +237,31 @@ function SerializePlatformQuotaItem(const AItem: TPlatformQuotaItem;
 function PlatformQuotaSerialize(const AItem: TPlatformQuotaItem;
   const ANowSec: Int64): string; inline;
 
-{ ── 定价 · 纯策略计费 · Phase1 T1.1 / T1.4 ── }
+{ ── 定价 · 纯策略计费 · Phase1 T1.1 / T1.4 / C2 V2 ── }
 type
   TModelPricing = nextpas.core.agent.pricing.TModelPricing;
   TPassthroughPricing = nextpas.core.agent.pricing.TPassthroughPricing;
+  TRateScope = nextpas.core.agent.pricing.TRateScope;
 
 const
   CDefaultPromptPer1k = nextpas.core.agent.pricing.CDefaultPromptPer1k;
   CDefaultCompletionPer1k = nextpas.core.agent.pricing.CDefaultCompletionPer1k;
+  CRateDenominator = nextpas.core.agent.pricing.CRateDenominator;
 
 function EstimateCost(const APricing: TModelPricing;
   APromptTokens, ACompletionTokens: Int64;
   ARateMultiplier: Int64 = 10000): Int64; overload; inline;
+  deprecated 'Use EstimateCostV2 or EstimateCostWithScope(rsTotal); V1 completion-only rate frozen';
+function EstimateCostV2(const APricing: TModelPricing;
+  APromptTokens, ACompletionTokens: Int64;
+  ARateMultiplier: Int64 = 10000): Int64; overload; inline;
+function EstimateCostLegsV2(const APricing: TModelPricing;
+  APromptTokens, ACompletionTokens: Int64; ARateMultiplier: Int64;
+  out APromptLegUsd6, ACompletionLegUsd6: Int64): Int64;
+function EstimateCostWithScope(const APricing: TModelPricing;
+  APromptTokens, ACompletionTokens: Int64; ARateMultiplier: Int64;
+  AScope: TRateScope): Int64; inline;
+function ApplyRateTotal(ACostUsd6, ARateMultiplier, ARateDenominator: Int64): Int64; inline;
 function EstimateCost(const AUsage: TTokenUsage): Int64; overload; inline;
 function EstimateCost(const AUsage: TTokenUsage;
   APromptPer1k, ACompletionPer1k: Int64): Int64; overload; inline;
@@ -607,6 +620,35 @@ function EstimateCost(const APricing: TModelPricing;
 begin
   Result := nextpas.core.agent.pricing.EstimateCost(APricing,
     APromptTokens, ACompletionTokens, ARateMultiplier);
+end;
+
+function EstimateCostV2(const APricing: TModelPricing;
+  APromptTokens, ACompletionTokens: Int64; ARateMultiplier: Int64): Int64; overload;
+begin
+  Result := nextpas.core.agent.pricing.EstimateCostV2(APricing,
+    APromptTokens, ACompletionTokens, ARateMultiplier);
+end;
+
+function EstimateCostLegsV2(const APricing: TModelPricing;
+  APromptTokens, ACompletionTokens: Int64; ARateMultiplier: Int64;
+  out APromptLegUsd6, ACompletionLegUsd6: Int64): Int64;
+begin
+  Result := nextpas.core.agent.pricing.EstimateCostLegsV2(APricing,
+    APromptTokens, ACompletionTokens, ARateMultiplier, APromptLegUsd6, ACompletionLegUsd6);
+end;
+
+function EstimateCostWithScope(const APricing: TModelPricing;
+  APromptTokens, ACompletionTokens: Int64; ARateMultiplier: Int64;
+  AScope: TRateScope): Int64;
+begin
+  Result := nextpas.core.agent.pricing.EstimateCostWithScope(APricing,
+    APromptTokens, ACompletionTokens, ARateMultiplier, AScope);
+end;
+
+function ApplyRateTotal(ACostUsd6, ARateMultiplier, ARateDenominator: Int64): Int64;
+begin
+  Result := nextpas.core.agent.pricing.ApplyRateTotal(ACostUsd6,
+    ARateMultiplier, ARateDenominator);
 end;
 
 function EstimateCost(const AUsage: TTokenUsage): Int64; overload;

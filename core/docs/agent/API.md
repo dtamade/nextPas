@@ -1021,8 +1021,8 @@ end;
 | 配额窗口 `pqDay/pqWeek/pqMonth` | 86_400 / 604_800 / 2_592_000 秒（`PlatformQuotaWindowSeconds` 单一真源，4 标量全 `inline`；`WindowExpired` 含 `AStart≤0` 永不过期与 `ANow<AStart` 回拨过期；`Exceeded` 含 `High` 溢出钳制） | `nextpas.core.agent.quota` |
 | Logger 缺省 | `nil` → `NullLogger`（`log.intf`，零开销） | SELECTION C15 |
 | env 前缀 | `NEXTPAS_AGENT_<VENDOR>_` | CONSUMERS §3 |
-| 定价 · RateDenominator / ARateMultiplier 默认 | 10_000（1.0x；`TModelPricing.RateDenominator` 缺省，`EstimateCost` 的 `ARateMultiplier` 默认 10_000，`<=0` 按 1.0x） | pricing 单元 |
-| 定价 · EstimateCost 舍入 | `(prompt*per1kPrompt+500) div 1000 + (completion*per1kCompletion*rate+5000) div 10000` μUSD（整数微元，四舍五入同源 `tk888.billing.pas:22,212`） | pricing 单元 |
+| 定价 · RateDenominator / ARateMultiplier 默认 | 10_000（1.0x；V1 `EstimateCost` 的 `ARateMultiplier` 默认 10_000，`<=0` 按 1.0x；`TModelPricing.RateDenominator` 在 V1 未读（实现恒 10_000），自 `EstimateCostV2` 起生效，`<=0` 回落 10_000） | pricing 单元（C2，2026-09-05） |
+| 定价 · EstimateCost 舍入 | V1 冻结（deprecated）：`(prompt*per1kPrompt+500) div 1000 + (completion*per1kCompletion*rate+5000) div 10000` μUSD（倍率仅 completion 腿）；V2 `EstimateCostV2` 整单总额：基费 `(prompt*per1kPrompt+500) div 1000 + (completion*per1kCompletion+500) div 1000` 再 `(total*rate+denom div 2) div denom` 一次作用（整数微元，四舍五入同源 `tk888.billing.pas:22,212`） | pricing 单元（C2，2026-09-05） |
 | 定价 · ImageTier 档位 | max-edge ≤1024→1000 · ≤2048→2000 · else 4000（含 `2048x2048→2000` 特判 `billing:470`） | pricing 单元 |
 | 定价 · TPassthroughPricing.FlatCostUsd6 缺省 | 0（未定价不计费） | pricing 单元 |
 | 有界快照预算 `CBoundedSnapshotBudget` | 6000 | `nextpas.core.agent.snapshot` 单一真源（门面 `CBoundedSnapshotBudget` 透出，`PROMPT-BUDGET.md` 有界管线） |
