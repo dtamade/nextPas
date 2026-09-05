@@ -71,6 +71,13 @@ var
   Contents: TResPackBytesArrayEx;
   TNoDedup, TDup50, TDupMiss: QWord;
   PeakBefore, PeakAfter: UInt64;
+
+{ 符号差百分比：dedup 更快时 QWord 相减回绕，Int64 差值直显（warn 门限比较不受影响）。 }
+function RatioDeltaPct(const ANew, ABase: QWord): Int64; inline;
+begin
+  Result := (Int64(ANew) - Int64(ABase)) * 100 div Int64(ABase);
+end;
+
 begin
   try
     WriteLn('=== respack writer dedup benchmark ===');
@@ -84,13 +91,13 @@ begin
     TDup50 := BenchOnce(Entries, True);
     WriteLn('50% dup dedup on: ', TDup50, ' ms (blob -48% expected)');
     if TNoDedup > 0 then
-      WriteLn('  ratio +', ((TDup50 - TNoDedup) * 100 div TNoDedup), '%');
+      WriteLn('  ratio ', RatioDeltaPct(TDup50, TNoDedup), '%');
     SetLength(Entries, 0); SetLength(Contents, 0);
     BuildEntries(64, 8 * 1024 * 1024, 0, Entries, Contents);
     TDupMiss := BenchOnce(Entries, True);
     WriteLn('0% dup dedup on (miss): ', TDupMiss, ' ms');
     if TNoDedup > 0 then
-      WriteLn('  ratio +', ((TDupMiss - TNoDedup) * 100 div TNoDedup), '%');
+      WriteLn('  ratio ', RatioDeltaPct(TDupMiss, TNoDedup), '%');
     PeakAfter := ProcessPeakRssBytes;
     WriteLn('peak rss after: ', PeakAfter div 1048576, ' MB');
     WriteLn('gates: 50% dup ≤1.08×, miss ≤1.15×, both ≤1.3× Go/Rust');

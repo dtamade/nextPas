@@ -10,6 +10,8 @@ FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)
 
 build:
 	mkdir -p $(BUILD_DIR)
+	# Drop cached .ppu: stale caches across source/flag drift crash trunk (EListError); rebuilds recompile anyway.
+	rm -f $(BUILD_DIR)/*.ppu
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
 run: build
