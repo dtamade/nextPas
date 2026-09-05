@@ -86,7 +86,7 @@ nextpas.core.respack.embed.pas          ← blob→.inc/.inc unit 纯内存生�
 | `writer.builder` | `base` + `writer.layout` + `bytes.ops` | 头/index/string 单源 |
 | `writer` | `writer.layout` + `writer.builder` + `base` | GetMem 一次性，定向清零 |
 | `writer.stream` | `writer.layout` + `writer.builder` + `base` | 复用布局，~1×+头 分段 |
-| `dirsource` | `writer`/`reader` + `fs` + `io.mapped` + `path` + `bytes.ops`/`text.strings` | 唯一 L2→L2 IO seam |
+| `dirsource` | `writer`/`reader` + `fs` + `path` + `dirsource.mmap`（`io.mapped` 经 `mmap` 单源，本单元不直引） + `bytes.ops`/`text.strings` | 唯一 L2→L2 FS seam |
 | `embed` | `text.strings`/`text.char`/`text.conv` + `bytes.ops` + `encoding.hex` + `embed.limits` | 纯内存 blob→.inc |
 
 `reader`/`writer` 不依赖 fs/io；`embed` 仅依赖 L1 `text.strings`/`text.char`/`text.conv` + `bytes.ops`/`encoding.hex`（零 fs，`fs.glob` 薄转发至同源；`BytesCopy`/`BytesConcatMany` 单源零拷贝 inline 热路径 + 组装阈值 4MiB 前置拒绝）：blob 输入输出一律 `(PByte, SizeUInt)` 或调用方提供的

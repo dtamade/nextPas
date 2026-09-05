@@ -9,7 +9,7 @@ uses
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，
      与 test_fs/test_vfs_source_contract 同机制，不自造）
   2) L2→L2 seam 唯一性：除 respack.dirsource/dirsource.mmap 外，
-     任何 respack 单元不得引用 nextpas.core.fs / nextpas.core.io.mapped（dirsource 唯一 L2→L2 IO seam：fs+io.mapped；dirsource.mmap 为其视图单源：io.mapped）
+     任何 respack 单元不得引用 nextpas.core.fs / nextpas.core.io.mapped（dirsource 唯一 L2→L2 FS seam：fs+path；io.mapped 经 dirsource.mmap 视图单源，本单元不直引；dirsource.mmap 为其视图单源：io.mapped）
   3) 异常根纪律：错误族挂在 nextpas.core.exception
   4) 单源收敛：bytes.ops/bytes.binary 等零拷贝单源；writer.layout 布局单源
      (bytes.ops inline 零拷贝 + collections.algorithms Sort + mem.base AlignUp64)，
@@ -105,7 +105,7 @@ var
   I: Integer;
   Src: string;
 begin
-  { 白名单外的单元一律禁 fs/io.mapped 引用；dirsource/dirsource.mmap 是唯一的 L2→L2 IO seam（dirsource: fs+io.mapped；dirsource.mmap: io.mapped 视图单源 via mem.memory_map，registry 明示 + source-contract 门禁，同 vfs.os 范式） }
+  { 白名单外的单元一律禁 fs/io.mapped 引用；dirsource(fs+path)/dirsource.mmap(io.mapped 视图单源)是唯一的 L2→L2 FS seam（dirsource 本单元不直引 io.mapped，经 dirsource.mmap 单源，registry 明示 + source-contract 门禁，同 vfs.os 范式） }
   for I := Low(NO_SEAM) to High(NO_SEAM) do
     AssertNoFsSeam(NO_SEAM[I], LoadSourceText(NO_SEAM[I]));
   { embed 已收敛至 L1 text.strings/text.char/text.conv 三单源（GlobMatch/IsAlpha/IntToStr 各归一、PChar 零拷贝 + inline，fs.glob 薄转发同源），不再构成 L2→L2 }
@@ -176,10 +176,10 @@ begin
   Check(Pos('inline', LoadSourceText('src/nextpas.core.embed.pas')) > 0,
     'embed facade inline evidence');
 
-  { 正向断言：seam 单元确实声明了 fs+io.mapped 依赖（防白名单失效漂移，uses graph 校验） }
+  { 正向断言：seam 单元声明了 fs 依赖、mmap 单元声明了 io.mapped 依赖（防白名单失效漂移，uses graph 校验；dirsource 本单元不直引 io.mapped） }
   Src := LoadSourceText('src/nextpas.core.respack.dirsource.pas');
   Check(FindUsesUnit(Src, 'nextpas.core.fs'), 'dirsource declares fs dependency (uses graph)');
-  Check(FindUsesUnit(Src, 'nextpas.core.io.mapped'), 'dirsource declares io.mapped mmap dependency (uses graph)');
+  Check(not FindUsesUnit(Src, 'nextpas.core.io.mapped'), 'dirsource must not reference io.mapped directly (mmap view via dirsource.mmap single source, uses graph)');
   Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'dirsource declares bytes.ops BytesCopy single source');
   Check(Pos('BytesCopy', Src) > 0, 'dirsource reuses BytesCopy single source (no bare Move)');
   Check(Pos('ResPackEmbedBuild', Src) > 0, 'dirsource hosts ResPackEmbedBuild (IO seam, embed is pure)');
@@ -188,8 +188,9 @@ begin
   Check(Pos('RelativizePath', Src) > 0, 'dirsource single RelativizePath via PathStripPrefix');
   Check(Pos('FilterRelPath', Src) > 0, 'dirsource DRY FilterRelPath pipeline');
   Check(Pos('TryReserveTotal', Src) > 0, 'dirsource DRY TryReserveTotal/TryAddSizeUInt single source');
-  Check(Pos('EnsureStreamCapacity', Src) > 0, 'dirsource DRY EnsureStreamCapacity');
-  Check(Pos('EnsureEmbedCapacity', Src) > 0, 'dirsource DRY EnsureEmbedCapacity');
+  Check(Pos('AppendMmapEntry', Src) > 0, 'dirsource stream/embed shared AppendMmapEntry emit single source');
+  Check(Pos('CleanRootDir', Src) > 0, 'dirsource shared CleanRootDir collect precheck single source');
+  Check(Pos('BuildBlobFromEntries', Src) > 0, 'dirsource memory/embed shared BuildBlobFromEntries layout single source');
   Check(Pos('ResPackEntriesFromDir', Src) > 0, 'dirsource ResPackEntriesFromDir small-pack guidance');
   Check(Pos('RESPACK_DIRSOURCE_LEGACY_LIMIT', Src) > 0, 'dirsource extracts 64MiB to RESPACK_DIRSOURCE_LEGACY_LIMIT (no magic)');
   Check(Pos('SizeUInt(64) * 1024 * 1024', Src) = 0, 'dirsource must not have bare 64MiB magic (use constant)');
@@ -209,6 +210,7 @@ begin
   Src := LoadSourceText('src/nextpas.core.respack.dirsource.mmap.pas');
   Check(FindUsesUnit(Src, 'nextpas.core.io.mapped'), 'dirsource.mmap declares io.mapped mmap dependency (uses graph)');
   Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'dirsource.mmap must not reference fs (uses graph)');
+  Check(Pos('TResPackMapsArray', Src) > 0, 'dirsource.mmap owns TResPackMapsArray anchor array single source');
   Check(Pos('nextpas.core.text.conv', Src) > 0, 'dirsource.mmap declares text.conv IntToStr single source');
   Check(Pos('MmapOpen', Src) > 0, 'dirsource.mmap zero-copy MmapOpen single source');
   Check(Pos('TryMmapRequire', Src) > 0, 'dirsource.mmap declares TryMmapRequire single source');
@@ -256,11 +258,11 @@ procedure TestExceptionRootDiscipline;
 var
   Src: string;
 begin
-  { 错误族必须显式继承自 nextpas.core.exception.Exception 根。
+  { 错误族必须显式继承自 nextpas.core.exception 框架根 ENextPasError。
     裸 RTL 引用已由扫描器覆盖；此处断言声明形态本身 }
   Src := LoadSourceText('src/nextpas.core.respack.base.pas');
   Check(Pos('nextpas.core.exception', Src) > 0, 'references exception root: base');
-  Check(Pos('= class(Exception)', Src) > 0, 'errors inherit exception root: base');
+  Check(Pos('= class(ENextPasError)', Src) > 0, 'errors inherit framework root ENextPasError: base');
   Check(Pos('nextpas.core.bytes.binary', Src) > 0, 'base declares bytes.binary single source');
   Check(Pos('nextpas.core.bytes.pathvalid', Src) > 0, 'base declares bytes.pathvalid single source');
   Check(Pos('nextpas.core.checksum.fnv32', Src) > 0, 'base declares checksum.fnv32 single source');
