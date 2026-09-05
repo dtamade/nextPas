@@ -82,6 +82,10 @@ type
   TResPackDigestFunc = reference to procedure(const AData: PByte;
     const ASize: SizeUInt; const ADigestOut: PByte);
 
+  { 流式写回调单源：writer.stream/intf/门面均转发此声明，零分叉。 }
+  TResPackWriteProc = reference to procedure(const AData: PByte;
+    const ASize: SizeUInt);
+
   TResPackBuildOptions = record
     Deduplicate: Boolean;         { fnv 候选 + 字节回验后复用槽位 }
     Hashes: Boolean;              { 计算并写入条目 FNV-1a }
@@ -175,7 +179,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid,
   nextpas.core.checksum.fnv32,
-  nextpas.core.mem,
   nextpas.core.text.number;
 
 function RdU16LE(AData: PByte): Word; inline;

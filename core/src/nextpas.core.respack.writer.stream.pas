@@ -12,7 +12,8 @@ uses
   nextpas.core.respack.writer.layout;
 
 type
-  TResPackWriteProc = reference to procedure(const AData: PByte; const ASize: SizeUInt);
+  { 单源于 base，兼容别名，零分叉。 }
+  TResPackWriteProc = nextpas.core.respack.base.TResPackWriteProc;
 
 { 流式两遍构造：与 ResPackBuild 同确定性（INV-R5），分段经 AWrite 回调输出，
   不一次性持有 Total 输出缓冲。 }
@@ -22,6 +23,12 @@ procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
 procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
   const AWrite: TResPackWriteProc);
+{ 内存 Sink 单源 Emit 封装：已算布局直写堆 blob，GetMem 单次+BytesCopy 单源
+  inline 零拷贝直填+Off 校验，异常 FreeMem 不丢；writer/dirsource 双 Build 共用，
+  消三处复制。 }
+function ResPackBuildLayoutBlob(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout): TResPackBlob;
+{ 纯预取总长：独立 Compute 1×；需随后输出时请 Compute 1× + Emit/BuildLayoutBlob 直排，勿 Size + BuildStream 连调致 2× 排序/去重。 }
 function ResPackBuildStreamSize(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): UInt64;
 
@@ -231,6 +238,46 @@ begin
     Result := L.Total;
   finally
     ResPackLayoutClear(L);
+  end;
+end;
+
+function ResPackBuildLayoutBlob(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout): TResPackBlob;
+var
+  Total: UInt64;
+  Buf: PByte;
+  Off: SizeUInt;
+  Sink: TResPackWriteProc;
+begin
+  Result.Data := nil;
+  Result.Size := 0;
+  Result.Owned := False;
+  Total := ALayout.Total;
+  if Total = 0 then Exit;
+  if Total > High(SizeUInt) then
+    raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
+  Buf := nil;
+  GetMem(Buf, SizeUInt(Total));
+  Off := 0;
+  Sink :=
+    procedure(const AData: PByte; const ASize: SizeUInt)
+    begin
+      if ASize = 0 then Exit;
+      BytesCopy(Buf + Off, AData, ASize);
+      Inc(Off, ASize);
+    end; { 单闭包/Build，堆分配一次，零每块分配；BytesCopy inline 快道 }
+  try
+    ResPackEmitLayout(AEntries, AOpts, ALayout, Sink);
+    if Off <> SizeUInt(Total) then
+      raise EResPackError.Create('respack: stream size mismatch');
+    Result.Data := Buf;
+    Result.Size := SizeUInt(Total);
+    Result.Owned := True;
+    Buf := nil;
+  except
+    if Buf <> nil then
+      FreeMem(Buf);
+    raise;
   end;
 end;
 
