@@ -1083,55 +1083,29 @@ end;
 
 procedure ScanNulFieldTruncations(const ABlock: TByteSpan; const AFields: array of TFieldRange; ATruncs: PSizeUInt);
 var
-  N, I, LCap: SizeUInt;
-  Found: SizeUInt;
+  N, I: SizeUInt;
   LOff, LLen: SizeUInt;
-  LIdx: SmallInt;
-  LMap: array[0..511] of SmallInt; // stack LUT: off -> field index, -1 = none, FillChar $FF = -1; eliminates inner J loop
-  K: SizeUInt;
   LFnd: SizeInt;
 begin
-  // perf: single 512B pass truncates N fields at first NUL via offset->field LUT (stack, zero-alloc, zero-copy PByte view, out-of-line per design-conventions loop ban). Branch 3584->512/Next (~7x, 2000条目 7M->1M), single source Span/bytes.ops for tar 7-field cache; early exit when Found=N.
+  // 每域首字节零速判 + MemFindByte 单源，大小通路合一，无 512B LUT
   N := SizeUInt(Length(AFields));
   for I := 0 to N - 1 do
     ATruncs[I] := AFields[I].Len;
   if (ABlock.Len = 0) or (ABlock.Data = nil) or (N = 0) then Exit;
-  // fast path: tar header 512B fits stack LUT 512; longer blocks fallback to per-field SpanIndexOf SIMD single source (still O(N*fieldLen) zero-copy, no 512*N double loop)
-  if ABlock.Len > 512 then
-  begin
-    for I := 0 to N - 1 do
-    begin
-      LOff := AFields[I].Off;
-      LLen := AFields[I].Len;
-      if (LOff >= ABlock.Len) or (LLen = 0) then Continue;
-      if LOff + LLen > ABlock.Len then LLen := ABlock.Len - LOff;
-      LFnd := SpanIndexOf(TByteSpan.Create(ABlock.Data + LOff, LLen), 0);
-      if LFnd >= 0 then
-        ATruncs[I] := SizeUInt(LFnd);
-    end;
-    Exit;
-  end;
-  LCap := ABlock.Len;
-  FillChar(LMap, SizeOf(LMap), $FF); // -1
   for I := 0 to N - 1 do
   begin
     LOff := AFields[I].Off;
     LLen := AFields[I].Len;
-    if LOff >= LCap then Continue;
-    if LOff + LLen > LCap then LLen := LCap - LOff;
-    for K := 0 to LLen - 1 do
-      LMap[LOff + K] := SmallInt(I);
-  end;
-  Found := 0;
-  for I := 0 to LCap - 1 do
-  begin
-    if ABlock.Data[I] <> 0 then Continue;
-    LIdx := LMap[I];
-    if LIdx < 0 then Continue;
-    if ATruncs[SizeUInt(LIdx)] <> AFields[SizeUInt(LIdx)].Len then Continue;
-    ATruncs[SizeUInt(LIdx)] := I - AFields[SizeUInt(LIdx)].Off;
-    Inc(Found);
-    if Found = N then Exit;
+    if (LLen = 0) or (LOff >= ABlock.Len) then Continue;
+    if LOff + LLen > ABlock.Len then LLen := ABlock.Len - LOff;
+    if ABlock.Data[LOff] = 0 then
+      ATruncs[I] := 0
+    else
+    begin
+      LFnd := SpanIndexOf(TByteSpan.Create(ABlock.Data + LOff, LLen), 0);
+      if LFnd >= 0 then
+        ATruncs[I] := SizeUInt(LFnd);
+    end;
   end;
 end;
 
