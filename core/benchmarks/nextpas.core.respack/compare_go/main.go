@@ -18,25 +18,40 @@ func printResult(name string, iters uint64, elapsed time.Duration) {
 }
 
 func benchEmbedReadFile(duration time.Duration) {
+	// Accumulate a checksum over the full contents and print it: without
+	// consuming the bytes the optimizer eliminates the read (measured
+	// ~1.6µs hollow loop instead of a real ~7µs payload read).
+	var acc uint64
 	for i := 0; i < warmupIters; i++ {
-		embeddedFS.ReadFile("testdata/file0000.bin")
+		data, _ := embeddedFS.ReadFile("testdata/file0000.bin")
+		for _, b := range data {
+			acc += uint64(b)
+		}
 	}
 	var iters uint64
 	start := time.Now()
 	for time.Since(start) < duration {
-		embeddedFS.ReadFile("testdata/file0000.bin")
+		data, _ := embeddedFS.ReadFile("testdata/file0000.bin")
+		for _, b := range data {
+			acc += uint64(b)
+		}
 		iters++
 	}
 	elapsed := time.Since(start)
+	fmt.Printf("  checksum: %016x\n", acc)
 	printResult("go-embed/FS-4k", iters, elapsed)
 }
 
 func benchEmbedOpenRead(duration time.Duration) {
 	// startup path: Open + ReadAll (mirrors ResPackOpen+Find)
+	var acc uint64
 	for i := 0; i < warmupIters; i++ {
 		f, _ := embeddedFS.Open("testdata/file0000.bin")
 		buf := make([]byte, 4096)
-		f.Read(buf)
+		n, _ := f.Read(buf)
+		for _, b := range buf[:n] {
+			acc += uint64(b)
+		}
 		f.Close()
 	}
 	var iters uint64
@@ -44,11 +59,15 @@ func benchEmbedOpenRead(duration time.Duration) {
 	for time.Since(start) < duration {
 		f, _ := embeddedFS.Open("testdata/file0000.bin")
 		buf := make([]byte, 4096)
-		f.Read(buf)
+		n, _ := f.Read(buf)
+		for _, b := range buf[:n] {
+			acc += uint64(b)
+		}
 		f.Close()
 		iters++
 	}
 	elapsed := time.Since(start)
+	fmt.Printf("  checksum: %016x\n", acc)
 	printResult("go-embed/Open+Read-4k", iters, elapsed)
 }
 

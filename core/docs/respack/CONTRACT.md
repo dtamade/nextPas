@@ -116,7 +116,7 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | 测试目录 | 目标用例数 | 说明 |
 |----------|-----------|------|
 | test_respack_reader | ≥ 16（已落地 26） | 八步校验每条规则 ≥1 拒绝用例 + codecId/digest 边界 + indexOffset 恒 40 + LE 位移 |
-| test_respack_writer | ≥ 12（已落地 18） | 排序/去重回验/对齐/golden/确定性/超限 + digest 4 对齐（布局单源 `writer.layout`：`ResPackCmpPath` via `bytes.ops` inline 零拷贝 + Sort via `collections.algorithms` + `AlignUp64` via `mem.base`） |
+| test_respack_writer | ≥ 12（已落地 19） | 排序/去重回验/对齐/golden/确定性/超限 + digest 4 对齐（布局单源 `writer.layout`：`ResPackCmpPath` via `bytes.ops` inline 零拷贝 + Sort via `collections.algorithms` + `AlignUp64` via `mem.base`） |
 | test_respack_roundtrip | ≥ 6（已落地 15） | 目录样例全量往返（含空文件、深路径、unicode 文件名；流式 `writer.stream` 同布局确定性回验，峰值 `~1×+头`） |
 | test_respack_dirsource | ≥ 4（已落地 7） | 枚举顺序/exclude 透传/符号链接策略/空目录 |
 | test_respack_embed | ≥ 4（已落地 15） | glob/prefix/inc golden/roundtrip（阈值可配置 MaxBlobBytes、IncUnit 单次分配 BytesCopy 组装） |
@@ -153,3 +153,4 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | 2026-09-02 | 1.0 | S6 独立策略模块闭环：阈值策略已抽取为 L1 独立模块 `nextpas.core.embed.limits`（`nextpas.core.embed` 门面），供 respack/其他嵌入载体复用；`nextpas.core.respack.limits` 转为兼容 inline 转发；CONTRACT/README/registry/source-contract 10→12 源校准，inline 零拷贝与 bytes.ops 单源不变 | AI |
 | 2026-09-05 | 1.0 | 收官校准：source-contract 白名单 12→13 源计数修正；§7 落地用例数校准（reader 25/writer 16/roundtrip 15/dirsource 7/embed 14，合计 81）；布局内联 `TResPackLayoutInfo` 门面别名移除（布局类型仅内部管线可见） | AI |
 | 2026-09-05 | 1.0 | Codex 审查闭环：writer 前置拒绝 nil-data 非零输入 + string table u32 上界 + 布局单点溢出钳制；reader ContentPtr/StoredPathSpanOf 以 BlobTotal 为界 + RequireOpen；门面补 wire 常量（HEADER/ENTRY/ALIGN/DIGEST/FLAG/EFLAG/MAX_ENTRY）与 `EEmbedTooLarge` 重导出；修复 `nextpas.core.embed` 门面 ResPack* 别名引用不存在标识（此前零编译消费隐藏）；FORMAT 明确槽位 index 序非递减；§7 校准 85 用例 | AI |
+| 2026-09-05 | 1.0 | bench 复活：陈旧 .ppu 致 trunk 内崩根因定位，四 bench Makefile 首编清缓存；dedup ratio 符号差显示；RESULTS 当日复测；Go peer 空测加 checksum 汇（Rust 端早已有）；§7 校准 86 用例（writer 补桶数幂性锁定） | AI |
