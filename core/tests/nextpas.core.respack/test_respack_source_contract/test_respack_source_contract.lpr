@@ -5,11 +5,11 @@ uses
   nextpas.core.exception,
   nextpas.core.fs;
 
-{ 源契约门禁：respack(9 源 + writer.builder 内部单源 + embed.limits 独立策略模块共 12 文件，含 limits 阈值策略单源已抽取至 L1 embed.limits) uses 白名单锁定。
+{ 源契约门禁：respack(9 源 + writer.builder 内部单源 + dirsource.mmap 视图单源 + embed.limits 独立策略模块共 13 文件，含 limits 阈值策略单源已抽取至 L1 embed.limits) uses 白名单锁定。
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，
      与 test_fs/test_vfs_source_contract 同机制，不自造）
-  2) L2→L2 seam 唯一性：除 respack.dirsource 外，
-     任何 respack 单元不得引用 nextpas.core.fs / nextpas.core.io.mapped（dirsource 唯一 L2→L2 IO seam：fs+io.mapped）
+  2) L2→L2 seam 唯一性：除 respack.dirsource/dirsource.mmap 外，
+     任何 respack 单元不得引用 nextpas.core.fs / nextpas.core.io.mapped（dirsource 唯一 L2→L2 IO seam：fs+io.mapped；dirsource.mmap 为其视图单源：io.mapped）
   3) 异常根纪律：错误族挂在 nextpas.core.exception
   4) 单源收敛：bytes.ops/bytes.binary 等零拷贝单源；writer.layout 布局单源
      (bytes.ops inline 零拷贝 + collections.algorithms Sort + mem.base AlignUp64)，
@@ -56,7 +56,7 @@ end;
 
 procedure TestRespackSourcesNoFpcRtl;
 const
-  FILES: array[0..11] of string = (
+  FILES: array[0..12] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.embed.limits.pas',
@@ -68,6 +68,7 @@ const
     'src/nextpas.core.respack.writer.stream.pas',
     'src/nextpas.core.respack.reader.pas',
     'src/nextpas.core.respack.dirsource.pas',
+    'src/nextpas.core.respack.dirsource.mmap.pas',
     'src/nextpas.core.respack.embed.pas');
 begin
   ScanList('respack src', FILES);
@@ -104,7 +105,7 @@ var
   I: Integer;
   Src: string;
 begin
-  { 白名单外的单元一律禁 fs/io.mapped 引用；dirsource 是唯一的 L2→L2 IO seam（fs+io.mapped mmap via mem.memory_map，registry 明示 + source-contract 门禁，同 vfs.os 范式） }
+  { 白名单外的单元一律禁 fs/io.mapped 引用；dirsource/dirsource.mmap 是唯一的 L2→L2 IO seam（dirsource: fs+io.mapped；dirsource.mmap: io.mapped 视图单源 via mem.memory_map，registry 明示 + source-contract 门禁，同 vfs.os 范式） }
   for I := Low(NO_SEAM) to High(NO_SEAM) do
     AssertNoFsSeam(NO_SEAM[I], LoadSourceText(NO_SEAM[I]));
   { embed 已收敛至 L1 text.strings/text.char/text.conv 三单源（GlobMatch/IsAlpha/IntToStr 各归一、PChar 零拷贝 + inline，fs.glob 薄转发同源），不再构成 L2→L2 }
@@ -197,6 +198,20 @@ begin
   Check(Pos('WalkPrePlain', Src) > 0, 'dirsource generic WalkPrePlain single source');
   Check(Pos('WalkPreEmbed', Src) > 0, 'dirsource generic WalkPreEmbed single source');
   Check(Pos('generic', Src) > 0, 'dirsource uses generics for Walk templating');
+  Check(Pos('nextpas.core.respack.dirsource.mmap', Src) > 0, 'dirsource reuses dirsource.mmap TryMmapRequire single source');
+  Check(Pos('TryMmapRequire', Src) > 0, 'dirsource reuses TryMmapRequire single source (no direct MmapOpen)');
+  Check(Pos('MmapOpen', Src) = 0, 'dirsource must not call MmapOpen directly (use dirsource.mmap single source)');
+  { mmap 视图单源：与 dirsource 同为 L2→L2 seam 白名单（fs 零引用 + io.mapped 零拷贝视图 + inline，失败置空不泄漏） }
+  Src := LoadSourceText('src/nextpas.core.respack.dirsource.mmap.pas');
+  Check(FindUsesUnit(Src, 'nextpas.core.io.mapped'), 'dirsource.mmap declares io.mapped mmap dependency (uses graph)');
+  Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'dirsource.mmap must not reference fs (uses graph)');
+  Check(Pos('nextpas.core.text.conv', Src) > 0, 'dirsource.mmap declares text.conv IntToStr single source');
+  Check(Pos('MmapOpen', Src) > 0, 'dirsource.mmap zero-copy MmapOpen single source');
+  Check(Pos('TryMmapRequire', Src) > 0, 'dirsource.mmap declares TryMmapRequire single source');
+  Check(Pos('TryMmapRequire(const APath: string; const AStatSize: Int64; out AMap: IMappedFile; out AErrMsg: string): Boolean; inline', Src) = 0,
+    'dirsource.mmap TryMmapRequire must NOT be inline (try..except inlining collides caller scope)');
+  Check(Pos('AMap := nil', Src) > 0, 'dirsource.mmap clears output mapping on failure (no stale non-nil)');
+  Check(Pos('Move(', Src) = 0, 'dirsource.mmap must not copy bytes (zero-copy view)');
   { 依赖白名单：reader/writer 仅依赖 base/bytes；唯一 fs 缝隙已锁定（uses graph 校验） }
   Src := LoadSourceText('src/nextpas.core.respack.base.pas');
   Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'base must not reference fs (uses graph)');
