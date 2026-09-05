@@ -96,7 +96,8 @@ end;
 function TResPack.ContentPtr(const AEntry: TResPackEntry): PByte; inline;
 begin
   RequireOpen;
-  if AEntry.DataOffset + AEntry.Size > FSize then
+  { 减法判界：加法回绕会绕过检查 }
+  if (AEntry.Size > UInt64(FSize)) or (AEntry.DataOffset > UInt64(FSize) - UInt64(AEntry.Size)) then
     raise EResPackCorrupted.CreateCtx('content', '', 'respack: data range beyond blob');
   Result := FData + SizeUInt(AEntry.DataOffset);
 end;
@@ -144,7 +145,19 @@ begin
 end;
 
 function TResPack.StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inline;
+var
+  PathEnd: UInt64;
 begin
+  { 减法判界：伪造 PathOffset/PathLen 加总回绕或超 blob 不得建视图 }
+  if AEntry.PathLen = 0 then
+    Exit(TByteSpan.Empty);
+  PathEnd := UInt64(AEntry.PathOffset) + UInt64(AEntry.PathLen);
+  if PathEnd < UInt64(AEntry.PathOffset) then
+    raise EResPackCorrupted.CreateCtx('path', '', 'respack: path range overflow');
+  if PathEnd > UInt64(FSize) then
+    raise EResPackCorrupted.CreateCtx('path', '', 'respack: path range beyond blob');
+  if FStrTabBase > UInt64(FSize) - PathEnd then
+    raise EResPackCorrupted.CreateCtx('path', '', 'respack: path range beyond blob');
   Result := PathSpanRaw(AEntry.PathOffset, AEntry.PathLen);
 end;
 

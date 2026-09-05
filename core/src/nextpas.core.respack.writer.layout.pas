@@ -34,17 +34,6 @@ type
     Total: UInt64;
   end;
 
-type
-  TResPackDedupBuckets = nextpas.core.respack.base.TResPackDedupBuckets; // 别名：四件套薄转发
-  PSizeInt = nextpas.core.respack.base.PSizeInt; // 别名：四件套薄转发
-  TResPackDistinct = nextpas.core.respack.base.TResPackDistinct; // 别名：四件套薄转发
-  PResPackDistinct = nextpas.core.respack.base.PResPackDistinct; // 别名：四件套薄转发
-
-{ Dedup arena 薄转发至 respack.base 共享底座，单源收敛。 }
-procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt); inline;
-procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt); inline;
-procedure ResPackDedupDone(var AArena: TLocalArena); inline;
-
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
 procedure ResPackComputeLayout(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; out ALayout: TResPackLayout);
@@ -100,19 +89,16 @@ begin
   Result := nextpas.core.mem.base.AlignUp64(AValue, AAlign);
 end;
 
-procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt); inline;
+{ 槽位命中判定单源：fnv 候选 + 长度 + 字节回验，tiny 线性/哈希主循环共用。 }
+function SlotContentEqual(const AEntries: array of TResPackInputEntry;
+  const ASlots: array of TResPackSlot; const AFnvBuf: array of UInt32;
+  const AJ, AK: SizeUInt): Boolean; inline;
 begin
-  nextpas.core.respack.base.ResPackDedupInit(AN, AArena, ABucketsHead, ASlotNext, ABucketCount);
-end;
-
-procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt); inline;
-begin
-  nextpas.core.respack.base.ResPackOverlapInit(AN, AArena, ABucketsHead, ASlotNext, ADistinct, ABucketCount);
-end;
-
-procedure ResPackDedupDone(var AArena: TLocalArena); inline;
-begin
-  nextpas.core.respack.base.ResPackDedupDone(AArena);
+  Result := (ASlots[AK].Fnv = AFnvBuf[AJ])
+    and (AEntries[AJ].DataSize = AEntries[ASlots[AK].SrcIdx].DataSize)
+    and ((AEntries[AJ].DataSize = 0)
+      or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[AJ].Data, AEntries[AJ].DataSize),
+        TByteSpan.Create(AEntries[ASlots[AK].SrcIdx].Data, AEntries[AJ].DataSize)));
 end;
 
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
@@ -137,8 +123,8 @@ var
   N, I, J: SizeUInt;
   K: SizeUInt;
   BucketIdx, BucketCount: SizeUInt;
-  BucketsHead: PSizeInt;
-  SlotNext: PSizeInt;
+  BucketsHead: nextpas.core.respack.base.PSizeInt;
+  SlotNext: nextpas.core.respack.base.PSizeInt;
   Probe: SizeInt;
   DedupArena: TLocalArena;
   TotalInput: SizeUInt;
@@ -205,17 +191,20 @@ begin
           + AEntries[ALayout.Order[I]].Path + '"');
   end;
 
-  { ── fnv ── }
+  { ── fnv：仅 Hashes/Deduplicate 时分配填充，否则 FnvBuf 留 nil 零分配 ── }
   NeedFnv := AOpts.Hashes or AOpts.Deduplicate;
-  try
-    SetLength(ALayout.FnvBuf, N);
-  except
-    on E: EOutOfMemory do
-      raise EResPackTooLarge.Create('respack: entry count too large for host');
+  if NeedFnv then
+  begin
+    try
+      SetLength(ALayout.FnvBuf, N);
+    except
+      on E: EOutOfMemory do
+        raise EResPackTooLarge.Create('respack: entry count too large for host');
+    end;
+    if N > 0 then
+      for I := 0 to N - 1 do
+        ALayout.FnvBuf[I] := ResPackFnv1a32(AEntries[I].Data, AEntries[I].DataSize);
   end;
-  if NeedFnv and (N > 0) then
-    for I := 0 to N - 1 do
-      ALayout.FnvBuf[I] := ResPackFnv1a32(AEntries[I].Data, AEntries[I].DataSize);
 
   { ── 布局：StrLen UInt64 回绕守卫（近 64K 路径极端） ── }
   StrLen := 0;
@@ -256,11 +245,7 @@ begin
           ALayout.EntrySlots[J] := SizeUInt(-1);
           if SlotCount > 0 then
             for K := 0 to SlotCount - 1 do
-              if (ALayout.Slots[K].Fnv = ALayout.FnvBuf[J])
-                and (AEntries[J].DataSize = AEntries[ALayout.Slots[K].SrcIdx].DataSize)
-                and ((AEntries[J].DataSize = 0)
-                  or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[J].Data, AEntries[J].DataSize),
-                    TByteSpan.Create(AEntries[ALayout.Slots[K].SrcIdx].Data, AEntries[J].DataSize))) then
+              if SlotContentEqual(AEntries, ALayout.Slots, ALayout.FnvBuf, J, K) then
               begin
                 ALayout.EntrySlots[J] := K;
                 Break;
@@ -285,7 +270,7 @@ begin
       BucketsHead := nil;
       SlotNext := nil;
       DedupArena := nil;
-      ResPackDedupInit(N, DedupArena, BucketsHead, SlotNext, BucketCount);
+      nextpas.core.respack.base.ResPackDedupInit(N, DedupArena, BucketsHead, SlotNext, BucketCount);
       try
         if N > 0 then
           for I := 0 to N - 1 do
@@ -297,11 +282,7 @@ begin
             while Probe <> -1 do
             begin
               K := SizeUInt(Probe);
-              if (ALayout.Slots[K].Fnv = ALayout.FnvBuf[J])
-                and (AEntries[J].DataSize = AEntries[ALayout.Slots[K].SrcIdx].DataSize)
-                and ((AEntries[J].DataSize = 0)
-                  or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[J].Data, AEntries[J].DataSize),
-                    TByteSpan.Create(AEntries[ALayout.Slots[K].SrcIdx].Data, AEntries[J].DataSize))) then
+              if SlotContentEqual(AEntries, ALayout.Slots, ALayout.FnvBuf, J, K) then
               begin
                 ALayout.EntrySlots[J] := K;
                 Break;
@@ -325,7 +306,7 @@ begin
             end;
           end;
         finally
-          ResPackDedupDone(DedupArena);
+          nextpas.core.respack.base.ResPackDedupDone(DedupArena);
         end;
     end;
   end
