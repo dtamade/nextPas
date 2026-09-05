@@ -90,6 +90,13 @@ make -C core/benchmarks/nextpas.core.tar/bench_tar regression
 - 降噪：`GOMAXPROCS=1`。`SetMinDuration 300ms`，`MinSamples 7`，`Warmup 1`。
 - 吞吐：`ACtx.SetBytes` 换算。
 - 归档：双路落盘 `build/bench-tar.json`。
+- 同口径：写档只计写（含 `Finish`），不含回读拷贝；`BlackBox` 取 `Size`/长度逃逸
+ （与 Go `_ = buf.Bytes()` / Rust `let _ = buf` 等价防 DCE），不做全字节触碰；
+  读档三方均搬运全部载荷。触碰与拷贝是 harness 负担，非被测库成本，不计入被测。
+- 已知结构差距（非回归，见 bench 头注）：`builder Finish` 的 `ToBytes` 值语义注定多一次
+  全量拷贝（Rust 靠所有权移动零拷贝）；1MB 档按操作分配/清零/同步释放（FPC 堆），
+  对 Go/Rust 的延迟释放。`ns/op ≤ 1.50×` 在这两档可能长期不达标，调阈值走
+  §6.3 双机复现流程，不在 bench 侧注水。
 
 ### 6.2 门限（CI 硬红）
 
