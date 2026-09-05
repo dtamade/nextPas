@@ -123,8 +123,95 @@ begin
   end;
 end;
 
-procedure TestNotADirectoryRaises;
+function PtrBytes(const AP: PByte; const ALen: SizeUInt): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, SizeInt(ALen));
+  if ALen > 0 then
+    Move(AP^, Result[0], ALen);
+end;
+
+function SameBytes(const AA, AB: TBytes): Boolean;
 var
+  I: SizeInt;
+begin
+  Result := Length(AA) = Length(AB);
+  if not Result then
+    Exit;
+  for I := 0 to Length(AA) - 1 do
+    if AA[I] <> AB[I] then
+      Exit(False);
+end;
+
+procedure CheckBuildFromDirRoundtrip(const ALabel: string; const ADedup: Boolean);
+var
+  Opts: TResPackBuildOptions;
+  B: TResPackBlob;
+  RP: TResPack;
+  E, EA, EB: TResPackEntry;
+  I: SizeUInt;
+  Prev, P: string;
+  Want, Got: TBytes;
+begin
+  { 真实入口往返：目录树（含空文件/unicode 名/重复内容）→ BuildFromDir →
+    blob 内字节与磁盘文件逐字节一致；输入无序，断言索引有序 }
+  WriteFile(G_Dir + '/empty.txt', BytesOf(''));
+  WriteFile(G_Dir + '/uni-€.txt', BytesOf('unicode-payload'));
+  WriteFile(G_Dir + '/dup1.bin', BytesOf('same-content'));
+  WriteFile(G_Dir + '/sub/dup2.bin', BytesOf('same-content'));
+  Opts := ResPackDefaultOptions;
+  Opts.Deduplicate := ADedup;
+  B := ResPackBuildFromDir(G_Dir, Opts);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    try
+      Check(RP.Count = 7, ALabel + ': all seven files packed');
+      Prev := '';
+      for I := 0 to RP.Count - 1 do
+      begin
+        E := RP.EntryAt(I);
+        P := RP.PathOf(E);
+        Check((Prev = '') or (Prev < P), ALabel + ': index sorted');
+        Prev := P;
+        Want := ReadFile(G_Dir + '/' + P);
+        Got := PtrBytes(RP.ContentPtr(E), E.Size);
+        Check(SameBytes(Want, Got), ALabel + ': byte-equal ' + P);
+        if not SameBytes(Want, Got) then
+          Exit;
+      end;
+      if ADedup then
+      begin
+        Check(RP.Find('dup1.bin', E), ALabel + ': dup1 found');
+        P := RP.PathOf(E);
+        Got := PtrBytes(RP.ContentPtr(E), E.Size);
+        Check(SameBytes(BytesOf('same-content'), Got), ALabel + ': dedup content intact');
+        if RP.Find('dup1.bin', EA) and RP.Find('sub/dup2.bin', EB) then
+          Check(EA.DataOffset = EB.DataOffset, ALabel + ': dedup shares one slot');
+      end;    finally
+      RP.Close;
+    end;
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure TestBuildFromDirRoundtrip;
+begin
+  SetupTree;
+  try
+    CheckBuildFromDirRoundtrip('plain', False);
+  finally
+    RemoveAll(G_Dir);
+  end;
+  SetupTree;
+  try
+    CheckBuildFromDirRoundtrip('dedup', True);
+  finally
+    RemoveAll(G_Dir);
+  end;
+end;
+
+procedure TestNotADirectoryRaises;var
   Got: Boolean;
   DE: TResPackDirEntries;
   Entries: TResPackInputArray;
@@ -147,5 +234,6 @@ begin
   T.Test('symlink skipped', @TestSymlinkSkipped);
   T.Test('modtime and size carried', @TestModTimeAndSizeCarried);
   T.Test('missing dir raises', @TestNotADirectoryRaises);
+  T.Test('build from dir roundtrip', @TestBuildFromDirRoundtrip);
   if not T.Run then Halt(1);
 end.
