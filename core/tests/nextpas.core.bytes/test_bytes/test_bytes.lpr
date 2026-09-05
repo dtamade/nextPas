@@ -535,10 +535,51 @@ begin
   CheckEqual(Byte($EE), LB.Data[99]);
 end;
 
+procedure TestScanNulTrunc;
+var
+  Blk: TBytes;
+  Fields: array[0..2] of TFieldRange;
+  Tr: array[0..2] of SizeUInt;
+  Big: TBytes;
+  BFields: array[0..0] of TFieldRange;
+  BTr: array[0..0] of SizeUInt;
+  I: Integer;
+begin
+  SetLength(Blk, 16);
+  for I := 0 to 15 do Blk[I] := Byte(Ord('A') + I);
+  Blk[3] := 0; Blk[10] := 0;
+  Fields[0].Off := 0; Fields[0].Len := 8;
+  Fields[1].Off := 8; Fields[1].Len := 8;
+  Fields[2].Off := 4; Fields[2].Len := 4;
+  ScanNulFieldTruncations(TByteSpan.Create(@Blk[0], 16), Fields, @Tr[0]);
+  CheckEqual(UInt64(3), UInt64(Tr[0]), 'first nul');
+  CheckEqual(UInt64(2), UInt64(Tr[1]), 'second nul');
+  CheckEqual(UInt64(4), UInt64(Tr[2]), 'no nul keeps len');
+  Blk[0] := 0;
+  ScanNulFieldTruncations(TByteSpan.Create(@Blk[0], 16), Fields, @Tr[0]);
+  CheckEqual(UInt64(0), UInt64(Tr[0]), 'empty head fast path');
+  Fields[0].Off := 100; Fields[0].Len := 8;
+  ScanNulFieldTruncations(TByteSpan.Create(@Blk[0], 16), Fields, @Tr[0]);
+  CheckEqual(UInt64(8), UInt64(Tr[0]), 'off past end keeps len');
+  SetLength(Big, 600);
+  for I := 0 to 599 do Big[I] := 1;
+  Big[550] := 0;
+  BFields[0].Off := 540; BFields[0].Len := 30;
+  ScanNulFieldTruncations(TByteSpan.Create(@Big[0], 600), BFields, @BTr[0]);
+  CheckEqual(UInt64(10), UInt64(BTr[0]), 'long block nul');
+  SetLength(Blk, 0);
+  Fields[0].Off := 0; Fields[0].Len := 8;
+  ScanNulFieldTruncations(TByteSpan.Empty, Fields, @Tr[0]);
+  CheckEqual(UInt64(8), UInt64(Tr[0]), 'empty block keeps len');
+  SetLength(Big, 0);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.bytes');
 
+
   T.Test('ops: Equal', @TestEqual);
+  T.Test('ops: ScanNulTrunc', @TestScanNulTrunc);
   T.Test('ops: Compare', @TestCompare);
   T.Test('ops: IndexOf', @TestIndexOf);
   T.Test('ops: StartsWith/EndsWith', @TestStartsEndsWith);
