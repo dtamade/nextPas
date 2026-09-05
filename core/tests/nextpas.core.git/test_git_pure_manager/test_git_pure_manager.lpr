@@ -932,7 +932,12 @@ begin
       LWtExt.LookupWorktree('no-such-wt');
     except
       on E: EGitError do
+      begin
         LRaised := True;
+        { 跨后端契约：未命中码 = GitErrorNotFound（GIT_ENOTFOUND -3），
+          与 libgit2 后端同语义 }
+        CheckEqual(GitErrorNotFound, E.ErrorCode, 'LookupWorktree missing ErrorCode');
+      end;
     end;
     Check(LRaised, 'LookupWorktree missing raises EGitError');
     LTagOid := '';

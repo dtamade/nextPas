@@ -8,6 +8,12 @@ uses
   nextpas.core.exception,
   nextpas.core.text.base;
 
+const
+  { 跨后端错误码契约：native 后端无 libgit2 依赖，复刻 libgit2 公开码表
+    （git2/errors.h；grok-build git2-rs 同源）对应语义的码值。
+    GitErrorNotFound = GIT_ENOTFOUND = -3：Lookup* 未命中。 }
+  GitErrorNotFound = -3;
+
 type
   EGitError = class(Exception)
   private

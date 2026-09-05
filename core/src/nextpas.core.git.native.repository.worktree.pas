@@ -266,7 +266,9 @@ begin
       Exit;
     end;
   end;
-  raise EGitError.CreateFmt('LookupWorktree: not found "%s"', [AName]);
+  { 未命中码走跨后端契约 GitErrorNotFound（= GIT_ENOTFOUND -3），与
+    libgit2 后端 git_worktree_lookup 同语义，调用方可以 ErrorCode 区分 }
+  raise EGitError.Create(GitErrorNotFound, 'LookupWorktree: not found "' + AName + '"');
 end;
 
 function RepositoryListWorktrees(const AGitDir: string): nextpas.core.base.TStringArray;
