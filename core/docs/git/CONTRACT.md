@@ -95,7 +95,7 @@
 | git.native.common | 共享对象助手（tree 查找/tag 剥离单源，GitFindBlobInTree/GitPeelToTree，零重复，EGitError 语义） |
 | git.native.util | 通用工具单源（Trim/SplitLines/WorktreeDir/FindBlobInTree/PeelToTree，inline/零拷贝，去重 common） |
 | git.native.wildmatch | **已移除**（owner 已收敛至 L1 `text.wildmatch` 单源，`*`/`?`/`**`/`[]` 含转义/字符类，零 SysUtils；`ignore`/`attributes` 直连 `text.wildmatch.WildSegment*` inline 零拷贝 via `bytes.ops` 单源，原 thin shim 已删除） |
-| git.factory | TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator 选择层（静态仅 native.manager，注册注入 libgit2，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
+| git.factory | TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator 选择层（静态仅 native.manager，注册注入 libgit2，gbAuto=gbNative，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
 | git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 全方法实现；值对象三小类 + 适配器支撑 helpers 已抽 `repository.objects` 分片，本体 934→640 行，接口零改动） |
 | git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，唯一 inline 零拷贝网关，<400 行；native 为已折叠空 BC shim 零类型/常量/函数转发 `@deprecated`，唯一门面为 objects） |
@@ -156,7 +156,7 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 
 - 默认消费路径是运行时加载系；静态声明系服务需要完整 ABI 面
   （如绑定生成器、ABI 审计、未来静态链接发行形态）的场景。
-- 选择层默认仍走 libgit2（需显式 `uses nextpas.core.git.libgit2` 注册）：`nextpas.core.git.factory.NewGitManager(gbAuto)` 首版等价 `gbLibGit2`（已注册时），未注册时 fail-closed；`uses nextpas.core.git; NewGitManager;` 未注册时亦三零（门面 impl 零 libgit2，base←intf←factory←facade）；纯路径 `gbNative`/`NewNativeGitManager` 或直连 `native.manager` 无需注册（见 PURE-BACKEND.md §2-§3）。
+- 选择层默认走 native（BREAKING 见 CHANGELOG Unreleased）：`nextpas.core.git.factory.NewGitManager(gbAuto)` 恒等于 `gbNative`；仅 `gbLibGit2` 未注册时 fail-closed；`uses nextpas.core.git; NewGitManager;` 默认纯路径（门面 impl 零 libgit2，base←intf←factory←facade）；纯路径 `gbNative`/`NewNativeGitManager` 或直连 `native.manager` 无需注册（见 PURE-BACKEND.md §2-§3）。
 - 词汇收敛（单源 `native.base.TGitOid` 20-byte 为权威，`bytes.ops` 单源 `SpanEqual/SpanCopy/IsZeroBytes/SpanFill`，`inline` 零拷贝 `Move`/`MemEqual`/`MemSet` 3×QWord，§7 `Oid/Same:inline` ≤80 ns/op, `Oid/IsValidHex|FromHex|ToHex` ≤150 ns/op not inline per red line 2）：
   运行时 `git_oid` 为 `libgit2.base.git_oid` variant 叠加（`id/Bytes/AsNative` 同偏移 0，`SizeOf=20=GitOidRawLen`，`PACKRECORDS C` 双编译器等价 stub 经 `settings.inc`，`Assert` 二进制保证，`GitOidToNative/NativeToGitOid` `inline` 零拷贝 overlay 无 `Move`，Pascal 别名 `TGitOid/TGitOid20` 同体）；
   静态 `TGitOid`（`bindings.structs`）已单源化为 20-byte `libgit2.base.git_oid` 别名（`SizeOf=20`，`PACKRECORDS C` 双编译器 stub，`Assert` 同源，`inline` 零拷贝 `SpanEqual` 3×QWord / `SpanCopy` 单 `Move` 无堆，`try..finally` 资源不丢），33-byte `TGitOid33` 及其 `GitOidCopy20To33/33To20/GitOid33Equals` 桥接已于 Phase7 (2026-09-02) 彻底移除（`grep -R TGitOid33` 零命中），SHA256 泛型候选改经 `bytes.ops` `Len` 参化 `TByteSpan`（`SpanEqual/Create(@Buf,32)`）非定长结构，不再占用单源；新模块一律经 20-byte 权威（`scripts/git-contract-check.sh` C5 `grep -R TGitOid` 越界即 warn，Phase 7 已清理静态 33-byte 双轨，`bindings.structs:685` 不再 `TGitOid33`）；
@@ -232,9 +232,9 @@ function NewNativeGitManager: IGitManager; inline;
 |------|------|----------|
 | `gbNative` | 创建 `TNativeGitManager`，仅依赖 `native.*`，零 libgit2；`inline` 值类型枚举零拷贝分发，`bytes.ops` 单源，`try..finally` 资源不丢；未拉入 `libgit2` 时编译图/产物双零 | 纯路径（三零经门面/ factory/直连三重达成） |
 | `gbLibGit2` | 创建 `TLibGit2Manager`，经 `platform.dl` 的 `dlopen/dlsym` 运行时加载 `libgit2`，需显式 `uses nextpas.core.git.libgit2` 注册（`RegisterLibGit2Creator`），未注册时 fail-closed 抛 `EGitError` | 需显式注册 |
-| `gbAuto` | 策略别名，首版恒等于 `gbLibGit2`（已注册时），下版本切 `gbNative` 前发迁移公告；未注册时 fail-closed | 显式注册后兼容，未注册时三零（门面 impl 零 libgit2），详见 `PURE-BACKEND.md` §3 |
+| `gbAuto` | 策略别名，恒等于 `gbNative`（BREAKING 见 CHANGELOG Unreleased；`gbLibGit2` 显式保留） | 纯路径（门面/ factory/直连三重三零），详见 `PURE-BACKEND.md` §3 |
 
-门面保留无参重载：`nextpas.core.git.NewGitManager` inline 转发 `factory.NewGitManager(gbAuto)`，impl 零 libgit2（`base←intf←factory←facade` 隔离，未注册时 `gbAuto` fail-closed 抛 `EGitError('not registered')`）；需 libgit2 轨道时显式 `uses nextpas.core.git.libgit2` 触发注册；纯消费显式 `gbNative`/`NewNativeGitManager` 或直连 `nextpas.core.git.native.manager.TNativeGitManager.Create`（三零）。
+门面保留无参重载：`nextpas.core.git.NewGitManager` inline 转发 `factory.NewGitManager(gbAuto)`，impl 零 libgit2（`base←intf←factory←facade` 隔离，默认纯路径）；需 libgit2 轨道时显式 `uses nextpas.core.git.libgit2` 触发注册并传 `gbLibGit2`（未注册时 fail-closed 抛 `EGitError('not registered')`）；纯消费显式 `gbNative`/`NewNativeGitManager` 或直连 `nextpas.core.git.native.manager.TNativeGitManager.Create`（三零）。
 
 ### 1.3 核心类型
 

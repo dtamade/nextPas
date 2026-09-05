@@ -52,7 +52,10 @@ var
   LCreator: TLibGit2Creator;
 begin
   case ABackend of
-    gbNative, gbAuto:
+    gbNative:
+      Result := TNativeGitManager.Create;
+    gbAuto:
+      { policy alias gbAuto=gbNative per CONTRACT §1.1/PURE-BACKEND §3 }
       Result := TNativeGitManager.Create;
     gbLibGit2:
       begin

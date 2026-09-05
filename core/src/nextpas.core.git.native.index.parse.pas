@@ -68,17 +68,24 @@ end;
 function ReadOffsetVarint(const AData: TBytes; var APos: SizeInt): Int64;
 var
   B: Byte;
+  N: Integer;
 begin
   Need(Length(AData), APos, 1);
   B := AData[APos];
   Inc(APos);
   Result := B and $7F;
+  N := 1;
   while (B and $80) <> 0 do
   begin
+    if N >= 10 then
+      raise EGitError.Create('offset varint overflow');
     Need(Length(AData), APos, 1);
     B := AData[APos];
     Inc(APos);
+    if Result > ((High(Int64) shr 7) - 1) then
+      raise EGitError.Create('offset varint overflow');
     Result := ((Result + 1) shl 7) or Int64(B and $7F);
+    Inc(N);
   end;
 end;
 
@@ -151,6 +158,7 @@ procedure ParseEntryV4(const AData: TBytes; var APos: SizeInt;
   var APrevPath: string; out AEntry: TGitIndexEntry);
 var
   Len, FixedUsed, StripN, SuffixLen: SizeInt;
+  Strip64: Int64;
   Q: SizeInt;
   Flags: Word;
   Suffix: string;
@@ -190,9 +198,10 @@ begin
     AEntry.IntentToAdd := False;
   end;
   APos := APos + FixedUsed;
-  StripN := Integer(ReadOffsetVarint(AData, APos));
-  if StripN > Length(APrevPath) then
+  Strip64 := ReadOffsetVarint(AData, APos);
+  if (Strip64 < 0) or (Strip64 > Length(APrevPath)) then
     raise EGitError.Create('corrupt v4 index entry: strip exceeds prev');
+  StripN := SizeInt(Strip64);
   Q := APos;
   while True do
   begin
