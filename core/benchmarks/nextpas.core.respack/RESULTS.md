@@ -62,6 +62,23 @@ Quantitative gates (enforced in `bench_servevfs.lpr`):
 
 206-range and 404-miss are same-cost or cheaper than 200-full (2026-09-05 live: 5.93µs / 3.43µs) — range via `IStream` window, miss via binary-search early exit, no FPC penalty.
 
+### Cost split (O1 verdict, 2026-09-05 live)
+
+| split op | ns/op | meaning |
+|----------|------:|---------|
+| `split/find-checksum-4k` | ~705 | Find + address + consume (~300 consume ⇒ lookup ≈ 400) |
+| `split/copy-checksum-4k` | ~339 | Move 4K + consume (~300 consume ⇒ copy ≈ fast) |
+| `embedded/404-miss` | ~3,380 | parse + dispatch + failed lookup, no copy |
+| `embedded/200-full-4k` | ~5,700 | everything |
+
+Reading: respack lookup+copy ≈ 0.5µs of 5.7µs total — **~90% of the cost is the
+HTTP/VFS shell (parse, dispatch, recorder), not respack**. The consume sink is a
+QWord-stride local-accumulate shared by both splits (a byte-wise global-store sink
+measured itself at 9µs and was rejected). Verdict: **no respack-side optimization
+is justified** — Find/ContentPtr are already sub-µs. Any further servevfs work belongs
+to the http.static lane (ServeVfs dispatch), not respack. Split ops stay as regression
+smoke (`BUDGET_SPLIT_FIND/COPY_NS` 5µs).
+
 ## 2. Embed carrier startup (µs, 1MiB pack, 200×5KiB)
 
 | impl | startup path | µs | note |

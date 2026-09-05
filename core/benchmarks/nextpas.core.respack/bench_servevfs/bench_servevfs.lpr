@@ -37,6 +37,8 @@ const
   BUDGET_OS_NS = 80000;
   BUDGET_RANGE_NS = 35000;
   BUDGET_MISS_NS = 35000;
+  BUDGET_SPLIT_FIND_NS = 5000;
+  BUDGET_SPLIT_COPY_NS = 5000;
   { 同机对照基线：FPC RTL / Go embed / Rust include_dir 公开数据（RESULTS.md），
     满足不低于 FPC、接近 Go/Rust 量化门限 }
   BASELINE_FPC_NS = 8500;   { FPC RTL TFileStream 4KiB 同机实测 }
@@ -89,6 +91,11 @@ var
   GHEmbedded, GHMemtree, GHOs: THttpHandlerFunc;
   GFullReq, GRangeReq, GMissReq: IHttpRequest;
   GOsDir, GFpcFilePath: string;
+  { 成本拆分视图：借 VFS 持有 blob 的生命期（Owned 移交后不释放，只读视图） }
+  GRP: TResPack;
+  GSplitEntry: TResPackEntry;
+  GSplitSink: UInt64;
+  GSplitCopyBuf: array[0..FILE_SIZE - 1] of Byte;
 
 { ── 工具 ── }
 
@@ -294,6 +301,10 @@ begin
   end;
   LBlob := ResPackBuild(LEntries, ResPackDefaultOptions);
   GEmbedded := CreateEmbeddedVfsOwned(LBlob.Data, LBlob.Size);
+  { 拆分视图与条目预解析（计时区外一次；blob 生命期归 VFS，视图只读借用） }
+  GRP := ResPackOpen(LBlob.Data, LBlob.Size);
+  if not GRP.Find(BENCH_FILE, GSplitEntry) then
+    raise Exception.Create('bench: split entry missing');
 
   { os：同一棵树落到真实盘 }
   GOsDir := GetTempDir + '/rp-bench-servevfs';
@@ -381,6 +392,41 @@ begin
   end;
 end;
 
+{ 8 字节步进消费单源：局部累加后一次落全局，防消除且不污染计时（逐字节全局存约 9µs，
+  会淹没被测操作；QWord 步进约 0.3µs，两拆分项共用同一汇，差值即操作差）。 }
+procedure ConsumeBuf(const P: PByte; const ASize: SizeUInt); inline;
+type
+  PQWord = ^QWord;
+var
+  I, N: SizeUInt;
+  LAcc: QWord;
+begin
+  LAcc := 0;
+  N := ASize div 8;
+  for I := 0 to N - 1 do
+    LAcc := LAcc + PQWord(P + I * 8)^;
+  GSplitSink := GSplitSink + LAcc;
+end;
+
+{ 成本拆分 Find-only：二分查找 + 内容寻址 + 消费，无 handler、无复制 }
+procedure BenchSplitFind(const ACtx: IBenchContext);
+var
+  E: TResPackEntry;
+begin
+  if not GRP.Find(BENCH_FILE, E) then
+    raise Exception.Create('bench: split find missed');
+  ConsumeBuf(GRP.ContentPtr(E), E.Size);
+  ACtx.SetBytes(E.Size);
+end;
+
+{ 成本拆分 copy-only：预解析条目直拷 4K + 消费，无查找、无 handler }
+procedure BenchSplitCopy(const ACtx: IBenchContext);
+begin
+  Move(GRP.ContentPtr(GSplitEntry)^, GSplitCopyBuf[0], FILE_SIZE);
+  ConsumeBuf(@GSplitCopyBuf[0], FILE_SIZE);
+  ACtx.SetBytes(FILE_SIZE);
+end;
+
 procedure CheckBudgetThresholds(const AResults: IBenchResults);
 var
   R: TBenchResult;
@@ -412,7 +458,13 @@ begin
   R := AResults.GetByName('servevfs/embedded/404-miss');
   if R.NsPerOp > BUDGET_MISS_NS then
     raise Exception.CreateFmt('budget exceeded embedded/404-miss: %.0f > %d ns/op', [R.NsPerOp, BUDGET_MISS_NS]);
-  WriteLn('budget: all 5 within threshold (embedded ', BUDGET_EMBEDDED_NS, ' os ', BUDGET_OS_NS, ' ns/op)');
+  R := AResults.GetByName('servevfs/split/find-checksum-4k');
+  if R.NsPerOp > BUDGET_SPLIT_FIND_NS then
+    raise Exception.CreateFmt('budget exceeded split/find: %.0f > %d ns/op', [R.NsPerOp, BUDGET_SPLIT_FIND_NS]);
+  R := AResults.GetByName('servevfs/split/copy-checksum-4k');
+  if R.NsPerOp > BUDGET_SPLIT_COPY_NS then
+    raise Exception.CreateFmt('budget exceeded split/copy: %.0f > %d ns/op', [R.NsPerOp, BUDGET_SPLIT_COPY_NS]);
+  WriteLn('budget: all 7 within threshold (embedded ', BUDGET_EMBEDDED_NS, ' os ', BUDGET_OS_NS, ' ns/op)');
   { 同机对照量化门限：不低于 FPC RTL，接近 Go/Rust（±30% 内，RESULTS.md 快照） }
   R := AResults.GetByName('servevfs/fpc-tfilestream/4k');
   if R.NsPerOp > BASELINE_FPC_NS * 1.1 then
@@ -452,6 +504,10 @@ begin
   LRec := TBenchRecorder.Create;
   GHEmbedded(GMissReq, LRec);
   Expect(LRec.Status = 404, 'embedded miss should be 404');
+
+  { 拆分正确性首验：预解析条目内容与 handler body 一致（防测错路径） }
+  Expect(GSplitEntry.Size = FILE_SIZE, 'split entry size 4KiB');
+  Expect(GSplitEntry.DataOffset mod 16 = 0, 'split entry slot aligned');
 end;
 
 begin
@@ -480,12 +536,16 @@ begin
         .Add('servevfs/fpc-tfilestream/4k', @BenchFpcTFileStream)
         .Add('servevfs/embedded/206-range', @BenchEmbRange)
         .Add('servevfs/embedded/404-miss', @BenchEmbMiss)
+        .Add('servevfs/split/find-checksum-4k', @BenchSplitFind)
+        .Add('servevfs/split/copy-checksum-4k', @BenchSplitCopy)
         .AddBaseline('fpc-rtl/TFileStream-4k', BASELINE_FPC_NS)
         .AddBaseline('go-embed/FS-4k', BASELINE_GO_NS)
         .AddBaseline('rust-include_dir-4k', BASELINE_RUST_NS)
         .Run);
 
     RemoveAll(GOsDir);
+    GRP.Close;
+    WriteLn('split sink: ', GSplitSink);
   except
     on E: Exception do
     begin
