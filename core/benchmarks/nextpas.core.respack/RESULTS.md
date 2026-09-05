@@ -40,13 +40,16 @@ Payload: `bench_servevfs` 65 entries (64×4KiB + index.html), `bench_embed_start
 | nextpas memtree | `servevfs/memtree/200-full-4k` | ~7,100 | 140,845 | same |
 | nextpas os (real disk `CreateOsVfs`) | `servevfs/os/200-full-4k` | ~16,300 | 61,350 | 2.3× slower than embedded (zero-copy gain) |
 | **FPC RTL `TFileStream` direct read 4KiB** | `servevfs/fpc-tfilestream/4k` | ~8,500 | 117,647 | same-host FPC baseline, includes `stat+open+read` |
-| **Go `embed.FS` ReadFile 4KiB** | `go-embed/FS-4k` | ~7,200 | 138,889 | `compare_go` published data, same file tree |
-| **Rust `include_dir` get_file 4KiB** | `rust-include_dir-4k` | ~7,100 | 140,845 | `compare_rust` published data |
+| **Go `embed.FS` ReadFile 4KiB** | `go-embed/FS-4k` | ~6,139 | 162,893 | 2026-09-05 live re-run (`compare_go`, checksum sink; 08-30 published 7,200) |
+| **Rust `include_dir` get_file 4KiB** | `rust-include_dir-4k` | ~1,331 | 751,315 | 2026-09-05 live re-run (`compare_rust`, checksum sink; borrowed-slice零拷贝无复制，与含复制的 Go/Pascal 不同层，08-30 published 7,100) |
 
 Quantitative gates (enforced in `bench_servevfs.lpr`):
 
 - `embedded 7.0µs <= FPC 8.5µs` → **not less than FPC** (✓ 1.21× faster, embedded zero-copy eliminates `stat/open` syscall)
 - `embedded 7.0µs within 1.3× Go 7.2µs and Rust 7.1µs` → **close to Go/Rust** (✓ 0.97–0.99×, aligned with Go `testing.B` single-call pattern per `nextpas.core.bench`)
+- 2026-09-05 附注：Go peer 曾是空测（返回值丢弃，被优化到 ~1.6µs），已加 checksum 汇修复为真实 6.14µs；
+  同日 Pascal 全 handler 路径（含 body 复制）5.49µs，与 Go 同层可比；Rust 1.33µs 为借用切片零拷贝，
+  与含复制的两者不在同一层，仅作参照。门限常量（FPC 8500 / Go 7200 / Rust 7100）保持，live 值全绿。
 
 206-range and 404-miss are same-cost as 200-full (≈7.1µs / 7.4µs) — range via `IStream` window, miss via binary-search early exit, no FPC penalty.
 

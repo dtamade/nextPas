@@ -4,6 +4,7 @@ uses
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
+  nextpas.core.mem.base,
   nextpas.core.respack,
   nextpas.core.respack.base,
   nextpas.core.bytes.ops;
@@ -392,6 +393,23 @@ begin
   Check(nextpas.core.respack.RESPACK_EFLAG_HASHED = 1, 'facade entry hashed flag bit0');
 end;
 
+{ 桶数恒为 2 的幂（layout/reader 用 and (Count-1) 取桶）：扫边界值断言范围与幂性，
+  退化只影响分布不影响正确性（命中必字节回验），此处锁定性能前提。 }
+procedure TestBucketCountPow2;
+const
+  CASES: array[0..9] of SizeUInt = (0, 1, 255, 256, 257, 1000, 32768, 65535, 65536, 100000);
+var
+  I: Integer;
+  C: SizeUInt;
+begin
+  for I := Low(CASES) to High(CASES) do
+  begin
+    C := TResPackDedupBuckets.BucketCountFor(CASES[I]);
+    Check((C >= 256) and (C <= 65536), 'bucket range');
+    Check(nextpas.core.mem.base.IsPowerOfTwo(C), 'bucket power of two');
+  end;
+end;
+
 procedure TestEmptyPack;
 var
   InA: TResPackInputArray;
@@ -488,6 +506,7 @@ begin
     T.Test('too large raises', @TestTooLargeWrapped);
     T.Test('nil data nonzero raises', @TestNilDataNonzeroRaises);
     T.Test('facade wire consts', @TestFacadeWireConsts);
+    T.Test('bucket count pow2', @TestBucketCountPow2);
     T.Test('empty pack opens', @TestEmptyPack);
     T.Test('golden snapshot', @TestGoldenSnapshot);
     T.Test('header fields sane', @TestHeaderFields);
