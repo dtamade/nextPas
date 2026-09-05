@@ -10,11 +10,11 @@
 |------|------|
 | `TTarEntryKind` | 7 种类：`tekRegular/HardLink/Symlink/CharDevice/BlockDevice/Directory/Fifo` |
 | `TTarHeader` | `Name/LinkName/Kind/Mode/UID/GID/Size/MTimeUnix/UName/GName/DevMajor/DevMinor/PaxRecords`（`PaxRecords: TPaxRecordArray` 保序透传全部 pax 原文，含已应用键与未知键） |
-| `TTarAddOptions` | `Mode/UID/GID/MTimeUnix/UName/GName`（`DefaultTarAddOptions` 取 0/空） |
+| `TTarAddOptions` | `Mode/UID/GID/MTimeUnix/UName/GName/Sparse`（`DefaultTarAddOptions` 取 0/空/`Sparse=False`；`Sparse=True` 走显式 pax 1.0 稀疏写出，见 §2 INV-8） |
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
 | `TTarReader` | `Create(PByte,Count)` / `WithOptions` 双形态；`Next(out H):Boolean` 迭代；`TrySlice(out TByteSpan):Boolean` 零拷贝视图（单一规范，生命周期绑 Reader）/ `EntryDataSlice` 薄转发；`OpenEntryStream:IReader` 零拷贝持有流（FBuf 时持有型零拷贝、外部 PByte 时按需 SpanClone 自包含持有防 UAF，inline/零拷贝，bytes.ops 单源）；`EntryDataOfs:SizeUInt`；`ClearGlobalPax` / `AcquireGlobalPaxGuard:IInterface` RAII 隔离 |
-| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，必须显式 `Finish`；析构不补写，仅 `ILogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH)` 可观测（文案单源 `nextpas.core.tar.log`，不驻留 `base` 类型层）、永不抛异常 `try..finally` 必释） |
+| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddSparseFile/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，必须显式 `Finish`；析构不补写，仅 `ILogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH)` 可观测（文案单源 `nextpas.core.tar.log`，不驻留 `base` 类型层）、永不抛异常 `try..finally` 必释） |
 
 ### 1.2 常量与谓词
 
@@ -29,7 +29,7 @@
 
 ### 1.4 链式构造器
 
-`ITarBuilder`（`nextpas.core.tar.intf` 定义，`nextpas.core.tar.builder` 实现）：`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/AddEntryFromReader/Finish` 链式单口直达。
+`ITarBuilder`（`nextpas.core.tar.intf` 定义，`nextpas.core.tar.builder` 实现）：`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/AddSparse/AddSparseWithOptions/AddEntryFromReader/Finish` 链式单口直达。
 
 - `base←intf←实现←门面`，L2→L1 单向 `nextpas.core.io.intf(IReader)`；薄门面委托 `TTarWriter`，复用 `bytes.ops`/`bytes.builder` 单源；需显式 `Finish`（两零块），析构 `try..finally` 必释资源、永不抛异常仅 `log.intf Warn` 可观测。
 
@@ -38,7 +38,7 @@
 - **[INV-1]** USTAR 写入：`magic "ustar\0"` @257 + `version "00"` @263 固定；>100 字符名自动 `prefix/name` 分割，否则以 `pax x` 扩展头承载。
 - **[INV-2]** 数值字段八进制为主，超限自动 `base-256`（`$80` + big-endian），读端双路径兼容。
 - **[INV-3]** 读写对称：读端支持 `GNU L/K` 与 `pax x/g` 的 `path/linkpath` 覆盖（per-entry 优于 global，`g` 需 guard 持久否则单次消费自动清理并 `ILogger.Warn`；`g` 恶意路堨经 `IsSafeTarEntryName` 过滤置空同步 `Warn` 可观测，防静默篡改），pax 记录严格校验、畸形抛 `EIOError`；类型化键 `size/mtime/uid/gid/uname/gname` 同规则应用（`x` 优先，`mtime` 小数截断取整，`size/uid/gid` 越界即 `EIOError`），未知键（含 `atime/ctime/xattr/GNU.sparse.*`）保序透传至 `PaxRecords`。
-- **[INV-8]** 稀疏重建：读端支持 oldgnu `S`（0.0/0.1，386 区 map + 482/504 扩展链，0.0 无 realsize 时由段推导）与 pax 1.0（`GNU.sparse.*` + 数据段首块十进制 map 文本 + `./GNUSparseFile.*` 占位名）；重建前 `stored` 与 `realsize` 双计总量、`realsize` 受单条目上限约束，未分配先守卫；map 缺终结符、段越界、存储不对账、错版、占位名失配一律 `EIOError`，占位名无 map 由名守卫 `EParseError`；写端不产生稀疏（dense 零块输出，标准兼容）。
+- **[INV-8]** 稀疏重建：读端支持 oldgnu `S`（0.0/0.1，386 区 map + 482/504 扩展链，0.0 无 realsize 时由段推导）与 pax 1.0（`GNU.sparse.*` + 数据段首块十进制 map 文本 + `./GNUSparseFile.*` 占位名）；重建前 `stored` 与 `realsize` 双计总量、`realsize` 受单条目上限约束，未分配先守卫；map 缺终结符、段越界、存储不对账、错版、占位名失配一律 `EIOError`，占位名无 map 由名守卫 `EParseError`；写端默认 dense（`AddFile/AddEntry` 零块输出，标准兼容），显式稀疏写出仅经 `AddSparseFile` / `AddEntryWithOptions(Sparse=True)` / builder `AddSparse/AddSparseWithOptions`，格式为 pax 1.0（`GNU.sparse.major=1/minor=0/name/realsize` + 占位名 `./GNUSparseFile.0/` + 首块十进制 map 文本，数据段按 512 补齐，与 GNU tar 1.35 互操作）；以下三种情形回退 dense 标准条目：空数据、占位名超 `Name` 字段、稀疏编码不小于 dense 体积（`AddSparseFile` 因所有权字段取零，回退字节与 `AddFile` 一致）；流式 `AddEntryFromReader` 不支持稀疏（需全量洞扫描）。
 - **[INV-4]** 校验和双算（unsigned/signed）任一匹配即过，否则 `EIOError: header checksum mismatch`。
 - **[INV-5]** 名安全：`IsSafeTarEntryName` 拒绝空名/绝对路径/盘符/反斜杠/`//`/`./`/`..`；写端 `EArgumentError`，读端/落盘前 `EParseError`，落盘二次拒绝；落盘前拒绝路径含符号链接段。
 - **[INV-6]** Bomb 守卫：`MaxEntrySize` 单条目与 `MaxTotalSize` 总量在 `common.Guard*` 单点 fail-closed，`TrySlice`/`OpenEntryStream` 中途同受；`pax x/g` 与 `GNU L/K` 扩展载荷计入总量（防 100k×超大 pax DoS，`GuardTarTotalSize` 单源）。

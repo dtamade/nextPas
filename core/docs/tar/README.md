@@ -31,7 +31,7 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | GNU longname `L/K` | — | Yes | 读端 `FPendingLongName/Link` 覆盖 |
 | PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`TarAppendPaxRecord` builder 零拷贝 `Reserve+AppendBytes` 最优路径单源，经 `archive.pax ArchivePaxFormatRecord` 单源 `SpanToString` 单次 Move），读端 per-entry 优于 global，`g` 在 `AcquireGlobalPaxGuard` 作用域内持久至下一 `g` 覆盖、无 guard 时单次消费自动清理并 `ILogger.Warn`、恶意由 `IsSafeTarEntryName` 自动过滤置空并同步 `Warn`（与自动清理 `Warn` 对齐防静默篡改）、`ClearGlobalPax` 显式或 `AcquireGlobalPaxGuard` RAII 自动隔离；通用 `TarParsePaxKVRecords`/`ArchivePaxParseRecords` 零拷贝迭代 `atime/mtime/size` 等扩展键，长度前缀缺空格/非数字/越界/缺换行即抛 `EIOError` 禁回退截断名 |
 | PAX 类型化键 `size/mtime/uid/gid/uname/gname` | —（ustar/base-256 已承载） | Yes（覆盖） | 与 path 同规则（x 优先/g 同持久语义），`mtime` 小数截断，越界即 `EIOError`；未知键保序透传 `TTarHeader.PaxRecords` |
-| GNU sparse 只读（old 0.0/0.1 + pax 1.0） | —（dense 零块输出，标准兼容） | Yes（重建） | `S`（386 区 map + 扩展链）/ 1.0（`GNU.sparse.*` + 数据段首块文本 map + 占位名）；重建前 stored/realsize 双计 bomb，未分配先守卫；见 CONTRACT INV-8 |
+| GNU sparse（old 0.0/0.1 + pax 1.0） | Yes（显式 pax 1.0） | Yes（重建） | 写端默认 dense，`AddSparseFile`/`AddEntryWithOptions(Sparse)`/`AddSparse` 显式写出 pax 1.0（`GNU.sparse.*` + `./GNUSparseFile.0/` 占位名 + 首块 map 文本，段按 512 补齐）；空数据/占位名超长/无收益回退 dense；读端 `S`（386 区 map + 扩展链）/ 1.0 重建，重建前 stored/realsize 双计 bomb，未分配先守卫；见 CONTRACT INV-8 |
 | Block alignment | Yes | Yes | 512 对齐 + 两零块收尾 |
 | Zero-copy slice/stream | — | Yes | `TrySlice` 单一规范 `TByteSpan` 零拷贝视图 + `EntryDataSlice` 薄转发(`PByte`) + `OpenEntryStream`（`FBuf` 时 `CreateSliceReaderWithHold` 零拷贝持有型、`Reader` 释放后仍可读；外部 `PByte` 时 `CreateSliceReader` 零拷贝直视、生命周期绑外部 PByte/Reader，零分配 inline，按需 `TrySlice+SpanClone` 自包含） |
 
@@ -47,6 +47,7 @@ S := CreateBytesStream;
 W := TTarWriter.Create(S as IWriter);
 W.AddFile('hello.txt', BytesOfString('hello'), $1A4, 1700000000);
 W.AddDir('assets');
+W.AddSparseFile('sparse.bin', Data); // 显式 pax 1.0 稀疏写出（默认 dense；回退规则见 CONTRACT INV-8）
 W.AddEntry(Hdr, Data); // Hdr.Name/Kind/Mode/UID/GID/MTime/UName/GName/DevMajor/DevMinor
 W.Finish; // 两零块，需显式调用，析构仅 Warn 不补写、永不抛异常
 ```
@@ -95,6 +96,7 @@ Opts := DefaultTarAddOptions; Opts.Mode := $1A4; Opts.MTimeUnix := 1700000000;
 TarBuilder.AddWithOptions('hello.txt', Data, Opts)
           .AddDirectoryWithOptions('assets', Opts)
           .AddEntry(Hdr, Data)
+          .AddSparse('sparse.bin', Data)
           .Finish;
  // 流式零拷贝（单口 ITarBuilder 直达，零 QueryInterface 仪式）：
  // TarBuilder.Add('a', Data).AddEntryFromReader(Hdr2, Reader).Finish
