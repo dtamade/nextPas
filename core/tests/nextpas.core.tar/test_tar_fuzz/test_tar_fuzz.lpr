@@ -1415,6 +1415,41 @@ begin
   SetLength(Arc, 0);
 end;
 
+procedure TestCachedChecksumPerHeader;
+var
+  Arc: TBytes;
+  R: TTarReader;
+  H: TTarHeader;
+  Hdr2Pos: Integer;
+begin
+  // f58d0d7b7 pin: HeaderIsZeroOrValid reuses cached dual sums on hit;
+  // a corrupt second header must be rejected against its own block,
+  // not accepted via the first header's snapshot (cold-cache cases cover this).
+  Arc := nil;
+  EmitRawHeader(Arc, 'first.txt', '0', 3);
+  AppendPayload(Arc, StringToBytes('one'));
+  Hdr2Pos := Length(Arc);
+  EmitRawHeader(Arc, 'second.txt', '0', 3);
+  AppendPayload(Arc, StringToBytes('two'));
+  AppendZeros(Arc, 1024);
+  Arc[Hdr2Pos + 10] := Arc[Hdr2Pos + 10] xor $FF;
+  R := TTarReader.Create(Arc);
+  try
+    CheckTrue(R.Next(H), 'first header accepted');
+    CheckEqual('first.txt', H.Name, 'first name');
+    try
+      R.Next(H);
+      CheckTrue(False, 'second header with bad checksum must raise');
+    except
+      on E: EIOError do
+        CheckTrue(True, 'second header rejected');
+    end;
+  finally
+    R.Free;
+  end;
+  SetLength(Arc, 0);
+end;
+
 procedure TestWriterSemantics;
 var
   S: IStream;
@@ -1767,6 +1802,7 @@ begin
   Suite.Test('sparse reject', @TestSparseReject);
   Suite.Test('bomb limits', @TestBombLimits);
   Suite.Test('malformed headers', @TestMalformedHeaders);
+  Suite.Test('cached checksum is per-header', @TestCachedChecksumPerHeader);
   Suite.Test('writer semantics', @TestWriterSemantics);
   Suite.Test('builder equivalence', @TestBuilderEquivalence);
   Suite.Test('fs determinism restore special', @TestFsDeterminismRestoreAndSpecial);
