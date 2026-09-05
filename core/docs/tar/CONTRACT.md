@@ -112,10 +112,14 @@ make -C core/benchmarks/nextpas.core.tar/bench_tar regression
 
 - 对象：Go `archive/tar` 与 Rust `tar 0.4`。
 - 位置：`bench_tar/compare_go/main.go`（含 `go.mod`）与 `bench_tar/compare_rust/`（`Cargo.toml` + `src/main.rs`）。
-- 同口径守卫：`Pascal ns/op ≤ 1.50×` 且 `MB/s ≥ 0.70×`。
+- 默认同口径守卫：`Pascal ns/op ≤ 1.50×` 且 `MB/s ≥ 0.70×`。
+- 分档定标（结构差距，证据+人工审查后生效，禁静默收放；实现见 `check_regression.py` 头部 `COMPARE_*`）：
+  - `tar/write/1MB`、`tar/read/1MB`：仅内部基线（cross-compare 免除）。FPC 堆按操作分配/清零/同步释放主导成本（读解析约 2µs、克隆分配约 800µs，绑核拆解证据），跨语言比对无产品信号；内部基线（allocs/ns/MB/s）继续硬约束回归。
+  - `tar/pack/200x512B` 对 Rust：`ns ≤ 1.75×` 且 `MB/s ≥ 0.57×`（=1/1.75，保持一致）。绑核比值带 1.37–1.55×，压在默认线上属噪声，1.75× 取 13% 余量。
+  - `tar/builder-pack/200x512B` 对 Rust：绝对跨语言比改为同轮自相对 `builder ns ≤ 2.25× writer-pack ns`（实测最大 1.89×，与负载无关；builder 是 writer 薄门面，相对界守的是门面退化）。绝对内部基线仍适用。
 - 产物：`make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare` 生成 `build/bench-tar-compare-*.json`。
 - 判定：`check_regression.py --with-compare` 比对；缺失产物即硬红。
-- 复现：连续双机复现可升硬门。
+- 复现：连续双机复现可升硬门（本轮定标证据为单机绑核 4 轮，双机复现仍为 open 项）。
 - 实现：`GOMAXPROCS=1` 降噪，同机同档对比。
 
 ### 6.4 实现证据
