@@ -323,6 +323,206 @@ begin
   end;
 end;
 
+{ ── 跨路径字节一致性：内存 Build vs Stream vs Size ── }
+
+var
+  { 流式收集全局锚点：匿名 WriteProc 捕获全局（同 G_DigestSeen 模式）；
+    用例内转存局部后立即置 nil，heaptrc 零泄漏由显式释放证明 }
+  G_StreamBuf: TBytes;
+
+procedure BuildCrossFixture(var AH: THolder);
+begin
+  HoldAdd(AH, 'a-first.txt', BytesOf('first-payload'));
+  HoldAdd(AH, 'empty.txt', BytesOf(''));
+  HoldAdd(AH, '图片/样式.css', BytesOf('body{}'));
+  HoldAdd(AH, 'copy1.bin', BytesOf('shared-bytes'));
+  HoldAdd(AH, 'copy2.bin', BytesOf('shared-bytes'));
+  HoldAdd(AH, 'z-last.bin', BytesOf('last-payload'));
+end;
+
+{ 同输入同选项：Size 预取 == Build 大小，Stream 分段输出与 Build 逐字节一致 }
+procedure CheckStreamIdentical(const ALabel: string;
+  const AInputs: TResPackInputArray; const AOpts: TResPackBuildOptions);
+var
+  B: TResPackBlob;
+  SSize: UInt64;
+  Streamed: TBytes;
+begin
+  B := ResPackBuild(AInputs, AOpts);
+  try
+    SSize := ResPackBuildStreamSize(AInputs, AOpts);
+    Check(SSize = UInt64(B.Size), ALabel + ': stream size equals build size');
+    G_StreamBuf := nil;
+    try
+      ResPackBuildStream(AInputs, AOpts,
+        procedure(const AData: PByte; const ASize: SizeUInt)
+        var
+          Old: SizeUInt;
+        begin
+          if ASize = 0 then Exit;
+          Old := SizeUInt(Length(G_StreamBuf));
+          SetLength(G_StreamBuf, Old + ASize);
+          Move(AData^, G_StreamBuf[Old], ASize);
+        end);
+      Streamed := G_StreamBuf;
+      G_StreamBuf := nil;
+      try
+        Check(SizeUInt(Length(Streamed)) = B.Size,
+          ALabel + ': stream length equals build size');
+        Check(SameBytes(PtrToBytes(B.Data, B.Size), Streamed),
+          ALabel + ': stream bytes identical to build');
+      finally
+        Streamed := nil;
+      end;
+    finally
+      G_StreamBuf := nil;
+    end;
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+{ 同包 build-then-read：有序/空文件/unicode/去重槽位/摘要逐项回验 }
+procedure CheckCrossRoundtrip(const ALabel: string;
+  const AInputs: TResPackInputArray; const AOpts: TResPackBuildOptions;
+  const AExpectDedupShare, AExpectDigest: Boolean);
+var
+  B: TResPackBlob;
+  RP: TResPack;
+  I: SizeUInt;
+  Prev, P: string;
+  E, EA, EB: TResPackEntry;
+  D: PByte;
+  Expect: UInt32;
+  K: Integer;
+  OK: Boolean;
+begin
+  B := ResPackBuild(AInputs, AOpts);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(RP.Count = 6, ALabel + ': six entries');
+    Prev := '';
+    OK := True;
+    if RP.Count > 0 then
+      for I := 0 to RP.Count - 1 do
+      begin
+        E := RP.EntryAt(I);
+        P := RP.PathOf(E);
+        if (Prev <> '') and (Prev >= P) then OK := False;
+        Prev := P;
+      end;
+    Check(OK, ALabel + ': index strictly sorted');
+    Check(RP.Find('empty.txt', E) and (E.Size = 0),
+      ALabel + ': empty file roundtrips');
+    Check(RP.Find('图片/样式.css', E), ALabel + ': unicode name found');
+    if RP.Find('图片/样式.css', E) then
+      Check(SameBytes(BytesOf('body{}'), PtrToBytes(RP.ContentPtr(E), E.Size)),
+        ALabel + ': unicode content equal');
+    Check(RP.Find('copy1.bin', EA) and RP.Find('copy2.bin', EB),
+      ALabel + ': duplicate pair found');
+    if AExpectDedupShare then
+      Check(EA.DataOffset = EB.DataOffset, ALabel + ': dedup shares one slot')
+    else
+      Check(EA.DataOffset <> EB.DataOffset,
+        ALabel + ': no-dedup keeps separate slots');
+    Check(SameBytes(BytesOf('shared-bytes'),
+      PtrToBytes(RP.ContentPtr(EA), EA.Size)),
+      ALabel + ': shared content intact');
+    if AExpectDigest then
+    begin
+      Check(RP.HasDigests, ALabel + ': digest section present');
+      OK := True;
+      if RP.Count > 0 then
+        for I := 0 to RP.Count - 1 do
+        begin
+          E := RP.EntryAt(I);
+          Expect := ResPackFnv1a32(RP.ContentPtr(E), E.Size);
+          D := RP.DigestPtr(I);
+          for K := 0 to RESPACK_DIGEST_SIZE - 1 do
+            if D[K] <> Byte(Expect shr (8 * (K mod 4))) then OK := False;
+        end;
+      Check(OK, ALabel + ': every index digest matches its own entry');
+    end
+    else
+      Check(not RP.HasDigests, ALabel + ': no digest section');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure RunCrossMode(const ALabel: string;
+  const ADedup, ADigest: Boolean);
+var
+  H: THolder;
+  Opts: TResPackBuildOptions;
+begin
+  BuildCrossFixture(H);
+  Opts := ResPackDefaultOptions;
+  Opts.Deduplicate := ADedup;
+  if ADigest then
+    Opts.DigestFunc :=
+      procedure(const AData: PByte; const ASize: SizeUInt;
+        const ADigestOut: PByte)
+      begin
+        DigestFiller(AData, ASize, ADigestOut);
+      end;
+  CheckStreamIdentical(ALabel, H.Inputs, Opts);
+  CheckCrossRoundtrip(ALabel, H.Inputs, Opts, ADedup, ADigest);
+end;
+
+procedure TestCrossPathPlain;
+begin
+  RunCrossMode('cross plain', False, False);
+end;
+
+procedure TestCrossPathDedup;
+begin
+  RunCrossMode('cross dedup', True, False);
+end;
+
+procedure TestCrossPathDigest;
+begin
+  RunCrossMode('cross digest', False, True);
+end;
+
+procedure TestCrossPathDedupDigest;
+begin
+  RunCrossMode('cross dedup+digest', True, True);
+end;
+
+procedure TestCrossPathEmpty;
+var
+  Empty: TResPackInputArray;
+begin
+  Empty := nil;
+  CheckStreamIdentical('cross empty', Empty, ResPackDefaultOptions);
+end;
+
+procedure TestCrossPathChunkedHead;
+{ 头块 40+N*40+名表远超 64K：强制 writer.stream 走 64K chunk 分片，
+  与内存版逐字节一致（该分支此前零覆盖） }
+const
+  BIG_N = 1700;
+var
+  H: THolder;
+  I: Integer;
+begin
+  SetLength(H.Store, BIG_N);
+  SetLength(H.Inputs, BIG_N);
+  for I := 0 to BIG_N - 1 do
+  begin
+    H.Store[I] := BytesOf('payload-' + Num4(I));
+    H.Inputs[I] := Default(TResPackInputEntry);
+    H.Inputs[I].Path := 'gen/chunk/' + Num4(I) + '.dat';
+    if Length(H.Store[I]) > 0 then
+      H.Inputs[I].Data := @H.Store[I][0]
+    else
+      H.Inputs[I].Data := nil;
+    H.Inputs[I].DataSize := SizeUInt(Length(H.Store[I]));
+  end;
+  CheckStreamIdentical('cross chunked head', H.Inputs, ResPackDefaultOptions);
+end;
+
 procedure TestPerfSmoke10k;
 { Smoke 属性：防回归预算而非精度断言。10k 条目 build + 全量 Find 的总耗时
   必须落在宽松硬上限内；若实现退化为 O(n²)（索引查找、排序、去重）会远超
@@ -392,6 +592,12 @@ begin
   T.Test('dedupe roundtrip', @TestDedupeRoundtrip);
   T.Test('digest roundtrip', @TestDigestRoundtrip);
   T.Test('digest index order', @TestDigestIndexOrder);
+  T.Test('cross plain identity', @TestCrossPathPlain);
+  T.Test('cross dedup identity', @TestCrossPathDedup);
+  T.Test('cross digest identity', @TestCrossPathDigest);
+  T.Test('cross dedup+digest identity', @TestCrossPathDedupDigest);
+  T.Test('cross empty identity', @TestCrossPathEmpty);
+  T.Test('cross chunked head identity', @TestCrossPathChunkedHead);
   T.Test('perf smoke 10k', @TestPerfSmoke10k);
   if not T.Run then Halt(1);
 end.

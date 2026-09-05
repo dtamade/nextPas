@@ -25,7 +25,6 @@ type
   TResPackInputArray = nextpas.core.respack.base.TResPackInputArray;
   TResPackBuildOptions = nextpas.core.respack.base.TResPackBuildOptions;
   TResPackBlob = nextpas.core.respack.base.TResPackBlob;
-  TResPackLayoutInfo = nextpas.core.respack.writer.TResPackLayoutInfo;
   TResPackIncludeFunc = nextpas.core.respack.dirsource.TResPackIncludeFunc;
   TResPack = nextpas.core.respack.reader.TResPack;
   TResPackEmbedOptions = nextpas.core.respack.embed.TResPackEmbedOptions;

@@ -42,11 +42,6 @@ const
   RESPACK_WRITER_HEAD_CHUNK = nextpas.core.respack.base.RESPACK_WRITER_HEAD_CHUNK;
 
 { 零填分段：BYTES_ZERO_PAGE 单源，≤4K 快道 inline，>4K 外联 Loop }
-function HasDigestOpt(const AOpts: TResPackBuildOptions): Boolean; inline;
-begin
-  Result := Assigned(AOpts.DigestFunc);
-end;
-
 procedure WriteZerosLoop(const AWrite: TResPackWriteProc; ACount: UInt64);
 var
   N: UInt64;
