@@ -19,9 +19,63 @@ uses
   nextpas.core.archive.pax;
 
 function BytesOf(const S: string): TBytes; inline;
+
 begin
   // perf: single-source via bytes.ops.StringToBytes (zero-copy PAnsiChar view, single Move), inline thin forward, owner bytes.ops; heaptrc0 via common.mk HEAPTRC_GATE=1 (-gh, haltonnotreleased+log), no duplicate Move
   Result := nextpas.core.bytes.ops.StringToBytes(S);
+end;
+
+procedure TestHeaderCacheFieldsMixed;
+var
+  S: IStream; W: TTarWriter; R: TTarReader; H: TTarHeader;
+  Hdr: TTarHeader; Arc: TBytes; LongDir, LongName: string; I: Integer;
+begin
+  LongDir := '';
+  for I := 1 to 95 do LongDir := LongDir + 'd';
+  LongName := LongDir + '/f.bin';
+  S := CreateBytesStream;
+  W := TTarWriter.Create(S as IWriter);
+  try
+    Hdr := Default(TTarHeader);
+    Hdr.Name := 'link.txt';
+    Hdr.Kind := tekSymlink;
+    Hdr.LinkName := 'target/with/slash.txt';
+    Hdr.Mode := $1A4;
+    Hdr.UName := 'alice';
+    Hdr.GName := 'staff';
+    W.AddEntry(Hdr, nil);
+    Hdr := Default(TTarHeader);
+    Hdr.Name := 'doc.txt';
+    Hdr.Kind := tekRegular;
+    Hdr.Mode := $1A4;
+    Hdr.UName := 'bob';
+    Hdr.GName := 'ops';
+    Hdr.Size := 3;
+    W.AddEntry(Hdr, BytesOf('doc'));
+    W.AddFile(LongName, BytesOf('L'));
+    W.Finish;
+  finally W.Free; end;
+  SetLength(Arc, S.Size);
+  S.Seek(0, soBeginning);
+  S.Read(Arc[0], Length(Arc));
+  R := TTarReader.Create(Arc);
+  try
+    CheckTrue(R.Next(H), 'link present');
+    CheckEqual('link.txt', H.Name, 'link name');
+    CheckEqual(Ord(tekSymlink), Ord(H.Kind), 'link kind');
+    CheckEqual('target/with/slash.txt', H.LinkName, 'link target');
+    CheckEqual('alice', H.UName, 'link uname');
+    CheckEqual('staff', H.GName, 'link gname');
+    CheckTrue(R.Next(H), 'doc present');
+    CheckEqual('doc.txt', H.Name, 'doc name');
+    CheckEqual('bob', H.UName, 'doc uname');
+    CheckEqual('ops', H.GName, 'doc gname');
+    CheckTrue(R.Next(H), 'long present');
+    CheckEqual(LongName, H.Name, 'prefix recombined');
+    CheckEqual('', H.LinkName, 'empty link');
+    CheckEqual('', H.UName, 'empty uname');
+    CheckTrue(R.Next(H) = False, 'end');
+  finally R.Free; end;
 end;
 
 function SameBytes(const A, B: TBytes): Boolean; inline;
@@ -326,7 +380,9 @@ var
 begin
   // heaptrc0 evidence: common.mk HEAPTRC_GATE=1 (-gh, haltonnotreleased+log) gates "0 unfreed blocks" + "Heap dump by heaptrc unit"; stability: W/R try..finally guarantees Free not lost
   Suite := TTestSuite.Create('tar.reader');
+
   Suite.Test('roundtrip regular', @TestRoundTripRegular);
+  Suite.Test('header cache mixed fields', @TestHeaderCacheFieldsMixed);
   Suite.Test('long names prefix split', @TestGNUAndPaxLongNames);
   Suite.Test('base256 and checksum', @TestBase256AndChecksum);
   Suite.Test('zero-copy slice and stream', @TestZeroCopySliceAndStream);
