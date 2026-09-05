@@ -7,7 +7,8 @@ unit nextpas.core.respack.writer;
 interface
 
 uses
-  nextpas.core.respack.base;
+  nextpas.core.respack.base,
+  nextpas.core.respack.writer.layout;
 
 type
   { 排序后的内部视图，供测试断言布局使用 }
@@ -23,52 +24,20 @@ function ResPackBuild(const AEntries: array of TResPackInputEntry;
 implementation
 
 uses
-  nextpas.core.bytes.ops,
-  nextpas.core.respack.writer.layout,
   nextpas.core.respack.writer.stream;
 
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): TResPackBlob;
 var
   L: TResPackLayout;
-  Total: UInt64;
-  Buf: PByte;
-  Off: SizeUInt;
-  Sink: TResPackWriteProc;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单布局复用 Emit：排序/fnv/去重仅 1×，BytesCopy 单源零拷贝直填；Sink 单闭包/Build，异常 FreeMem+Clear 不丢资源。 }
+  { 单布局复用 Emit：排序/fnv/去重仅 1×，内存 Sink 经 stream 单源封装直填；布局由 stream 拥有 Clear 不丢资源。 }
   ResPackComputeLayout(AEntries, AOpts, L);
   try
-    Total := L.Total;
-    if Total = 0 then Exit;
-    if Total > High(SizeUInt) then
-      raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
-    Buf := nil;
-    GetMem(Buf, SizeUInt(Total));
-    Off := 0;
-    Sink :=
-      procedure(const AData: PByte; const ASize: SizeUInt)
-      begin
-        if ASize = 0 then Exit;
-        BytesCopy(Buf + Off, AData, ASize);
-        Inc(Off, ASize);
-      end; { 单闭包/Build，堆分配一次，零每块分配；BytesCopy inline 快道 }
-    try
-      ResPackEmitLayout(AEntries, AOpts, L, Sink);
-      if Off <> SizeUInt(Total) then
-        raise EResPackError.Create('respack: stream size mismatch');
-      Result.Data := Buf;
-      Result.Size := SizeUInt(Total);
-      Result.Owned := True;
-      Buf := nil;
-    except
-      if Buf <> nil then
-        FreeMem(Buf);
-      raise;
-    end;
+    Result := ResPackBuildLayoutBlob(AEntries, AOpts, L);
   finally
     ResPackLayoutClear(L);
   end;
