@@ -4783,6 +4783,83 @@ begin
   end;
 end;
 
+procedure TestDescribeBadRefKeepsCause;
+var
+  Work, GitDir: string;
+  LRaised: Boolean;
+begin
+  // covers resolve fallback: unknown ref must report the rev-parse cause,
+  // not just the ref-lookup "not found"
+  MakeTwoCommitRepo('nextpas_git_describe_cause', Work, GitDir);
+  try
+    LRaised := False;
+    try
+      GitDescribe(GitDir, 'no-such-ref-xyz');
+    except
+      on E: EGitError do
+      begin
+        LRaised := True;
+        CheckTrue(Pos('cannot resolve', E.Message) > 0,
+          'names the failure, got: ' + E.Message);
+        CheckTrue(Pos('no-such-ref-xyz', E.Message) > 0,
+          'keeps the ref, got: ' + E.Message);
+      end;
+    end;
+    CheckTrue(LRaised, 'unknown ref raises');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
+procedure TestDescribeCorruptAncestorKeepsCause;
+var
+  Work, GitDir, MidHex, ObjPath: string;
+  LRaised: Boolean;
+begin
+  // covers BFS read errors: tag on c1, middle commit object deleted, so the
+  // walk must report the missing object instead of bare "no tag found"
+  Work := PathJoin([GetTempDir, 'nextpas_git_describe_corrupt_' + IntToStr(GetProcessID)]);
+  RemoveAll(Work);
+  MkdirAll(Work, PermDirDefault);
+  try
+    RunInChecked('git', ['init', '--quiet', '-b', 'main'], Work);
+    RunInChecked('git', ['config', 'user.email', 'test@example.com'], Work);
+    RunInChecked('git', ['config', 'user.name', 'Test Er'], Work);
+    WriteFileText(PathJoin([Work, 'f.txt']), 'c1'#10);
+    RunInChecked('git', ['add', '.'], Work);
+    RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c1'], Work);
+    RunInChecked('git', ['tag', '-a', 'v1.0', '-m', 'r', 'HEAD'], Work);
+    WriteFileText(PathJoin([Work, 'f.txt']), 'c2'#10);
+    RunInChecked('git', ['add', '.'], Work);
+    RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c2'], Work);
+    WriteFileText(PathJoin([Work, 'f.txt']), 'c3'#10);
+    RunInChecked('git', ['add', '.'], Work);
+    RunInChecked('git', ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'c3'], Work);
+    GitDir := PathJoin([Work, '.git']);
+    MidHex := Trim(MustCaptureIn('git', ['rev-parse', 'HEAD~1'], Work));
+    ObjPath := PathJoin([GitDir, 'objects', Copy(MidHex, 1, 2), Copy(MidHex, 3, 38)]);
+    CheckTrue(DeleteFile(ObjPath), 'middle commit object deleted');
+    LRaised := False;
+    try
+      GitDescribe(GitDir, 'HEAD');
+    except
+      on E: EGitError do
+      begin
+        LRaised := True;
+        CheckTrue(Pos('no tag found', E.Message) > 0,
+          'still reports no tag, got: ' + E.Message);
+        CheckTrue(Pos('failed to read', E.Message) > 0,
+          'reports the read failure, got: ' + E.Message);
+        CheckTrue(Pos(MidHex, E.Message) > 0,
+          'names the missing object, got: ' + E.Message);
+      end;
+    end;
+    CheckTrue(LRaised, 'corrupt ancestor raises');
+  finally
+    RemoveAll(Work);
+  end;
+end;
+
 procedure TestShowStructure;
 var
   Work, GitDir, CliOut: string;
@@ -5785,6 +5862,8 @@ begin
     T.Test('notes add get remove round-trip', @TestNotesAddGetRemoveRoundTrip);
     T.Test('archive file list matches git', @TestArchiveFileListMatchesGit);
     T.Test('describe matches git', @TestDescribeMatchesGit);
+    T.Test('describe bad ref keeps cause', @TestDescribeBadRefKeepsCause);
+    T.Test('describe corrupt ancestor keeps cause', @TestDescribeCorruptAncestorKeepsCause);
     T.Test('show structure', @TestShowStructure);
     T.Test('catfile matches git', @TestCatFileMatchesGit);
     T.Test('log matches git', @TestLogMatchesGit);

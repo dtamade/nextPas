@@ -123,14 +123,31 @@ begin
 end;
 
 function GitResolveStartOid(const AGitDir, ARef: string): TGitOid;
-var R: string;
+var
+  R, LWhy: string;
 begin
   R := GitTrimSpaces(ARef);
   if R = '' then
     Result := GitResolveHead(AGitDir)
   else
-    try Result := GitRevParse(AGitDir, R);
-    except Result := GitResolveRef(AGitDir, R); end;
+  begin
+    { rev-parse understands specs (HEAD~1, tags); a plain ref name falls
+      through to ref lookup. When both fail, report the rev-parse reason:
+      it names the actual cause, the ref lookup only repeats "not found". }
+    try
+      Result := GitRevParse(AGitDir, R);
+    except
+      on E: Exception do
+      begin
+        LWhy := E.Message;
+        try
+          Result := GitResolveRef(AGitDir, R);
+        except
+          raise EGitError.CreateFmt('cannot resolve "%s": %s', [R, LWhy]);
+        end;
+      end;
+    end;
+  end;
 end;
 
 end.

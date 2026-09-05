@@ -22,28 +22,16 @@ implementation
 
 uses
   nextpas.core.fs,
-  nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.revparse,
   nextpas.core.git.native.tag,
+  nextpas.core.git.native.common,
   nextpas.core.git.native.revwalk,
   nextpas.core.text.conv;
 
-function LocalTrim(const S: string): string;
-var I, J: Integer;
-begin
-  I := 1;
-  while (I <= Length(S)) and (S[I] in [#9, #10, #13, ' ']) do Inc(I);
-  J := Length(S);
-  while (J >= I) and (S[J] in [#9, #10, #13, ' ']) do Dec(J);
-  if J < I then Result := '' else Result := Copy(S, I, J - I + 1);
-end;
-
-function ShortHex(const AOid: TGitOid): string;
-begin
-  Result := Copy(GitOidToHex(AOid), 1, 7);
-end;
+{ LocalTrim/ShortHex/PeelToCommit/ResolveStartOid intentionally live in
+  git.native.common as the single source (blame/describe share them);
+  this unit keeps only describe-specific code. }
 
 function EffectiveTagOid(const AEntry: TGitTagEntry): TGitOid; inline;
 begin
@@ -156,46 +144,6 @@ begin
   Result := '';
 end;
 
-function PeelToCommit(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
-var
-  Kind: TGitObjectKind;
-  Data: TBytes;
-  TagInfo: TGitTagInfo;
-  Depth: Integer;
-begin
-  Result := AOid;
-  Depth := 0;
-  while Depth < 16 do
-  begin
-    Data := ARepo.ReadObject(Result, Kind);
-    if Kind = gokTag then
-    begin
-      TagInfo := GitParseTag(Data);
-      Result := TagInfo.Target;
-      Inc(Depth);
-    end
-    else if Kind = gokCommit then Exit
-    else raise EGitError.CreateFmt('ref does not point to commit: %s', [GitOidToHex(AOid)]);
-  end;
-  raise EGitError.Create('tag peel too deep');
-end;
-
-function ResolveStartOid(const AGitDir, ARef: string): TGitOid;
-var R: string;
-begin
-  R := LocalTrim(ARef);
-  if R = '' then
-    Result := GitResolveHead(AGitDir)
-  else
-  begin
-    try
-      Result := GitRevParse(AGitDir, R);
-    except
-      Result := GitResolveRef(AGitDir, R);
-    end;
-  end;
-end;
-
 type
   TQueueEntry = record
     Oid: TGitOid;
@@ -205,7 +153,7 @@ type
 function DescribeInternal(const AGitDir, ARef: string; AIncludeLightweight: Boolean): string;
 var
   Repo: TNativeRepository;
-  StartOid, Peeled: TGitOid;
+  Peeled: TGitOid;
   Tags, Filtered: TGitTagArray;
   I, FilteredCount, FilteredIdx: Integer;
   Queue: array of TQueueEntry;
@@ -219,8 +167,17 @@ var
   Info: TGitCommitInfo;
   ParentOid: TGitOid;
   P: Integer;
+  LReadErr: string;
 begin
   if AGitDir = '' then raise EGitError.Create('describe: gitdir empty');
+  { validate + resolve the start first: an invalid ref must report its cause
+    even when the repo has no tags at all }
+  Repo := TNativeRepository.Create(AGitDir);
+  try
+    Peeled := GitPeelToCommit(Repo, GitResolveStartOid(AGitDir, ARef));
+  finally
+    Repo.Free;
+  end;
   Tags := GitTagList(AGitDir);
   // filter annotated-only: pre-count once, single allocation O(n)
   if not AIncludeLightweight then
@@ -251,9 +208,8 @@ begin
     TagMapAdd(TagMap, EffectiveTagOid(Tags[I]), Tags[I].Name);
   Repo := TNativeRepository.Create(AGitDir);
   Visited := TGitOidSet.Create;
+  LReadErr := '';
   try
-    StartOid := ResolveStartOid(AGitDir, ARef);
-    Peeled := PeelToCommit(Repo, StartOid);
     // distance 0 check: O(1) hash lookup inline
     TagName := TagMapFind(TagMap, Peeled);
     if TagName <> '' then Exit(TagName);
@@ -268,13 +224,25 @@ begin
     begin
       Cur := Queue[Head];
       Inc(Head);
-      // read parents of Cur
+      // read parents of Cur: a missing/corrupt object must not silently
+      // truncate the walk (wrong distance or bare "no tag found"); record
+      // the first read failure and report it if no tag is reached
       try
         Data := Repo.ReadObject(Cur.Oid, Kind);
       except
+        on E: Exception do
+        begin
+          if LReadErr = '' then
+            LReadErr := 'failed to read ' + GitOidToHex(Cur.Oid) + ': ' + E.Message;
+          Continue;
+        end;
+      end;
+      if Kind <> gokCommit then
+      begin
+        if LReadErr = '' then
+          LReadErr := 'object ' + GitOidToHex(Cur.Oid) + ' is not a commit';
         Continue;
       end;
-      if Kind <> gokCommit then Continue;
       Info := GitParseCommit(Data);
       for P := 0 to High(Info.Parents) do
       begin
@@ -285,7 +253,7 @@ begin
         if TagName <> '' then
         begin
           // distance is Cur.Dist + 1
-          Result := TagName + '-' + IntToStr(Cur.Dist + 1) + '-g' + ShortHex(Peeled);
+          Result := TagName + '-' + IntToStr(Cur.Dist + 1) + '-g' + GitShortHex(Peeled);
           Exit;
         end;
         // amortized doubling: zero per-parent SetLength(...+1)
@@ -299,6 +267,8 @@ begin
           raise EGitError.Create('describe: history too large');
       end;
     end;
+    if LReadErr <> '' then
+      raise EGitError.CreateFmt('no tag found (%s)', [LReadErr]);
     raise EGitError.Create('no tag found');
   finally
     Visited.Free;
