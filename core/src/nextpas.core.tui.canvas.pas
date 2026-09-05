@@ -14,6 +14,7 @@ unit nextpas.core.tui.canvas;
  *   - floodfill  4-连通区域种子填充（CanvasFloodFill4）
  *   - export     活动层导出 txt / ansi
  *   - docstore   文档持久化 JSON 序列化（CanvasDocSaveToJson/LoadFromJson）
+ *   - flatten    视口裁剪与可见层合并（CanvasFlattenViewport/Visible）
  *  边界：本门面为 `canvas.*` 子家族聚合（`canvas.base`←`canvas.intf`←聚合门面），
  *  不寄居 `nextpas.core.tui` 主包；主包聚合零分配，`HEAPTRC_GATE=1` heaptrc0 双路径固化，
  *  `bytes.ops` 单源零拷贝（`RowPtr`/`CellPtr`/`CanvasCellSpan` inline）不复制像素。
@@ -31,7 +32,8 @@ uses
   nextpas.core.tui.canvas.clipboard,
   nextpas.core.tui.canvas.floodfill,
   nextpas.core.tui.canvas.export,
-  nextpas.core.tui.canvas.docstore;
+  nextpas.core.tui.canvas.docstore,
+  nextpas.core.tui.canvas.flatten;
 
 implementation
 

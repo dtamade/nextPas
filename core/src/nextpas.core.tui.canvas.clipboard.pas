@@ -39,10 +39,14 @@ type
     property AnchorY: Integer read FAnchorY;
   end;
 
+{** @desc 选区规范化为闭区间（覆盖任意拖拽顺序）；供笔画/选区调用方共用 *}
+procedure NormalizeRect(AX0, AY0, AX1, AY1: Integer;
+  out NX0, NY0, NX1, NY1: Integer);
+
 implementation
 
-{ 选区规范化为闭区间; 覆盖任意拖拽顺序 }
-procedure NormalizeRect(AX0, AY0, AX1, AY1: Integer; out NX0, NY0, NX1, NY1: Integer);
+procedure NormalizeRect(AX0, AY0, AX1, AY1: Integer;
+  out NX0, NY0, NX1, NY1: Integer);
 begin
   if AX0 <= AX1 then
   begin
