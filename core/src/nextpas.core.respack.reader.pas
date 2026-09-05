@@ -337,6 +337,7 @@ begin
     DistinctCount := 0;
     LastEnd := AStrTabEnd;
     HasPrev := False;
+    PrevSpan := TByteSpan.Empty;
     for I := 0 to ACount - 1 do
     begin
       PathOff := RdU32LE(AIdxBase + I * RESPACK_ENTRY_SIZE);

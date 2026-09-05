@@ -95,6 +95,18 @@ Gate: const-carrier within 1.3× Go/Rust Open peers on quiet iron; 2026-09-05 bo
 load (~20) too noisy for a verdict — numbers recorded, gate NOT claimed green today.
 Re-run on quiet iron before citing.
 
+### Cost split (2026-09-05 live, same noisy box, relative reading)
+
+| split op | µs/op | meaning |
+|----------|------:|---------|
+| `startup/split/open-only` | ~126 | 200 条目八步校验，不 Find |
+| `startup/open-const-carrier` | ~127 | Open + 一次 Find |
+| `lookup/find-binary-search` | ~128 | Open + 另一次 Find（复核） |
+
+Reading: 单次 Find ≈ 1µs（两次独立复核一致）；Open 校验 ≈ 126µs / 200 条目 ≈
+0.63µs 每条目。校验是 O(n) 八步全量，无可削之肉——削它等于削弱 INV-R2
+（不存在半信任句柄），不在选项内。Verdict: **启动路径无优化项**，成本即契约成本。
+
 ## 3. Writer memory ceiling (512MiB, INV-R10)
 
 | impl | input | blob | peak RSS | wall (live 2026-09-05) |
