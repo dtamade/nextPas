@@ -101,11 +101,14 @@ type
     Owned: Boolean;
   end;
 
-  { 错误：挂 exception 根，Op/Path 结构化；CreateStep 重载 }
-  EResPackError = class(Exception)
+  { 错误：挂 ENextPasError 框架根(Op/Path 结构化；CreateStep 重载)，
+    类目见各 DefaultCategory，catch ENextPasError 统一收敛 }
+  EResPackError = class(ENextPasError)
   private
     FOp: string;
     FPath: string;
+  protected
+    class function DefaultCategory: TErrorCategory; override;
   public
     constructor Create(const AMsg: string); overload;
     constructor CreateCtx(const AOp, APath, AMsg: string); overload;
@@ -115,6 +118,8 @@ type
   EResPackCorrupted = class(EResPackError)
   private
     FStep: Integer;
+  protected
+    class function DefaultCategory: TErrorCategory; override;
   public
     constructor Create(const AMsg: string); overload;
     constructor CreateStep(const AStep: Integer; const ADetail: string); overload;
@@ -122,11 +127,26 @@ type
     constructor CreateCtx(const AOp, APath, AMsg: string); overload;
     property Step: Integer read FStep;
   end;
-  EResPackDuplicatePath = class(EResPackError);
-  EResPackInvalidPath = class(EResPackError);
-  EResPackNotFound = class(EResPackError);
-  EResPackTooLarge = class(EResPackError);
-  EResPackDirSourceFailed = class(EResPackError);
+  EResPackDuplicatePath = class(EResPackError)
+  protected
+    class function DefaultCategory: TErrorCategory; override;
+  end;
+  EResPackInvalidPath = class(EResPackError)
+  protected
+    class function DefaultCategory: TErrorCategory; override;
+  end;
+  EResPackNotFound = class(EResPackError)
+  protected
+    class function DefaultCategory: TErrorCategory; override;
+  end;
+  EResPackTooLarge = class(EResPackError)
+  protected
+    class function DefaultCategory: TErrorCategory; override;
+  end;
+  EResPackDirSourceFailed = class(EResPackError)
+  protected
+    class function DefaultCategory: TErrorCategory; override;
+  end;
 
 { Dedup/overlap arena：base 统一拥有，writer.layout/reader 共享，单 slab。 }
 type
@@ -134,8 +154,8 @@ type
   TResPackDistinct = record Off: UInt64; Size: UInt64; end;
   PResPackDistinct = ^TResPackDistinct;
 
-  // MIN=256 为哈希分散下限，tiny pack(N=1-2) 256*8=2K slab 相对 Total 可忽略，已评估；
-  // 若需优化可在调用方对 N<=4 时用线性扫描分支，但当前 arena 单 slab 已极简，保留 MIN。
+  // MIN=256 为哈希分散下限(CONTRACT 锁定)；writer.layout N<=4 已走线性免 arena，
+  // reader overlap tiny(N=2..4)仍 MIN 256 单 slab(256*8=2K)Open 期一次性、try..finally 释放，相对 Total 可忽略，保留 MIN。
   TResPackDedupBuckets = record
     const MIN = 256; // MIN 256 保障哈希分散，tiny pack 2K slab 可忽略
     const MAX = 65536;
@@ -358,6 +378,41 @@ begin
   inherited Create(AMsg);
   FOp := '';
   FPath := '';
+end;
+
+class function EResPackError.DefaultCategory: TErrorCategory;
+begin
+  Result := ecInternal;
+end;
+
+class function EResPackCorrupted.DefaultCategory: TErrorCategory;
+begin
+  Result := ecParse;
+end;
+
+class function EResPackDuplicatePath.DefaultCategory: TErrorCategory;
+begin
+  Result := ecAlreadyExists;
+end;
+
+class function EResPackInvalidPath.DefaultCategory: TErrorCategory;
+begin
+  Result := ecInvalidArgument;
+end;
+
+class function EResPackNotFound.DefaultCategory: TErrorCategory;
+begin
+  Result := ecNotFound;
+end;
+
+class function EResPackTooLarge.DefaultCategory: TErrorCategory;
+begin
+  Result := ecResourceExhausted;
+end;
+
+class function EResPackDirSourceFailed.DefaultCategory: TErrorCategory;
+begin
+  Result := ecIO;
 end;
 
 constructor EResPackError.CreateCtx(const AOp, APath, AMsg: string);

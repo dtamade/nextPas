@@ -13,6 +13,12 @@ uses
   nextpas.core.exception,
   nextpas.core.io.mapped;
 
+type
+  { 视图类型单源重导出：dirsource 锚点经此取 IMappedFile/TResPackMapsArray，
+    不直引 io.mapped（L2→L2 缝收口至本单元，inline 零拷贝视图）。 }
+  IMappedFile = nextpas.core.io.mapped.IMappedFile;
+  TResPackMapsArray = array of IMappedFile;
+
 function TryMmapRequire(const APath: string; const AStatSize: Int64; out AMap: IMappedFile; out AErrMsg: string): Boolean;
 
 implementation

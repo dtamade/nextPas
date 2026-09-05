@@ -35,6 +35,15 @@ type
     function Search(const APath: string; out AIdx: SizeUInt): Boolean;
     { Path view helper via bytes.ops (inline, zero-copy). }
     function PathSpanRaw(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
+    { Range-checked path view single source: RequireOpen + overflow/BlobTotal/strtab
+      guards (inline, zero-copy via PathSpanRaw); StoredPathSpan(Of) 共用。 }
+    function CheckedPathSpan(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
+    { Span-based search single source: Query 视图一次构造，多处复用
+      (FromStr inline 零拷贝)；string 重载为薄转发。LowerBoundSpan/SearchSpan
+      含循环不 inline (I-Cache)，ComparePathAtSpan 小体量 inline。 }
+    function LowerBoundSpan(const AQuery: TByteSpan): SizeUInt;
+    function ComparePathAtSpan(const AIdx: SizeUInt; const AQuery: TByteSpan): Integer; inline;
+    function SearchSpan(const AQuery: TByteSpan; out AIdx: SizeUInt): Boolean;
     procedure RequireOpen; inline;
 
   public
@@ -132,28 +141,37 @@ function TResPack.StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
 var
   Base: PByte;
 begin
+  RequireOpen;
   if AIdx >= Count then
     raise EResPackCorrupted.CreateCtx('path', '', 'respack: index out of range');
   Base := FData + SizeUInt(FHdr.IndexOffset) + AIdx * RESPACK_ENTRY_SIZE;
-  Result := PathSpanRaw(RdU32LE(Base), RdU16LE(Base + 4));
+  { 全量守卫与 StoredPathSpanOf 一致：CheckedPathSpan 内含 RequireOpen +
+    PathEnd 回绕/BlobTotal/strtab 越界校验，杜绝越界视图。 }
+  Result := CheckedPathSpan(RdU32LE(Base), RdU16LE(Base + 4));
 end;
 
-function TResPack.StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inline;
+function TResPack.CheckedPathSpan(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
 var
   PathEnd: UInt64;
 begin
   RequireOpen;
   { 减法判界：伪造 PathOffset/PathLen 加总回绕或超逻辑包长不得建视图 }
-  if AEntry.PathLen = 0 then
+  if ALen = 0 then
     Exit(TByteSpan.Empty);
-  PathEnd := UInt64(AEntry.PathOffset) + UInt64(AEntry.PathLen);
-  if PathEnd < UInt64(AEntry.PathOffset) then
+  PathEnd := UInt64(AOff) + UInt64(ALen);
+  if PathEnd < UInt64(AOff) then
     raise EResPackCorrupted.CreateCtx('path', '', 'respack: path range overflow');
   if PathEnd > UInt64(FHdr.BlobTotal) then
     raise EResPackCorrupted.CreateCtx('path', '', 'respack: path range beyond blob');
   if FStrTabBase > UInt64(FHdr.BlobTotal) - PathEnd then
     raise EResPackCorrupted.CreateCtx('path', '', 'respack: path range beyond blob');
-  Result := PathSpanRaw(AEntry.PathOffset, AEntry.PathLen);
+  Result := PathSpanRaw(AOff, ALen);
+end;
+
+function TResPack.StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inline;
+begin
+  { 单源：守卫收口 CheckedPathSpan，与 StoredPathSpan 全量一致。 }
+  Result := CheckedPathSpan(AEntry.PathOffset, AEntry.PathLen);
 end;
 
 function TResPack.CompareStoredToBuf(const AIdx: SizeUInt;
@@ -284,13 +302,18 @@ begin
     raise EResPackCorrupted.CreateStep(5, 'data overlaps strtab');
 end;
 
-{ 融合第二遍：单次 DecodeWire 完成 strtab 下界 + Step6 路径界 + Step7 有序/规范 + Step5 overlap
-  增量哈希；index/strtab 只触一遍。SpanCompare/ValidSpan 经 bytes.ops 零拷贝 inline。 }
-procedure GuardStep67Overlap(var ARes: TResPack; const ACount: SizeUInt;
-  const AMinData: UInt64; const AStrTabEnd: UInt64);
+{ 融合第二遍：strtab 下界 + Step6 路径界 + Step7 有序/规范 + Step5 overlap
+  增量哈希；仅读本遍所需的 PathOff/PathLen/DataOff/Size 四字段
+  (RdUxx bytes.ops inline 单源)，完整 DecodeWire 只在首遍出现一次——
+  流式两遍无整表常驻 (零 transient 分配)，安全换吞吐的显式取舍。
+  SpanCompare/ValidSpan 经 bytes.ops 零拷贝 inline。 }
+procedure GuardStep67Overlap(var ARes: TResPack; const AIdxBase: PByte;
+  const ACount: SizeUInt; const AMinData: UInt64; const AStrTabEnd: UInt64);
 var
   I: SizeUInt;
-  E: TResPackEntry;
+  PathOff: UInt32;
+  PathLen: Word;
+  DataOff, DataSize: UInt64;
   PathEnd: UInt64;
   CurSpan, PrevSpan: TByteSpan;
   HasPrev: Boolean;
@@ -316,47 +339,50 @@ begin
     HasPrev := False;
     for I := 0 to ACount - 1 do
     begin
-      ARes.DecodeWire(I, E);
-      if E.DataOffset < AStrTabEnd then
+      PathOff := RdU32LE(AIdxBase + I * RESPACK_ENTRY_SIZE);
+      PathLen := RdU16LE(AIdxBase + I * RESPACK_ENTRY_SIZE + 4);
+      DataOff := RdU64LE(AIdxBase + I * RESPACK_ENTRY_SIZE + 8);
+      DataSize := RdU64LE(AIdxBase + I * RESPACK_ENTRY_SIZE + 16);
+      if DataOff < AStrTabEnd then
         raise EResPackCorrupted.CreateStep(5, 'data overlaps header/index/strtab');
-      PathEnd := UInt64(E.PathOffset) + UInt64(E.PathLen);
-      if PathEnd < UInt64(E.PathOffset) then
+      PathEnd := UInt64(PathOff) + UInt64(PathLen);
+      if PathEnd < UInt64(PathOff) then
         raise EResPackCorrupted.CreateStep(6, 'path range overflow');
       if PathEnd > AMinData - ARes.FStrTabBase then
         raise EResPackCorrupted.CreateStep(6, 'path beyond string table bound');
       if PathEnd > ARes.FHdr.BlobTotal - ARes.FStrTabBase then
         raise EResPackCorrupted.CreateStep(6, 'path beyond blobTotal');
-      if E.PathLen = 0 then
+      if PathLen = 0 then
         CurSpan := TByteSpan.Empty
       else
-        CurSpan := TByteSpan.Create(ARes.FData + SizeUInt(ARes.FStrTabBase) + SizeUInt(E.PathOffset), SizeUInt(E.PathLen));
+        CurSpan := TByteSpan.Create(ARes.FData + SizeUInt(ARes.FStrTabBase) + SizeUInt(PathOff), SizeUInt(PathLen));
       if HasPrev and (SpanCompare(PrevSpan, CurSpan) >= 0) then
         raise EResPackCorrupted.CreateStep(7, 'index not strictly sorted or duplicate path');
       if not ResPackValidSpan(CurSpan, True) then
         raise EResPackCorrupted.CreateStep(7, 'non-canonical path stored');
-      if E.Size > 0 then
+      if DataSize > 0 then
       begin
         IsDup := False;
         if BucketsHead <> nil then
         begin
-          BucketIdx := (SizeUInt(E.DataOffset) xor SizeUInt(E.DataOffset shr 32) xor SizeUInt(E.Size)) and (BucketCount - 1);
+          BucketIdx := (SizeUInt(DataOff) xor SizeUInt(DataOff shr 32) xor SizeUInt(DataSize)) and (BucketCount - 1);
           Probe := BucketsHead[BucketIdx];
           while Probe <> -1 do
           begin
-            if (Distinct[SizeUInt(Probe)].Off = E.DataOffset) and (Distinct[SizeUInt(Probe)].Size = E.Size) then
+            if (Distinct[SizeUInt(Probe)].Off = DataOff) and (Distinct[SizeUInt(Probe)].Size = DataSize) then
             begin IsDup := True; Break; end;
             Probe := SlotNext[SizeUInt(Probe)];
           end;
         end;
         if not IsDup then
         begin
-          if E.DataOffset < LastEnd then
+          if DataOff < LastEnd then
             raise EResPackCorrupted.CreateStep(5, 'data sections overlap');
-          LastEnd := E.DataOffset + E.Size;
+          LastEnd := DataOff + DataSize;
           if BucketsHead <> nil then
           begin
-            Distinct[DistinctCount].Off := E.DataOffset;
-            Distinct[DistinctCount].Size := E.Size;
+            Distinct[DistinctCount].Off := DataOff;
+            Distinct[DistinctCount].Size := DataSize;
             SlotNext[DistinctCount] := BucketsHead[BucketIdx];
             BucketsHead[BucketIdx] := SizeInt(DistinctCount);
             Inc(DistinctCount);
@@ -418,10 +444,12 @@ begin
   MaxDataEnd := 0;
   StrLen := 0;
   StrTabEnd := Result.FStrTabBase;
-  { 流式两遍：首遍字段直验，次遍融合 strtab/Step6/Step7/overlap；无整表 arena，零 transient 拷贝。 }
+  { 流式两遍无整表常驻：首遍 DecodeWire 全字段直验，次遍仅读四字段
+    (PathOff/PathLen/DataOff/DataSize) 完成 strtab/Step6/Step7/overlap；
+    完整解码单点，零 transient 拷贝。 }
   GuardStep5Fields(Result, IdxBase, MinData, MaxDataEnd, StrLen, HdrFlags, StrTabEnd);
   EntryCount := Result.Count;
-  GuardStep67Overlap(Result, EntryCount, MinData, StrTabEnd);
+  GuardStep67Overlap(Result, IdxBase, EntryCount, MinData, StrTabEnd);
   GuardStep8Digest(Result, StrLen, MaxDataEnd);
   if (Result.FHdr.Flags and RESPACK_FLAG_DIGESTED) <> 0 then
     Result.FDigests := AData + SizeUInt(Result.FHdr.DigestOffset)
@@ -447,10 +475,19 @@ end;
 
 function TResPack.Search(const APath: string; out AIdx: SizeUInt): Boolean;
 var
+  Query: TByteSpan;
+begin
+  { 单次零拷贝视图构造，复用于 LowerBoundSpan + ComparePathAtSpan。 }
+  Query := TByteSpan.FromStr(APath);
+  Result := SearchSpan(Query, AIdx);
+end;
+
+function TResPack.SearchSpan(const AQuery: TByteSpan; out AIdx: SizeUInt): Boolean;
+var
   Idx: SizeUInt;
 begin
-  Idx := LowerBound(APath);
-  if (Idx < Count) and (ComparePathAt(Idx, APath) = 0) then
+  Idx := LowerBoundSpan(AQuery);
+  if (Idx < Count) and (ComparePathAtSpan(Idx, AQuery) = 0) then
   begin
     AIdx := Idx;
     Exit(True);
@@ -461,10 +498,15 @@ end;
 function TResPack.Find(const APath: string; out AEntry: TResPackEntry): Boolean;
 var
   Idx: SizeUInt;
+  Query: TByteSpan;
 begin
-  if (not FOpen) or (not ResPackValidPath(APath, True)) then
+  if not FOpen then
     Exit(False);
-  if not Search(APath, Idx) then
+  { Query 视图一次构造：合法性扫描走 span 单源，与二分比较复用同一视图。 }
+  Query := TByteSpan.FromStr(APath);
+  if not ResPackValidSpan(Query, True) then
+    Exit(False);
+  if not SearchSpan(Query, Idx) then
     Exit(False);
   DecodeWire(Idx, AEntry);
   Result := True;
@@ -492,21 +534,25 @@ begin
 end;
 
 function TResPack.LowerBound(const APath: string): SizeUInt;
+begin
+  { 薄转发：单次 FromStr 零拷贝视图后走 span 单源。 }
+  Result := LowerBoundSpan(TByteSpan.FromStr(APath));
+end;
+
+function TResPack.LowerBoundSpan(const AQuery: TByteSpan): SizeUInt;
 var
   Lo, Hi, Mid: SizeUInt;
   C: Integer;
-  Query: TByteSpan;
 begin
   RequireOpen;
   Lo := 0;
   Hi := Count;
   if Hi = 0 then Exit(0);
-  Query := TByteSpan.FromStr(APath);
   { Binary search via StoredPathSpan + SpanCompare (bytes.ops); not inline. }
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    C := SpanCompare(StoredPathSpan(Mid), Query);
+    C := SpanCompare(StoredPathSpan(Mid), AQuery);
     if C < 0 then
       Lo := Mid + 1
     else
@@ -516,13 +562,17 @@ begin
 end;
 
 function TResPack.ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer;
+begin
+  { 薄转发：单次 FromStr 零拷贝视图后走 span 单源。 }
+  Result := ComparePathAtSpan(AIdx, TByteSpan.FromStr(APath));
+end;
+
+function TResPack.ComparePathAtSpan(const AIdx: SizeUInt; const AQuery: TByteSpan): Integer; inline;
 var
-  Query: TByteSpan;
   S: TByteSpan;
 begin
   RequireOpen;
-  Query := TByteSpan.FromStr(APath);
   S := StoredPathSpan(AIdx);
-  Result := SpanCompare(S, Query);
+  Result := SpanCompare(S, AQuery);
 end;
 end.

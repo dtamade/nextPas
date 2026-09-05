@@ -28,9 +28,11 @@ procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
   消三处复制。 }
 function ResPackBuildLayoutBlob(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout): TResPackBlob;
-{ 纯预取总长：独立 Compute 1×；需随后输出时请 Compute 1× + Emit/BuildLayoutBlob 直排，勿 Size + BuildStream 连调致 2× 排序/去重。 }
+{ 纯预取总长：独立 Compute 1×；需随后输出时请 Compute 1× + ResPackLayoutTotal/Emit/BuildLayoutBlob 直排，勿 Size + BuildStream 连调致 2× 排序/去重。 }
 function ResPackBuildStreamSize(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): UInt64;
+{ 已算布局零成本总长：读 ALayout.Total，无排序/fnv/去重，供 Compute 1× 后预取复用，inline。 }
+function ResPackLayoutTotal(const ALayout: TResPackLayout): UInt64; inline;
 
 implementation
 
@@ -67,17 +69,85 @@ begin
   WriteZerosLoop(AWrite, ACount);
 end;
 
+function ResPackLayoutTotal(const ALayout: TResPackLayout): UInt64; inline;
+begin
+  Result := ALayout.Total;
+end;
+
+{ 外部 Layout 校验：槽位单调/索引越界/回绕前置拒绝，逆序 Gap 下溢不再落入 UInt64 相减；含循环禁 inline。 }
+procedure ValidateEmitLayout(const AEntries: array of TResPackInputEntry;
+  const ALayout: TResPackLayout; const AHasDigest: Boolean);
+var
+  N: SizeUInt;
+  I, J, S, K: SizeUInt;
+  Cur, EndCur: UInt64;
+begin
+  N := SizeUInt(Length(AEntries));
+  if ALayout.N <> N then
+    raise EResPackError.Create('respack.stream: layout entry count mismatch');
+  if SizeUInt(Length(ALayout.Order)) <> N then
+    raise EResPackError.Create('respack.stream: layout order length mismatch');
+  if SizeUInt(Length(ALayout.PathLens)) <> N then
+    raise EResPackError.Create('respack.stream: layout path lens mismatch');
+  if SizeUInt(Length(ALayout.EntrySlots)) <> N then
+    raise EResPackError.Create('respack.stream: layout entry-slot mismatch');
+  if ALayout.SlotCount > SizeUInt(Length(ALayout.Slots)) then
+    raise EResPackError.Create('respack.stream: layout slot count exceeds slots');
+  if ALayout.DataStart > ALayout.Total then
+    raise EResPackError.Create('respack.stream: layout data start exceeds total');
+  if ALayout.StrTabBase > ALayout.DataStart then
+    raise EResPackError.Create('respack.stream: layout string base exceeds data start');
+  if (N = 0) and (ALayout.SlotCount <> 0) then
+    raise EResPackError.Create('respack.stream: layout slots without entries');
+  if N > 0 then
+    for I := 0 to N - 1 do
+    begin
+      if ALayout.Order[I] >= N then
+        raise EResPackError.Create('respack.stream: layout order index out of range');
+      J := ALayout.Order[I];
+      S := ALayout.EntrySlots[J];
+      if S >= ALayout.SlotCount then
+        raise EResPackError.Create('respack.stream: layout entry-slot out of range');
+    end;
+  Cur := ALayout.DataStart;
+  if ALayout.SlotCount > 0 then
+    for K := 0 to ALayout.SlotCount - 1 do
+    begin
+      J := ALayout.Slots[K].SrcIdx;
+      if J >= N then
+        raise EResPackError.Create('respack.stream: layout slot source out of range');
+      if ALayout.Slots[K].Offset < Cur then
+        raise EResPackError.Create('respack.stream: layout slot offsets not monotonic');
+      if ALayout.Slots[K].Offset > ALayout.Total then
+        raise EResPackError.Create('respack.stream: layout slot offset exceeds total');
+      if UInt64(AEntries[J].DataSize) > High(UInt64) - ALayout.Slots[K].Offset then
+        raise EResPackError.Create('respack.stream: layout slot end overflow');
+      EndCur := ALayout.Slots[K].Offset + UInt64(AEntries[J].DataSize);
+      if EndCur > ALayout.Total then
+        raise EResPackError.Create('respack.stream: layout slot end exceeds total');
+      Cur := EndCur;
+    end;
+  if AHasDigest then
+  begin
+    if ALayout.DigOff > ALayout.Total then
+      raise EResPackError.Create('respack.stream: layout digest offset exceeds total');
+    if (ALayout.Total - ALayout.DigOff) div UInt64(RESPACK_DIGEST_SIZE) < UInt64(N) then
+      raise EResPackError.Create('respack.stream: layout digest range too small');
+  end;
+end;
+
 procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
   const AWrite: TResPackWriteProc);
 var
-  N, I, J, K: SizeUInt;
+  N, I, J, K, S: SizeUInt;
   Cur: UInt64;
   HeadBuf: TBytes;
   Head: PByte;
   HeadSize: UInt64;
   Gap: UInt64;
   DigestTmp: TResPackDigest;
+  SlotDigests: array of TResPackDigest;
   ChunkCap: SizeUInt;
   ChunkPos: SizeUInt;
   procedure FlushHead; inline;
@@ -158,6 +228,7 @@ var
 begin
   if not Assigned(AWrite) then
     raise EResPackError.Create('respack.stream: Write proc is nil');
+  ValidateEmitLayout(AEntries, ALayout, Assigned(AOpts.DigestFunc));
   HeadBuf := nil;
   N := ALayout.N;
   HeadSize := ALayout.DataStart;
@@ -196,15 +267,39 @@ begin
   begin
     if ALayout.DigOff > Cur then
       WriteZeros(AWrite, ALayout.DigOff - Cur);
-    { 摘要数组与 index 同序（FORMAT.md）：按 Order 映射输入条目，输入序直排即错位 }
+    { 摘要数组与 index 同序（FORMAT.md）：按 Order 映射输入条目，输入序直排即错位；
+      去重命中同槽内容一致，按 SlotCount 计次后经 EntrySlots 复用，零重复摘要 CPU。 }
     if N > 0 then
-      for I := 0 to N - 1 do
+      if (ALayout.SlotCount > 0) and (ALayout.SlotCount < N) then
       begin
-        J := ALayout.Order[I];
-        BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
-        AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @DigestTmp[0]);
-        AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
-      end;
+        try
+          SetLength(SlotDigests, ALayout.SlotCount);
+        except
+          on E: EOutOfMemory do
+            raise EResPackTooLarge.Create('respack: digest cache too large for host');
+        end;
+        for K := 0 to ALayout.SlotCount - 1 do
+        begin
+          J := ALayout.Slots[K].SrcIdx;
+          BytesZero(@SlotDigests[K][0], RESPACK_DIGEST_SIZE);
+          AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @SlotDigests[K][0]);
+        end;
+        for I := 0 to N - 1 do
+        begin
+          J := ALayout.Order[I];
+          S := ALayout.EntrySlots[J];
+          AWrite(@SlotDigests[S][0], RESPACK_DIGEST_SIZE);
+        end;
+        SlotDigests := nil;
+      end
+      else
+        for I := 0 to N - 1 do
+        begin
+          J := ALayout.Order[I];
+          BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+          AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @DigestTmp[0]);
+          AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+        end;
   end;
 end;
 
@@ -230,7 +325,7 @@ var
 begin
   ResPackComputeLayout(AEntries, AOpts, L);
   try
-    Result := L.Total;
+    Result := ResPackLayoutTotal(L);
   finally
     ResPackLayoutClear(L);
   end;
@@ -252,7 +347,12 @@ begin
   if Total > High(SizeUInt) then
     raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
   Buf := nil;
-  GetMem(Buf, SizeUInt(Total));
+  try
+    GetMem(Buf, SizeUInt(Total));
+  except
+    on E: EOutOfMemory do
+      raise EResPackTooLarge.Create('respack: blob too large for host');
+  end;
   Off := 0;
   Sink :=
     procedure(const AData: PByte; const ASize: SizeUInt)

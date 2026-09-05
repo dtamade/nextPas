@@ -30,7 +30,7 @@ type
   TResPackEmbedOptions = nextpas.core.respack.embed.TResPackEmbedOptions;
   TResPackIncOptions = nextpas.core.respack.embed.TResPackIncOptions;
   TResPackDirEntries = nextpas.core.respack.dirsource.TResPackDirEntries;
-  TResPackWriteProc = nextpas.core.respack.writer.stream.TResPackWriteProc;
+  TResPackWriteProc = nextpas.core.respack.base.TResPackWriteProc;
 
   EResPackError = nextpas.core.respack.base.EResPackError;
   EResPackCorrupted = nextpas.core.respack.base.EResPackCorrupted;
