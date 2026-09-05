@@ -264,6 +264,9 @@ procedure SetBasicAuth(const AHeaders: IHttpHeaders;
   const AUsername, APassword: string); inline;
 {** @desc Set Bearer Authorization header }
 procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string); inline;
+{** @desc Parse server-side Authorization header (Bearer scheme, see http.headers) }
+function TryParseBearerToken(const AAuthHeader: string;
+  out AToken: string): Boolean; inline;
 
 {** @desc Percent-encode/decode URL components (RFC 3986) }
 function UrlEncode(const AStr: string): string; inline;
@@ -824,6 +827,13 @@ end;
 procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
 begin
   nextpas.core.http.extensions.SetBearerAuth(AHeaders, AToken);
+end;
+
+function TryParseBearerToken(const AAuthHeader: string;
+  out AToken: string): Boolean;
+begin
+  Result := nextpas.core.http.extensions.TryParseBearerToken(AAuthHeader,
+    AToken);
 end;
 
 function UrlEncode(const AStr: string): string;

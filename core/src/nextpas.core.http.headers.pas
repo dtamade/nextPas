@@ -59,13 +59,19 @@ function IsHttpHeaderNameChar(const AChar: AnsiChar): Boolean;
 procedure SetBasicAuth(const AHeaders: IHttpHeaders;
   const AUsername, APassword: string);
 procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
+{** @desc Parse server-side Authorization header ('Bearer <token>', case-insensitive
+   scheme, surrounding whitespace tolerated). True + AToken on success;
+   False + '' on empty/malformed input. }
+function TryParseBearerToken(const AAuthHeader: string;
+  out AToken: string): Boolean;
 
 implementation
 
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.encoding;
+  nextpas.core.encoding,
+  nextpas.core.text.conv;
 
 function HeaderBytes(const AValue: string): TBytes;
 begin
@@ -528,6 +534,27 @@ procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
 begin
   RequireHeaders(AHeaders);
   AHeaders.SetHeader('authorization', 'Bearer ' + AToken);
+end;
+
+function TryParseBearerToken(const AAuthHeader: string;
+  out AToken: string): Boolean;
+var
+  LAuth: string;
+  LToken: string;
+  LPos: SizeInt;
+begin
+  AToken := '';
+  LAuth := Trim(AAuthHeader);
+  LPos := Pos(' ', LAuth);
+  if LPos <= 0 then
+    Exit(False);
+  if not SameText(Copy(LAuth, 1, LPos - 1), 'Bearer') then
+    Exit(False);
+  LToken := Trim(Copy(LAuth, LPos + 1, Length(LAuth) - LPos));
+  if LToken = '' then
+    Exit(False);
+  AToken := LToken;
+  Result := True;
 end;
 
 end.

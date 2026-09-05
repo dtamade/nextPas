@@ -87,6 +87,8 @@ function TcpServerBackendName(const ABackend: TTcpServerBackend): string; inline
 function NewHeaders: IHttpHeaders; inline;
 procedure SetBasicAuth(const AHeaders: IHttpHeaders; const AUsername, APassword: string); inline;
 procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string); inline;
+function TryParseBearerToken(const AAuthHeader: string;
+  out AToken: string): Boolean; inline;
 
 function UrlEncode(const AStr: string): string; inline;
 function UrlDecode(const AStr: string): string; inline;
@@ -161,6 +163,12 @@ end;
 procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
 begin
   nextpas.core.http.headers.SetBearerAuth(AHeaders, AToken);
+end;
+
+function TryParseBearerToken(const AAuthHeader: string;
+  out AToken: string): Boolean;
+begin
+  Result := nextpas.core.http.headers.TryParseBearerToken(AAuthHeader, AToken);
 end;
 
 function UrlEncode(const AStr: string): string;

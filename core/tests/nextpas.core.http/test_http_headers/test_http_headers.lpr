@@ -633,6 +633,60 @@ begin
     'bearer auth header value');
 end;
 
+procedure CheckBearerParse(const AHeader, AExpectedToken: string;
+  const AExpected: Boolean; const ALabel: string);
+var
+  LToken: string;
+begin
+  LToken := '<unset>';
+  Check(TryParseBearerToken(AHeader, LToken) = AExpected, ALabel + ': result');
+  if AExpected then
+    CheckEqual(AExpectedToken, LToken, ALabel + ': token')
+  else
+    CheckEqual('', LToken, ALabel + ': out cleared');
+end;
+
+procedure TestTryParseBearerTokenValid;
+begin
+  CheckBearerParse('Bearer token-123', 'token-123', True, 'canonical');
+  CheckBearerParse('Bearer abc', 'abc', True, 'simple');
+  CheckBearerParse('Bearer a b', 'a b', True, 'inner space kept');
+end;
+
+procedure TestTryParseBearerTokenCaseInsensitive;
+begin
+  CheckBearerParse('bearer abc', 'abc', True, 'lowercase scheme');
+  CheckBearerParse('BEARER xyz', 'xyz', True, 'uppercase scheme');
+  CheckBearerParse('BeArEr mixed', 'mixed', True, 'mixed-case scheme');
+end;
+
+procedure TestTryParseBearerTokenWhitespace;
+begin
+  CheckBearerParse('  Bearer abc  ', 'abc', True, 'surrounding spaces');
+  CheckBearerParse('Bearer   abc', 'abc', True, 'multi-space separator');
+  CheckBearerParse('Bearer ' + #9 + ' abc', 'abc', True, 'tab after scheme');
+  CheckBearerParse(#9 + 'Bearer abc' + #13#10, 'abc', True, 'tab/crlf edges');
+  CheckBearerParse('Bearer abc  ', 'abc', True, 'trailing spaces');
+end;
+
+procedure TestTryParseBearerTokenEmpty;
+begin
+  CheckBearerParse('', '', False, 'empty header');
+  CheckBearerParse('   ', '', False, 'blank header');
+  CheckBearerParse(#9#10#13, '', False, 'whitespace-only header');
+end;
+
+procedure TestTryParseBearerTokenMalformed;
+begin
+  CheckBearerParse('Basic abc', '', False, 'wrong scheme');
+  CheckBearerParse('Bearer', '', False, 'scheme only');
+  CheckBearerParse('Bearer ', '', False, 'scheme plus space');
+  CheckBearerParse('Bearer   ', '', False, 'scheme plus spaces');
+  CheckBearerParse('Bear abc', '', False, 'truncated scheme');
+  CheckBearerParse('BearerX abc', '', False, 'scheme prefix mismatch');
+  CheckBearerParse('Token abc', '', False, 'other scheme');
+end;
+
 procedure TestAuthHelpersRejectNilHeaders;
 var
   LH: IHttpHeaders;
@@ -713,6 +767,16 @@ begin
   T.Test('Validation accepts tchar names', @TestValidationAcceptsTCharNames);
   T.Test('SetBasicAuth sets Authorization', @TestSetBasicAuth);
   T.Test('SetBearerAuth sets Authorization', @TestSetBearerAuth);
+  T.Test('TryParseBearerToken parses valid headers',
+    @TestTryParseBearerTokenValid);
+  T.Test('TryParseBearerToken accepts any scheme case',
+    @TestTryParseBearerTokenCaseInsensitive);
+  T.Test('TryParseBearerToken tolerates whitespace',
+    @TestTryParseBearerTokenWhitespace);
+  T.Test('TryParseBearerToken rejects empty headers',
+    @TestTryParseBearerTokenEmpty);
+  T.Test('TryParseBearerToken rejects malformed headers',
+    @TestTryParseBearerTokenMalformed);
   T.Test('Auth helpers reject nil headers', @TestAuthHelpersRejectNilHeaders);
   T.Test('ForEach rejects nil callback', @TestForEachRejectsNilCallback);
   if not T.Run then Halt(1);
