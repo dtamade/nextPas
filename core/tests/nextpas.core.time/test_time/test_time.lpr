@@ -298,6 +298,42 @@ begin
   Check(DateTimeToUnix(DateTimeUtcNow) > 1577836800, 'current time > 2020');
 end;
 
+procedure TestUnixNowSec;
+var
+  LBeforeNs, LAfterNs: UInt64;
+  LSec: Int64;
+begin
+  LBeforeNs := platform_realtime_ns;
+  LSec := UnixNowSec;
+  LAfterNs := platform_realtime_ns;
+  Check((LSec >= Int64(LBeforeNs) div 1000000000) and
+    (LSec <= Int64(LAfterNs) div 1000000000),
+    'UnixNowSec tracks realtime_ns div 1e9');
+  Check(LSec > 1577836800, 'UnixNowSec > 2020');
+  { 与 DateTimeToUnix 一致性：同为 UTC 墙钟秒，两次 realtime 读数差内相差不超过 2s
+   （DateTimeToUnix 侧 Round + Double 路径，UnixNowSec 侧 div 截断）。 }
+  Check(Abs(LSec - DateTimeToUnix(DateTimeUtcNow)) <= 2,
+    'UnixNowSec agrees with DateTimeToUnix(DateTimeUtcNow)');
+end;
+
+procedure TestUnixNowMs;
+var
+  LBeforeNs, LAfterNs: UInt64;
+  LMs, LSec: Int64;
+begin
+  LBeforeNs := platform_realtime_ns;
+  LMs := UnixNowMs;
+  LAfterNs := platform_realtime_ns;
+  Check((LMs >= Int64(LBeforeNs) div 1000000) and
+    (LMs <= Int64(LAfterNs) div 1000000),
+    'UnixNowMs tracks realtime_ns div 1e6');
+  { div 截断边界：亚秒余数丢弃不进位，ms/1000 与秒读数至多差 1（两次读数窗口）。 }
+  LSec := UnixNowSec;
+  Check(Abs(LMs div 1000 - LSec) <= 1, 'UnixNowMs div 1000 agrees with UnixNowSec');
+  CheckEqual(Int64(1), Int64(1999999999) div 1000000000, 'sec truncates, not rounds');
+  CheckEqual(Int64(1), Int64(1500000) div 1000000, 'ms truncates, not rounds');
+end;
+
 procedure TestMsSleep;
 var
   LBefore, LAfter: UInt64;
@@ -329,6 +365,8 @@ begin
   T.Test('DateTime math', @TestDateTimeMath);
   T.Test('DaysBetween', @TestDaysBetween);
   T.Test('DateTimeToUnix/UnixToDateTime', @TestDateTimeToUnix);
+  T.Test('UnixNowSec', @TestUnixNowSec);
+  T.Test('UnixNowMs', @TestUnixNowMs);
   T.Test('MsSleep blocks', @TestMsSleep);
   if not T.Run then Halt(1);
 end.

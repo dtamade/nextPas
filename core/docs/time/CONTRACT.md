@@ -233,6 +233,7 @@ function FormatISO8601UTC(const AUnixSeconds: Int64): string; inline;
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime; function EncodeTime(const AHour, AMinute, ASecond, AMSec: Word): TDateTime;
 procedure DecodeDate(const AValue: TDateTime; out AYear, AMonth, ADay: Word); procedure DecodeTime(const AValue: TDateTime; out AHour, AMinute, ASecond, AMSec: Word);
 function DateTimeToUnix(const AValue: TDateTime): Int64; function UnixToDateTime(const AValue: Int64): TDateTime; // Double 宽度防 Single 精度丢
+function UnixNowSec: Int64; inline; function UnixNowMs: Int64; inline; // 整型 Unix now：realtime_ns div 1e9/1e6 截断，纯函数无 raise，墙钟不保证单调
 ```
 
 ---
@@ -275,7 +276,7 @@ function DateTimeToUnix(const AValue: TDateTime): Int64; function UnixToDateTime
 | TStopwatch | ❌ | 有状态（FRunning/FAccumulated/FStart），调用方同步 |
 | TTimer/TTicker | ❌ | 有状态（FState/FDeadline/FNext），轮询型，调用方同步 |
 | TSleep/MsSleep | ✅ | 类方法/纯函数，底层 `platform_thread_sleep_*` |
-| DateTimeNow/DateTimeUtcNow/Now/Today/Local | ✅ | 无锁系统调用（realtime/monotonic + offset 原子读） |
+| DateTimeNow/DateTimeUtcNow/Now/Today/Local/UnixNowSec/UnixNowMs | ✅ | 无锁系统调用（realtime/monotonic + offset 原子读；UnixNow* 为墙钟 div 截断，不保证单调） |
 | cpu helpers | ✅ | `platform_thread_*`/`platform_cpu_count` |
 
 ---
@@ -293,7 +294,7 @@ function DateTimeToUnix(const AValue: TDateTime): Int64; function UnixToDateTime
 
 | 测试目录 | 说明 |
 |----------|------|
-| test_time | TDuration/TInstant/Stopwatch/Platform/DateTimeNow/UtcNow/日期算术/MsSleep |
+| test_time | TDuration/TInstant/Stopwatch/Platform/DateTimeNow/UtcNow/日期算术/UnixNowSec+Ms（截断边界/DateTimeToUnix 一致性）/MsSleep |
 | test_date | TDate 创建/闰年/增减/边界/Today |
 | test_time_bucket | 桶键定宽/溢出/负数拒绝 |
 | test_iso8601_format | ISO 8601 解析/格式化往返 |

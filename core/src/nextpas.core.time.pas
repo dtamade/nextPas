@@ -68,6 +68,9 @@ procedure DecodeDate(const AValue: TDateTime; out AYear, AMonth, ADay: Word);
 procedure DecodeTime(const AValue: TDateTime; out AHour, AMinute, ASecond, AMSec: Word);
 function DateTimeToUnix(const AValue: TDateTime): Int64;
 function UnixToDateTime(const AValue: Int64): TDateTime;
+{ 整型 Unix now：realtime_ns div 截断（非 Round）；纯函数无 raise；墙钟不保证单调。 }
+function UnixNowSec: Int64; inline;
+function UnixNowMs: Int64; inline;
 
 implementation
 
@@ -281,6 +284,16 @@ begin
     Int64->Double 精确（<2^53），除 Double(86400.0) 保持双精度。 }
   Result := Double(AValue) / Double(86400.0) +
     Double(UNIX_EPOCH_TDATETIME);
+end;
+
+function UnixNowSec: Int64;
+begin
+  Result := Int64(nextpas.core.platform.time.platform_realtime_ns) div 1000000000;
+end;
+
+function UnixNowMs: Int64;
+begin
+  Result := Int64(nextpas.core.platform.time.platform_realtime_ns) div 1000000;
 end;
 
 end.
