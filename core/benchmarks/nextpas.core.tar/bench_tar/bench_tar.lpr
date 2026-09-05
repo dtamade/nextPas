@@ -2,6 +2,9 @@ program bench_tar;
 {**
  * @desc TAR 基准套件：nextpas.core.bench 规矩形态，覆盖 writer/builder/reader 全路径。
  * 小文件 200×512B 与大文件 1MiB 两档，验证 bytes 级一致后经 TBenchSuite 统计。
+ * 方法学与 compare_go/compare_rust 同口径：写档只计写（含 Finish），不含回读拷贝；
+ * BlackBox 取 Size/长度逃逸（与 Go `_ = buf.Bytes()` / Rust `let _ = buf` 等价防 DCE），
+ * 不做全字节触碰（触碰是 harness 负担，非被测库成本）；读档三方均搬运全部载荷。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -102,9 +105,15 @@ end;
 // bench funcs
 
 procedure BenchPackMany(const ACtx: IBenchContext);
-var LArc: TBytes;
+var S: IStream; W: TTarWriter; LI: Integer;
 begin
-  LArc := BuildManyArchiveBench; BenchBlackBoxBytes(LArc[0], Length(LArc)); ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
+  // 同口径写：不回读（回读拷贝是 harness 负担；GArchive 一次性装配仍走 BuildManyArchiveBench）
+  S := CreateBytesStream; W := TTarWriter.Create(S as IWriter);
+  try
+    for LI := 0 to BENCH_PACK_COUNT - 1 do W.AddFile(EntryName(LI), GFiles[LI]);
+    W.Finish; BenchBlackBoxInt64(S.Size);
+  finally W.Free; end;
+  ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
 end;
 
 procedure BenchPackMany2000(const ACtx: IBenchContext);
@@ -118,7 +127,7 @@ var B: ITarBuilder; LI: Integer; LArc: TBytes;
 begin
   B := TarBuilder;
   for LI := 0 to BENCH_PACK_COUNT - 1 do B.Add(EntryName(LI), GFiles[LI]);
-  LArc := B.Finish; BenchBlackBoxBytes(LArc[0], Length(LArc)); ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
+  LArc := B.Finish; BenchBlackBoxInt64(Length(LArc)); ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
 end;
 
 procedure BenchOpenParse(const ACtx: IBenchContext);
@@ -140,10 +149,11 @@ begin
 end;
 
 procedure BenchWrite1MB(const ACtx: IBenchContext);
-var S: IStream; W: TTarWriter; LArc: TBytes;
+var S: IStream; W: TTarWriter;
 begin
+  // 同口径写：不回读（Go/Rust 写档同样只保留缓冲不回读）
   S := CreateBytesStream; W := TTarWriter.Create(S as IWriter);
-  try W.AddFile('big.bin', GBlob); W.Finish; SetLength(LArc, S.Size); if Length(LArc)>0 then begin S.Seek(0, soBeginning); S.Read(LArc[0], Length(LArc)); end; BenchBlackBoxBytes(LArc[0], Length(LArc)); finally W.Free; end; ACtx.SetBytes(BIG_SIZE);
+  try W.AddFile('big.bin', GBlob); W.Finish; BenchBlackBoxInt64(S.Size); finally W.Free; end; ACtx.SetBytes(BIG_SIZE);
 end;
 
 procedure BenchRead1MB(const ACtx: IBenchContext);
