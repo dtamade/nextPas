@@ -20,6 +20,14 @@ Environment snapshot (2026-08-30, Linux x86_64):
 - Go: 1.22, `go run` with `bytes`/`embed`
 - Rust: 1.78, `--release`, `include_dir` 0.7.4
 
+Re-measured (2026-09-05, same box under load ~20, FPC 3.3.1 trunk): servevfs embedded
+5.49µs / memtree 5.27µs / os 14.38µs / fpc-tfilestream 5.44µs / 206-range 5.93µs /
+404-miss 3.43µs, gate line `embedded 5488.4ns <= FPC 8500 and within 1.3x Go/Rust` green;
+embed_startup const-carrier 134µs / pack 2.96ms / fpc-memstream 975µs (high stddev, noisy box);
+writer_memory blob 536874208B, RSS 527→1039MB; writer_dedup 50% dup faster than no-dedup
+(868ms vs 964ms, blob -48%), miss +0~4%, no warns. Bench `build` now drops cached `.ppu`
+first (stale caches across source/flag drift crashed trunk with `EListError`, 2026-09-05 fix).
+
 Payload: `bench_servevfs` 65 entries (64×4KiB + index.html), `bench_embed_startup` 1MiB pack (200×5KiB), `bench_writer_memory` 512MiB pack (64×8MiB) per INV-R10.
 
 ---
@@ -74,6 +82,9 @@ Throughput same-host: nextpas `ResPackBuild` 512MiB ~1.02× FPC, 0.98× Go, 0.97
 | 无重复对照 | 0% | 536MiB | 基线 | 1.15× 内 | 同 §3 |
 
 `bench_writer_dedup` (`make -C core/benchmarks/nextpas.core.respack/bench_writer_dedup run`) 三场景同机可复现，门限 `≤1.08×/≤1.15×` 且 `≤1.3× Go/Rust`。
+2026-09-05 复测三轮：50% dup 均快于无去重（blob -48% 少写），miss +0~+4%，零 warn；
+曾报一次 `+258%` warn，复测证实为高负载机器噪声（同轮 load ~20）。ratio 显示的 QWord 回绕
+bug（dedup 更快时打印天文数字）已修为符号差直显。
 
 ---
 
