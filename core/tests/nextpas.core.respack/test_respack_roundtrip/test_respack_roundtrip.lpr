@@ -279,6 +279,50 @@ begin
   end;
 end;
 
+procedure TestDigestIndexOrder;
+var
+  H: THolder;
+  Opts: TResPackBuildOptions;
+  B: TResPackBlob;
+  RP: TResPack;
+  E: TResPackEntry;
+  D: PByte;
+  Expect: UInt32;
+  I: SizeUInt;
+  OK: Boolean;
+  K: Integer;
+begin
+  { 输入故意乱序：摘要数组必须与 index 同序（FORMAT.md），输入序直排即错位 }
+  HoldAdd(H, 'z/last.bin', BytesOf('third-payload'));
+  HoldAdd(H, 'm/mid.bin', BytesOf('second-payload'));
+  HoldAdd(H, 'a/first.bin', BytesOf('first-payload'));
+  Opts := ResPackDefaultOptions;
+  Opts.DigestFunc :=
+    procedure(const AData: PByte; const ASize: SizeUInt; const ADigestOut: PByte)
+    begin
+      DigestFiller(AData, ASize, ADigestOut);
+    end;
+  B := ResPackBuild(H.Inputs, Opts);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(RP.Count = 3, 'digest order has 3 entries');
+    OK := True;
+    if RP.Count = 3 then
+      for I := 0 to 2 do
+      begin
+        E := RP.EntryAt(I);
+        Expect := ResPackFnv1a32(RP.ContentPtr(E), E.Size);
+        D := RP.DigestPtr(I);
+        for K := 0 to RESPACK_DIGEST_SIZE - 1 do
+          if D[K] <> Byte(Expect shr (8 * (K mod 4))) then
+            OK := False;
+      end;
+    Check(OK, 'each index digest matches its own entry content');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 procedure TestPerfSmoke10k;
 { Smoke 属性：防回归预算而非精度断言。10k 条目 build + 全量 Find 的总耗时
   必须落在宽松硬上限内；若实现退化为 O(n²)（索引查找、排序、去重）会远超
@@ -347,6 +391,7 @@ begin
   T.Test('binary pattern 256', @TestBinaryPattern);
   T.Test('dedupe roundtrip', @TestDedupeRoundtrip);
   T.Test('digest roundtrip', @TestDigestRoundtrip);
+  T.Test('digest index order', @TestDigestIndexOrder);
   T.Test('perf smoke 10k', @TestPerfSmoke10k);
   if not T.Run then Halt(1);
 end.

@@ -1,6 +1,8 @@
 unit nextpas.core.respack.dirsource.mmap;
 
-{** @desc dirsource mmap 单源：TryMmapRequire 零拷贝视图，单块复用。 }
+{** @desc dirsource mmap 单源：TryMmapRequire 零拷贝视图，单块复用。
+  Not inline: try..except 不得内联（FPC 内联把 except 变量 E 带入调用方作用域，
+  与调用方符号冲突致编译失败）；每文件一次调用，开销可忽略。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -38,6 +40,7 @@ begin
     else if SizeUInt(AMap.Size) <> SizeUInt(AStatSize) then
     begin
       AErrMsg := 'mmap size mismatch: stat=' + IntToStr(AStatSize) + ' cmap=' + IntToStr(AMap.Size) + ' (path=' + APath + ')';
+      AMap := nil;
       Exit(False);
     end;
     Result := True;

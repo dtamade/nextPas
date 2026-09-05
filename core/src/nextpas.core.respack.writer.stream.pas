@@ -8,7 +8,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.respack.base;
+  nextpas.core.respack.base,
+  nextpas.core.respack.writer.layout;
 
 type
   TResPackWriteProc = reference to procedure(const AData: PByte; const ASize: SizeUInt);
@@ -17,6 +18,10 @@ type
   不一次性持有 Total 输出缓冲。 }
 procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc);
+{ 已算布局直排：复用调用方持有的 Layout，零重复排序/fnv/去重，供内存版单布局复用。 }
+procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
+  const AWrite: TResPackWriteProc);
 function ResPackBuildStreamSize(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): UInt64;
 
@@ -24,8 +29,7 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.respack.writer.builder,
-  nextpas.core.respack.writer.layout;
+  nextpas.core.respack.writer.builder;
 
 const
   RESPACK_WRITER_HEAD_CHUNK = nextpas.core.respack.base.RESPACK_WRITER_HEAD_CHUNK;
@@ -61,10 +65,10 @@ begin
   WriteZerosLoop(AWrite, ACount);
 end;
 
-procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
-  const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc);
+procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
+  const AWrite: TResPackWriteProc);
 var
-  L: TResPackLayout;
   N, I, J, K: SizeUInt;
   Cur: UInt64;
   HeadBuf: TBytes;
@@ -119,86 +123,99 @@ var
     // 64K HeadBuf 单次分配/Build，复用分片
     SetLength(HeadBuf, ChunkCap);
     ChunkPos := 0;
-    N := L.N;
+    N := ALayout.N;
     { header/index 直写至 chunk，复用 builder 单源，无中间 40B Tmp 拷贝 }
-    ResPackWriterFillHeader40(@HeadBuf[ChunkPos], AOpts, L);
+    ResPackWriterFillHeader40(@HeadBuf[ChunkPos], AOpts, ALayout);
     Inc(ChunkPos, RESPACK_HEADER_SIZE);
-    CurOff := L.StrTabBase;
+    CurOff := ALayout.StrTabBase;
     if N > 0 then
       for II := 0 to N - 1 do
       begin
         if ChunkCap - ChunkPos < RESPACK_ENTRY_SIZE then FlushHead;
-        JJ := L.Order[II];
-        ResPackWriterFillEntry40(@HeadBuf[ChunkPos], AEntries, AOpts, L, JJ, CurOff);
+        JJ := ALayout.Order[II];
+        ResPackWriterFillEntry40(@HeadBuf[ChunkPos], AEntries, AOpts, ALayout, JJ, CurOff);
         Inc(ChunkPos, RESPACK_ENTRY_SIZE);
-        Inc(CurOff, L.PathLens[JJ]);
+        Inc(CurOff, ALayout.PathLens[JJ]);
         if ChunkPos = ChunkCap then FlushHead;
       end;
     { string table：路径按 Order 顺序零拷贝分片直写，BytesCopy 单源 }
     if N > 0 then
       for II := 0 to N - 1 do
       begin
-        JJ := L.Order[II];
-        if L.PathLens[JJ] > 0 then
-          WriteHeadBytes(Pointer(AEntries[JJ].Path), L.PathLens[JJ]);
+        JJ := ALayout.Order[II];
+        if ALayout.PathLens[JJ] > 0 then
+          WriteHeadBytes(Pointer(AEntries[JJ].Path), ALayout.PathLens[JJ]);
       end;
     FlushHead;
     Pad := 0;
-    if L.DataStart > L.StrTabBase + L.StrLen then
-      Pad := L.DataStart - (L.StrTabBase + L.StrLen);
+    if ALayout.DataStart > ALayout.StrTabBase + ALayout.StrLen then
+      Pad := ALayout.DataStart - (ALayout.StrTabBase + ALayout.StrLen);
     if Pad > 0 then
       WriteZeros(AWrite, Pad);
   end;
 begin
   if not Assigned(AWrite) then
     raise EResPackError.Create('respack.stream: Write proc is nil');
+  HeadBuf := nil;
+  N := ALayout.N;
+  HeadSize := ALayout.DataStart;
+  { 头块大小 = DataStart；≤64K 单次 SetLength+ResPackWriterFillHead 快道，>64K 走 64K chunk 直写 }
+  if HeadSize = 0 then
+  begin
+  end
+  else if HeadSize <= UInt64(RESPACK_WRITER_HEAD_CHUNK) then
+  begin
+    SetLength(HeadBuf, SizeUInt(HeadSize));
+    if HeadSize > 0 then Head := @HeadBuf[0] else Head := nil;
+    ResPackWriterFillHead(Head, AEntries, AOpts, ALayout);
+    if HeadSize > 0 then AWrite(Head, SizeUInt(HeadSize));
+  end
+  else
+  begin
+    WriteHeadChunked;
+  end;
+
+  { data 槽位：按 Offset 顺序分段零拷贝直写，槽间隙零填 }
+  Cur := HeadSize;
+  if ALayout.SlotCount > 0 then
+    for K := 0 to ALayout.SlotCount - 1 do
+    begin
+      Gap := ALayout.Slots[K].Offset - Cur;
+      if Gap > 0 then
+        WriteZeros(AWrite, Gap);
+      J := ALayout.Slots[K].SrcIdx;
+      if AEntries[J].DataSize > 0 then
+        AWrite(AEntries[J].Data, AEntries[J].DataSize);
+      Cur := ALayout.Slots[K].Offset + UInt64(AEntries[J].DataSize);
+    end;
+
+  { digest 对齐间隙 }
+  if AOpts.DigestFunc <> nil then
+  begin
+    if ALayout.DigOff > Cur then
+      WriteZeros(AWrite, ALayout.DigOff - Cur);
+    { 摘要数组与 index 同序（FORMAT.md）：按 Order 映射输入条目，输入序直排即错位 }
+    if N > 0 then
+      for I := 0 to N - 1 do
+      begin
+        J := ALayout.Order[I];
+        BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+        AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @DigestTmp[0]);
+        AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+      end;
+  end;
+end;
+
+procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc);
+var
+  L: TResPackLayout;
+begin
+  if not Assigned(AWrite) then
+    raise EResPackError.Create('respack.stream: Write proc is nil');
   ResPackComputeLayout(AEntries, AOpts, L);
   try
-    N := L.N;
-    HeadSize := L.DataStart;
-    { 头块大小 = DataStart；≤64K 单次 SetLength+ResPackWriterFillHead 快道，>64K 走 64K chunk 直写 }
-    if HeadSize = 0 then
-    begin
-    end
-    else if HeadSize <= UInt64(RESPACK_WRITER_HEAD_CHUNK) then
-    begin
-      SetLength(HeadBuf, SizeUInt(HeadSize));
-      if HeadSize > 0 then Head := @HeadBuf[0] else Head := nil;
-      ResPackWriterFillHead(Head, AEntries, AOpts, L);
-      if HeadSize > 0 then AWrite(Head, SizeUInt(HeadSize));
-    end
-    else
-    begin
-      WriteHeadChunked;
-    end;
-
-    { data 槽位：按 Offset 顺序分段零拷贝直写，槽间隙零填 }
-    Cur := HeadSize;
-    if L.SlotCount > 0 then
-      for K := 0 to L.SlotCount - 1 do
-      begin
-        Gap := L.Slots[K].Offset - Cur;
-        if Gap > 0 then
-          WriteZeros(AWrite, Gap);
-        J := L.Slots[K].SrcIdx;
-        if AEntries[J].DataSize > 0 then
-          AWrite(AEntries[J].Data, AEntries[J].DataSize);
-        Cur := L.Slots[K].Offset + UInt64(AEntries[J].DataSize);
-      end;
-
-    { digest 对齐间隙 }
-    if AOpts.DigestFunc <> nil then
-    begin
-      if L.DigOff > Cur then
-        WriteZeros(AWrite, L.DigOff - Cur);
-      if N > 0 then
-        for I := 0 to N - 1 do
-        begin
-          BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
-          AOpts.DigestFunc(AEntries[I].Data, AEntries[I].DataSize, @DigestTmp[0]);
-          AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
-        end;
-    end;
+    ResPackEmitLayout(AEntries, AOpts, L, AWrite);
   finally
     ResPackLayoutClear(L);
   end;

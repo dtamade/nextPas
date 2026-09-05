@@ -1,6 +1,6 @@
 # nextpas.core.respack 代码契约
 
-**模块路径**：`core/src/nextpas.core.respack*.pas`（10 个源文件，已落地：`base`/`limits`/`reader`/`writer`/`writer.layout`/`writer.builder`/`writer.stream`/`dirsource`/`embed`/门面）+ 独立策略模块 `nextpas.core.embed.limits`（L1，S6 已从 respack.limits 抽取，供其他嵌入载体复用；`nextpas.core.embed.pas` 门面）
+**模块路径**：`core/src/nextpas.core.respack*.pas`（11 个源文件，已落地：`base`/`limits`/`reader`/`writer`/`writer.layout`/`writer.builder`/`writer.stream`/`dirsource`/`dirsource.mmap`/`embed`/门面）+ 独立策略模块 `nextpas.core.embed.limits`（L1，S6 已从 respack.limits 抽取，供其他嵌入载体复用；`nextpas.core.embed.pas` 门面）
 **层级**：L2（依赖 L0-L1；`writer.layout` 为布局单源（`writer`/`writer.stream` 共用，复用 `bytes.ops`/`collections.algorithms`/`mem.base`，inline 零拷贝）；`writer.stream` 流式两遍分段零双驻留（峰值 ~1×+头，`try..finally` 释放）；`dirsource` 为唯一 L2→L2 fs IO seam（`ResPackEntriesFromDir`/`ResPackBuildFromDir`/`ResPackBuildStreamFromDir`/`ResPackExtractToDir` + `ResPackEmbedBuild` StripPrefix→Glob→AddPrefix 管线，GlobMatch L1 单源，registry 明示 + source-contract 门禁，同 vfs.os 范式）；`embed` 仅依赖 L1 `text.strings`/`text.char`/`text.conv` + `bytes.ops`/`encoding.hex` + `embed.limits` 独立阈值策略单源（L1，供其他载体复用，`respack.limits` 为兼容转发；GlobMatch/IsAlpha/IntToStr 各归一、BytesCopy 单源零拷贝 + 非 inline 循环体守红线2 + `EmbedRequireIncSize`/`ResPackRequireIncSize` 前置拒绝单源（inline 零拷贝，可配置 `MaxBlobBytes`）+ IncUnit 单次 `SetLength(Total)`+分段 `BytesCopy` 与 `writer.builder` 通用文本组装单源收敛），纯内存可复用（零 FS/零 writer/零 dirsource，修复 L1→L2 上行）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-09-02
@@ -18,10 +18,11 @@ respack.limits        ← 嵌入/打包阈值策略兼容转发（S6 已抽取�
 embed.limits          ← 嵌入载体阈值策略独立模块（L1，供 respack/其他载体复用；EMBED INC MAX 4MiB 单源、DefaultLine 16，EmbedRequireIncSize inline UIntToBuffer+BytesCopy 单源，EEmbedTooLarge 独立异常，CONTRACT 独立命名）
 respack.reader        ← 校验清单 + 索引二分查找（只读，inline 零拷贝 SpanCompare via bytes.ops，GuardStep 分治 + O(n) hash 去重，525 行）
 respack.writer        ← 条目列表 → blob（排序/去重/对齐/digest，布局计算单源于 writer.layout，头单源于 writer.builder）
-respack.writer.layout ← 布局单源：排序/去重/对齐/槽位/总量（writer 与 writer.stream 共用；零拷贝 ResPackCmpPath via bytes.ops + Sort via collections.algorithms + AlignUp64 via mem.base，dedup arena 单源收敛至 respack.base 共享底座 via bytes.ops+mem.arena.local 单 slab TLocalArena，BucketCountFor via BytesNextCapacity，TResPackDedupBuckets MIN256 MAX65536，ResPackLayoutClear out-of-line，消除 reader→writer.layout 反向依赖守 base←impl←facade 单向；GuardStep7Order 外联守红线2，ResPackDedupInit/OverlapInit 外联守 I-Cache）
+respack.writer.layout ← 布局单源：排序/去重/对齐/槽位/总量（writer 与 writer.stream 共用；零拷贝 ResPackCmpPath via bytes.ops + Sort via collections.algorithms + AlignUp64 via mem.base，dedup arena 直调 respack.base 共享底座（无别名/转发复刻，单 slab TLocalArena，BucketCountFor via BytesNextCapacity，TResPackDedupBuckets MIN256 MAX65536，owner 唯一归 base），ResPackLayoutClear out-of-line，消除 reader→writer.layout 反向依赖守 base←impl←facade 单向；GuardStep7Order 外联守红线2，ResPackDedupInit/OverlapInit 外联守 I-Cache）
 respack.writer.builder← 头/index/string 单源 builder（writer 与 writer.stream 共用，WrU*LE/BytesCopy/BytesZero 单源，registry 明示 + source-contract 门禁）
 respack.writer.stream ← 流式两遍分段零双驻留（复用 layout 首遍 + builder 头单源；头/index/string 合批 TBytes RAII SetLength → 槽间隙零填 WriteZeros inline 快道/4K 零页 → data 零拷贝 Move 分段 → digest；峰值 ~1×+头，try..finally ResPackLayoutClear 不丢资源）
-respack.dirsource     ← fs+io.mapped 目录枚举适配 + 嵌入打包管线（唯一 L2→L2 IO seam，ResPackEmbedBuild StripPrefix→Glob→AddPrefix 复用 L1 text.strings GlobMatch 单源，mmap 零拷贝 via mem.memory_map owner；通用 Walk 单源 generic TWalkCtx<T>/EnsureWalkCapacity<T>/WalkPrePlain/Embed inline 零拷贝 + RESPACK_DIRSOURCE_LEGACY_LIMIT 64MiB 家族收口与 RESPACK_MAX_INPUT_BYTES 512MiB 同源；流式零双驻留 ResPackBuildFromDir/EmbedBuild 单次 Walk + StreamSize 预取 Total 直写，消除 512MB 二次 Move，门禁>800行拆 dirsource.walk/embed/extract 子模块）
+respack.dirsource     ← fs+io.mapped 目录枚举适配 + 嵌入打包管线（唯一 L2→L2 IO seam，ResPackEmbedBuild StripPrefix→Glob→AddPrefix 复用 L1 text.strings GlobMatch 单源，mmap 零拷贝经 dirsource.mmap TryMmapRequire 单源 via mem.memory_map owner；通用 Walk 单源 generic TWalkCtx<T>/EnsureWalkCapacity<T>/WalkPrePlain/Embed inline 零拷贝 + RESPACK_DIRSOURCE_LEGACY_LIMIT 64MiB 家族收口与 RESPACK_MAX_INPUT_BYTES 512MiB 同源；流式零双驻留 ResPackBuildFromDir/EmbedBuild 单次 Walk + StreamSize 预取 Total 直写，消除 512MB 二次 Move，门禁>800行拆 dirsource.walk/embed/extract 子模块）
+respack.dirsource.mmap ← mmap 视图单源：TryMmapRequire 零拷贝 MmapOpen 视图（stat 空/尺寸一致性校验，失败置空 AMap，inline；dirsource 唯一调用方）
 respack.embed         ← 嵌入工具链库：blob→.inc/.inc unit 纯内存生成（S4 已落地，阈值单源于 embed.limits 独立模块 + BytesCopy 单源零拷贝 + 非 inline 循环体守红线 + 通用组装单源收敛 writer.builder，纯内存可复用）
 respack.pas           ← 门面 re-export（纯转发，inline）
 embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed.limits 的纯转发门面，供其他载体直接复用）
@@ -119,9 +120,9 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | test_respack_roundtrip | ≥ 6 | 目录样例全量往返（含空文件、深路径、unicode 文件名；流式 `writer.stream` 同布局确定性回验，峰值 `~1×+头`） |
 | test_respack_dirsource | ≥ 4 | 枚举顺序/exclude 透传/符号链接策略/空目录 |
 | test_respack_embed | ≥ 4 | glob/prefix/inc golden/roundtrip（阈值可配置 MaxBlobBytes、IncUnit 单次分配 BytesCopy 组装） |
-| source-contract | — | uses 白名单断言（11 源 `base`/`embed.limits`/`respack.limits`/`reader`/`writer`/`writer.layout`/`writer.builder`/`writer.stream`/`dirsource`/`embed`/门面 + `embed.pas` 独立门面；`writer.layout` 布局单源 `TResPackDedupBuckets` + `writer.builder` 头单源 + `writer.stream` 流式两遍分段零双驻留 `try..finally ResPackLayoutClear` + `embed.limits` 独立阈值策略单源 `EmbedRequireIncSize`/`ResPackRequireIncSize`/`EffectiveLimit` inline 零拷贝（`respack.limits` 仅兼容转发 `try..except EEmbedTooLarge→EResPackTooLarge`）+ `embed` 通用组装 `BytesCopy` 与 `writer.builder` 单源收敛；复用 `core/tests/fpc_rtl_uses_scan.inc` 机制） |
+| source-contract | — | uses 白名单断言（12 源 `base`/`embed.limits`/`respack.limits`/`reader`/`writer`/`writer.layout`/`writer.builder`/`writer.stream`/`dirsource`/`dirsource.mmap`/`embed`/门面 + `embed.pas` 独立门面；`writer.layout` 布局单源 `TResPackDedupBuckets` + `writer.builder` 头单源 + `writer.stream` 流式两遍分段零双驻留 `try..finally ResPackLayoutClear` + `embed.limits` 独立阈值策略单源 `EmbedRequireIncSize`/`ResPackRequireIncSize`/`EffectiveLimit` inline 零拷贝（`respack.limits` 仅兼容转发 `try..except EEmbedTooLarge→EResPackTooLarge`）+ `embed` 通用组装 `BytesCopy` 与 `writer.builder` 单源收敛；复用 `core/tests/fpc_rtl_uses_scan.inc` 机制） |
 
-合计 6 门物理（覆盖 10 源 `base`/`limits`/`reader`/`writer`/`writer.layout`/`writer.builder`/`writer.stream`/`dirsource`/`embed`/门面；`writer.layout` 布局单源与 `writer.builder` 头单源 + `writer.stream` 流式门禁并入 writer/source-contract）；vfs 侧 6 门，合计 **12 门**闭环。heaptrc 0 leak 为所有 gate 门禁。
+合计 6 门物理（覆盖 11 源 `base`/`limits`/`reader`/`writer`/`writer.layout`/`writer.builder`/`writer.stream`/`dirsource`/`dirsource.mmap`/`embed`/门面；`writer.layout` 布局单源与 `writer.builder` 头单源 + `writer.stream` 流式门禁并入 writer/source-contract）；vfs 侧 6 门，合计 **12 门**闭环。heaptrc 0 leak 为所有 gate 门禁。
 
 ---
 
