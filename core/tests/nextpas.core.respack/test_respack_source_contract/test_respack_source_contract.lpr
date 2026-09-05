@@ -198,6 +198,10 @@ begin
   Check(Pos('WalkPrePlain', Src) > 0, 'dirsource generic WalkPrePlain single source');
   Check(Pos('WalkPreEmbed', Src) > 0, 'dirsource generic WalkPreEmbed single source');
   Check(Pos('generic', Src) > 0, 'dirsource uses generics for Walk templating');
+  { 内存打包单次布局：BuildFromDir/EmbedBuild 禁 Size+Stream 双算（2× 排序/去重），
+    经 ComputeLayout 1× + BuildLayoutBlob 直排（stream 单源语：勿 Size+BuildStream 连调） }
+  Check(Pos('ResPackComputeLayout', Src) > 0, 'dirsource memory builds compute layout once (no Size+Stream double compute)');
+  Check(Pos('ResPackBuildLayoutBlob', Src) > 0, 'dirsource memory builds emit via BuildLayoutBlob single source');
   Check(Pos('nextpas.core.respack.dirsource.mmap', Src) > 0, 'dirsource reuses dirsource.mmap TryMmapRequire single source');
   Check(Pos('TryMmapRequire', Src) > 0, 'dirsource reuses TryMmapRequire single source (no direct MmapOpen)');
   Check(Pos('MmapOpen', Src) = 0, 'dirsource must not call MmapOpen directly (use dirsource.mmap single source)');
