@@ -160,12 +160,6 @@ begin
   Result := True;
 end;
 
-{ 指数扩容单源：bytes.ops BytesNextCapacity 单源 O(n²)→O(n)，inline 零拷贝，回绕防护收口 }
-function WalkGrowCap(const ACap, ANeeded: SizeUInt): SizeUInt; inline;
-begin
-  Result := BytesNextCapacity(ACap, ANeeded);
-end;
-
 { 公共双数组扩容 helper：EnsureDual 双重载（TBytes / IMappedFile），复用 bytes.ops 单源，inline 零拷贝 }
 procedure EnsureDual(var ACap: SizeUInt; const ACount, ANeeded: SizeUInt; var AEntries: TResPackInputArray; var ASecond: TResPackBytesArray); overload; inline;
 begin

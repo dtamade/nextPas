@@ -46,19 +46,6 @@ uses
   nextpas.core.collections.algorithms,
   nextpas.core.mem.base;
 
-function CmpPath(const AEntries: array of TResPackInputEntry;
-  const ALens: array of Word; AI, AJ: SizeUInt): Integer; inline;
-var
-  PA, PB: PByte;
-  LA, LB: SizeUInt;
-begin
-  LA := SizeUInt(ALens[AI]);
-  LB := SizeUInt(ALens[AJ]);
-  if LA = 0 then PA := nil else PA := PByte(@AEntries[AI].Path[1]);
-  if LB = 0 then PB := nil else PB := PByte(@AEntries[AJ].Path[1]);
-  Result := ResPackCmpPath(PA, LA, PB, LB);
-end;
-
 type
   TWordArr = array[0..(High(SizeInt) div SizeOf(Word)) - 1] of Word;
   PWordArr = ^TWordArr;
@@ -70,6 +57,7 @@ type
   end;
   POrderSortData = ^TOrderSortData;
 
+{ 路径字节序比较单源：排序与重复判定共用，经 bytes.ops inline 零拷贝。 }
 function CompareOrder(const A, B: SizeUInt; Data: Pointer): SizeInt;
 var
   D: POrderSortData;
@@ -179,14 +167,12 @@ begin
   begin
     for I := 0 to N - 1 do
       ALayout.Order[I] := I;
+    SortData.Entries := PEntryArr(@AEntries[0]);
+    SortData.Lens := PWordArr(@ALayout.PathLens[0]);
     if N > 1 then
-    begin
-      SortData.Entries := PEntryArr(@AEntries[0]);
-      SortData.Lens := PWordArr(@ALayout.PathLens[0]);
       specialize Sort<SizeUInt>(ALayout.Order, @CompareOrder, @SortData);
-    end;
     for I := 1 to N - 1 do
-      if CmpPath(AEntries, ALayout.PathLens, ALayout.Order[I], ALayout.Order[I-1]) = 0 then
+      if CompareOrder(ALayout.Order[I], ALayout.Order[I-1], @SortData) = 0 then
         raise EResPackDuplicatePath.Create('respack: duplicate path "'
           + AEntries[ALayout.Order[I]].Path + '"');
   end;

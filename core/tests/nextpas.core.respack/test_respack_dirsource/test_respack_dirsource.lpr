@@ -227,6 +227,76 @@ begin
   Check(Got, 'missing dir raises dirsource error');
 end;
 
+var
+  { 目录流式收集全局锚点：匿名 WriteProc 捕获全局；转存局部后立即置 nil，
+    heaptrc 零泄漏由显式释放证明 }
+  G_DirStreamBuf: TBytes;
+
+{ 目录三路径一致：BuildFromDir == BuildStreamFromDir 分段输出 ==
+  BuildStreamSizeFromDir 预取（plain/dedup 两模式，含空文件/unicode/重复内容） }
+procedure CheckDirStreamIdentity(const ALabel: string; const ADedup: Boolean);
+var
+  Opts: TResPackBuildOptions;
+  B: TResPackBlob;
+  SSize: UInt64;
+  Streamed: TBytes;
+begin
+  WriteFile(G_Dir + '/empty.txt', BytesOf(''));
+  WriteFile(G_Dir + '/uni-€.txt', BytesOf('unicode-payload'));
+  WriteFile(G_Dir + '/dup1.bin', BytesOf('same-content'));
+  WriteFile(G_Dir + '/sub/dup2.bin', BytesOf('same-content'));
+  Opts := ResPackDefaultOptions;
+  Opts.Deduplicate := ADedup;
+  B := ResPackBuildFromDir(G_Dir, Opts);
+  try
+    SSize := ResPackBuildStreamSizeFromDir(G_Dir, Opts);
+    Check(SSize = UInt64(B.Size), ALabel + ': dir size precompute equals build');
+    G_DirStreamBuf := nil;
+    try
+      ResPackBuildStreamFromDir(G_Dir, Opts,
+        procedure(const AData: PByte; const ASize: SizeUInt)
+        var
+          Old: SizeUInt;
+        begin
+          if ASize = 0 then Exit;
+          Old := SizeUInt(Length(G_DirStreamBuf));
+          SetLength(G_DirStreamBuf, Old + ASize);
+          Move(AData^, G_DirStreamBuf[Old], ASize);
+        end);
+      Streamed := G_DirStreamBuf;
+      G_DirStreamBuf := nil;
+      try
+        Check(SizeUInt(Length(Streamed)) = B.Size,
+          ALabel + ': dir stream length equals build size');
+        Check(SameBytes(PtrBytes(B.Data, B.Size), Streamed),
+          ALabel + ': dir stream bytes identical to build');
+      finally
+        Streamed := nil;
+      end;
+    finally
+      G_DirStreamBuf := nil;
+    end;
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure TestDirStreamIdentity;
+begin
+  SetupTree;
+  try
+    CheckDirStreamIdentity('dir plain', False);
+  finally
+    RemoveAll(G_Dir);
+  end;
+  SetupTree;
+  try
+    CheckDirStreamIdentity('dir dedup', True);
+  finally
+    RemoveAll(G_Dir);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.respack.dirsource');
   T.Test('relative recursive names', @TestRelativeRecursive);
@@ -235,5 +305,6 @@ begin
   T.Test('modtime and size carried', @TestModTimeAndSizeCarried);
   T.Test('missing dir raises', @TestNotADirectoryRaises);
   T.Test('build from dir roundtrip', @TestBuildFromDirRoundtrip);
+  T.Test('dir stream identity', @TestDirStreamIdentity);
   if not T.Run then Halt(1);
 end.

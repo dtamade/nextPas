@@ -70,12 +70,6 @@ uses
   nextpas.core.base.utils,
   nextpas.core.mem.arena.local;
 
-type
-  TResPackEntries = array of TResPackEntry;
-  PResPackEntry = ^TResPackEntry;
-  TDistinct = TResPackDistinct;
-  PDistinct = PResPackDistinct;
-
 function TResPack.GetCount: SizeUInt;
 begin
   Result := SizeUInt(FHdr.EntryCount);

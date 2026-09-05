@@ -10,14 +10,6 @@ uses
   nextpas.core.respack.base,
   nextpas.core.respack.writer.layout;
 
-type
-  { 排序后的内部视图，供测试断言布局使用 }
-  TResPackLayoutInfo = record
-    BlobTotal: UInt64;
-    StringTableBase: UInt64;
-    FirstDataOffset: UInt64;
-  end;
-
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): TResPackBlob;
 
