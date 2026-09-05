@@ -75,6 +75,7 @@ type
     FScanValid: Boolean;
     FScanPos: SizeUInt;
     FScanLens: array[0..6] of SizeUInt; // opaque generic cache: 0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix
+    FScanSumU, FScanSumS, FScanStored: Int64; // cached dual checksum + stored, same validity as FScanLens
     FGuardHead: TTarGlobalPaxGuard; // guard chain
     FGuardCount: SizeUInt;
     FLogger: ILogger; // warn on auto-clear/reject
@@ -284,6 +285,7 @@ var
   LLens: array[0..6] of SizeUInt;
   LBlock: TByteSpan;
   LFields: array[0..6] of TFieldRange;
+  LU, LS: Int64;
   I: SizeInt;
 begin
   if ASelf.FScanValid and (ASelf.FScanPos = ASelf.FPos) then Exit;
@@ -292,6 +294,9 @@ begin
     // bulk lens from single source map loop (no literal drift, zero-copy single source)
     for I := 0 to 6 do
       ASelf.FScanLens[I] := C_TAR_HEADER_CACHE_MAP[I].Len;
+    ASelf.FScanSumU := 0;
+    ASelf.FScanSumS := 0;
+    ASelf.FScanStored := 0;
     ASelf.FScanPos := ASelf.FPos;
     ASelf.FScanValid := True;
     Exit;
@@ -302,6 +307,11 @@ begin
     LFields[I] := C_TAR_HEADER_CACHE_MAP[I];
   ScanNulFieldTruncations(LBlock, LFields, @LLens[0]);
   ASelf.FScanLens := LLens;
+  // snapshot dual checksum once per header; HeaderIsZeroOrValid reuses on hit, no second 512B sum
+  ASelf.FScanStored := TarStoredChecksum(LBlock.Data);
+  TarComputeChecksumsDual(LBlock.Data, LU, LS);
+  ASelf.FScanSumU := LU;
+  ASelf.FScanSumS := LS;
   ASelf.FScanPos := ASelf.FPos;
   ASelf.FScanValid := True;
 end;
@@ -464,7 +474,19 @@ function TTarReader.HeaderIsZeroOrValid(APos: SizeUInt): Boolean;
 begin
   if APos + C_TAR_BLOCK_SIZE > FCount then
     Exit(False);
-  Result := TarHeaderIsZeroOrValid(@FData[APos], APos);
+  if APos = FPos then
+  begin
+    // ensure cache once per header; acceptance set verbatim from TarHeaderIsZeroOrValid, cached sums replace second 512B sum
+    if not (FScanValid and (FScanPos = FPos)) then
+      CacheHeader(Self);
+    if TarHeaderIsZeroBlock(@FData[APos]) then
+      Exit(True);
+    if (FScanStored <> FScanSumU) and (FScanStored <> FScanSumS) then
+      raise EIOError.CreateFmt('tar: header checksum mismatch at offset %d (stored %d, computed unsigned %d signed %d)', [APos, FScanStored, FScanSumU, FScanSumS]);
+    Result := False;
+  end
+  else
+    Result := TarHeaderIsZeroOrValid(@FData[APos], APos);
 end;
 
 function TTarReader.SliceToString(ABase: PByte; ALen: SizeUInt): string;
