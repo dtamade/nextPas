@@ -1,6 +1,6 @@
 unit nextpas.core.text.sql;
 
-{** @desc SQL 文本单源（L1）：单引号转义 / 标识符引用 / 字面量拼装。
+{** @desc SQL 文本单源（L1）：单引号转义 / 标识符引用 / 字面量拼装 / LIKE 模式转义。
        零 SysUtils，NUL 拒绝，O(N+Q) 单次分配。
        抽取自 db.base 的 BulkCopy 复用收口，供 db 族与未来 http/config 等
        需 SQL 字面量拼装的 L2/L3 复用；L0 语义，L1 层级。 *}
@@ -27,6 +27,9 @@ const
 function SqlEscape(const S: string): string;
 function SqlEscapeLen(const S: string): Integer;
 procedure SqlCheckNul(const S: string);
+{ LIKE 模式转义：`\`/`%`/`_` 前加 `\`，调用方配 `ESCAPE '\'`（SQLite/Postgres 通用），NUL 拒绝 }
+function SqlLikeEscape(const S: string): string;
+function SqlLikeEscapeLen(const S: string): Integer;
 { 标识符引用： " → "" 并包双引号，空/NUL 拒绝 }
 function SqlQuoteIdent(const AIdent: string): string;
 function SqlQuotedIdentLen(const AIdent: string): Integer;
@@ -210,6 +213,46 @@ begin
   N := Length(S);
   for I := 1 to N do if S[I] = #0 then
     raise ESqlError.Create(SBulkNul);
+end;
+
+function SqlLikeEscape(const S: string): string;
+var
+  I, J, Q, N: Integer;
+begin
+  N := Length(S);
+  for I := 1 to N do
+    if S[I] = #0 then
+      raise ESqlError.Create(SBulkNul);
+  Q := 0;
+  for I := 1 to N do
+    if (S[I] = '\') or (S[I] = '%') or (S[I] = '_') then Inc(Q);
+  if Q = 0 then
+    Exit(S);
+  SetLength(Result, N + Q);
+  J := 1;
+  for I := 1 to N do
+    if (S[I] = '\') or (S[I] = '%') or (S[I] = '_') then
+    begin
+      Result[J] := '\';
+      Result[J+1] := S[I];
+      Inc(J, 2);
+    end
+    else
+    begin
+      Result[J] := S[I];
+      Inc(J);
+    end;
+end;
+
+function SqlLikeEscapeLen(const S: string): Integer;
+var I, N, Q: Integer;
+begin
+  N := Length(S);
+  for I := 1 to N do if S[I] = #0 then
+    raise ESqlError.Create(SBulkNul);
+  Q := 0;
+  for I := 1 to N do if (S[I] = '\') or (S[I] = '%') or (S[I] = '_') then Inc(Q);
+  Result := N + Q;
 end;
 
 function SqlQuoteIdent(const AIdent: string): string;
