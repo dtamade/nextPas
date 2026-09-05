@@ -106,7 +106,6 @@ type
     procedure ClearGlobalPaxExt; inline;
     function UstarEntryName: string; // out-of-line: prefix/name 归一
     procedure FillHeaderScalars(var AHeader: TTarHeader); // out-of-line: mode/uid/gid/mtime/uname/gname/devmajor/devminor
-    function FindPaxValue(const AKey: string; out AValue: string): Boolean; // out-of-line: Extra 线性 last-wins
     procedure NoteSparsePending; // out-of-line: x 中 GNU.sparse.* 建 pending，畸形即 EIOError
     procedure ParseSparseOldHeader(out ASegs: TSparseSegArray; out AReal: Int64; out AExtBlocks: Integer); // out-of-line: S 头 map+扩展链
     procedure ParseSparseMapText(AStored: PByte; AStoredLen: SizeUInt; AReal: Int64; out ASegs: TSparseSegArray; out AMapLen: SizeUInt); // out-of-line: 1.0 文本 map
@@ -164,6 +163,16 @@ begin
   SetLength(ADst, Old + Length(ASrc));
   for I := 0 to High(ASrc) do
     ADst[Old + I] := ASrc[I];
+end;
+
+procedure AppendPaxRecord(var ADst: TPaxRecordArray; const ARec: TPaxRecord); inline;
+var
+  Old: Integer;
+begin
+  // 单条追加：免单元素临时数组一次堆分配
+  Old := Length(ADst);
+  SetLength(ADst, Old + 1);
+  ADst[Old] := ARec;
 end;
 
 function IsGnuSparseDataName(const AName: string): Boolean;
@@ -648,7 +657,7 @@ begin
   // 全记录原文先保序透传（含已应用的类型化键），再按关键字应用
   LRec.Key := MaterializeSpan(AKey);
   LRec.Value := MaterializeSpan(AValue);
-  AppendPaxRecords(FPaxExt.Extra, [LRec]);
+  AppendPaxRecord(FPaxExt.Extra, LRec);
   if (AKey.Len = 4) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
   begin
     if AValue.Len > 0 then FPaxPath := SpanToString(AValue) else FPaxPath := '';
@@ -774,41 +783,41 @@ begin
   AHeader.DevMinor := NumericField(FPos + C_TAR_LAYOUT.DevMinor.Off, C_TAR_LAYOUT.DevMinor.Len);
 end;
 
-function TTarReader.FindPaxValue(const AKey: string; out AValue: string): Boolean;
-var
-  I: Integer;
-begin
-  // Extra 内线性 last-wins；调用方限定小记录集，外联
-  Result := False;
-  AValue := '';
-  for I := 0 to High(FPaxExt.Extra) do
-    if FPaxExt.Extra[I].Key = AKey then
-    begin
-      AValue := FPaxExt.Extra[I].Value;
-      Result := True;
-    end;
-end;
-
 procedure TTarReader.NoteSparsePending;
 var
   LMajor, LMinor, LReal, LName: string;
+  LHasMajor, LHasMinor, LHasReal, LHasName: Boolean;
   LUInt: UInt64;
+  I: Integer;
 begin
-  // 仅 x 分支调用：GNU.sparse.* 成组出现才建 pending，缺项/错版即 EIOError
+  // 仅 x 分支调用：GNU.sparse.* 成组出现才建 pending，缺项/错版即 EIOError；Extra 单遍归约 last-wins
   FSparsePending := False;
-  if not FindPaxValue('GNU.sparse.major', LMajor) then
+  LMajor := ''; LMinor := ''; LReal := ''; LName := '';
+  LHasMajor := False; LHasMinor := False; LHasReal := False; LHasName := False;
+  for I := 0 to High(FPaxExt.Extra) do
+  begin
+    if FPaxExt.Extra[I].Key = 'GNU.sparse.major' then
+    begin LMajor := FPaxExt.Extra[I].Value; LHasMajor := True; end
+    else if FPaxExt.Extra[I].Key = 'GNU.sparse.minor' then
+    begin LMinor := FPaxExt.Extra[I].Value; LHasMinor := True; end
+    else if FPaxExt.Extra[I].Key = 'GNU.sparse.realsize' then
+    begin LReal := FPaxExt.Extra[I].Value; LHasReal := True; end
+    else if FPaxExt.Extra[I].Key = 'GNU.sparse.name' then
+    begin LName := FPaxExt.Extra[I].Value; LHasName := True; end;
+  end;
+  if not LHasMajor then
     Exit;
-  if not FindPaxValue('GNU.sparse.minor', LMinor) then
+  if not LHasMinor then
     raise EIOError.Create('tar: sparse minor missing');
   if (LMajor <> '1') or (LMinor <> '0') then
     raise EIOError.Create('tar: unsupported sparse version ' + LMajor + '.' + LMinor);
-  if not FindPaxValue('GNU.sparse.realsize', LReal) then
+  if not LHasReal then
     raise EIOError.Create('tar: sparse realsize missing');
   if (LReal = '') or not ParseUInt64(PAnsiChar(LReal), SizeUInt(Length(LReal)), LUInt) then
     raise EIOError.Create('tar: bad sparse realsize');
   if LUInt > UInt64(High(Int64)) then
     raise EIOError.Create('tar: sparse realsize out of range');
-  if not FindPaxValue('GNU.sparse.name', LName) then
+  if not LHasName then
     raise EIOError.Create('tar: sparse name missing');
   if LName = '' then
     raise EIOError.Create('tar: sparse name missing');
