@@ -23,6 +23,9 @@ function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline
 procedure EmbedRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 
+type
+  EEmbedTooLarge = nextpas.core.embed.limits.EEmbedTooLarge;
+
 implementation
 
 function EmbedEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
@@ -32,7 +35,7 @@ end;
 
 function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
 begin
-  Result := nextpas.core.embed.limits.ResPackEffectiveIncLimit(AConfigured);
+  Result := nextpas.core.embed.limits.EmbedEffectiveIncLimit(AConfigured);
 end;
 
 procedure EmbedRequireIncSize(const ASize, ALimit: SizeUInt); inline;
@@ -40,9 +43,11 @@ begin
   nextpas.core.embed.limits.EmbedRequireIncSize(ASize, ALimit);
 end;
 
+{ L1 不能依赖 L2 respack.base：ResPack* 兼容别名直通 Embed* 单源，
+  异常即 EEmbedTooLarge（上层 respack.limits 负责转译 EResPackTooLarge）。 }
 procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 begin
-  nextpas.core.embed.limits.ResPackRequireIncSize(ASize, ALimit);
+  nextpas.core.embed.limits.EmbedRequireIncSize(ASize, ALimit);
 end;
 
 end.

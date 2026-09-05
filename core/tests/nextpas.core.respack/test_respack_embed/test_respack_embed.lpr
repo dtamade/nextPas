@@ -3,6 +3,7 @@ program test_respack_embed;
 uses
   nextpas.core.test,
   nextpas.core.base,
+  nextpas.core.embed,
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.respack;
@@ -552,6 +553,24 @@ begin
   end;
 end;
 
+{ 独立策略门面可编译性：EEmbedTooLarge 经 nextpas.core.embed 重导出可用，
+  且与 respack 侧超限异常为同一类型（兼容转发不断裂）。 }
+procedure TestEmbedFacadeException;
+var
+  E: EEmbedTooLarge;
+begin
+  Check(EMBED_INC_MAX_BLOB_BYTES = 4 * 1024 * 1024, 'embed facade limit const visible');
+  E := nil;
+  Check(E = nil, 'embed facade exception type usable');
+  try
+    EmbedRequireIncSize(EMBED_INC_MAX_BLOB_BYTES + 1, EMBED_INC_MAX_BLOB_BYTES);
+    Check(False, 'over-limit inc size accepted');
+  except
+    on X: EEmbedTooLarge do Check(True, 'embed facade raises embed exception');
+    on X: Exception do Check(False, 'wrong exception class for inc limit');
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.respack.embed');
   T.Test('build all entries', @TestBuildAllEntries);
@@ -568,5 +587,6 @@ begin
   T.Test('.inc medium blob hex roundtrip', @TestIncMediumBlobHexRoundtrip);
   T.Test('extract roundtrip identical blob', @TestExtractRoundtrip);
   T.Test('extract creates dirs and content', @TestExtractCreatesDirsAndContent);
+  T.Test('embed facade exception', @TestEmbedFacadeException);
   if not T.Run then Halt(1);
 end.

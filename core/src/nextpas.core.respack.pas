@@ -42,7 +42,13 @@ type
 
 const
   RESPACK_VERSION = nextpas.core.respack.base.RESPACK_VERSION;
+  RESPACK_HEADER_SIZE = nextpas.core.respack.base.RESPACK_HEADER_SIZE;
+  RESPACK_ENTRY_SIZE = nextpas.core.respack.base.RESPACK_ENTRY_SIZE;
+  RESPACK_DATA_ALIGN = nextpas.core.respack.base.RESPACK_DATA_ALIGN;
+  RESPACK_DIGEST_SIZE = nextpas.core.respack.base.RESPACK_DIGEST_SIZE;
   RESPACK_CODEC_STORE = nextpas.core.respack.base.RESPACK_CODEC_STORE;
+  RESPACK_FLAG_HASHED = nextpas.core.respack.base.RESPACK_FLAG_HASHED;
+  RESPACK_FLAG_DIGESTED = nextpas.core.respack.base.RESPACK_FLAG_DIGESTED;
   RESPACK_FLAG_ALGO_MASK = nextpas.core.respack.base.RESPACK_FLAG_ALGO_MASK;
   RESPACK_FLAG_ALGO_SHIFT = nextpas.core.respack.base.RESPACK_FLAG_ALGO_SHIFT;
   RESPACK_DIGEST_ALGO_SHA256 = nextpas.core.respack.base.RESPACK_DIGEST_ALGO_SHA256;
@@ -51,6 +57,8 @@ const
   RESPACK_INC_MAX_BLOB_BYTES =
     nextpas.core.respack.limits.RESPACK_INC_MAX_BLOB_BYTES;
   RESPACK_MAX_INPUT_BYTES = nextpas.core.respack.base.RESPACK_MAX_INPUT_BYTES;
+  RESPACK_MAX_ENTRY_COUNT = nextpas.core.respack.base.RESPACK_MAX_ENTRY_COUNT;
+  RESPACK_EFLAG_HASHED = nextpas.core.respack.base.RESPACK_EFLAG_HASHED;
   RESPACK_DIRSOURCE_LEGACY_LIMIT = nextpas.core.respack.base.RESPACK_DIRSOURCE_LEGACY_LIMIT;
   RESPACK_WRITER_HEAD_CHUNK = nextpas.core.respack.base.RESPACK_WRITER_HEAD_CHUNK;
 

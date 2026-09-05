@@ -363,6 +363,35 @@ begin
   ExpectResPackError(@BuildTooLarge, 'over-limit input raises');
 end;
 
+procedure BuildNilData;
+var
+  InA: array[0..0] of TResPackInputEntry;
+begin
+  InA[0].Path := 'ghost.bin';
+  InA[0].Data := nil;
+  InA[0].DataSize := 8;
+  InA[0].ModTime := 0;
+  ResPackBuild(InA, ResPackDefaultOptions);
+end;
+
+procedure TestNilDataNonzeroRaises;
+begin
+  ExpectResPackError(@BuildNilData, 'nil data with nonzero size raises');
+end;
+
+procedure TestFacadeWireConsts;
+begin
+  { 门面必须直接可用：wire 常量经 nextpas.core.respack 重导出，consumer 无需 import 实现单元
+    （全限定引用，base 同名存在，必须走门面解析才算证明）。 }
+  Check(nextpas.core.respack.RESPACK_HEADER_SIZE = 40, 'facade header size 40');
+  Check(nextpas.core.respack.RESPACK_ENTRY_SIZE = 40, 'facade entry size 40');
+  Check(nextpas.core.respack.RESPACK_DATA_ALIGN = 16, 'facade data align 16');
+  Check(nextpas.core.respack.RESPACK_DIGEST_SIZE = 32, 'facade digest size 32');
+  Check(nextpas.core.respack.RESPACK_FLAG_HASHED = 1, 'facade hashed flag bit0');
+  Check(nextpas.core.respack.RESPACK_FLAG_DIGESTED = 2, 'facade digested flag bit1');
+  Check(nextpas.core.respack.RESPACK_EFLAG_HASHED = 1, 'facade entry hashed flag bit0');
+end;
+
 procedure TestEmptyPack;
 var
   InA: TResPackInputArray;
@@ -457,6 +486,8 @@ begin
     T.Test('digest region written', @TestDigestRegion);
     T.Test('modtime roundtrip', @TestModTime);
     T.Test('too large raises', @TestTooLargeWrapped);
+    T.Test('nil data nonzero raises', @TestNilDataNonzeroRaises);
+    T.Test('facade wire consts', @TestFacadeWireConsts);
     T.Test('empty pack opens', @TestEmptyPack);
     T.Test('golden snapshot', @TestGoldenSnapshot);
     T.Test('header fields sane', @TestHeaderFields);

@@ -147,6 +147,9 @@ begin
       if Length(AEntries[I].Path) > High(Word) then
         raise EResPackInvalidPath.Create('respack: path too long "'
           + AEntries[I].Path + '"');
+      if (AEntries[I].DataSize > 0) and (AEntries[I].Data = nil) then
+        raise EResPackError.Create('respack: entry has nil data with nonzero size "'
+          + AEntries[I].Path + '"');
       ALayout.PathLens[I] := Word(Length(AEntries[I].Path));
       if not TryAddSizeUInt(TotalInput, SizeUInt(AEntries[I].DataSize), TotalInput) then
         raise EResPackTooLarge.Create('respack: total input overflow (wrap) exceeds limit');
@@ -192,7 +195,7 @@ begin
         ALayout.FnvBuf[I] := ResPackFnv1a32(AEntries[I].Data, AEntries[I].DataSize);
   end;
 
-  { ── 布局：StrLen UInt64 回绕守卫（近 64K 路径极端） ── }
+  { ── 布局：StrLen UInt64 回绕守卫（近 64K 路径极端）+ pathOffset u32 上界 ── }
   StrLen := 0;
   if N > 0 then
     for I := 0 to N - 1 do
@@ -201,6 +204,10 @@ begin
         raise EResPackTooLarge.Create('respack: string table length overflow');
       StrLen := StrLen + UInt64(ALayout.PathLens[I]);
     end;
+  { pathOffset 线上 u32：路径字节不计入 MaxTotalInputBytes，超 4GiB 时 writer 必须前置拒绝，
+    绝不产出 reader 必拒的截断包（builder 的 UInt32 转换至此恒安全）。 }
+  if StrLen > High(UInt32) then
+    raise EResPackTooLarge.Create('respack: string table exceeds pathOffset u32 range');
   ALayout.StrLen := StrLen;
   StrTabBase := UInt64(RESPACK_HEADER_SIZE) + UInt64(N) * RESPACK_ENTRY_SIZE;
   ALayout.StrTabBase := StrTabBase;
@@ -209,6 +216,10 @@ begin
   else
     DataStart := StrTabBase;
   ALayout.DataStart := DataStart;
+  { 槽位累加单点上界：Cur ≤ DataStart + TotalInput + 16*N；MaxTotalInputBytes 可由调用方调高，
+    此处一次性钳住 UInt64 回绕，后续三处槽位循环无需逐站检查。 }
+  if TotalInput > High(UInt64) - (DataStart + UInt64(N) * 16 + RESPACK_DATA_ALIGN) then
+    raise EResPackTooLarge.Create('respack: layout size overflow');
 
   try
     SetLength(ALayout.EntrySlots, N);

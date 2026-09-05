@@ -115,11 +115,11 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 
 | 测试目录 | 目标用例数 | 说明 |
 |----------|-----------|------|
-| test_respack_reader | ≥ 16（已落地 25） | 八步校验每条规则 ≥1 拒绝用例 + codecId/digest 边界 + indexOffset 恒 40 + LE 位移 |
-| test_respack_writer | ≥ 12（已落地 16） | 排序/去重回验/对齐/golden/确定性/超限 + digest 4 对齐（布局单源 `writer.layout`：`ResPackCmpPath` via `bytes.ops` inline 零拷贝 + Sort via `collections.algorithms` + `AlignUp64` via `mem.base`） |
+| test_respack_reader | ≥ 16（已落地 26） | 八步校验每条规则 ≥1 拒绝用例 + codecId/digest 边界 + indexOffset 恒 40 + LE 位移 |
+| test_respack_writer | ≥ 12（已落地 18） | 排序/去重回验/对齐/golden/确定性/超限 + digest 4 对齐（布局单源 `writer.layout`：`ResPackCmpPath` via `bytes.ops` inline 零拷贝 + Sort via `collections.algorithms` + `AlignUp64` via `mem.base`） |
 | test_respack_roundtrip | ≥ 6（已落地 15） | 目录样例全量往返（含空文件、深路径、unicode 文件名；流式 `writer.stream` 同布局确定性回验，峰值 `~1×+头`） |
 | test_respack_dirsource | ≥ 4（已落地 7） | 枚举顺序/exclude 透传/符号链接策略/空目录 |
-| test_respack_embed | ≥ 4（已落地 14） | glob/prefix/inc golden/roundtrip（阈值可配置 MaxBlobBytes、IncUnit 单次分配 BytesCopy 组装） |
+| test_respack_embed | ≥ 4（已落地 15） | glob/prefix/inc golden/roundtrip（阈值可配置 MaxBlobBytes、IncUnit 单次分配 BytesCopy 组装） |
 | source-contract | — | uses 白名单断言（13 源 `base`/`embed.limits`/`respack.limits`/`reader`/`writer`/`writer.layout`/`writer.builder`/`writer.stream`/`dirsource`/`dirsource.mmap`/`embed`/门面 + `embed.pas` 独立门面；`writer.layout` 布局单源 `TResPackDedupBuckets` + `writer.builder` 头单源 + `writer.stream` 流式两遍分段零双驻留 `try..finally ResPackLayoutClear` + `embed.limits` 独立阈值策略单源 `EmbedRequireIncSize`/`ResPackRequireIncSize`/`EffectiveLimit` inline 零拷贝（`respack.limits` 仅兼容转发 `try..except EEmbedTooLarge→EResPackTooLarge`）+ `embed` 通用组装 `BytesCopy` 与 `writer.builder` 单源收敛；复用 `core/tests/fpc_rtl_uses_scan.inc` 机制） |
 
 合计 6 门物理（覆盖 11 源 `base`/`limits`/`reader`/`writer`/`writer.layout`/`writer.builder`/`writer.stream`/`dirsource`/`dirsource.mmap`/`embed`/门面；`writer.layout` 布局单源与 `writer.builder` 头单源 + `writer.stream` 流式门禁并入 writer/source-contract）；vfs 侧 6 门，合计 **12 门**闭环。heaptrc 0 leak 为所有 gate 门禁。
@@ -152,3 +152,4 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | 2026-09-02 | 1.0 | S6 收口：补 S6 校准表（嵌入载体阈值 `<4MB` 实测线性 vs 恒定 + 流式两遍 `writer.stream` 复用 `writer.layout` 单源同布局，峰值 `~1×+头` 零双驻留，`try..finally` 不丢资源；CONTRACT 业务为准，缺能力反哺 `mem.memory_map`/`io.mapped` owner） | AI |
 | 2026-09-02 | 1.0 | S6 独立策略模块闭环：阈值策略已抽取为 L1 独立模块 `nextpas.core.embed.limits`（`nextpas.core.embed` 门面），供 respack/其他嵌入载体复用；`nextpas.core.respack.limits` 转为兼容 inline 转发；CONTRACT/README/registry/source-contract 10→12 源校准，inline 零拷贝与 bytes.ops 单源不变 | AI |
 | 2026-09-05 | 1.0 | 收官校准：source-contract 白名单 12→13 源计数修正；§7 落地用例数校准（reader 25/writer 16/roundtrip 15/dirsource 7/embed 14，合计 81）；布局内联 `TResPackLayoutInfo` 门面别名移除（布局类型仅内部管线可见） | AI |
+| 2026-09-05 | 1.0 | Codex 审查闭环：writer 前置拒绝 nil-data 非零输入 + string table u32 上界 + 布局单点溢出钳制；reader ContentPtr/StoredPathSpanOf 以 BlobTotal 为界 + RequireOpen；门面补 wire 常量（HEADER/ENTRY/ALIGN/DIGEST/FLAG/EFLAG/MAX_ENTRY）与 `EEmbedTooLarge` 重导出；修复 `nextpas.core.embed` 门面 ResPack* 别名引用不存在标识（此前零编译消费隐藏）；FORMAT 明确槽位 index 序非递减；§7 校准 85 用例 | AI |
