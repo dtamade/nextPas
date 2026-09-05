@@ -85,7 +85,8 @@ uses
   nextpas.core.text.strings,
   nextpas.core.respack.dirsource.mmap,
   nextpas.core.respack.reader,
-  nextpas.core.respack.writer;
+  nextpas.core.respack.writer,
+  nextpas.core.respack.writer.layout;
 
 type
   TResPackBytesArray = array of TBytes;
@@ -509,45 +510,23 @@ end;
 function ResPackBuildFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions; const AInclude: TResPackIncludeFunc): TResPackBlob;
 var
-  Total: UInt64;
-  Buf: PByte;
-  Off: SizeUInt;
-  SinkProc: TResPackWriteProc;
+  L: TResPackLayout;
   Entries: TResPackInputArray;
   Anchors: TResPackMapsArray;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单次 Walk：Collect 单源枚举一次，Size 与 Stream 同 Entries 复用布局，消除二次枚举+mmap；
-    直接 GetMem 直写，消除 TBytes SinkBuf 二次大块 Move（512MB 省一次 Move），
-    峰值 ~1×+头，BytesCopy inline 零拷贝，try..finally 释放不丢 }
+  { 单次 Walk + 单次布局：Collect 单源枚举一次，ComputeLayout 1×（排序/fnv/去重），
+    BuildLayoutBlob 直排堆 blob；禁 Size+BuildStream 双算（stream 单源语）。
+    峰值 ~1×+头，try..finally 释放不丢 }
   CollectStreamEntries(ARoot, AInclude, Entries, Anchors);
   try
-    Total := ResPackBuildStreamSize(Entries, AOpts);
-    if Total = 0 then Exit;
-    if Total > High(SizeUInt) then
-      raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
-    GetMem(Buf, SizeUInt(Total));
-    Off := 0;
-    SinkProc :=
-      procedure(const AData: PByte; const ASize: SizeUInt)
-      begin
-        if ASize = 0 then Exit;
-        BytesCopy(Buf + Off, AData, ASize);
-        Inc(Off, ASize);
-      end;
+    ResPackComputeLayout(Entries, AOpts, L);
     try
-      ResPackBuildStream(Entries, AOpts, SinkProc);
-      if Off <> SizeUInt(Total) then
-        raise EResPackError.Create('respack: stream size mismatch');
-      Result.Data := Buf;
-      Result.Size := SizeUInt(Total);
-      Result.Owned := True;
-      Buf := nil;
-    except
-      if Buf <> nil then FreeMem(Buf);
-      raise;
+      Result := ResPackBuildLayoutBlob(Entries, AOpts, L);
+    finally
+      ResPackLayoutClear(L);
     end;
   finally
     SetLength(Anchors, 0);
@@ -777,44 +756,23 @@ end;
 function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob;
 var
-  Total: UInt64;
-  Buf: PByte;
-  Off: SizeUInt;
-  SinkProc: TResPackWriteProc;
+  L: TResPackLayout;
   Entries: TResPackInputArray;
   Anchors: TResPackMapsArray;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单次 Walk：Collect 单源枚举一次，Size 与 Stream 同 Entries 复用布局，消除二次枚举+mmap+布局；
-    直接 GetMem 直写，消除二次 Move，峰值 ~1×+头，BytesCopy inline 零拷贝 }
+  { 单次 Walk + 单次布局：Collect 单源枚举一次，ComputeLayout 1×（排序/fnv/去重），
+    BuildLayoutBlob 直排堆 blob；禁 Size+BuildStream 双算（stream 单源语）。
+    峰值 ~1×+头，try..finally 释放不丢 }
   CollectEmbedEntries(ASourceDir, AOpts, Entries, Anchors);
   try
-    Total := ResPackBuildStreamSize(Entries, AOpts.Build);
-    if Total = 0 then Exit;
-    if Total > High(SizeUInt) then
-      raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
-    GetMem(Buf, SizeUInt(Total));
-    Off := 0;
-    SinkProc :=
-      procedure(const AData: PByte; const ASize: SizeUInt)
-      begin
-        if ASize = 0 then Exit;
-        BytesCopy(Buf + Off, AData, ASize);
-        Inc(Off, ASize);
-      end;
+    ResPackComputeLayout(Entries, AOpts.Build, L);
     try
-      ResPackBuildStream(Entries, AOpts.Build, SinkProc);
-      if Off <> SizeUInt(Total) then
-        raise EResPackError.Create('respack: stream size mismatch');
-      Result.Data := Buf;
-      Result.Size := SizeUInt(Total);
-      Result.Owned := True;
-      Buf := nil;
-    except
-      if Buf <> nil then FreeMem(Buf);
-      raise;
+      Result := ResPackBuildLayoutBlob(Entries, AOpts.Build, L);
+    finally
+      ResPackLayoutClear(L);
     end;
   finally
     SetLength(Anchors, 0);
