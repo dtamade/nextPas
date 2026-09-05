@@ -90,6 +90,8 @@ HTTP 场景的 gzip/brotli 属内容编码，归 http.static 职责。槽位保�
 
 - 从 string table 结束后的下一个 **16 字节对齐**边界开始
 - 每个内容槽位起始于 16 字节对齐边界；槽位间由 writer 填零填充
+- writer 按 index 顺序依次分配槽位：`dataOffset` 在 index 顺序上非递减（去重共享槽位时相等）；
+  reader 的 overlap 判定依赖该顺序（校验清单第 5 步），不满足该顺序的包按损坏拒绝
 - 空文件（size=0）合法：仍分配对齐槽位（dataOffset 指向对齐边界），简化 reader 断言
 - **内容去重**（writer 可选开关，默认关）：开启后，写入前以 fnv32 为候选键查已写内容，
   候选命中必须**逐字节回验相等**才允许复用槽位——杜绝哈希碰撞错误共享（策略同 asar）。

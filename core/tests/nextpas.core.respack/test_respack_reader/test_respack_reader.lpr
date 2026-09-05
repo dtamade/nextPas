@@ -685,6 +685,52 @@ begin
   end;
 end;
 
+{ 尾部多余字节不属于逻辑包：伪造记录指向 tail 时 ContentPtr/StoredPathSpanOf
+  必须以 BlobTotal 为界拒绝（allo trailing 下合法条目仍可读）。 }
+procedure TestTailBytesNotAddressable;
+var
+  B: TResPackBlob;
+  Wide: TBytes;
+  RP: TResPack;
+  E, Forged: TResPackEntry;
+  Got: Boolean;
+begin
+  BuildBase(B);
+  try
+    SetLength(Wide, B.Size + 16);
+    Move(B.Data^, Wide[0], B.Size);
+    FillChar(Wide[B.Size], 16, $AA);
+    RP := ResPackOpen(@Wide[0], SizeUInt(Length(Wide)));
+    Check(RP.Find('assets/app.js', E), 'valid entry still found with trailing bytes');
+    Check(RP.ContentPtr(E) <> nil, 'valid content still addressable');
+    Forged := E;
+    Forged.DataOffset := UInt64(B.Size);
+    Forged.Size := 4;
+    Got := False;
+    try
+      RP.ContentPtr(Forged);
+    except
+      on E: EResPackCorrupted do Got := True;
+      on E: Exception do ;
+    end;
+    Check(Got, 'tail data range rejected');
+    Forged := E;
+    Forged.PathOffset := UInt32(B.Size);
+    Forged.PathLen := 4;
+    Got := False;
+    try
+      RP.StoredPathSpanOf(Forged);
+    except
+      on E: EResPackCorrupted do Got := True;
+      on E: Exception do ;
+    end;
+    Check(Got, 'tail path range rejected');
+    RP.Close;
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.respack.reader');
   T.Test('happy open/find/content', @TestHappyOpen);
@@ -712,5 +758,6 @@ begin
   T.Test('step5 header HASHED inconsistent', @WStep5HeaderHashedMismatch);
   T.Test('BE header explicit LE roundtrip', @TestBEHeaderRoundTrip);
   T.Test('BE entry explicit LE roundtrip', @TestBEEntryRoundTrip);
+  T.Test('tail bytes not addressable', @TestTailBytesNotAddressable);
   if not T.Run then Halt(1);
 end.

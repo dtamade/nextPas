@@ -89,8 +89,9 @@ end;
 function TResPack.ContentPtr(const AEntry: TResPackEntry): PByte; inline;
 begin
   RequireOpen;
-  { 减法判界：加法回绕会绕过检查 }
-  if (AEntry.Size > UInt64(FSize)) or (AEntry.DataOffset > UInt64(FSize) - UInt64(AEntry.Size)) then
+  { 减法判界：加法回绕会绕过检查；以 BlobTotal（逻辑包长）而非 FSize（实际缓冲）为界，
+    尾部多余字节不属于任何条目，伪造记录不得借此窥探。 }
+  if (AEntry.Size > UInt64(FHdr.BlobTotal)) or (AEntry.DataOffset > UInt64(FHdr.BlobTotal) - UInt64(AEntry.Size)) then
     raise EResPackCorrupted.CreateCtx('content', '', 'respack: data range beyond blob');
   Result := FData + SizeUInt(AEntry.DataOffset);
 end;
@@ -141,15 +142,16 @@ function TResPack.StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inli
 var
   PathEnd: UInt64;
 begin
-  { 减法判界：伪造 PathOffset/PathLen 加总回绕或超 blob 不得建视图 }
+  RequireOpen;
+  { 减法判界：伪造 PathOffset/PathLen 加总回绕或超逻辑包长不得建视图 }
   if AEntry.PathLen = 0 then
     Exit(TByteSpan.Empty);
   PathEnd := UInt64(AEntry.PathOffset) + UInt64(AEntry.PathLen);
   if PathEnd < UInt64(AEntry.PathOffset) then
     raise EResPackCorrupted.CreateCtx('path', '', 'respack: path range overflow');
-  if PathEnd > UInt64(FSize) then
+  if PathEnd > UInt64(FHdr.BlobTotal) then
     raise EResPackCorrupted.CreateCtx('path', '', 'respack: path range beyond blob');
-  if FStrTabBase > UInt64(FSize) - PathEnd then
+  if FStrTabBase > UInt64(FHdr.BlobTotal) - PathEnd then
     raise EResPackCorrupted.CreateCtx('path', '', 'respack: path range beyond blob');
   Result := PathSpanRaw(AEntry.PathOffset, AEntry.PathLen);
 end;
