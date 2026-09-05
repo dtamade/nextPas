@@ -129,142 +129,279 @@ begin
     SetLength(Result, EntryCount);
 end;
 
+{ Zero-copy span helpers for signature/commit/tag headers: TByteSpan views via
+  bytes.ops single source (inline SpanIndexOf/SpanTrim/SpanToString/SpanStartsWith,
+  single SetString copy only on materialize); digit loops not inline. }
+function SpanHasPrefix(const ALine: TByteSpan; const APrefix: string): Boolean; inline;
+begin
+  if SizeUInt(Length(APrefix)) > ALine.Len then
+    Exit(False);
+  Result := SpanStartsWith(ALine, TByteSpan.FromStr(APrefix));
+end;
+
+function SpanValueAfter(const ALine: TByteSpan; APrefixLen: SizeUInt): TByteSpan; inline;
+begin
+  if APrefixLen >= ALine.Len then
+    Exit(TByteSpan.Empty);
+  Result.Data := ALine.Data + APrefixLen;
+  Result.Len := ALine.Len - APrefixLen;
+  Result := SpanTrim(Result);
+end;
+
+function TryParseDecInt64(const ASpan: TByteSpan; out AValue: Int64): Boolean;
+var
+  I: SizeUInt;
+  Neg: Boolean;
+  D: Byte;
+  V: Int64;
+begin
+  AValue := 0;
+  if ASpan.Len = 0 then
+    Exit(False);
+  I := 0;
+  Neg := False;
+  if (ASpan.Data[0] = Ord('+')) or (ASpan.Data[0] = Ord('-')) then
+  begin
+    Neg := ASpan.Data[0] = Ord('-');
+    I := 1;
+    if ASpan.Len = 1 then
+      Exit(False);
+  end;
+  V := 0;
+  while I < ASpan.Len do
+  begin
+    D := ASpan.Data[I];
+    if (D < Ord('0')) or (D > Ord('9')) then
+      Exit(False);
+    if (V > High(Int64) div 10) or
+      ((V = High(Int64) div 10) and (Int64(D - Ord('0')) > High(Int64) mod 10)) then
+      Exit(False);
+    V := V * 10 + Int64(D - Ord('0'));
+    Inc(I);
+  end;
+  if Neg then
+    V := -V;
+  AValue := V;
+  Result := True;
+end;
+
+function TryParseTzMinutes(const ASpan: TByteSpan; out AMinutes: Integer): Boolean; inline;
+var
+  HH, MM: Integer;
+begin
+  // "+HHMM"/"-HHMM" digit arithmetic, no alloc; out-of-shape falls back to 0
+  Result := False;
+  if ASpan.Len <> 5 then
+    Exit;
+  if (ASpan.Data[0] <> Ord('+')) and (ASpan.Data[0] <> Ord('-')) then
+    Exit;
+  if (ASpan.Data[1] < Ord('0')) or (ASpan.Data[1] > Ord('9')) then
+    Exit;
+  if (ASpan.Data[2] < Ord('0')) or (ASpan.Data[2] > Ord('9')) then
+    Exit;
+  if (ASpan.Data[3] < Ord('0')) or (ASpan.Data[3] > Ord('9')) then
+    Exit;
+  if (ASpan.Data[4] < Ord('0')) or (ASpan.Data[4] > Ord('9')) then
+    Exit;
+  HH := (Ord(ASpan.Data[1]) - Ord('0')) * 10 + (Ord(ASpan.Data[2]) - Ord('0'));
+  MM := (Ord(ASpan.Data[3]) - Ord('0')) * 10 + (Ord(ASpan.Data[4]) - Ord('0'));
+  if ASpan.Data[0] = Ord('-') then
+    AMinutes := -(HH * 60 + MM)
+  else
+    AMinutes := HH * 60 + MM;
+  Result := True;
+end;
+
 function GitParseSignature(const ALine: string): TGitSignature;
 var
-  Lt, Gt, Sp, Code: Integer;
-  Tail, TimeStr, TzStr: string;
-  Raw: Int64;
+  LWhole, LName, LMail, LTail, LTime, LTz, LRest: TByteSpan;
+  Lt, Gt, Sp: SizeInt;
 begin
-  Lt := Pos('<', ALine);
-  Gt := Pos('>', ALine);
-  if (Lt < 2) or (Gt <= Lt) then
+  // perf: zero-copy views over ALine (inline SpanIndexOf SIMD + SpanTrim single source); only Name/Email materialize, time/tz parsed in place
+  LWhole := TByteSpan.FromStr(ALine);
+  Lt := SpanIndexOf(LWhole, Byte('<'));
+  Gt := SpanIndexOf(LWhole, Byte('>'));
+  if (Lt <= 0) or (Gt <= Lt) then
     raise EGitError.CreateFmt('corrupt signature "%s"', [ALine]);
-  Result.Name := Trim(Copy(ALine, 1, Lt - 1));
-  Result.Email := Copy(ALine, Lt + 1, Gt - Lt - 1);
-  Tail := Trim(Copy(ALine, Gt + 1, MaxInt));
-  Sp := Pos(' ', Tail);
-  if Sp < 2 then
-    raise EGitError.CreateFmt('corrupt signature timestamp "%s"', [ALine]);
-  TimeStr := Copy(Tail, 1, Sp - 1);
-  Val(TimeStr, Raw, Code);
-  if Code <> 0 then
-    raise EGitError.CreateFmt('corrupt signature time "%s"', [TimeStr]);
-  Result.UnixTime := Raw;
-  TzStr := Trim(Copy(Tail, Sp + 1, MaxInt));
-  // "+HHMM" / "-HHMM"
-  if (Length(TzStr) = 5)
-    and ((TzStr[1] = '+') or (TzStr[1] = '-'))
-    and (TryStrToInt(Copy(TzStr, 2, 2), Sp))
-    and (TryStrToInt(Copy(TzStr, 4, 2), Code)) then
+  LName.Data := LWhole.Data;
+  LName.Len := SizeUInt(Lt);
+  LName := SpanTrim(LName);
+  LMail.Data := LWhole.Data + SizeUInt(Lt) + 1;
+  LMail.Len := SizeUInt(Gt - Lt - 1);
+  if SizeUInt(Gt) + 1 < LWhole.Len then
   begin
-    if TzStr[1] = '-' then
-      Result.TzMinutes := -(Sp * 60 + Code)
-    else
-      Result.TzMinutes := Sp * 60 + Code;
+    LRest.Data := LWhole.Data + SizeUInt(Gt) + 1;
+    LRest.Len := LWhole.Len - SizeUInt(Gt) - 1;
   end
   else
+    LRest := TByteSpan.Empty;
+  LTail := SpanTrim(LRest);
+  Sp := SpanIndexOf(LTail, Byte(' '));
+  if Sp <= 0 then
+    raise EGitError.CreateFmt('corrupt signature timestamp "%s"', [ALine]);
+  LTime.Data := LTail.Data;
+  LTime.Len := SizeUInt(Sp);
+  LRest.Data := LTail.Data + SizeUInt(Sp) + 1;
+  LRest.Len := LTail.Len - SizeUInt(Sp) - 1;
+  LTz := SpanTrim(LRest);
+  Result.Name := SpanToString(LName);
+  Result.Email := SpanToString(LMail);
+  if not TryParseDecInt64(LTime, Result.UnixTime) then
+    raise EGitError.CreateFmt('corrupt signature time "%s"', [SpanToString(LTime)]);
+  if not TryParseTzMinutes(LTz, Result.TzMinutes) then
     Result.TzMinutes := 0;
 end;
 
 function GitParseCommit(const AData: TBytes): TGitCommitInfo;
 var
-  Text, Header, Line, Rest: string;
-  Lines: TStringArray;
-  I, Brk, Sp, ParentCount: Integer;
+  LData, LLine, LVal: TByteSpan;
+  LStr: string;
+  Sep: SizeInt;
+  HeaderLen, MsgOff, Pos, LineEnd: SizeUInt;
+  Rel: SizeInt;
+  ParentCount: Integer;
 begin
-  Text := BytesToString(AData);
-  // headers and message are separated by the first blank line
-  Brk := Pos(#10#10, Text);
-  if Brk > 0 then
+  // perf: single TByteSpan view; blank-line split via SpanIndexOfSpan SIMD single source; header lines scanned in place, no SplitLines alloc, only matched values materialize
+  LData := TByteSpan.FromBytes(AData);
+  Sep := SpanIndexOfSpan(LData, TByteSpan.FromStr(#10#10));
+  if Sep >= 0 then
   begin
-    Header := Copy(Text, 1, Brk - 1);
-    Result.Message := Copy(Text, Brk + 2, MaxInt);
+    HeaderLen := SizeUInt(Sep);
+    MsgOff := SizeUInt(Sep) + 2;
   end
   else
   begin
-    Header := Text;
-    Result.Message := '';
+    HeaderLen := LData.Len;
+    MsgOff := LData.Len;
   end;
-  Lines := GitSplitLines(Header);
+  if MsgOff < LData.Len then
+  begin
+    LLine.Data := LData.Data + MsgOff;
+    LLine.Len := LData.Len - MsgOff;
+    Result.Message := SpanToString(LLine);
+  end
+  else
+    Result.Message := '';
   ParentCount := 0;
   SetLength(Result.Parents, 0);
-  for I := 0 to Length(Lines) - 1 do
+  Pos := 0;
+  while Pos < HeaderLen do
   begin
-    Line := Lines[I];
-    if (Line = '') or (Line[1] = ' ') then
+    LLine.Data := LData.Data + Pos;
+    LLine.Len := HeaderLen - Pos;
+    Rel := SpanIndexOf(LLine, 10);
+    if Rel < 0 then
+      LineEnd := HeaderLen
+    else
+      LineEnd := Pos + SizeUInt(Rel);
+    LLine.Data := LData.Data + Pos;
+    LLine.Len := LineEnd - Pos;
+    if Rel < 0 then
+      Pos := HeaderLen
+    else
+      Pos := LineEnd + 1;
+    if (LLine.Len = 0) or (LLine.Data[0] = Ord(' ')) then
       Continue;
-    Sp := Pos(' ', Line);
-    if Sp < 2 then
-      Continue;
-    Rest := Trim(Copy(Line, Sp + 1, MaxInt));
-    if Copy(Line, 1, 5) = 'tree ' then
-      Result.Tree := GitOidFromHex(Rest)
-    else if Copy(Line, 1, 7) = 'parent ' then
+    if SpanHasPrefix(LLine, 'tree ') then
     begin
+      LVal := SpanValueAfter(LLine, 5);
+      Result.Tree := GitOidFromHex(SpanToString(LVal));
+    end
+    else if SpanHasPrefix(LLine, 'parent ') then
+    begin
+      LVal := SpanValueAfter(LLine, 7);
+      LStr := SpanToString(LVal);
       Inc(ParentCount);
       SetLength(Result.Parents, ParentCount);
-      Result.Parents[ParentCount - 1] := GitOidFromHex(Rest);
+      Result.Parents[ParentCount - 1] := GitOidFromHex(LStr);
     end
-    else if Copy(Line, 1, 7) = 'author ' then
-      Result.Author := GitParseSignature(Rest)
-    else if Copy(Line, 1, 10) = 'committer ' then
-      Result.Committer := GitParseSignature(Rest);
+    else if SpanHasPrefix(LLine, 'author ') then
+    begin
+      LVal := SpanValueAfter(LLine, 7);
+      Result.Author := GitParseSignature(SpanToString(LVal));
+    end
+    else if SpanHasPrefix(LLine, 'committer ') then
+    begin
+      LVal := SpanValueAfter(LLine, 10);
+      Result.Committer := GitParseSignature(SpanToString(LVal));
+    end;
   end;
 end;
 
 function GitParseTag(const AData: TBytes): TGitTagInfo;
 var
-  Text, Header, Line, Rest: string;
-  Lines: TStringArray;
-  I, Brk, Sp: Integer;
+  LData, LLine, LVal: TByteSpan;
+  Sep: SizeInt;
+  HeaderLen, MsgOff, Pos, LineEnd: SizeUInt;
+  Rel: SizeInt;
   HaveObject, HaveType, HaveName: Boolean;
 begin
-  Text := BytesToString(AData);
-  // headers and message are separated by the first blank line
-  Brk := Pos(#10#10, Text);
-  if Brk > 0 then
+  // perf: same zero-copy header scan as GitParseCommit (single view, no SplitLines alloc)
+  LData := TByteSpan.FromBytes(AData);
+  Sep := SpanIndexOfSpan(LData, TByteSpan.FromStr(#10#10));
+  if Sep >= 0 then
   begin
-    Header := Copy(Text, 1, Brk - 1);
-    Result.Message := Copy(Text, Brk + 2, MaxInt);
+    HeaderLen := SizeUInt(Sep);
+    MsgOff := SizeUInt(Sep) + 2;
   end
   else
   begin
-    Header := Text;
-    Result.Message := '';
+    HeaderLen := LData.Len;
+    MsgOff := LData.Len;
   end;
+  if MsgOff < LData.Len then
+  begin
+    LLine.Data := LData.Data + MsgOff;
+    LLine.Len := LData.Len - MsgOff;
+    Result.Message := SpanToString(LLine);
+  end
+  else
+    Result.Message := '';
   Result.HasTagger := False;
   HaveObject := False;
   HaveType := False;
   HaveName := False;
-  Lines := GitSplitLines(Header);
-  for I := 0 to Length(Lines) - 1 do
+  Pos := 0;
+  while Pos < HeaderLen do
   begin
-    Line := Lines[I];
-    if (Line = '') or (Line[1] = ' ') then
+    LLine.Data := LData.Data + Pos;
+    LLine.Len := HeaderLen - Pos;
+    Rel := SpanIndexOf(LLine, 10);
+    if Rel < 0 then
+      LineEnd := HeaderLen
+    else
+      LineEnd := Pos + SizeUInt(Rel);
+    LLine.Data := LData.Data + Pos;
+    LLine.Len := LineEnd - Pos;
+    if Rel < 0 then
+      Pos := HeaderLen
+    else
+      Pos := LineEnd + 1;
+    if (LLine.Len = 0) or (LLine.Data[0] = Ord(' ')) then
       Continue;
-    Sp := Pos(' ', Line);
-    if Sp < 2 then
-      Continue;
-    Rest := Trim(Copy(Line, Sp + 1, MaxInt));
-    if Copy(Line, 1, 7) = 'object ' then
+    if SpanHasPrefix(LLine, 'object ') then
     begin
-      Result.Target := GitOidFromHex(Rest);
+      LVal := SpanValueAfter(LLine, 7);
+      Result.Target := GitOidFromHex(SpanToString(LVal));
       HaveObject := True;
     end
-    else if Copy(Line, 1, 5) = 'type ' then
+    else if SpanHasPrefix(LLine, 'type ') then
     begin
       // raises for anything outside commit/tree/blob/tag (nested tags ok)
-      Result.TargetKind := GitKindFromString(Rest);
+      LVal := SpanValueAfter(LLine, 5);
+      Result.TargetKind := GitKindFromString(SpanToString(LVal));
       HaveType := True;
     end
-    else if Copy(Line, 1, 4) = 'tag ' then
+    else if SpanHasPrefix(LLine, 'tag ') then
     begin
-      Result.TagName := Rest;
+      LVal := SpanValueAfter(LLine, 4);
+      Result.TagName := SpanToString(LVal);
       HaveName := True;
     end
-    else if Copy(Line, 1, 7) = 'tagger ' then
+    else if SpanHasPrefix(LLine, 'tagger ') then
     begin
-      Result.Tagger := GitParseSignature(Rest);
+      LVal := SpanValueAfter(LLine, 7);
+      Result.Tagger := GitParseSignature(SpanToString(LVal));
       Result.HasTagger := True;
     end;
   end;

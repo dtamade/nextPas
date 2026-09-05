@@ -55,9 +55,9 @@ function GitCollectCommitsWithBoundary(ARepo: TNativeRepository;
   const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitRevEntryArray; inline;
 
 { one-shot topological order (children always precede parents, ready set
-  drained LIFO exactly like git's default --topo-order): buffers the
-  reachable subgraph, so it costs one read+parse per reachable commit up
-  front. AMaxCount < 0 means unlimited. }
+  drained LIFO exactly like git's default --topo-order): unlimited buffers the
+  reachable subgraph up front; bounded streams emit-driven with exact fallback.
+  AMaxCount < 0 means unlimited. }
 function GitTopoOrderCommits(ARepo: TNativeRepository;
   const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray; overload; inline;
 function GitTopoOrderCommits(ARepo: TNativeRepository;

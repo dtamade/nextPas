@@ -32,7 +32,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.collections.algorithms,
   nextpas.core.collections.arr.sort,
-  nextpas.core.platform.env,
+  nextpas.core.os.env,
   nextpas.core.git.native.config;
 
 function CompareString(const A, B: string; AData: Pointer): SizeInt;
@@ -158,6 +158,7 @@ var
   Cfg: TGitConfig;
   GlobalPath: string;
   Expanded: string;
+  LHome: string;
 begin
   ExcludeFile := PathJoin([AGitDir, 'info', 'exclude']);
   if Exists(ExcludeFile) then
@@ -179,9 +180,10 @@ begin
   if GlobalPath = '' then Exit;
   if (Length(GlobalPath) > 0) and (GlobalPath[1] = '~') then
   begin
-    if GlobalPath = '~' then Expanded := platform_env_get_str('HOME')
+    LHome := UserHomeDir;
+    if GlobalPath = '~' then Expanded := LHome
     else if (Length(GlobalPath) >= 2) and (GlobalPath[2] = '/') then
-      Expanded := PathJoin([platform_env_get_str('HOME'), Copy(GlobalPath, 3, MaxInt)])
+      Expanded := PathJoin([LHome, Copy(GlobalPath, 3, MaxInt)])
     else Expanded := GlobalPath;
     GlobalPath := Expanded;
   end;

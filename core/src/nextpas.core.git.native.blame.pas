@@ -53,19 +53,24 @@ uses
   nextpas.core.collections.algorithms,
   nextpas.core.collections.hashmap.swiss;
 
-function LocalTrim(const S: string): string; inline;
-begin
-  Result := Trim(S);
-end;
-
-function ShortHex(const AOid: TGitOid): string;
-begin
-  Result := Copy(GitOidToHex(AOid), 1, 7);
-end;
-
 function IsZeroOid(const AOid: TGitOid): Boolean; inline;
 begin
   Result := GitOidIsZero(AOid);
+end;
+
+// tree-field scan over raw commit bytes, one 40-char alloc, no signature parse
+function BlameCommitTreeOf(const AData: TBytes; out ATree: TGitOid): Boolean; inline;
+var Hex: string; I: Integer;
+begin
+  Result := False;
+  if Length(AData) < 45 then Exit;
+  if (AData[0] <> Ord('t')) or (AData[1] <> Ord('r')) or (AData[2] <> Ord('e')) or
+     (AData[3] <> Ord('e')) or (AData[4] <> Ord(' ')) then Exit;
+  SetLength(Hex, 40);
+  for I := 0 to 39 do Hex[I + 1] := Chr(AData[5 + I]);
+  if not GitOidIsValidHex(Hex) then Exit;
+  ATree := GitOidFromHex(Hex);
+  Result := True;
 end;
 
 function SplitLines(const S: string): TStringArray; inline;
@@ -448,35 +453,6 @@ begin
   Result := TBlameMatchArray(ComputeMatches(AOld, ANew));
 end;
 
-function PeelToCommit(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
-var Kind: TGitObjectKind; Data: TBytes; TagInfo: TGitTagInfo; Depth: Integer;
-begin
-  Result := AOid; Depth := 0;
-  while Depth < 16 do
-  begin
-    Data := ARepo.ReadObject(Result, Kind);
-    if Kind = gokTag then
-    begin
-      TagInfo := GitParseTag(Data);
-      Result := TagInfo.Target;
-      Inc(Depth);
-    end
-    else if Kind = gokCommit then Exit
-    else raise EGitError.CreateFmt('ref does not point to commit: %s', [GitOidToHex(AOid)]);
-  end;
-  raise EGitError.Create('tag peel too deep');
-end;
-
-function ResolveStartOid(const AGitDir, ARef: string): TGitOid;
-var R: string;
-begin
-  R := LocalTrim(ARef);
-  if R = '' then Result := GitResolveHead(AGitDir)
-  else
-    try Result := GitRevParse(AGitDir, R);
-    except Result := GitResolveRef(AGitDir, R); end;
-end;
-
 function BytesToLines(const AData: TBytes): TStringArray;
 var LLen, I, Start, LCount, LCap: SizeInt; LLineLen: SizeInt;
 begin
@@ -525,9 +501,11 @@ var
   StartOid, Peeled: TGitOid;
   Oids: TGitOidArray;
   Infos: array of TGitCommitInfo;
+  Parsed: array of Boolean;
+  OidIdx: TOidIndexMap;
   HeadTree: TGitOid;
   HeadLines: TStringArray;
-  HeadBlobOid, CurBlobOid: TGitOid;
+  HeadBlobOid, CurBlobOid, CurTree: TGitOid;
   BlameOids: array of TGitOid;
   Cache: TBlameCache;
   CacheCap, CacheCnt: SizeUInt;
@@ -539,25 +517,31 @@ var
   PrevLines: TStringArray;
   Matches: TMatchArray;
   Entry: TGitBlameEntry;
+  procedure EnsureCommit(AIdx: Integer);
+  begin
+    if Parsed[AIdx] then Exit;
+    Data := Repo.ReadObject(Oids[AIdx], Kind);
+    if Kind <> gokCommit then raise EGitError.CreateFmt('object %s is not a commit', [GitOidToHex(Oids[AIdx])]);
+    Infos[AIdx] := GitParseCommit(Data);
+    Parsed[AIdx] := True;
+  end;
 begin
   Result := nil;
   if AGitDir = '' then raise EGitError.Create('blame: gitdir empty');
-  if LocalTrim(APath) = '' then raise EGitError.Create('blame: path empty');
+  if GitTrimSpaces(APath) = '' then raise EGitError.Create('blame: path empty');
   if Pos('/', APath) = 1 then raise EGitError.Create('blame: absolute path');
   Repo := TNativeRepository.Create(AGitDir);
   CacheMap := TBlameOidMap.Create(0, @BlameOidHash, @BlameOidEqual);
+  OidIdx := TOidIndexMap.Create;
   try
-    StartOid := ResolveStartOid(AGitDir, ARef);
-    Peeled := PeelToCommit(Repo, StartOid);
+    StartOid := GitResolveStartOid(AGitDir, ARef);
+    Peeled := GitPeelToCommit(Repo, StartOid);
     Oids := GitCollectCommits(Repo, [Peeled], -1);
     if Length(Oids) = 0 then raise EGitError.Create('blame: no commits');
     SetLength(Infos, Length(Oids));
-    for I := 0 to High(Oids) do
-    begin
-      Data := Repo.ReadObject(Oids[I], Kind);
-      if Kind <> gokCommit then raise EGitError.CreateFmt('object %s is not a commit', [GitOidToHex(Oids[I])]);
-      Infos[I] := GitParseCommit(Data);
-    end;
+    SetLength(Parsed, Length(Oids));
+    for I := 0 to High(Oids) do OidIdx.Add(Oids[I], I);
+    EnsureCommit(0);
     HeadTree := Infos[0].Tree;
     if not ReadFileLines(Repo, HeadTree, APath, HeadLines) then
       raise EGitError.CreateFmt('path not in HEAD: %s', [APath]);
@@ -579,7 +563,14 @@ begin
     end;
     for I := 1 to High(Oids) do
     begin
-      CurBlobOid := FindBlobOid(Repo, Infos[I].Tree, APath);
+      Data := Repo.ReadObject(Oids[I], Kind);
+      if Kind <> gokCommit then raise EGitError.CreateFmt('object %s is not a commit', [GitOidToHex(Oids[I])]);
+      if not BlameCommitTreeOf(Data, CurTree) then
+      begin
+        EnsureCommit(I);
+        CurTree := Infos[I].Tree;
+      end;
+      CurBlobOid := FindBlobOid(Repo, CurTree, APath);
       if IsZeroOid(CurBlobOid) then Continue;
       if GitOidSame(CurBlobOid, HeadBlobOid) then
       begin
@@ -623,22 +614,22 @@ begin
     for I := 0 to High(HeadLines) do
     begin
       Info := Infos[0];
-      for J := 0 to High(Oids) do
-        if GitOidSame(Oids[J], BlameOids[I]) then
-        begin
-          Info := Infos[J];
-          Break;
-        end;
+      if OidIdx.TryGet(BlameOids[I], K) then
+      begin
+        EnsureCommit(K);
+        Info := Infos[K];
+      end;
       Entry.LineNo := I + 1;
       Entry.Line := HeadLines[I];
       Entry.CommitOid := BlameOids[I];
-      Entry.ShortOid := ShortHex(BlameOids[I]);
+      Entry.ShortOid := GitShortHex(BlameOids[I]);
       Entry.AuthorName := Info.Author.Name;
       Entry.AuthorEmail := Info.Author.Email;
       Entry.CommitTime := Info.Committer.UnixTime;
       Result[I] := Entry;
     end;
   finally
+    OidIdx.Free;
     CacheMap.Free;
     Repo.Free;
   end;

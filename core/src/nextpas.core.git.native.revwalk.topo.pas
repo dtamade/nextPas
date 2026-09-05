@@ -18,9 +18,10 @@ type
   TGitOidArray = nextpas.core.git.native.revwalk.base.TGitOidArray;
 
 { one-shot topological order (children always precede parents, ready set
-  drained LIFO exactly like git's default --topo-order): buffers the
-  reachable subgraph, so it costs one read+parse per reachable commit up
-  front. AMaxCount < 0 means unlimited. }
+  drained LIFO exactly like git's default --topo-order). AMaxCount < 0 means
+  unlimited and buffers the full reachable subgraph up front; AMaxCount >= 0
+  streams emit-driven so small limits skip the tail (exact full fallback on
+  proven inversion). }
 function GitTopoOrderCommits(ARepo: TNativeRepository;
   const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray; overload;
 function GitTopoOrderCommits(ARepo: TNativeRepository;
@@ -169,7 +170,8 @@ begin
   SetLength(AStack, High(AStack));
 end;
 
-function GitTopoOrderCommits(ARepo: TNativeRepository;
+{ unlimited exact path: buffer the full reachable subgraph, then sort + emit }
+function GitTopoOrderCommitsFull(ARepo: TNativeRepository;
   const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray;
 var
   Nodes: TTopoNodes;
@@ -315,6 +317,211 @@ begin
     ParseCache.Free;
     if Graph <> nil then Graph.Free;
   end;
+end;
+
+{ bounded streaming topo for AMaxCount > 0: emit-driven discovery parses one
+  commit per visited node and stops after AMaxCount emissions, leaving the
+  tail untouched. ChildCount = buffered-but-unemitted children; parents not
+  yet buffered accumulate in Pending (stale entries for never-buffered oids
+  are never read). A ready entry gone stale is skipped at pop and re-pushed
+  at its zero transition, so emission order matches the full walk; an edge
+  into an already-emitted node proves inversion and redoes the exact full walk.
+  perf: inline stack/append/pending helpers, geometric growth via bytes.ops
+  GrowArrayCapacity single source, CoW parent share (no Copy) }
+function GitTopoOrderCommitsBounded(ARepo: TNativeRepository;
+  const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray;
+var
+  Nodes: TTopoNodes;
+  NodesLen: SizeInt;
+  Ready: TNodeIndexArray;
+  ReadyCap, ReadyLen: SizeInt;
+  Emitted: array of Boolean;
+  Seen: TGitOidSet;
+  OidMap, Pending: TOidIndexMap;
+  Graph: TCommitGraph;
+  ParseCache: TCommitParseCache;
+  ResCount, ResCap: SizeInt;
+  LateEdge: Boolean;
+  I, Idx: Integer;
+
+  procedure PushReady(AIdx: Integer); inline;
+  begin
+    if ReadyLen >= ReadyCap then
+    begin
+      ReadyCap := SizeInt(GrowArrayCapacity(SizeUInt(ReadyCap), SizeUInt(ReadyLen + 1)));
+      SetLength(Ready, ReadyCap);
+    end;
+    Ready[ReadyLen] := AIdx;
+    Inc(ReadyLen);
+  end;
+
+  function PopReady(out AIdx: Integer): Boolean; inline;
+  begin
+    Result := ReadyLen > 0;
+    if not Result then
+      Exit;
+    Dec(ReadyLen);
+    AIdx := Ready[ReadyLen];
+  end;
+
+  procedure PendingInc(const AOid: TGitOid); inline;
+  var
+    C: Integer;
+  begin
+    if Pending.TryGet(AOid, C) then
+      Pending.Add(AOid, C + 1)
+    else
+      Pending.Add(AOid, 1);
+  end;
+
+  function PendingTake(const AOid: TGitOid): Integer; inline;
+  begin
+    if not Pending.TryGet(AOid, Result) then
+      Result := 0;
+  end;
+
+  procedure AppendBounded(const AOid: TGitOid); inline;
+  begin
+    if ResCount >= ResCap then
+    begin
+      ResCap := SizeInt(GrowArrayCapacity(SizeUInt(ResCap), SizeUInt(ResCount + 1)));
+      SetLength(Result, ResCap);
+    end;
+    Result[ResCount] := AOid;
+    Inc(ResCount);
+  end;
+
+  { parse-on-discover single delivery (graph -> cache -> inflate); links the
+    new node to buffered parents or stages pending counts for the rest.
+    not inline: fetch + loop would bloat I-Cache }
+  function BufferNode(const AOid: TGitOid): Integer;
+  var
+    GWhen: Int64;
+    GParents: TGitOidArray;
+    J, PIdx: Integer;
+  begin
+    if OidMap.TryGet(AOid, Result) then
+      Exit;
+    if not TryFetchCommitCached(ARepo, Graph, ParseCache, AOid, GWhen, GParents) then
+      raise EGitError.Create('topo walk start points at a non-commit object');
+    Seen.Add(AOid);
+    if NodesLen >= Length(Nodes) then
+    begin
+      SetLength(Nodes, SizeInt(GrowArrayCapacity(SizeUInt(Length(Nodes)), SizeUInt(NodesLen + 1))));
+      SetLength(Emitted, Length(Nodes));
+    end;
+    Result := NodesLen;
+    Inc(NodesLen);
+    Nodes[Result].Oid := AOid;
+    Nodes[Result].When := GWhen;
+    Nodes[Result].Parents := GParents; { CoW share, no Copy }
+    Nodes[Result].ChildCount := PendingTake(AOid);
+    OidMap.Add(AOid, Result);
+    for J := 0 to High(GParents) do
+      if OidMap.TryGet(GParents[J], PIdx) then
+      begin
+        if Emitted[PIdx] then
+          LateEdge := True
+        else
+          Inc(Nodes[PIdx].ChildCount);
+      end
+      else
+        PendingInc(GParents[J]);
+  end;
+
+  { emit + discover parents on the spot; each buffered parent drops one
+    unemitted child and joins Ready at zero. not inline: loop }
+  procedure EmitNode(AIdx: Integer);
+  var
+    J, PIdx: Integer;
+  begin
+    Emitted[AIdx] := True;
+    AppendBounded(Nodes[AIdx].Oid);
+    for J := 0 to High(Nodes[AIdx].Parents) do
+    begin
+      if LateEdge then
+        Break;
+      PIdx := BufferNode(Nodes[AIdx].Parents[J]);
+      Dec(Nodes[PIdx].ChildCount);
+      if Nodes[PIdx].ChildCount = 0 then
+        PushReady(PIdx);
+    end;
+  end;
+
+begin
+  Result := nil;
+  ResCount := 0;
+  ResCap := 0;
+  Nodes := nil;
+  NodesLen := 0;
+  Ready := nil;
+  ReadyCap := 0;
+  ReadyLen := 0;
+  Emitted := nil;
+  LateEdge := False;
+  Seen := TGitOidSet.Create;
+  OidMap := TOidIndexMap.Create;
+  Pending := TOidIndexMap.Create;
+  ParseCache := TCommitParseCache.Create;
+  Graph := nil;
+  try
+    try if not GitTryLoadCommitGraph(ARepo.GitDir, Graph) then Graph := nil; except Graph := nil; end;
+    for I := 0 to High(AStarts) do
+    begin
+      if Seen.Contains(AStarts[I]) then
+        Continue;
+      Idx := BufferNode(AStarts[I]);
+      if Nodes[Idx].ChildCount = 0 then
+        PushReady(Idx);
+    end;
+    SetLength(Ready, ReadyLen);
+    TopoSortTips(Ready, Nodes);
+    ReadyCap := Length(Ready);
+    while (ResCount < AMaxCount) and PopReady(Idx) do
+    begin
+      if Emitted[Idx] then
+        Continue;
+      if Nodes[Idx].ChildCount <> 0 then
+        Continue;
+      EmitNode(Idx);
+      if LateEdge then
+        Break;
+    end;
+    if LateEdge then
+    begin
+      Result := GitTopoOrderCommitsFull(ARepo, AStarts, AMaxCount);
+      Exit;
+    end;
+    SetLength(Result, ResCount);
+    SetLength(Ready, ReadyLen);
+  finally
+    Seen.Free;
+    OidMap.Free;
+    Pending.Free;
+    ParseCache.Free;
+    if Graph <> nil then Graph.Free;
+  end;
+end;
+
+function GitTopoOrderCommits(ARepo: TNativeRepository;
+  const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray;
+begin
+  { AMaxCount = 0 / no starts: zero I/O; bounded streams emit-driven so small
+    limits skip the tail, unlimited keeps the exact full walk }
+  if AMaxCount = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+  if Length(AStarts) = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+  if AMaxCount > 0 then
+    Result := GitTopoOrderCommitsBounded(ARepo, AStarts, AMaxCount)
+  else
+    Result := GitTopoOrderCommitsFull(ARepo, AStarts, AMaxCount);
 end;
 
 function GitTopoOrderCommits(ARepo: TNativeRepository;

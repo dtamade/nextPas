@@ -17,12 +17,19 @@ uses
 function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean; inline;
 function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid; inline;
+// single source for commit peeling, short-oid display and start-ref resolution
+function GitShortHex(const AOid: TGitOid): string;
+function GitPeelToCommit(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
+function GitResolveStartOid(const AGitDir, ARef: string): TGitOid;
 
 implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.git.native.objmodel;
+  nextpas.core.git.native.objmodel,
+  nextpas.core.git.native.refs,
+  nextpas.core.git.native.revparse,
+  nextpas.core.git.native.util;
 
 function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 begin
@@ -84,6 +91,46 @@ begin
     end;
   end;
   raise EGitError.Create('tag peel too deep');
+end;
+
+function GitShortHex(const AOid: TGitOid): string;
+begin
+  Result := Copy(GitOidToHex(AOid), 1, 7);
+end;
+
+function GitPeelToCommit(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
+var
+  Kind: TGitObjectKind;
+  Data: TBytes;
+  TagInfo: TGitTagInfo;
+  Depth: Integer;
+begin
+  Result := AOid;
+  Depth := 0;
+  while Depth < 16 do
+  begin
+    Data := ARepo.ReadObject(Result, Kind);
+    if Kind = gokTag then
+    begin
+      TagInfo := GitParseTag(Data);
+      Result := TagInfo.Target;
+      Inc(Depth);
+    end
+    else if Kind = gokCommit then Exit
+    else raise EGitError.CreateFmt('ref does not point to commit: %s', [GitOidToHex(AOid)]);
+  end;
+  raise EGitError.Create('tag peel too deep');
+end;
+
+function GitResolveStartOid(const AGitDir, ARef: string): TGitOid;
+var R: string;
+begin
+  R := GitTrimSpaces(ARef);
+  if R = '' then
+    Result := GitResolveHead(AGitDir)
+  else
+    try Result := GitRevParse(AGitDir, R);
+    except Result := GitResolveRef(AGitDir, R); end;
 end;
 
 end.
