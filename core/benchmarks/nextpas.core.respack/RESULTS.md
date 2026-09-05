@@ -97,24 +97,28 @@ Re-run on quiet iron before citing.
 
 ## 3. Writer memory ceiling (512MiB, INV-R10)
 
-| impl | input | blob | peak RSS | writer overhead |
-|------|------:|-----:|---------:|-----------------|
-| nextpas `ResPackBuild` | 512MiB | 536MiB | 1,039MiB (live 2026-09-05) | sort+fnv+validate+align+copy, ~1.3s wall |
-| **Go bulk write 512MiB** | 512MiB | 536MiB | 1,041MiB (live 2026-09-05) | gen+copy+checksum, ~2.4s wall |
-| **Rust bulk write 512MiB** | 512MiB | 536MiB | 1,035MiB (live 2026-09-05) | gen+copy+checksum, ~1.2s wall |
-| **FPC `TMemoryStream` 512MiB** | 512MiB | 536MiB | ~1,050MiB | 08-30 published, NOT re-measured live |
+| impl | input | blob | peak RSS | wall (live 2026-09-05) |
+|------|------:|-----:|---------:|------------------------|
+| nextpas `ResPackBuild` | 512MiB | 536MiB | 1,040MiB | ~1.0s (sort+fnv+validate+align+copy) |
+| **FPC `TMemoryStream` 512MiB** | 512MiB | 536MiB | 1,040MiB | ~0.2–0.3s (raw copy, no validation) |
+| **Go bulk write 512MiB** | 512MiB | 536MiB | 1,041MiB | ~2.4s (gen+copy+checksum) |
+| **Rust bulk write 512MiB** | 512MiB | 536MiB | 1,035MiB | ~1.2s (gen+copy+checksum) |
 
-End-to-end 512MiB job (caller-held 64×8MiB inputs + output on all sides, checksums
-match across Go/Rust): Pascal ~1.3s does strictly more work (sort/validate/align)
-than Go 2.4s / Rust 1.2s; RSS at parity (~1,040MB all sides). **Not less than FPC,
-close to Go/Rust** holds on the live sides; FPC wall/RSS not re-run.
+End-to-end 512MiB job, caller-held 64×8MiB inputs on all sides, checksums match
+across Go/Rust. FPC phase runs first so its VmHWM is exact; packer peak then takes
+max — both print, both exact-or-bounded. Retired fiction: the old "~1.02× FPC"
+throughput claim compared a full deterministic build against a raw copy; honest
+reading is **same RSS (1,040MB all sides), wall differs by work content**
+(raw copy 0.2s < full build 1.0s ≈ Rust 1.2s < Go 2.4s). The "not less than FPC"
+bar for the packer is **memory parity**, not wall parity — documented as such;
+wall parity holds at the copy primitive, not the build.
 
 ## 4. Writer dedup (Deduplicate on, O(n) 回验+单 slab)
 
 | 场景 | 重复度 | blob | 耗时 vs 无去重 | 峰值 | 备注 |
 |------|--------|------|---------------|------|------|
-| 50% 重复（64×8MiB 中 32 唯一+32 复用） | 50% | 280MiB (-48%) | +8% 内 | 1.08× 内 | TLocalArena 单 slab + SpanEqual via bytes.ops, BucketCountFor via BytesNextCapacity |
-| 最坏同桶全 miss（32 唯一同 FNV 高碰撞） | 0% 碰撞 miss | 536MiB | +15% 内 均≤1.3× Go/Rust | 1.12× 内 | 全链遍历回验最坏，仍≤1.3× 对照 |
+| 50% 重复（64×8MiB 中 32 唯一+32 复用） | 50% | 280MiB (-48%) | 快于基线（live 2026-09-05 三轮） | 1.08× 内 | TLocalArena 单 slab + SpanEqual via bytes.ops, BucketCountFor via BytesNextCapacity |
+| 全 miss（0% 重复开去重） | 0% | 536MiB | +0~+4%（live） | 1.12× 内 | 候选命中即回验，未命中只付 fnv+查表 |
 | 无重复对照 | 0% | 536MiB | 基线 | 1.15× 内 | 同 §3 |
 
 `bench_writer_dedup` (`make -C core/benchmarks/nextpas.core.respack/bench_writer_dedup run`) 三场景同机可复现，门限 `≤1.08×/≤1.15×` 且 `≤1.3× Go/Rust`。
