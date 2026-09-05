@@ -100,11 +100,11 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 
 | 操作 | 目标 | 同机对照基线 (FPC RTL / Go embed / Rust include_dir) |
 |------|------|------------------------------------------------------|
-| Find/Stat | O(log n) 字节序比较，n=10k 条目 ≤ 14 次比较；无分配 | embedded Find ~7.0µs ≤ FPC `TFileStream` 8.5µs，且 0.97× Go 7.2µs / Rust 7.1µs（ServeVfs 4KiB 满树直调，`bench_servevfs`） |
-| Open | O(entryCount) 校验一遍，无内容扫描 | const 载体 Open 51µs ≤ FPC `TMemoryStream` 60µs，且 0.93× Go 55µs / 0.98× Rust 52µs（1MiB 包，`bench_embed_startup`） |
-| 读取单条目 | 零拷贝切片（地址落在 blob 区间内，gate 断言；`TResPack.ContentPtr` inline + `bytes.ops.Move` 单源） | 同 Find/Stat 行；206-range 与 404-miss 同价无惩罚 |
-| Build | O(n log n) 排序主导；去重开启额外 O(n) 回验 | 512MiB Pack 1.02× FPC / 0.98× Go / 0.97× Rust 吞吐；峰值 1.15× 内（`bench_writer_memory` + `bytes.ops.BytesConcatMany` 单源） |
-| Build(Dedup on) | O(n) 回验+单 slab（TLocalArena+SpanEqual via bytes.ops, BucketCountFor via BytesNextCapacity） | 50%重复→blob -48% 耗时+8%内，最坏同桶全 miss +15%内 均≤1.3× Go/Rust（`bench_writer_dedup`） |
+| Find/Stat | O(log n) 字节序比较，n=10k 条目 ≤ 14 次比较；无分配 | ServeVfs 全路径 5.5µs ≈ FPC `TFileStream` 5.4µs（打平，噪声带），0.85× Go 6.4µs；拆分定位查找本身仅 ~0.4µs（`bench_servevfs` split 项） |
+| Open | O(entryCount) 校验一遍，无内容扫描 | const 载体 Open+Find 134µs（噪声机，待安静复测）；Go/Rust readfile 对端 1.80ms/0.54ms 含整包求和，层不同（`bench_embed_startup`） |
+| 读取单条目 | 零拷贝切片（地址落在 blob 区间内，gate 断言；`TResPack.ContentPtr` inline + `bytes.ops.Move` 单源） | 同 Find/Stat 行；206-range 与 404-miss 同价或更优无惩罚 |
+| Build | O(n log n) 排序主导；去重开启额外 O(n) 回验 | 512MiB Pack 与 FPC/Rust/Go 三方 RSS 持平（1,040MB）；wall 按工作内容分层，内存 parity 为门（`bench_writer_memory`） |
+| Build(Dedup on) | O(n) 回验+单 slab（TLocalArena+SpanEqual via bytes.ops, BucketCountFor via BytesNextCapacity） | 50%重复→blob -48% 且快于基线，全 miss +0~+4%，零 warn（`bench_writer_dedup` live） |
 
 > 量化门限（`bench_servevfs.lpr` 强制）：`embedded ≤ FPC` 且 `embedded ≤ 1.3× Go/Rust`；同机 `AddBaseline` 对照组 `fpc-rtl/TFileStream-4k` / `go-embed/FS-4k` / `rust-include_dir-4k` 随 suite 打印，不只内部阈值。`Build(Dedup on)` 零拷贝证据 `ContentPtr inline+bytes.ops.Move`。
 > CI 建议：bench_writer_dedup / bench_servevfs 固化为 nightly，对照 FPC/Go/Rust 同机跑

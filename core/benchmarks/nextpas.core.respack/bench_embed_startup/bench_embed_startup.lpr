@@ -117,6 +117,19 @@ begin
   end;
 end;
 
+{ 成本拆分 Open-only：200 条目八步校验，不 Find（与 const 载体差值即单次查找） }
+procedure BenchSplitOpen(const ACtx: IBenchContext);
+var
+  RP: TResPack;
+begin
+  ACtx.SetBytes(SizeInt(GBlob.Size));
+  RP := ResPackOpen(GBlob.Data, GBlob.Size);
+  try
+  finally
+    RP.Close;
+  end;
+end;
+
 { FPC RTL 同机对照：TMemoryStream 承载同等 1MB 包解析，计量启动开销 }
 procedure BenchFpcMemStream(const ACtx: IBenchContext);
 var
@@ -149,6 +162,7 @@ begin
       .Add('startup/readfile-pack-carrier', @BenchPackFileCarrier)
       .Add('startup/fpc-memstream-1mb', @BenchFpcMemStream)
       .Add('lookup/find-binary-search', @BenchFindLookup)
+      .Add('startup/split/open-only', @BenchSplitOpen)
       .AddBaseline('fpc-rtl/TMemoryStream-1mb', BASELINE_FPC_STARTUP_NS)
       .AddBaseline('go-embed/1mb', BASELINE_GO_STARTUP_NS)
       .AddBaseline('rust-include_dir/1mb', BASELINE_RUST_STARTUP_NS)
