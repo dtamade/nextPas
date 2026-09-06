@@ -48,14 +48,14 @@ end;
 
 procedure RunOnce(const ATargetBytes: SizeUInt);
 var
-  Chunk: TBytes;
   Entries: array of TResPackInputEntry;
   Contents: array of TBytes;
   ChunkSize, Remaining: SizeUInt;
   I, N: Integer;
   K: SizeUInt;
-  Pos, FullTiles, Rem, TileSum, EntrySum: SizeUInt;
-  Tile: array[0..250] of Byte;
+  SCount, STail, PTiles, PRem, TileSum, EntrySum: SizeUInt;
+  P: array[0..250] of Byte;
+  S: array[0..63000] of Byte;
   Acc: QWord;
   Blob: TResPackBlob;
   T0, T1, T2, T3: QWord;
@@ -75,51 +75,68 @@ begin
   N := Integer(ATargetBytes div ChunkSize);
   SetLength(Contents, N);
   SetLength(Entries, N);
-  SetLength(Chunk, SizeInt(ChunkSize));
-  { 逐条目独立填充再拷贝：各条目内容互异（Byte(I mod 251)），去重不得跨条目
-    复用，blob 回到 ~512MB，与 Rust 对端同量实写可比。填充与拷贝同循环，
-    杜绝"先填同一块再全拷贝"造成的全同内容坍缩（P0 去重默认开后现形）。
-    填充计入端到端计时（Rust 对端 gen 在计时区内，同口径，保守侧）。 }
+  { 逐条目独立填充：各条目内容互异（seed = 条目序号），去重不得跨条目复用，
+    blob 回到 ~512MB，与 Rust 对端同量实写可比。填充计入端到端计时
+    （Rust 对端 gen 在计时区内，同口径，保守侧）。
+    两级瓦片：251B 周期瓦 P（31 与 251 互素）→ 63KB 超瓦 S（251 个 P，
+    63001 = 251² 相位自洽，任意重复不断相）；8MB 条目 = 133 个 S + 相位
+    干净尾，全程大块 Move（~8k 次调用），字节流与公式逐位一致。 }
   Acc := 0;
   T0 := GetTickCount64;
   for I := 0 to N - 1 do
   begin
-    { 251 周期瓦片：(J*31+S) mod 251 中 31 与 251 互素，故 J 周期恰为 251；
-      整瓦 Move 平铺 + 尾部截断，字节流与逐字节公式逐位一致（校验和跨语言可比），
-      速度走内存带宽而非逐字节除法。 }
     TileSum := 0;
     for K := 0 to 250 do
     begin
-      Tile[K] := Byte((K * 31 + SizeUInt(I) * 7) mod 251);
-      TileSum := TileSum + SizeUInt(Tile[K]);
+      P[K] := Byte((K * 31 + SizeUInt(I) * 7) mod 251);
+      TileSum := TileSum + SizeUInt(P[K]);
     end;
-    Pos := 0;
-    FullTiles := ChunkSize div 251;
-    for K := 0 to FullTiles - 1 do
-    begin
-      Move(Tile[0], Chunk[Pos], 251);
-      Inc(Pos, 251);
-    end;
-    Rem := ChunkSize - Pos;
-    if Rem > 0 then
-      Move(Tile[0], Chunk[Pos], Rem);
-    { 瓦片算术求和 == 逐字节累加（同字节集），省一遍 8MB 重读 }
-    EntrySum := TileSum * FullTiles;
-    if Rem > 0 then
-      for K := 0 to Rem - 1 do
-        EntrySum := EntrySum + SizeUInt(Tile[K]);
-    Acc := Acc + QWord(EntrySum);
+    for K := 0 to 250 do
+      Move(P[0], S[K * 251], 251);
     SetLength(Contents[I], SizeInt(ChunkSize));
-    Move(Chunk[0], Contents[I][0], ChunkSize);
+    SCount := ChunkSize div SizeUInt(63001);
+    STail := ChunkSize mod SizeUInt(63001);
+    if SCount > 0 then
+      for K := 0 to SCount - 1 do
+        Move(S[0], Contents[I][K * 63001], 63001);
+    if STail > 0 then
+      Move(S[0], Contents[I][SCount * 63001], STail);
+    { 瓦片算术求和 == 逐字节累加（同字节集），省一遍 8MB 重读 }
+    PTiles := STail div 251;
+    PRem := STail mod 251;
+    EntrySum := TileSum * (SCount * 251 + PTiles);
+    if PRem > 0 then
+      for K := 0 to PRem - 1 do
+        EntrySum := EntrySum + SizeUInt(P[K]);
+    Acc := Acc + QWord(EntrySum);
     Entries[I].Path := 'chunk' + IntToStr(I) + '.bin';
     Entries[I].Data := @Contents[I][0];
     Entries[I].DataSize := ChunkSize;
     Entries[I].ModTime := 0;
   end;
-  { 尾部零头：凑不满整块时用最后一块缩容 }
+  { 尾部零头：凑不满整块时用最后一块缩容；Acc 此前按整块累加，
+    超 DataSize 的尾部不属于输入，必须同步扣减（同 P 周期算术，否则校验和虚增） }
   Remaining := ATargetBytes - SizeUInt(N) * ChunkSize;
   if (Remaining > 0) and (N > 0) then
   begin
+    TileSum := 0;
+    for K := 0 to 250 do
+    begin
+      P[K] := Byte((K * 31 + SizeUInt(N - 1) * 7) mod 251);
+      TileSum := TileSum + SizeUInt(P[K]);
+    end;
+    EntrySum := 0;
+    PRem := ChunkSize mod 251;
+    if PRem > 0 then
+      for K := 0 to PRem - 1 do
+        EntrySum := EntrySum + SizeUInt(P[K]);
+    EntrySum := EntrySum + TileSum * (ChunkSize div 251);
+    PRem := Remaining mod 251;
+    if PRem > 0 then
+      for K := 0 to PRem - 1 do
+        EntrySum := EntrySum - SizeUInt(P[K]);
+    EntrySum := EntrySum - TileSum * (Remaining div 251);
+    Acc := Acc - QWord(EntrySum);
     SetLength(Contents[N - 1], SizeInt(Remaining));
     Entries[N - 1].DataSize := Remaining;
   end;
