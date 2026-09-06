@@ -117,8 +117,8 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 
 | 测试目录 | 目标用例数 | 说明 |
 |----------|-----------|------|
-| test_respack_reader | ≥ 16（已落地 29） | 九步校验每条规则 ≥1 拒绝用例 + codecId/digest/哈希段边界 + indexOffset 恒 40 + LE 位移 |
-| test_respack_writer | ≥ 12（已落地 23） | 排序/去重回验/对齐/golden/确定性/超限 + digest 4 对齐（布局单源 `writer.layout`：`ResPackCmpPath` via `bytes.ops` inline 零拷贝 + Sort via `collections.algorithms` + `AlignUp64` via `mem.base`） + 哈希段发射/默认关/空包 |
+| test_respack_reader | ≥ 16（已落地 30） | 九步校验每条规则 ≥1 拒绝用例 + codecId/digest/哈希段边界（含晚桶损坏拒绝，抽验禁区锁定） + indexOffset 恒 40 + LE 位移 |
+| test_respack_writer | ≥ 12（已落地 23） | 排序/去重回验/对齐/golden/确定性/超限 + digest 4 对齐（布局单源 `writer.layout`：`ResPackCmpPath` via `bytes.ops` inline 零拷贝 + Sort via `collections.algorithms` + `AlignUp64` via `mem.base`） + 哈希段发射/默认关/空包 + 门面哈希面齐（bit5/KNOWN/段常量/桶函数转发锁定） |
 | test_respack_roundtrip | ≥ 6（已落地 16） | 目录样例全量往返（含空文件、深路径、unicode 文件名；流式 `writer.stream` 同布局确定性回验，峰值 `~1×+头`） + 哈希段内存/流式字节一致往返 |
 | test_respack_dirsource | ≥ 4（已落地 7） | 枚举顺序/exclude 透传/符号链接策略/空目录 |
 | test_respack_embed | ≥ 4（已落地 15） | glob/prefix/inc golden/roundtrip（阈值可配置 MaxBlobBytes、IncUnit 单次分配 BytesCopy 组装） |
