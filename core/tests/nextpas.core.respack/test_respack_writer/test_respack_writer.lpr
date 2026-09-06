@@ -410,6 +410,31 @@ begin
   end;
 end;
 
+{ 默认即去重：不断言具体槽位实现，只断言可观测契约——同内容两条目同槽、
+  内容正确；改默认值必先改此用例（防默认漂移）。 }
+procedure TestDefaultDedupOn;
+var
+  InA: array[0..1] of TResPackInputEntry;
+  B: TResPackBlob;
+  RP: TResPack;
+  EA, EB: TResPackEntry;
+  Want: TBytes;
+begin
+  InA[0] := Ent('a.bin', BytesOf('shared-bytes'));
+  InA[1] := Ent('b.bin', BytesOf('shared-bytes'));
+  Want := BytesOf('shared-bytes');
+  B := ResPackBuild(InA, ResPackDefaultOptions);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(RP.Find('a.bin', EA) and RP.Find('b.bin', EB), 'default pair found');
+    Check(EA.DataOffset = EB.DataOffset, 'default options share one slot');
+    Check(SameBytesRaw(RP.ContentPtr(EA), @Want[0], EA.Size),
+      'default shared content intact');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 procedure TestEmptyPack;
 var
   InA: TResPackInputArray;
@@ -507,6 +532,7 @@ begin
     T.Test('nil data nonzero raises', @TestNilDataNonzeroRaises);
     T.Test('facade wire consts', @TestFacadeWireConsts);
     T.Test('bucket count pow2', @TestBucketCountPow2);
+    T.Test('default dedup on', @TestDefaultDedupOn);
     T.Test('empty pack opens', @TestEmptyPack);
     T.Test('golden snapshot', @TestGoldenSnapshot);
     T.Test('header fields sane', @TestHeaderFields);

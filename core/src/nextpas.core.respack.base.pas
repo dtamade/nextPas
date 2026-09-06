@@ -256,7 +256,9 @@ end;
 
 function ResPackDefaultOptions: TResPackBuildOptions;
 begin
-  Result.Deduplicate := False;
+  { 去重默认开：同内容零代价共享槽位（fnv 候选+逐字节回验），50%重复实测更快、
+    全 miss +4%内；CONTRACT/FORMAT 已同步，BENCH 门限守护。 }
+  Result.Deduplicate := True;
   Result.Hashes := True;
   Result.CodecId := RESPACK_CODEC_STORE;
   Result.DigestFunc := nil;
