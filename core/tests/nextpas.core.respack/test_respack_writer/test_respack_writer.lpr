@@ -7,6 +7,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.respack,
   nextpas.core.respack.base,
+  nextpas.core.respack.hasharena,
   nextpas.core.bytes.ops;
 
 {$I golden_respack_v1.inc}

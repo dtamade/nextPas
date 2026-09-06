@@ -1,7 +1,7 @@
 unit nextpas.core.respack.writer.layout;
 
 {** @desc respack 布局单源：排序/去重/对齐/槽位计算，供 writer/stream 共用。
-  单源于 base/bytes.ops/collections.algorithms/mem.base。 }
+  单源于 base/hasharena/bytes.ops/collections.algorithms/mem.base。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -49,7 +49,8 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.collections.algorithms,
-  nextpas.core.mem.base;
+  nextpas.core.mem.base,
+  nextpas.core.respack.hasharena;
 
 type
   TWordArr = array[0..(High(SizeInt) div SizeOf(Word)) - 1] of Word;
@@ -92,6 +93,23 @@ begin
     and ((AEntries[AJ].DataSize = 0)
       or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[AJ].Data, AEntries[AJ].DataSize),
         TByteSpan.Create(AEntries[ASlots[AK].SrcIdx].Data, AEntries[AJ].DataSize)));
+end;
+
+{ 槽位分配单源：对齐经 mem.base，tiny/哈希/直排三处共用。 }
+procedure LayoutAddSlot(var ALayout: TResPackLayout; var ACur: UInt64;
+  var ASlotCount: SizeUInt; const AEntries: array of TResPackInputEntry;
+  const AFnvBuf: array of UInt32; const AJ: SizeUInt; const ANeedFnv: Boolean); inline;
+begin
+  ACur := AlignUpU64(ACur, RESPACK_DATA_ALIGN);
+  ALayout.Slots[ASlotCount].Offset := ACur;
+  ALayout.Slots[ASlotCount].SrcIdx := AJ;
+  if ANeedFnv then
+    ALayout.Slots[ASlotCount].Fnv := AFnvBuf[AJ]
+  else
+    ALayout.Slots[ASlotCount].Fnv := 0;
+  ALayout.EntrySlots[AJ] := ASlotCount;
+  ACur := ACur + UInt64(AEntries[AJ].DataSize);
+  Inc(ASlotCount);
 end;
 
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
@@ -260,18 +278,7 @@ begin
                 Break;
               end;
           if ALayout.EntrySlots[J] = SizeUInt(-1) then
-          begin
-            Cur := AlignUpU64(Cur, RESPACK_DATA_ALIGN);
-            ALayout.Slots[SlotCount].Offset := Cur;
-            ALayout.Slots[SlotCount].SrcIdx := J;
-            if NeedFnv then
-              ALayout.Slots[SlotCount].Fnv := ALayout.FnvBuf[J]
-            else
-              ALayout.Slots[SlotCount].Fnv := 0;
-            ALayout.EntrySlots[J] := SlotCount;
-            Cur := Cur + UInt64(AEntries[J].DataSize);
-            Inc(SlotCount);
-          end;
+            LayoutAddSlot(ALayout, Cur, SlotCount, AEntries, ALayout.FnvBuf, J, NeedFnv);
         end;
     end
     else
@@ -279,7 +286,7 @@ begin
       BucketsHead := nil;
       SlotNext := nil;
       DedupArena := nil;
-      nextpas.core.respack.base.ResPackDedupInit(N, DedupArena, BucketsHead, SlotNext, BucketCount);
+      nextpas.core.respack.hasharena.ResPackDedupInit(N, DedupArena, BucketsHead, SlotNext, BucketCount);
       try
         if N > 0 then
           for I := 0 to N - 1 do
@@ -300,22 +307,13 @@ begin
             end;
             if ALayout.EntrySlots[J] = SizeUInt(-1) then
             begin
-              Cur := AlignUpU64(Cur, RESPACK_DATA_ALIGN);
-              ALayout.Slots[SlotCount].Offset := Cur;
-              ALayout.Slots[SlotCount].SrcIdx := J;
-              if NeedFnv then
-                ALayout.Slots[SlotCount].Fnv := ALayout.FnvBuf[J]
-              else
-                ALayout.Slots[SlotCount].Fnv := 0;
-              SlotNext[SlotCount] := BucketsHead[BucketIdx];
-              BucketsHead[BucketIdx] := SizeInt(SlotCount);
-              ALayout.EntrySlots[J] := SlotCount;
-              Cur := Cur + UInt64(AEntries[J].DataSize);
-              Inc(SlotCount);
+              LayoutAddSlot(ALayout, Cur, SlotCount, AEntries, ALayout.FnvBuf, J, NeedFnv);
+              SlotNext[ALayout.EntrySlots[J]] := BucketsHead[BucketIdx];
+              BucketsHead[BucketIdx] := SizeInt(ALayout.EntrySlots[J]);
             end;
           end;
         finally
-          nextpas.core.respack.base.ResPackDedupDone(DedupArena);
+          nextpas.core.respack.hasharena.ResPackDedupDone(DedupArena);
         end;
     end;
   end
@@ -323,16 +321,7 @@ begin
     for I := 0 to N - 1 do
     begin
       J := ALayout.Order[I];
-      Cur := AlignUpU64(Cur, RESPACK_DATA_ALIGN);
-      ALayout.Slots[SlotCount].Offset := Cur;
-      ALayout.Slots[SlotCount].SrcIdx := J;
-      if NeedFnv then
-        ALayout.Slots[SlotCount].Fnv := ALayout.FnvBuf[J]
-      else
-        ALayout.Slots[SlotCount].Fnv := 0;
-      ALayout.EntrySlots[J] := SlotCount;
-      Cur := Cur + UInt64(AEntries[J].DataSize);
-      Inc(SlotCount);
+      LayoutAddSlot(ALayout, Cur, SlotCount, AEntries, ALayout.FnvBuf, J, NeedFnv);
     end;
   ALayout.SlotCount := SlotCount;
   EndData := Cur;
