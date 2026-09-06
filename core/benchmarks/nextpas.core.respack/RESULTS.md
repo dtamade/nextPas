@@ -146,7 +146,7 @@ Reading: 单次 Find ≈ 1µs（两次独立复核一致）；Open 校验 ≈ 12
 
 | impl | input | blob | peak RSS | wall (live 2026-09-05) |
 |------|------:|-----:|---------:|------------------------|
-| nextpas `ResPackBuild` | 512MiB | 536MiB | 1,040MiB | ~1.0s (sort+fnv+validate+align+copy) |
+| nextpas `ResPackBuild` | 512MiB | 536MiB | 1,040MiB | 构建 ~1.0s，端到端 ~1.25s |
 | **FPC `TMemoryStream` 512MiB** | 512MiB | 536MiB | 1,040MiB | ~0.2–0.3s (raw copy, no validation) |
 | **Go bulk write 512MiB** | 512MiB | 536MiB | 1,041MiB | ~2.4s (gen+copy+checksum) |
 | **Rust bulk write 512MiB** | 512MiB | 536MiB | 1,035MiB | ~1.2s (gen+copy+checksum) |
@@ -155,17 +155,27 @@ End-to-end 512MiB job, caller-held 64×8MiB inputs on all sides, checksums match
 across Go/Rust. FPC phase runs first so its VmHWM is exact; packer peak then takes
 max — both print, both exact-or-bounded. Retired fiction: the old "~1.02× FPC"
 throughput claim compared a full deterministic build against a raw copy; honest
-reading is **same RSS (1,040MB all sides), wall differs by work content**
-(raw copy 0.2s < full build 1.0s ≈ Rust 1.2s < Go 2.4s). The "not less than FPC"
+reading is **same RSS (1,040MB all sides); end-to-end wall parity within noise**
+(Pascal 1241–1386ms vs Rust 1189–1494ms same-host, same-payload, checksums equal;
+build-only is ~1.0s vs ~1.2s but build-only excludes Pascal-side fill that Rust
+times, so end-to-end is the cited comparison). The "not less than FPC"
 bar for the packer is **memory parity**, not wall parity — documented as such;
 wall parity holds at the copy primitive, not the build.
 
 2026-09-06 live re-run (same host): Pascal wall 1035ms ≤ Rust 1244ms, RSS 1039 vs
-1035. Bulk wall 无硬门限（单样本 wall 噪声大），RSS 单边门限已编码进
-`bench_writer_memory`（packer 峰值超 FPC 峰值 15% 即红灯，输出 `gate:` 行作证）。
+1035（该轮 Pascal 填充未计时，口径偏 Pascal，见下）。
 2026-09-06 附注：P0 去重默认开启后曾暴露 bench 输入 bug——填充与拷贝分属两轮循环，
 64 条目内容全同，包坍缩至 8MB 而 Rust 对端实写 512MB（不可比）；已修为逐条目独立
-填充，包回 ~512MB（本轮复测：Pascal 978ms/RSS 1040MB vs Rust 1217ms/RSS 1035MB）。
+填充，包回 ~512MB。
+2026-09-06 口径修正（skeptic 审计）：Rust 对端 gen 在计时区内，Pascal 填充此前在
+计时区外——双方改为端到端同口径（含填充/生成）后三轮背靠背复测：Pascal 端到端
+1241–1386ms（含填充 ~280ms + 构建 ~1000ms），Rust 1189–1494ms（另有一轮 13.8s
+机器毛刺，负载机噪声之证），RSS 1040–1041 vs 1035MB。结论修正为**持平**（此前
+"win" 是口径红利，撤回），RSS 持续持平。三方输入校验和同机一致
+（Pascal/Rust/Go 均为 `0000000f9ffffd34`，u64 回绕累加，载荷逐字节同源）。
+门限：`bench_writer_memory` 内双门（端到端 wall ≤1500ms 回归级 + packer 峰值超
+FPC 峰值 15% 即红灯）；wall 单样本噪声大（本轮即见 13.8s 毛刺），门限只抓回归，
+胜负以本节逐轮记录为准，复测前勿引用。
 
 ## 4. Writer dedup (Deduplicate on, O(n) 回验+单 slab)
 
