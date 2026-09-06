@@ -40,15 +40,15 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 
 - blob 输入一律 `(PByte, SizeUInt)`，不持有所有权；调用方保证生命期覆盖 TResPack
 - `TResPackBuildOptions`：`Deduplicate: Boolean`（默认 True，同内容槽位共享；fnv 候选+逐字节回验，去重门限见 §6）、`CodecId: Byte`（默认 `STORE=0`）、
-  `DigestFunc: TResPackDigestFunc`（nil = 无 digest 区；算法 ID 经 header flags bit2-4 预留，v1 仅 0=SHA-256）、时间戳来源
+  `DigestFunc: TResPackDigestFunc`（nil = 无 digest 区；算法 ID 经 header flags bit2-4 预留，v1 仅 0=SHA-256）、`HashIndex: Boolean`（默认 False：写尾部哈希段供 O(1) 查找；bit5 包老 reader 整包拒收，兼容优先，perf 通道显式开）、时间戳来源
 
 ---
 
 ## 2. 不变量
 
 - **[INV-R1]** 线格式与 [`FORMAT.md`](FORMAT.md) 唯一对应；改格式先改文档升版本
-- **[INV-R2]** Open 完成八步校验清单后才暴露任何查找；不存在"半信任"句柄
-- **[INV-R3]** Find/Stat 只在已通过校验的 index 上做二分，路径比较为字节序精确比较
+- **[INV-R2]** Open 完成九步校验清单后才暴露任何查找；不存在"半信任"句柄
+- **[INV-R3]** Find/Stat 只在已通过校验的 index 上查找：哈希段存在时哈希先查（fnv+探测，命中逐字节回验），失配回退二分；路径比较为字节序精确比较
 - **[INV-R4]** reader 查询操作（Find/Stat/EntryAt）零堆分配，只返回定长 record；
   路径物化（PathOf）每次调用恰好构造一个 string。Open 零拷贝（不复制 blob），
   校验期对每条目各做一次路径物化用于语法断言
@@ -61,6 +61,7 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 - **[INV-R9]** digest 区存不透明 32 字节；算法由 `DigestFunc` 注入，header flags bit2-4 预留算法 ID（v1 仅 0=SHA-256，其余拒绝），本模块零加密依赖
 - **[INV-R10]** 内存上限：writer 声明输入 ≤ 512 MB（`RESPACK_MAX_INPUT_BYTES`），dirsource 废弃便捷路径 ≤64MiB（`RESPACK_DIRSOURCE_LEGACY_LIMIT` 家族收口防 2×+头 OOM）；超限行为 = 显式 raise
   （`EResPackTooLarge`，超阈引导流式mmap 1×+头），绝不静默产出损坏包
+- **[INV-R11]** 哈希段（bit5）可选存在：桶数由条目数单源派生（`ResPackHashBucketCount`，writer 布局与 reader 校验/查找共用）；段内存放 index 位（非输入序号），writer 按 index 序灌桶保证确定性（INV-R5）；Open 第 9 步逐桶回验，损坏整包拒绝；查找正确性不依赖表（回退二分），表只许降速不许断错
 
 ---
 
@@ -100,7 +101,7 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 
 | 操作 | 目标 | 同机对照基线 (FPC RTL / Go embed / Rust include_dir) |
 |------|------|------------------------------------------------------|
-| Find/Stat | O(log n) 字节序比较，n=10k 条目 ≤ 14 次比较；无分配 | ServeVfs 全路径 5.5µs ≈ FPC `TFileStream` 5.4µs（打平，噪声带），0.85× Go 6.4µs；拆分定位查找本身仅 ~0.4µs（`bench_servevfs` split 项） |
+| Find/Stat | O(log n) 字节序比较，n=10k 条目 ≤ 14 次比较；无分配。哈希段存在时 O(1) 先查（fnv+探测，命中回验），失配回退二分 | ServeVfs 全路径 5.5µs ≈ FPC `TFileStream` 5.4µs（打平，噪声带），0.85× Go 6.4µs；拆分定位二分 ~0.65µs、哈希 ~0.46µs（`bench_servevfs` split 项，2026-09-06 live，门限：哈希 ≤ 二分×1.2 且 ≤ Rust split 1100ns） |
 | Open | O(entryCount) 校验一遍，无内容扫描 | const 载体 Open+Find 134µs（噪声机，待安静复测）；Go/Rust readfile 对端 1.80ms/0.54ms 含整包求和，层不同（`bench_embed_startup`） |
 | 读取单条目 | 零拷贝切片（地址落在 blob 区间内，gate 断言；`TResPack.ContentPtr` inline + `bytes.ops.Move` 单源） | 同 Find/Stat 行；206-range 与 404-miss 同价或更优无惩罚 |
 | Build | O(n log n) 排序主导；去重开启额外 O(n) 回验 | 512MiB Pack 与 FPC/Rust/Go 三方 RSS 持平（1,040MB）；wall 按工作内容分层，内存 parity 为门（`bench_writer_memory`） |
@@ -115,9 +116,9 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 
 | 测试目录 | 目标用例数 | 说明 |
 |----------|-----------|------|
-| test_respack_reader | ≥ 16（已落地 26） | 八步校验每条规则 ≥1 拒绝用例 + codecId/digest 边界 + indexOffset 恒 40 + LE 位移 |
-| test_respack_writer | ≥ 12（已落地 19） | 排序/去重回验/对齐/golden/确定性/超限 + digest 4 对齐（布局单源 `writer.layout`：`ResPackCmpPath` via `bytes.ops` inline 零拷贝 + Sort via `collections.algorithms` + `AlignUp64` via `mem.base`） |
-| test_respack_roundtrip | ≥ 6（已落地 15） | 目录样例全量往返（含空文件、深路径、unicode 文件名；流式 `writer.stream` 同布局确定性回验，峰值 `~1×+头`） |
+| test_respack_reader | ≥ 16（已落地 29） | 九步校验每条规则 ≥1 拒绝用例 + codecId/digest/哈希段边界 + indexOffset 恒 40 + LE 位移 |
+| test_respack_writer | ≥ 12（已落地 23） | 排序/去重回验/对齐/golden/确定性/超限 + digest 4 对齐（布局单源 `writer.layout`：`ResPackCmpPath` via `bytes.ops` inline 零拷贝 + Sort via `collections.algorithms` + `AlignUp64` via `mem.base`） + 哈希段发射/默认关/空包 |
+| test_respack_roundtrip | ≥ 6（已落地 16） | 目录样例全量往返（含空文件、深路径、unicode 文件名；流式 `writer.stream` 同布局确定性回验，峰值 `~1×+头`） + 哈希段内存/流式字节一致往返 |
 | test_respack_dirsource | ≥ 4（已落地 7） | 枚举顺序/exclude 透传/符号链接策略/空目录 |
 | test_respack_embed | ≥ 4（已落地 15） | glob/prefix/inc golden/roundtrip（阈值可配置 MaxBlobBytes、IncUnit 单次分配 BytesCopy 组装） |
 | source-contract | — | uses 白名单断言（13 源 `base`/`embed.limits`/`respack.limits`/`reader`/`writer`/`writer.layout`/`writer.builder`/`writer.stream`/`dirsource`/`dirsource.mmap`/`embed`/门面 + `embed.pas` 独立门面；`writer.layout` 布局单源 `TResPackDedupBuckets` + `writer.builder` 头单源 + `writer.stream` 流式两遍分段零双驻留 `try..finally ResPackLayoutClear` + `embed.limits` 独立阈值策略单源 `EmbedRequireIncSize`/`ResPackRequireIncSize`/`EffectiveLimit` inline 零拷贝（`respack.limits` 仅兼容转发 `try..except EEmbedTooLarge→EResPackTooLarge`）+ `embed` 通用组装 `BytesCopy` 与 `writer.builder` 单源收敛；复用 `core/tests/fpc_rtl_uses_scan.inc` 机制） |
@@ -131,7 +132,7 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | 阶段 | 交付物 | 状态 | 门禁 / 证据 |
 |------|--------|------|-------------|
 | S1 | 格式层（FORMAT v1 恒 40 字节头、LE 位移与宿主无关、digest 4 对齐、header flags bit2-4 算法位预留） | 已收官 | test_respack_reader/writer/roundtrip 全绿；indexOffset 恒 40 + LE 位移断言 |
-| S2 | 契约（INV-R1..R10、不变量、错误表、CodecId/DigestFunc 签名） | 已收官 | CONTRACT 1.0 校准；source-contract uses 白名单全绿 |
+| S2 | 契约（INV-R1..R11、不变量、错误表、CodecId/DigestFunc/HashIndex 签名） | 已收官 | CONTRACT 1.0 校准；source-contract uses 白名单全绿 |
 | S3 | 后端（vfs embedded/os/memtree/sub 零拷贝、P8 地址断言） | 已收官 | test_vfs_conformance/embedded/memtree/facade 全绿 |
 | S4 | 工具链（respack.embed + rp_pack CLI + demo_asset_embed，一键链路） | 已收官 | test_respack_embed 全绿；`make -C core/tools/respack build` + `make -C core/examples/nextpas.core.vfs/demo_asset_embed gen run` 自检绿 |
 | S5 | http.static 接入（`ServeVfs(IVfs)` 直通 embedded，ETag 取 fnv32、条件请求/Range/MIME 与 fs 版同语义） | 已收官 | test_http_static + http_static_vfs_demo 304/206/404 自检绿 |
@@ -154,3 +155,4 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | 2026-09-05 | 1.0 | 收官校准：source-contract 白名单 12→13 源计数修正；§7 落地用例数校准（reader 25/writer 16/roundtrip 15/dirsource 7/embed 14，合计 81）；布局内联 `TResPackLayoutInfo` 门面别名移除（布局类型仅内部管线可见） | AI |
 | 2026-09-05 | 1.0 | Codex 审查闭环：writer 前置拒绝 nil-data 非零输入 + string table u32 上界 + 布局单点溢出钳制；reader ContentPtr/StoredPathSpanOf 以 BlobTotal 为界 + RequireOpen；门面补 wire 常量（HEADER/ENTRY/ALIGN/DIGEST/FLAG/EFLAG/MAX_ENTRY）与 `EEmbedTooLarge` 重导出；修复 `nextpas.core.embed` 门面 ResPack* 别名引用不存在标识（此前零编译消费隐藏）；FORMAT 明确槽位 index 序非递减；§7 校准 85 用例 | AI |
 | 2026-09-05 | 1.0 | bench 复活：陈旧 .ppu 致 trunk 内崩根因定位，四 bench Makefile 首编清缓存；dedup ratio 符号差显示；RESULTS 当日复测；Go peer 空测加 checksum 汇（Rust 端早已有）；§7 校准 86 用例（writer 补桶数幂性锁定） | AI |
+| 2026-09-06 | 1.0 | P1 哈希段：FORMAT bit5 落定（段布局/index 位语义/第 9 步校验），CONTRACT INV-R11 + `HashIndex` 默认关；reader 哈希先查+二分回退；writer 布局/builder/stream 单源发射；live 65 条目哈希 0.46µs < 二分 0.65µs，门限双锁（≤二分×1.2 且 ≤Rust split 1100ns）；§7 校准 reader 29/writer 23/roundtrip 16 | AI |

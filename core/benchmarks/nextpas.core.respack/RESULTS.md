@@ -67,6 +67,7 @@ Quantitative gates (enforced in `bench_servevfs.lpr`):
 | split op | ns/op | meaning |
 |----------|------:|---------|
 | `split/find-checksum-4k` | ~619–662 | Find + address + consume (门限 ≤ Rust split 1100，绿) |
+| `split/find-hashindex-4k` | ~459–497 | 同文件哈希包查找 + address + consume（门限 ≤ 二分×1.2 且 ≤ Rust split 1100，双绿） |
 | `split/copy-checksum-4k` | ~320–340 | Move 4K + consume |
 | `split/sink-only-4k` | ~260 | consume alone (net 相减用) |
 | `embedded/404-miss` | ~3,300 | parse + dispatch + failed lookup, no copy |
@@ -95,6 +96,23 @@ Gross 总额 Pascal 胜（619 < 1015，门限 `BASELINE_RUST_SPLIT_NS` 1100 已�
 不同复杂度类打不赢。追平的唯一路径是 FORMAT 预留的 bit5 hash-index 区（O(1)
 路径查找索引），属版式扩展，另案立项——当前冻结范围（行为/格式/错误语义）内
 已到顶。`StoredPathSpanFast`（循环内免检视图）即本次微调产物，行为零变更。
+
+### Hash-index 收官（2026-09-06 live，同机，65 条目）
+
+bit5 段落地后复测（含第二轮复核）：
+
+| side | gross (lookup+consume) | sink alone | net lookup |
+|------|----------------------:|-----------:|-----------:|
+| Pascal 二分 `split/find-checksum` | ~646–695 | ~272–289 | **~357–423** |
+| Pascal 哈希 `split/find-hashindex` | ~459–497 | ~272–289 | **~170–225** |
+| Rust `include_dir get_file` | ~1015 | ~960 | **~55** |
+
+哈希 gross 约为二分的 0.7×（net 约 0.5×）：同复杂度类（O(1) vs O(1)）下 Pascal
+fnv+探测+回验链已与 Rust phf 同层可比，剩余额度是不同的汇方法与包规模（65 条目
+二分本就便宜，大 n 下哈希优势放大）。门限已双锁进 `bench_servevfs`（哈希 ≤
+二分×1.2 防回归，哈希 ≤ Rust split 1100 锁领先），退化即红灯。net 55ns（Rust）vs
+170ns（Pascal）的剩差距是 include_dir 的编译期完美哈希 vs 运行时开放寻址的固有差，
+不属本格式可追范围，如实记录。
 
 ## 2. Embed carrier startup (µs, 1MiB pack, 200×5KiB)
 

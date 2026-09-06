@@ -731,6 +731,120 @@ begin
   end;
 end;
 
+{ 哈希段回归：命中走哈希、失配回退二分、段损坏整包拒、digest 组合。
+  段基址按 FORMAT 派生（无 digest 时为尾段：Total - 桶数×8，测试包无 digest）。 }
+procedure BuildHashBase(out B: TResPackBlob);
+var
+  InA: array[0..1] of TResPackInputEntry;
+  Opts: TResPackBuildOptions;
+begin
+  InA[0] := MakeInput('assets/app.js', 'console.log(1);');
+  InA[1] := MakeInput('index.html', '<html>ok</html>');
+  Opts := ResPackDefaultOptions;
+  Opts.HashIndex := True;
+  B := ResPackBuild(InA, Opts);
+end;
+
+procedure TestHashHitAndMissFallback;
+var
+  B: TResPackBlob;
+  RP: TResPack;
+  E: TResPackEntry;
+  Got: Boolean;
+begin
+  BuildHashBase(B);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(RP.HasHashIndex, 'hash pack exposes index');
+    Check(RP.Find('index.html', E), 'hash hit found');
+    Check(E.Size = 15, 'hash hit entry sane');
+    Check(not RP.Find('nope.bin', E), 'hash miss falls back to False');
+    Got := False;
+    try
+      RP.Stat('nope.bin');
+    except
+      on X: EResPackNotFound do Got := True;
+      on X: Exception do ;
+    end;
+    Check(Got, 'hash miss stat raises not-found');
+    RP.Close;
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure TestHashCorruptRejects;
+var
+  B: TResPackBlob;
+  Wide: TBytes;
+  RP: TResPack;
+  Buckets: SizeUInt;
+  Base: SizeUInt;
+  I: SizeUInt;
+  Idx: UInt32;
+  Got: Boolean;
+begin
+  BuildHashBase(B);
+  try
+    Buckets := ResPackHashBucketCount(2);
+    Base := B.Size - SizeUInt(Buckets) * 8;
+    SetLength(Wide, B.Size);
+    Move(B.Data^, Wide[0], B.Size);
+    { 找首个非空桶，翻其 fnv 首字节：指纹必失配，指位仍界内 → step9 拒绝。 }
+    I := 0;
+    while I < Buckets do
+    begin
+      Idx := RdU32LE(@Wide[Base + I * 8 + 4]);
+      if Idx <> UInt32($FFFFFFFF) then
+        Break;
+      Inc(I);
+    end;
+    Check(I < Buckets, 'hash pack has a non-empty bucket');
+    Wide[Base + I * 8] := Wide[Base + I * 8] xor $FF;
+    Got := False;
+    try
+      RP := ResPackOpen(@Wide[0], SizeUInt(Length(Wide)));
+    except
+      on X: EResPackCorrupted do Got := True;
+      on X: Exception do ;
+    end;
+    Check(Got, 'corrupt hash section rejected');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure TestHashWithDigest;
+var
+  InA: array[0..1] of TResPackInputEntry;
+  Opts: TResPackBuildOptions;
+  B: TResPackBlob;
+  RP: TResPack;
+  E: TResPackEntry;
+begin
+  InA[0] := MakeInput('assets/app.js', 'console.log(1);');
+  InA[1] := MakeInput('index.html', '<html>ok</html>');
+  Opts := ResPackDefaultOptions;
+  Opts.HashIndex := True;
+  Opts.DigestFunc :=
+    procedure(const AData: PByte; const ASize: SizeUInt; const ADigestOut: PByte)
+    var
+      I: Integer;
+    begin
+      for I := 0 to RESPACK_DIGEST_SIZE - 1 do
+        ADigestOut[I] := Byte($10 + I);
+    end;
+  B := ResPackBuild(InA, Opts);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(RP.HasHashIndex and RP.HasDigests, 'digest+hash pack exposes both');
+    Check(RP.Find('assets/app.js', E), 'digest+hash find works');
+    RP.Close;
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.respack.reader');
   T.Test('happy open/find/content', @TestHappyOpen);
@@ -759,5 +873,8 @@ begin
   T.Test('BE header explicit LE roundtrip', @TestBEHeaderRoundTrip);
   T.Test('BE entry explicit LE roundtrip', @TestBEEntryRoundTrip);
   T.Test('tail bytes not addressable', @TestTailBytesNotAddressable);
+  T.Test('hash hit and miss fallback', @TestHashHitAndMissFallback);
+  T.Test('hash corrupt rejects', @TestHashCorruptRejects);
+  T.Test('hash with digest', @TestHashWithDigest);
   if not T.Run then Halt(1);
 end.

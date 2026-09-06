@@ -39,6 +39,7 @@ const
   BUDGET_MISS_NS = 35000;
   BUDGET_SPLIT_FIND_NS = 5000;
   BUDGET_SPLIT_COPY_NS = 5000;
+  BUDGET_SPLIT_HASH_NS = 5000;
   { 同机对照基线：FPC RTL / Go embed / Rust include_dir 公开数据（RESULTS.md），
     满足不低于 FPC、接近 Go/Rust 量化门限 }
   BASELINE_FPC_NS = 8500;   { FPC RTL TFileStream 4KiB 同机实测 }
@@ -98,6 +99,9 @@ var
   GOsDir, GFpcFilePath: string;
   { 成本拆分视图：借 VFS 持有 blob 的生命期（Owned 移交后不释放，只读视图） }
   GRP: TResPack;
+  { 哈希对照视图：同树第二包（HashIndex opt-in），blob 由本全局持有，视图只读借用 }
+  GRP_HASH: TResPack;
+  GHashBlob: TResPackBlob;
   GSplitEntry: TResPackEntry;
   GSplitSink: UInt64;
   GSplitCopyBuf: array[0..FILE_SIZE - 1] of Byte;
@@ -258,6 +262,13 @@ end;
 
 { ── 载荷与三后端装配 ── }
 
+{ 哈希对照选项单源：与默认选项仅差 HashIndex 一位（默认关保老 reader 兼容） }
+function HashIndexOptions: TResPackBuildOptions; inline;
+begin
+  Result := ResPackDefaultOptions;
+  Result.HashIndex := True;
+end;
+
 procedure SetupBackends;
 var
   LIndexData: TBytes;
@@ -310,6 +321,10 @@ begin
   GRP := ResPackOpen(LBlob.Data, LBlob.Size);
   if not GRP.Find(BENCH_FILE, GSplitEntry) then
     raise Exception.Create('bench: split entry missing');
+  { 哈希对照包：同输入同选项，仅加 HashIndex（默认关，老 reader 兼容）；
+    第二包独立构建，字节差异仅哈希段 + bit5 标志位 }
+  GHashBlob := ResPackBuild(LEntries, HashIndexOptions);
+  GRP_HASH := ResPackOpen(GHashBlob.Data, GHashBlob.Size);
 
   { os：同一棵树落到真实盘 }
   GOsDir := GetTempDir + '/rp-bench-servevfs';
@@ -432,6 +447,18 @@ begin
   ACtx.SetBytes(GSplitEntry.Size);
 end;
 
+{ 哈希段对照：同文件在哈希包上的查找 + 内容寻址 + 消费（O(1) 哈希优先，
+  失配回退二分）；与 split/find-checksum 同汇同文件，差值即索引策略差 }
+procedure BenchSplitFindHash(const ACtx: IBenchContext);
+var
+  E: TResPackEntry;
+begin
+  if not GRP_HASH.Find(BENCH_FILE, E) then
+    raise Exception.Create('bench: split hash find missed');
+  ConsumeBuf(GRP_HASH.ContentPtr(E), E.Size);
+  ACtx.SetBytes(E.Size);
+end;
+
 { 成本拆分 copy-only：预解析条目直拷 4K + 消费，无查找、无 handler }
 procedure BenchSplitCopy(const ACtx: IBenchContext);
 begin
@@ -443,7 +470,7 @@ end;
 procedure CheckBudgetThresholds(const AResults: IBenchResults);
 var
   R: TBenchResult;
-  REmb, ROs: TBenchResult;
+  REmb, ROs, RHash, RBin: TBenchResult;
   Ratio: Double;
 begin
   R := AResults.GetByName('servevfs/embedded/200-full-4k');
@@ -480,7 +507,20 @@ begin
   R := AResults.GetByName('servevfs/split/sink-only-4k');
   if R.NsPerOp > BUDGET_SPLIT_COPY_NS then
     raise Exception.CreateFmt('budget exceeded split/sink: %.0f > %d ns/op', [R.NsPerOp, BUDGET_SPLIT_COPY_NS]);
-  WriteLn('budget: all 8 within threshold (embedded ', BUDGET_EMBEDDED_NS, ' os ', BUDGET_OS_NS, ' ns/op)');
+  R := AResults.GetByName('servevfs/split/find-hashindex-4k');
+  if R.NsPerOp > BUDGET_SPLIT_HASH_NS then
+    raise Exception.CreateFmt('budget exceeded split/hash-find: %.0f > %d ns/op', [R.NsPerOp, BUDGET_SPLIT_HASH_NS]);
+  WriteLn('budget: all 9 within threshold (embedded ', BUDGET_EMBEDDED_NS, ' os ', BUDGET_OS_NS, ' ns/op)');
+  RHash := AResults.GetByName('servevfs/split/find-hashindex-4k');
+  RBin := AResults.GetByName('servevfs/split/find-checksum-4k');
+  { 哈希段 verdict（2026-09-06 live：hash 497ns vs 二分 695ns，同包 65 条目）：
+    哈希查找不慢于二分（1.2× 余量防噪声误杀），且总额继续领先 Rust peer；
+    任一退化即红灯。net 口径见 RESULTS.md。 }
+  if (RBin.NsPerOp > 0) and (RHash.NsPerOp > RBin.NsPerOp * 1.2) then
+    raise Exception.CreateFmt('baseline violation hash-find %.0f > binary %.0f x1.2: hash index regressed', [RHash.NsPerOp, RBin.NsPerOp]);
+  if RHash.NsPerOp > BASELINE_RUST_SPLIT_NS then
+    raise Exception.CreateFmt('baseline violation split/hash-find %.0f > Rust split %d ns/op: hash-index read no longer beats Rust peer', [RHash.NsPerOp, BASELINE_RUST_SPLIT_NS]);
+  WriteLn('baseline: split/hash-find ', RHash.NsPerOp:0:1, ' ns/op <= binary x1.2 and <= Rust split ', BASELINE_RUST_SPLIT_NS);
   { 同机对照量化门限：不低于 FPC RTL，接近 Go/Rust（±30% 内，RESULTS.md 快照） }
   R := AResults.GetByName('servevfs/fpc-tfilestream/4k');
   if R.NsPerOp > BASELINE_FPC_NS * 1.1 then
@@ -500,6 +540,7 @@ end;
 procedure VerifySmoke;
 var
   LRec: TBenchRecorder;
+  LE: TResPackEntry;
 begin
   LRec := TBenchRecorder.Create;
   GHEmbedded(GFullReq, LRec);
@@ -528,6 +569,11 @@ begin
   { 拆分正确性首验：预解析条目内容与 handler body 一致（防测错路径） }
   Expect(GSplitEntry.Size = FILE_SIZE, 'split entry size 4KiB');
   Expect(GSplitEntry.DataOffset mod 16 = 0, 'split entry slot aligned');
+  { 哈希对照首验：同文件在哈希包可查且内容一致（防测错包） }
+  Expect(GRP_HASH.HasHashIndex, 'hash pack exposes index');
+  Expect(GRP_HASH.Find(BENCH_FILE, LE) and (LE.Size = FILE_SIZE),
+    'hash pack finds same file');
+  Expect(LE.DataOffset = GSplitEntry.DataOffset, 'hash pack same data slot');
 end;
 
 begin
@@ -557,6 +603,7 @@ begin
         .Add('servevfs/embedded/206-range', @BenchEmbRange)
         .Add('servevfs/embedded/404-miss', @BenchEmbMiss)
         .Add('servevfs/split/find-checksum-4k', @BenchSplitFind)
+        .Add('servevfs/split/find-hashindex-4k', @BenchSplitFindHash)
         .Add('servevfs/split/copy-checksum-4k', @BenchSplitCopy)
         .Add('servevfs/split/sink-only-4k', @BenchSplitSink)
         .AddBaseline('fpc-rtl/TFileStream-4k', BASELINE_FPC_NS)
@@ -566,6 +613,8 @@ begin
 
     RemoveAll(GOsDir);
     GRP.Close;
+    GRP_HASH.Close;
+    ResPackFreeBlob(GHashBlob);
     WriteLn('split sink: ', GSplitSink);
   except
     on E: Exception do

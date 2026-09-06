@@ -24,6 +24,9 @@ type
     FHdr: TResPackHeader;
     FStrTabBase: UInt64;
     FDigests: PByte;
+    { 哈希段视图（bit5 置位时非 nil；开放寻址，桶→(fnv32,index)，空桶 index=$FFFFFFFF） }
+    FHashIdx: PByte;
+    FHashBuckets: SizeUInt;
 
     function GetCount: SizeUInt; inline;
     { 40 字节 index 项 → host-order TResPackEntry。
@@ -49,10 +52,13 @@ type
     function LowerBoundSpan(const AQuery: TByteSpan): SizeUInt;
     function ComparePathAtSpan(const AIdx: SizeUInt; const AQuery: TByteSpan): Integer; inline;
     function SearchSpan(const AQuery: TByteSpan; out AIdx: SizeUInt): Boolean;
+    { 哈希先查：fnv+开放寻址（探针上限内），命中回验字节；失配/超限返回 False 由
+      调用方回退二分（正确性不依赖表完整，表损坏只降速不断错）。not inline。 }
+    function FindHash(const AQuery: TByteSpan; out AEntry: TResPackEntry): Boolean;
     procedure RequireOpen; inline;
 
   public
-    { 八步校验后可用；任一失败 raise EResPackCorrupted }
+    { 九步校验后可用；任一失败 raise EResPackCorrupted }
     class function Open(const AData: PByte; const ASize: SizeUInt): TResPack; static;
     procedure Close;
 
@@ -72,6 +78,7 @@ type
     function ContentPtr(const AEntry: TResPackEntry): PByte; inline;
     function DigestPtr(const AIdx: SizeUInt): PByte; inline;
     function HasDigests: Boolean; inline;
+    function HasHashIndex: Boolean; inline;
     { Path span view via bytes.ops; LowerBound not inline (loop). }
     function StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
     function LowerBound(const APath: string): SizeUInt;
@@ -82,7 +89,8 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.mem.arena.local;
+  nextpas.core.mem.arena.local,
+  nextpas.core.mem.base;
 
 function TResPack.GetCount: SizeUInt;
 begin
@@ -92,6 +100,11 @@ end;
 function TResPack.HasDigests: Boolean;
 begin
   Result := FDigests <> nil;
+end;
+
+function TResPack.HasHashIndex: Boolean;
+begin
+  Result := FHashIdx <> nil;
 end;
 
 procedure TResPack.RequireOpen; inline;
@@ -205,7 +218,7 @@ begin
   Result := SpanCompare(SA, SB);
 end;
 
-{ ── Stage guards: Open 八步校验拆为 guard 函数，单函数 <80 行，阅读质感轻量；非 inline 守 I-Cache（分支体积） ── }
+{ ── Stage guards: Open 九步校验拆为 guard 函数，单函数 <80 行，阅读质感轻量；非 inline 守 I-Cache（分支体积） ── }
 
 procedure GuardStep1(const AData: PByte; const ASize: SizeUInt);
 begin
@@ -257,13 +270,14 @@ end;
 { Step5 首遍流式：逐项 DecodeWire 直验，无整表 arena；LE 经 bytes.ops inline 零拷贝，零额外分配。 }
 procedure GuardStep5Fields(var ARes: TResPack; const AIdxBase: PByte;
   out AMinData: UInt64; out AMaxDataEnd: UInt64; out AStrLen: UInt64;
-  const AHdrFlags: UInt32; out AStrTabEnd: UInt64);
+  const AHdrFlags: UInt32; out AStrTabEnd: UInt64; out AMaxEndAll: UInt64);
 var
   I, ACount: SizeUInt;
   E: TResPackEntry;
 begin
   AMinData := ARes.FHdr.BlobTotal;
   AMaxDataEnd := 0;
+  AMaxEndAll := 0;
   AStrLen := 0;
   ACount := ARes.Count;
   if ACount = 0 then
@@ -298,10 +312,14 @@ begin
       raise EResPackCorrupted.CreateStep(5, 'string table length overflow');
     AStrLen := AStrLen + UInt64(E.PathLen);
     if E.DataOffset < AMinData then AMinData := E.DataOffset;
+    { 全槽上界（含空文件槽）：writer EndData == max(offset+size)（单调槽位+对齐，
+      共享槽不推进），step9 哈希基址派生单源于此。step5 已验 DataOffset+Size 界内，
+      此处减法判界不回绕。 }
+    if E.DataOffset > ARes.FHdr.BlobTotal - E.Size then
+      raise EResPackCorrupted.CreateStep(5, 'data range overflow');
+    if E.DataOffset + E.Size > AMaxEndAll then AMaxEndAll := E.DataOffset + E.Size;
     if E.Size > 0 then
     begin
-      if E.DataOffset > High(UInt64) - E.Size then
-        raise EResPackCorrupted.CreateStep(5, 'data range overflow');
       if E.DataOffset + E.Size > AMaxDataEnd then AMaxDataEnd := E.DataOffset + E.Size;
     end;
   end;
@@ -438,9 +456,73 @@ begin
     raise EResPackCorrupted.CreateStep(8, 'digest overlaps data');
 end;
 
+{ 第 9 步（bit5 置位时）：哈希段基址派生（digest 尾或全槽上界，8 对齐）+
+  界内断言 + 数据区不交叠 + 逐桶回验（fnv 重算、index 界内、非空数=N）。
+  重复/缺失 index 只降速（查找回退二分），不断错；探针天然终止于空桶。 }
+procedure GuardStep9Hash(var ARes: TResPack; const AMaxEndAll: UInt64);
+var
+  N: SizeUInt;
+  Buckets: SizeUInt;
+  SegEnd: UInt64;
+  Base: UInt64;
+  B: SizeUInt;
+  SlotFnv: UInt32;
+  SlotIdx: UInt32;
+  E: TResPackEntry;
+  Span: TByteSpan;
+  NonEmpty: SizeUInt;
+begin
+  N := ARes.Count;
+  if N = 0 then
+    raise EResPackCorrupted.CreateStep(9, 'hash index without entries');
+  Buckets := ResPackHashBucketCount(N);
+  if Buckets < RESPACK_HASH_MIN_BUCKETS then
+    raise EResPackCorrupted.CreateStep(9, 'hash bucket count too small');
+  if Buckets > High(UInt64) div RESPACK_HASH_ENTRY_SIZE then
+    raise EResPackCorrupted.CreateStep(9, 'hash section size overflow');
+  if (ARes.FHdr.Flags and RESPACK_FLAG_DIGESTED) <> 0 then
+  begin
+    if ARes.FHdr.DigestOffset > High(UInt64) - UInt64(N) * RESPACK_DIGEST_SIZE then
+      raise EResPackCorrupted.CreateStep(9, 'hash digest end overflow');
+    SegEnd := ARes.FHdr.DigestOffset + UInt64(N) * RESPACK_DIGEST_SIZE;
+  end
+  else
+    SegEnd := AMaxEndAll;
+  if SegEnd > High(UInt64) - (RESPACK_HASH_ALIGN - 1) then
+    raise EResPackCorrupted.CreateStep(9, 'hash alignment overflow');
+  Base := nextpas.core.mem.base.AlignUp64(SegEnd, RESPACK_HASH_ALIGN);
+  if Base > ARes.FHdr.BlobTotal then
+    raise EResPackCorrupted.CreateStep(9, 'hash section beyond blobTotal');
+  if UInt64(Buckets) * RESPACK_HASH_ENTRY_SIZE > ARes.FHdr.BlobTotal - Base then
+    raise EResPackCorrupted.CreateStep(9, 'hash section beyond blobTotal');
+  if AMaxEndAll > Base then
+    raise EResPackCorrupted.CreateStep(9, 'data overlaps hash section');
+  NonEmpty := 0;
+  for B := 0 to Buckets - 1 do
+  begin
+    SlotFnv := RdU32LE(ARes.FData + SizeUInt(Base) + B * RESPACK_HASH_ENTRY_SIZE);
+    SlotIdx := RdU32LE(ARes.FData + SizeUInt(Base) + B * RESPACK_HASH_ENTRY_SIZE + 4);
+    if SlotIdx = RESPACK_HASH_EMPTY_INDEX then
+      Continue;
+    Inc(NonEmpty);
+    if SizeUInt(SlotIdx) >= N then
+      raise EResPackCorrupted.CreateStep(9, 'hash slot index out of range');
+    ARes.DecodeWire(SizeUInt(SlotIdx), E);
+    { PathSpanRaw 直取：二遍已验全条目路径界（step6），同遍式信任基；
+      CheckedPathSpan 含 RequireOpen，Open 期不可用。 }
+    Span := ARes.PathSpanRaw(E.PathOffset, E.PathLen);
+    if ResPackFnv1a32(Span.Data, Span.Len) <> SlotFnv then
+      raise EResPackCorrupted.CreateStep(9, 'hash slot fingerprint mismatch');
+  end;
+  if NonEmpty <> SizeUInt(N) then
+    raise EResPackCorrupted.CreateStep(9, 'hash slot count mismatch');
+  ARes.FHashIdx := ARes.FData + SizeUInt(Base);
+  ARes.FHashBuckets := Buckets;
+end;
+
 class function TResPack.Open(const AData: PByte; const ASize: SizeUInt): TResPack;
 var
-  MinData, MaxDataEnd, StrTabEnd, StrLen: UInt64;
+  MinData, MaxDataEnd, StrTabEnd, StrLen, MaxEndAll: UInt64;
   HdrFlags: UInt32;
   IdxBase: PByte;
   EntryCount: SizeUInt;
@@ -456,12 +538,13 @@ begin
   IdxBase := AData + SizeUInt(Result.FHdr.IndexOffset);
   MinData := Result.FHdr.BlobTotal;
   MaxDataEnd := 0;
+  MaxEndAll := 0;
   StrLen := 0;
   StrTabEnd := Result.FStrTabBase;
   { 流式两遍无整表常驻：首遍 DecodeWire 全字段直验，次遍仅读四字段
     (PathOff/PathLen/DataOff/DataSize) 完成 strtab/Step6/Step7/overlap；
     完整解码单点，零 transient 拷贝。 }
-  GuardStep5Fields(Result, IdxBase, MinData, MaxDataEnd, StrLen, HdrFlags, StrTabEnd);
+  GuardStep5Fields(Result, IdxBase, MinData, MaxDataEnd, StrLen, HdrFlags, StrTabEnd, MaxEndAll);
   EntryCount := Result.Count;
   GuardStep67Overlap(Result, IdxBase, EntryCount, MinData, StrTabEnd);
   GuardStep8Digest(Result, StrLen, MaxDataEnd);
@@ -469,6 +552,10 @@ begin
     Result.FDigests := AData + SizeUInt(Result.FHdr.DigestOffset)
   else
     Result.FDigests := nil;
+  Result.FHashIdx := nil;
+  Result.FHashBuckets := 0;
+  if (HdrFlags and RESPACK_FLAG_HASHINDEX) <> 0 then
+    GuardStep9Hash(Result, MaxEndAll);
   Result.FOpen := True;
 end;
 
@@ -477,6 +564,8 @@ begin
   FData := nil;
   FSize := 0;
   FDigests := nil;
+  FHashIdx := nil;
+  FHashBuckets := 0;
   FOpen := False;
   FHdr.EntryCount := 0;
   FHdr.IndexOffset := 0;
@@ -509,6 +598,51 @@ begin
   Result := False;
 end;
 
+function TResPack.FindHash(const AQuery: TByteSpan; out AEntry: TResPackEntry): Boolean;
+{ 探针上限：校验期表装载≤0.5（期望链~2），超限回退二分——正确性不依赖表分布，
+  恶意聚簇只降速不断错；空桶即真未命中。tiny 表（桶数<上限）全覆盖才停。 }
+const
+  MAX_PROBES = 64;
+var
+  H: UInt32;
+  Mask: SizeUInt;
+  I: SizeUInt;
+  B: SizeUInt;
+  Limit: SizeUInt;
+  SlotFnv: UInt32;
+  SlotIdx: UInt32;
+  E: TResPackEntry;
+begin
+  Result := False;
+  if (FHashIdx = nil) or (FHashBuckets < RESPACK_HASH_MIN_BUCKETS) then
+    Exit;
+  if not IsPowerOfTwo(FHashBuckets) then
+    Exit;
+  H := ResPackFnv1a32(AQuery.Data, AQuery.Len);
+  Mask := FHashBuckets - 1;
+  B := SizeUInt(H) and Mask;
+  Limit := MAX_PROBES;
+  if Limit > FHashBuckets then
+    Limit := FHashBuckets;
+  for I := 0 to Limit - 1 do
+  begin
+    SlotFnv := RdU32LE(FHashIdx + B * RESPACK_HASH_ENTRY_SIZE);
+    SlotIdx := RdU32LE(FHashIdx + B * RESPACK_HASH_ENTRY_SIZE + 4);
+    if SlotIdx = RESPACK_HASH_EMPTY_INDEX then
+      Exit;
+    if (SlotFnv = H) and (SizeUInt(SlotIdx) < Count) then
+    begin
+      DecodeWire(SizeUInt(SlotIdx), E);
+      if SpanCompare(StoredPathSpanFast(SizeUInt(SlotIdx)), AQuery) = 0 then
+      begin
+        AEntry := E;
+        Exit(True);
+      end;
+    end;
+    B := (B + 1) and Mask;
+  end;
+end;
+
 function TResPack.Find(const APath: string; out AEntry: TResPackEntry): Boolean;
 var
   Idx: SizeUInt;
@@ -520,6 +654,9 @@ begin
   Query := TByteSpan.FromStr(APath);
   if not ResPackValidSpan(Query, True) then
     Exit(False);
+  { 哈希先查：命中直接返回；失配/超限/无段回退二分（SearchSpan），行为与无段一致。 }
+  if (FHashIdx <> nil) and FindHash(Query, AEntry) then
+    Exit(True);
   if not SearchSpan(Query, Idx) then
     Exit(False);
   DecodeWire(Idx, AEntry);

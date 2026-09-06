@@ -36,7 +36,7 @@ blobTotal      └────────────────────�
 |------|------|------|------|------|
 | 0x00 | 4 | `magic` | bytes | `'N' 'P' 'R' 'S'` |
 | 0x04 | 4 | `version` | u32 LE | 必须 = 1 |
-| 0x08 | 4 | `flags` | u32 LE | bit0 = 全部条目 hash 有效；bit1 = digest 区存在；bit2-4 = digest 算法 ID（0=SHA-256 预留，其余拒绝）；bit5+ 必须为 0 |
+| 0x08 | 4 | `flags` | u32 LE | bit0 = 全部条目 hash 有效；bit1 = digest 区存在；bit2-4 = digest 算法 ID（0=SHA-256 预留，其余拒绝）；bit5 = hash-index 区存在；bit6+ 必须为 0 |
 | 0x0C | 4 | `entryCount` | u32 LE | 条目数 |
 | 0x10 | 8 | `indexOffset` | u64 LE | index 起始偏移（v1 恒为 40） |
 | 0x18 | 8 | `digestOffset` | u64 LE | digest 区起始；无则 0 |
@@ -114,6 +114,22 @@ header flags bit1 置位时存在：`entryCount × 32` 字节数组，与 index 
 - 推荐算法 SHA-256；分块哈希（asar blockSize/blocks 对等物）推迟至有部分校验真实需求
 - 用途：供应链完整性核验、发布物审计；ETag 场景继续用条目 fnv32（更廉价）
 
+## Hash-index 区（可选，O(1) 路径查找）
+
+header flags bit5 置位时存在：digest 区之后（无 digest 时 data 区之后），8 字节对齐，
+`bucketCount × 8` 字节数组。桶数由条目数唯一派生（`N=0→无段；否则装载 ≤0.5 的最小
+2 的幂，≥2`，writer 与 reader 同一函数，空包不带段）。
+
+每桶 8 字节：`u32 LE 路径 FNV-1a32 + u32 LE index 位`（index 位即索引序位，与
+`DecodeWire` 同义，非输入序号）。空桶为 `fnv=0 / index=$FFFFFFFF`。writer 按 index
+序灌桶（开放寻址线性探测，确定性输出），fnv 取该位源路径字节——reader 按存储字节
+重算，两者一致才算命中。
+
+reader 语义：查找时哈希先查（fnv + 探测，上限 64 步，命中逐字节回验），失配/超限/
+无段一律回退二分——正确性不依赖表，表损坏只降速不断错；但 Open 期逐桶回验
+（基址派生、界内、数据不交叠、fnv 重算、非空数 = N），损坏整包拒绝（校验第 9 步）。
+bit5 包老 reader 整包拒收（未知位置 0），故 writer 默认关闭，perf 通道显式开启。
+
 ## 路径规范（canonical path grammar）
 
 **全盘采纳 Go `io/fs.ValidPath` 语义**（两模块共享；vfs 层引用同一节）：
@@ -144,6 +160,9 @@ header flags bit1 置位时存在：`entryCount × 32` 字节数组，与 index 
 8. 路径逐段符合 canonical grammar（严格模式；宽松模式仅去前导 `/` 后重校验）；
    digest 存在时：`digestOffset ≥ minDataOffset` 且
    `digestOffset + entryCount×32 ≤ blobTotal`
+9. bit5 置位时：哈希段基址按 digest 尾（无 digest 时全槽上界）8 对齐派生，段界内、
+   与数据区不交叠，逐桶 fnv 重算一致、index 位界内、非空桶数 = entryCount；
+   空包带 bit5 即拒绝
 
 校验全部通过后才对外暴露任何查找结果；不存在"半信任"状态。
 
@@ -153,8 +172,9 @@ header flags bit1 置位时存在：`entryCount × 32` 字节数组，与 index 
 2. 规范化并校验路径；重复路径报 `EResPackDuplicatePath`
 3. 按 path 字节序排序
 4. 布局计算：string table → 16 对齐 → 依次分配内容槽位（去重开启时先候选匹配）
-5. 写 header/index/string table/data；需要时补零填充；可选写 digest 区
-6. 回填 `blobTotal`/`digestOffset`；汇总 flags 位
+5. 写 header/index/string table/data；需要时补零填充；可选写 digest 区；
+   HashIndex 开启时按 index 序灌桶写 hash-index 区（8 对齐，桶数单源派生）
+6. 回填 `blobTotal`/`digestOffset`；汇总 flags 位（含 bit5）
 
 输入来源与 writer 解耦：纯内存条目即可构造；目录扫描是 `dirsource` 的职责；
 include/exclude/prefix 过滤归工具层（对标 rust-embed derive 属性与 asar unpack-dir）。
@@ -183,6 +203,6 @@ SHA-256 digest，modTime 已知。字节序比较 `'a' < 'i'`，故 app.js 在�
   误解新格式
 - **预留位登记**：
   - header flags **bit2-4 = digest 算法 ID**（0=SHA-256，1-7 预留，v1 writer 恒写 0；reader 拒绝非 0 算法，仅当 bit1 置位时校验）
-  - header flags **bit5 = hash-index 区**（未来 O(1) 路径查找索引，对标 Tauri phf）；bit5+ 拒绝；启用须伴随本表更新与版本评审，不动既有布局
+  - header flags **bit5 = hash-index 区**（O(1) 路径查找索引，桶数单源派生，index 位语义；默认关闭保老 reader 兼容）；bit6+ 拒绝
 - 改布局/语义：`version` 递增；reader 只接受自己认识的版本集合 `{1}`
 - 新压缩编解码：走 `codecId` 登记表 + compress 模块 seam，独立立项
