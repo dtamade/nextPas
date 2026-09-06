@@ -104,7 +104,7 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | Find/Stat | O(log n) 字节序比较，n=10k 条目 ≤ 14 次比较；无分配。哈希段存在时 O(1) 先查（fnv+探测，命中回验），失配回退二分 | ServeVfs 全路径 5.5µs ≈ FPC `TFileStream` 5.4µs（打平，噪声带），0.85× Go 6.4µs；拆分定位二分 ~0.65µs、哈希 ~0.46µs（`bench_servevfs` split 项，2026-09-06 live，门限：哈希 ≤ 二分×1.2 且 ≤ Rust split 1100ns） |
 | Open | O(entryCount) 校验一遍，无内容扫描 | const 载体 Open+Find 134µs（噪声机，待安静复测）；Go/Rust readfile 对端 1.80ms/0.54ms 含整包求和，层不同（`bench_embed_startup`） |
 | 读取单条目 | 零拷贝切片（地址落在 blob 区间内，gate 断言；`TResPack.ContentPtr` inline + `bytes.ops.Move` 单源） | 同 Find/Stat 行；206-range 与 404-miss 同价或更优无惩罚 |
-| Build | O(n log n) 排序主导；去重开启额外 O(n) 回验 | 512MiB Pack 与 FPC/Rust/Go 三方 RSS 持平（1,040MB）；端到端 wall 同口径（同载荷、填充/生成计入、校验和一致）与 Rust 持平，内存 parity 为门（`bench_writer_memory` 双门限） |
+| Build | O(n log n) 排序主导；去重开启额外 O(n) 回验 | 512MiB Pack 与 FPC/Rust/Go 三方 RSS 持平（1,040MB）；端到端 wall 同口径（同载荷、填充/生成计入、校验和一致）与 Rust 持平，内存 parity 为门（RSS 单边门在 `bench_writer_memory` 本体，wall 直接对比门为 `compare_bulk_wall.sh` 动态脚本） |
 | Build(Dedup on) | O(n) 回验+单 slab（TLocalArena+SpanEqual via bytes.ops, BucketCountFor via BytesNextCapacity） | 50%重复→blob -48% 且快于基线，全 miss +0~+4%，零 warn（`bench_writer_dedup` live） |
 
 > 量化门限（`bench_servevfs.lpr` 强制）：`embedded ≤ FPC` 且 `embedded ≤ 1.3× Go/Rust`；同机 `AddBaseline` 对照组 `fpc-rtl/TFileStream-4k` / `go-embed/FS-4k` / `rust-include_dir-4k` 随 suite 打印，不只内部阈值。`Build(Dedup on)` 零拷贝证据 `ContentPtr inline+bytes.ops.Move`。
