@@ -5,7 +5,7 @@ uses
   nextpas.core.exception,
   nextpas.core.fs;
 
-{ 源契约门禁：respack(9 源 + writer.builder 内部单源 + dirsource.mmap 视图单源 + embed.limits 独立策略模块共 13 文件，含 limits 阈值策略单源已抽取至 L1 embed.limits) uses 白名单锁定。
+{ 源契约门禁：respack(9 源 + writer.builder 内部单源 + dirsource.mmap 视图单源 + embed.limits 独立策略模块 + hasharena 去重 arena 单源共 14 文件，含 limits 阈值策略单源已抽取至 L1 embed.limits) uses 白名单锁定。
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，
      与 test_fs/test_vfs_source_contract 同机制，不自造）
   2) L2→L2 seam 唯一性：除 respack.dirsource/dirsource.mmap 外，
@@ -56,9 +56,10 @@ end;
 
 procedure TestRespackSourcesNoFpcRtl;
 const
-  FILES: array[0..12] of string = (
+  FILES: array[0..13] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
+    'src/nextpas.core.respack.hasharena.pas',
     'src/nextpas.core.embed.limits.pas',
     'src/nextpas.core.embed.pas',
     'src/nextpas.core.respack.limits.pas',
@@ -89,9 +90,10 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..10] of string = (
+  NO_SEAM: array[0..11] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
+    'src/nextpas.core.respack.hasharena.pas',
     'src/nextpas.core.embed.limits.pas',
     'src/nextpas.core.embed.pas',
     'src/nextpas.core.respack.limits.pas',
@@ -188,17 +190,22 @@ begin
   Check(Pos('RelativizePath', Src) > 0, 'dirsource single RelativizePath via PathStripPrefix');
   Check(Pos('FilterRelPath', Src) > 0, 'dirsource DRY FilterRelPath pipeline');
   Check(Pos('TryReserveTotal', Src) > 0, 'dirsource DRY TryReserveTotal/TryAddSizeUInt single source');
-  Check(Pos('AppendMmapEntry', Src) > 0, 'dirsource stream/embed shared AppendMmapEntry emit single source');
+  Check(Pos('BoundEmitSlot', Src) > 0, 'dirsource single-map fused write+digest emit single source (no triple mmap)');
+  Check(Pos('BoundOuterEqualSlot', Src) > 0, 'dirsource outer single-map reuse verify single source (no per-candidate outer remap)');
+  Check(Pos('ResPackDedupInit', Src) > 0, 'dirsource hashed dedup via hasharena ResPackDedupInit single source (no O(N^2) linear scan)');
+  Check(Pos('nextpas.core.respack.hasharena', Src) > 0, 'dirsource declares hasharena dedup single source');
   Check(Pos('CleanRootDir', Src) > 0, 'dirsource shared CleanRootDir collect precheck single source');
-  Check(Pos('BuildBlobFromEntries', Src) > 0, 'dirsource memory/embed shared BuildBlobFromEntries layout single source');
+  Check(Pos('ResPackBuildLayoutBlob', Src) > 0, 'dirsource memory builds mirror BuildLayoutBlob contract (OOM→TooLarge + sink guard)');
   Check(Pos('ResPackEntriesFromDir', Src) > 0, 'dirsource ResPackEntriesFromDir small-pack guidance');
   Check(Pos('RESPACK_DIRSOURCE_LEGACY_LIMIT', Src) > 0, 'dirsource extracts 64MiB to RESPACK_DIRSOURCE_LEGACY_LIMIT (no magic)');
   Check(Pos('SizeUInt(64) * 1024 * 1024', Src) = 0, 'dirsource must not have bare 64MiB magic (use constant)');
-  Check(Pos('TWalkCtx', Src) > 0, 'dirsource generic TWalkCtx<T> templated context single source');
-  Check(Pos('EnsureWalkCapacity', Src) > 0, 'dirsource generic EnsureWalkCapacity<T> single source');
-  Check(Pos('WalkPrePlain', Src) > 0, 'dirsource generic WalkPrePlain single source');
-  Check(Pos('WalkPreEmbed', Src) > 0, 'dirsource generic WalkPreEmbed single source');
-  Check(Pos('generic', Src) > 0, 'dirsource uses generics for Walk templating');
+  Check(Pos('TBoundCtx', Src) > 0, 'dirsource bounded TBoundCtx zero-map collect single source');
+  Check(Pos('BuildBoundLayout', Src) > 0, 'dirsource BuildBoundLayout hashed dedup single source');
+  Check(Pos('EmitBoundLayout', Src) > 0, 'dirsource EmitBoundLayout fused single-map emit single source');
+  Check(Pos('BuildBoundBlob', Src) > 0, 'dirsource BuildBoundBlob OOM-normalized blob assembly single source');
+  Check(Pos('WalkPrePlain', Src) > 0, 'dirsource WalkPrePlain single source');
+  Check(Pos('WalkPreEmbed', Src) > 0, 'dirsource WalkPreEmbed single source');
+  Check(Pos('RESPACK_MAX_ENTRY_COUNT', Src) > 0, 'dirsource Dummy fuse-check before alloc (no transient oversize)');
   { 内存打包单次布局：BuildFromDir/EmbedBuild 禁 Size+Stream 双算（2× 排序/去重），
     经 ComputeLayout 1× + BuildLayoutBlob 直排（stream 单源语：勿 Size+BuildStream 连调） }
   Check(Pos('ResPackComputeLayout', Src) > 0, 'dirsource memory builds compute layout once (no Size+Stream double compute)');
@@ -224,8 +231,28 @@ begin
   Check(Pos('RESPACK_DIRSOURCE_LEGACY_LIMIT', Src) > 0, 'base declares RESPACK_DIRSOURCE_LEGACY_LIMIT family with RESPACK_MAX_INPUT_BYTES');
   Check(Pos('RESPACK_MAX_INPUT_BYTES', Src) > 0, 'base declares RESPACK_MAX_INPUT_BYTES');
   Check(Pos('64) * 1024 * 1024', Src) > 0, 'base defines 64MiB legacy limit inline zero-copy');
+  Check(Pos('TResPackDedupBuckets', Src) = 0, 'base must not own dedup buckets (four-piece, owner hasharena)');
+  Check(Pos('ResPackDedupInit', Src) = 0, 'base must not own dedup arena alloc (four-piece, owner hasharena)');
+  Check(Pos('ResPackOverlapInit', Src) = 0, 'base must not own overlap arena alloc (four-piece, owner hasharena)');
+  Check(Pos('ResPackDedupDone', Src) = 0, 'base must not own arena done (four-piece, owner hasharena)');
+  Check(Pos('ResPackHashArenaInit', Src) = 0, 'base must not own hash arena impl (four-piece, owner hasharena)');
+  Src := LoadSourceText('src/nextpas.core.respack.hasharena.pas');
+  Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'hasharena must not reference fs (uses graph)');
+  Check(Pos('nextpas.core.respack.base', Src) > 0, 'hasharena declares respack.base view types single source');
+  Check(Pos('nextpas.core.mem.arena.local', Src) > 0, 'hasharena declares mem.arena.local single slab single source');
+  Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'hasharena declares bytes.ops BytesNextCapacity single source');
+  Check(Pos('TResPackDedupBuckets', Src) > 0, 'hasharena owns TResPackDedupBuckets single source');
+  Check(Pos('ResPackDedupInit', Src) > 0, 'hasharena owns ResPackDedupInit single source');
+  Check(Pos('ResPackOverlapInit', Src) > 0, 'hasharena owns ResPackOverlapInit single source');
+  Check(Pos('ResPackDedupDone', Src) > 0, 'hasharena owns ResPackDedupDone try..finally not leak');
+  Check(Pos('inline', Src) > 0, 'hasharena inline zero-copy evidence');
+  Check(Pos('BytesNextCapacity', Src) > 0, 'hasharena reuses BytesNextCapacity single source');
+  Check(Pos('Alloc(', Src) > 0, 'hasharena Alloc slab zero-copy evidence');
   Src := LoadSourceText('src/nextpas.core.respack.reader.pas');
   Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'reader must not reference fs (uses graph)');
+  Check(Pos('nextpas.core.respack.hasharena', Src) > 0, 'reader reuses hasharena overlap single source');
+  Check(Pos('ResPackOverlapInit', Src) > 0, 'reader reuses ResPackOverlapInit single source');
+  Check(Pos('ResPackDedupDone', Src) > 0, 'reader try..finally ResPackDedupDone not leak');
   Src := LoadSourceText('src/nextpas.core.respack.writer.pas');
   Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'writer must not reference fs (uses graph)');
   Src := LoadSourceText('src/nextpas.core.respack.writer.layout.pas');
@@ -234,6 +261,8 @@ begin
   Check(Pos('nextpas.core.collections.algorithms', Src) > 0, 'writer.layout declares collections.algorithms Sort single source');
   Check(Pos('nextpas.core.mem.base', Src) > 0, 'writer.layout declares mem.base AlignUp64 single source');
   Check(Pos('ResPackCmpPath', Src) > 0, 'writer.layout reuses bytes.ops ResPackCmpPath inline zero-copy');
+  Check(Pos('nextpas.core.respack.hasharena', Src) > 0, 'writer.layout reuses hasharena dedup single source');
+  Check(Pos('ResPackDedupInit', Src) > 0, 'writer.layout reuses ResPackDedupInit single source');
   Src := LoadSourceText('src/nextpas.core.respack.writer.builder.pas');
   Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'writer.builder must not reference fs (uses graph)');
   Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'writer.builder declares bytes.ops single source');

@@ -158,13 +158,14 @@ procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
   const AWrite: TResPackWriteProc);
 var
-  N, I, J, K: SizeUInt;
+  N, I, J, K, S: SizeUInt;
   Cur: UInt64;
   HeadBuf: TBytes;
   Head: PByte;
   HeadSize: UInt64;
   Gap: UInt64;
   DigestTmp: TResPackDigest;
+  SlotDigests: array of TResPackDigest;
   HashChunk: TBytes;
   HStart, HCount, HCapBuckets: SizeUInt;
   ChunkCap: SizeUInt;
@@ -287,17 +288,42 @@ begin
     if ALayout.DigOff > Cur then
       WriteZeros(AWrite, ALayout.DigOff - Cur);
     Cur := ALayout.DigOff;
-    { 摘要与 index 同序（FORMAT.md）：按 Order 映射输入条目逐项直排；
-      无 SlotCount×32 堆缓存，栈上 DigestTmp 32B O(1)，BytesZero 单源 inline；
-      去重包重复槽多算 CPU 换 ~1×+64K 峰值，INV-R5 字节一致。 }
+    { 摘要与 index 同序（FORMAT.md）：重复包按槽单算经 EntrySlots 直排复用，
+      无重复零堆快道；BytesZero 单源 inline，槽摘要指针零拷贝直写，INV-R5 一致。 }
     if N > 0 then
-      for I := 0 to N - 1 do
+      if (ALayout.SlotCount > 0) and (ALayout.SlotCount < N) then
       begin
-        J := ALayout.Order[I];
-        BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
-        AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @DigestTmp[0]);
-        AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
-      end;
+        try
+          SetLength(SlotDigests, ALayout.SlotCount);
+        except
+          on E: EOutOfMemory do
+            raise EResPackTooLarge.Create('respack: digest cache too large for host');
+        end;
+        try
+          for K := 0 to ALayout.SlotCount - 1 do
+          begin
+            J := ALayout.Slots[K].SrcIdx;
+            BytesZero(@SlotDigests[K][0], RESPACK_DIGEST_SIZE);
+            AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @SlotDigests[K][0]);
+          end;
+          for I := 0 to N - 1 do
+          begin
+            J := ALayout.Order[I];
+            S := ALayout.EntrySlots[J];
+            AWrite(@SlotDigests[S][0], RESPACK_DIGEST_SIZE);
+          end;
+        finally
+          SlotDigests := nil;
+        end;
+      end
+      else
+        for I := 0 to N - 1 do
+        begin
+          J := ALayout.Order[I];
+          BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+          AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @DigestTmp[0]);
+          AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+        end;
     if N > 0 then
       Cur := ALayout.DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
   end;

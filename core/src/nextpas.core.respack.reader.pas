@@ -38,11 +38,6 @@ type
     function Search(const APath: string; out AIdx: SizeUInt): Boolean;
     { Path view helper via bytes.ops (inline, zero-copy). }
     function PathSpanRaw(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
-    { Unchecked index span: caller holds RequireOpen + AIdx < Count (open-time
-      validation already bounds every stored path; DecodeWire trusts the same
-      basis). Search loop + ComparePathAtSpan only; public StoredPathSpan keeps
-      full guards. }
-    function StoredPathSpanFast(const AIdx: SizeUInt): TByteSpan; inline;
     { Range-checked path view single source: RequireOpen + overflow/BlobTotal/strtab
       guards (inline, zero-copy via PathSpanRaw); StoredPathSpan(Of) 共用。 }
     function CheckedPathSpan(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
@@ -90,7 +85,8 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.mem.arena.local,
-  nextpas.core.mem.base;
+  nextpas.core.mem.base,
+  nextpas.core.respack.hasharena;
 
 function TResPack.GetCount: SizeUInt;
 begin
@@ -166,14 +162,6 @@ begin
   { 全量守卫与 StoredPathSpanOf 一致：CheckedPathSpan 内含 RequireOpen +
     PathEnd 回绕/BlobTotal/strtab 越界校验，杜绝越界视图。 }
   Result := CheckedPathSpan(RdU32LE(Base), RdU16LE(Base + 4));
-end;
-
-function TResPack.StoredPathSpanFast(const AIdx: SizeUInt): TByteSpan; inline;
-var
-  Base: PByte;
-begin
-  Base := FData + SizeUInt(FHdr.IndexOffset) + AIdx * RESPACK_ENTRY_SIZE;
-  Result := PathSpanRaw(RdU32LE(Base), RdU16LE(Base + 4));
 end;
 
 function TResPack.CheckedPathSpan(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
@@ -458,6 +446,8 @@ end;
 
 { 第 9 步（bit5 置位时）：哈希段基址派生（digest 尾或全槽上界，8 对齐）+
   界内断言 + 数据区不交叠 + 逐桶回验（fnv 重算、index 界内、非空数=N）。
+  Open 期全量验证不抽验：损坏整包拒绝是 INV-R2 无半信任承诺的一部分，
+  不以 Open 提速为由削弱；路径 FNV 量级远小于八步校验本身体量。
   重复/缺失 index 只降速（查找回退二分），不断错；探针天然终止于空桶。 }
 procedure GuardStep9Hash(var ARes: TResPack; const AMaxEndAll: UInt64);
 var
@@ -633,7 +623,9 @@ begin
     if (SlotFnv = H) and (SizeUInt(SlotIdx) < Count) then
     begin
       DecodeWire(SizeUInt(SlotIdx), E);
-      if SpanCompare(StoredPathSpanFast(SizeUInt(SlotIdx)), AQuery) = 0 then
+      { 有界视图：Open 后缓冲可被改写，无界视图会越界读；Checked 经 BlobTotal/strtab
+        判界越界即抛 EResPackCorrupted (inline 零拷贝 via bytes.ops)。 }
+      if SpanCompare(CheckedPathSpan(E.PathOffset, E.PathLen), AQuery) = 0 then
       begin
         AEntry := E;
         Exit(True);
@@ -699,13 +691,13 @@ begin
   Lo := 0;
   Hi := Count;
   if Hi = 0 then Exit(0);
-  { Binary search via StoredPathSpanFast + SpanCompare (bytes.ops); not inline.
-    RequireOpen hoisted (once), per-step guards redundant: Open validated every
-    stored path and Mid < Count by loop construction. }
+  { Binary search via StoredPathSpan (checked) + SpanCompare (bytes.ops inline 零拷贝);
+    not inline (loop 守 I-Cache). RequireOpen hoisted once; per-step 路径界仍逐项校验：
+    Open 后缓冲可被改写，无界视图会越界读而非抛错。 }
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    C := SpanCompare(StoredPathSpanFast(Mid), AQuery);
+    C := SpanCompare(StoredPathSpan(Mid), AQuery);
     if C < 0 then
       Lo := Mid + 1
     else
@@ -727,7 +719,7 @@ begin
   RequireOpen;
   if AIdx >= Count then
     raise EResPackCorrupted.CreateCtx('path', '', 'respack: index out of range');
-  S := StoredPathSpanFast(AIdx);
+  S := StoredPathSpan(AIdx);
   Result := SpanCompare(S, AQuery);
 end;
 end.

@@ -814,6 +814,63 @@ begin
   end;
 end;
 
+{ 晚桶损坏仍拒绝：70 条目 256 桶，翻末个非空桶指纹（序号 ≥64，抽验盲区），
+  Open 全量回验必须拒绝——锁定 INV-R2 无半信任，不以 Open 提速抽验。 }
+procedure TestHashLateCorruptRejects;
+const
+  ENTRY_COUNT = 70;
+var
+  Inputs: array of TResPackInputEntry;
+  B: TResPackBlob;
+  Wide: TBytes;
+  Opts: TResPackBuildOptions;
+  RP: TResPack;
+  Buckets: SizeUInt;
+  Base: SizeUInt;
+  I: SizeUInt;
+  Ordinal: SizeUInt;
+  Last: SizeUInt;
+  Idx: UInt32;
+  Got: Boolean;
+begin
+  SetLength(Inputs, ENTRY_COUNT);
+  for I := 0 to ENTRY_COUNT - 1 do
+    Inputs[I] := MakeInput('bulk/f' + Char(Ord('0') + (I div 10)) +
+      Char(Ord('0') + (I mod 10)) + '.bin', 'payload');
+  Opts := ResPackDefaultOptions;
+  Opts.HashIndex := True;
+  B := ResPackBuild(Inputs, Opts);
+  try
+    Buckets := ResPackHashBucketCount(ENTRY_COUNT);
+    Base := B.Size - SizeUInt(Buckets) * 8;
+    SetLength(Wide, B.Size);
+    Move(B.Data^, Wide[0], B.Size);
+    Ordinal := 0;
+    Last := 0;
+    for I := 0 to Buckets - 1 do
+    begin
+      Idx := RdU32LE(@Wide[Base + I * 8 + 4]);
+      if Idx = UInt32($FFFFFFFF) then
+        Continue;
+      Inc(Ordinal);
+      Last := I;
+    end;
+    Check(Ordinal = ENTRY_COUNT, 'hash pack holds seventy fingerprints');
+    Check(Ordinal > 64, 'late bucket beyond spot-check range exists');
+    Wide[Base + Last * 8] := Wide[Base + Last * 8] xor $FF;
+    Got := False;
+    try
+      RP := ResPackOpen(@Wide[0], SizeUInt(Length(Wide)));
+    except
+      on X: EResPackCorrupted do Got := True;
+      on X: Exception do ;
+    end;
+    Check(Got, 'late corrupt fingerprint rejected at open');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 procedure TestHashWithDigest;
 var
   InA: array[0..1] of TResPackInputEntry;
@@ -875,6 +932,7 @@ begin
   T.Test('tail bytes not addressable', @TestTailBytesNotAddressable);
   T.Test('hash hit and miss fallback', @TestHashHitAndMissFallback);
   T.Test('hash corrupt rejects', @TestHashCorruptRejects);
+  T.Test('hash late corrupt rejects', @TestHashLateCorruptRejects);
   T.Test('hash with digest', @TestHashWithDigest);
   if not T.Run then Halt(1);
 end.
