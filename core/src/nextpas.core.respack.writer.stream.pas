@@ -212,7 +212,7 @@ var
     Pad: UInt64;
   begin
     ChunkCap := RESPACK_WRITER_HEAD_CHUNK;
-    // 64K HeadBuf 单次分配/Build，复用分片
+    { 64K HeadBuf 复用分片直写：header/index/string 逐段灌 chunk，满即落盘 }
     SetLength(HeadBuf, ChunkCap);
     ChunkPos := 0;
     N := ALayout.N;
@@ -236,7 +236,7 @@ var
       begin
         JJ := ALayout.Order[II];
         if ALayout.PathLens[JJ] > 0 then
-          WriteHeadBytes(Pointer(AEntries[JJ].Path), ALayout.PathLens[JJ]);
+          WriteHeadBytes(PByte(@AEntries[JJ].Path[1]), ALayout.PathLens[JJ]);
       end;
     FlushHead;
     Pad := 0;
@@ -252,20 +252,19 @@ begin
   HeadBuf := nil;
   N := ALayout.N;
   HeadSize := ALayout.DataStart;
-  { 头块大小 = DataStart；≤64K 单次 SetLength+ResPackWriterFillHead 快道，>64K 走 64K chunk 直写 }
-  if HeadSize = 0 then
+  { 头块大小 = DataStart；≤64K 单次 SetLength+FillHead 快道，>64K 走 64K chunk
+    直写，内存版与流式版逐字节一致由 roundtrip 门禁锁定。 }
+  if HeadSize > 0 then
   begin
-  end
-  else if HeadSize <= UInt64(RESPACK_WRITER_HEAD_CHUNK) then
-  begin
-    SetLength(HeadBuf, SizeUInt(HeadSize));
-    if HeadSize > 0 then Head := @HeadBuf[0] else Head := nil;
-    ResPackWriterFillHead(Head, AEntries, AOpts, ALayout);
-    if HeadSize > 0 then AWrite(Head, SizeUInt(HeadSize));
-  end
-  else
-  begin
-    WriteHeadChunked;
+    if HeadSize <= UInt64(RESPACK_WRITER_HEAD_CHUNK) then
+    begin
+      SetLength(HeadBuf, SizeUInt(HeadSize));
+      Head := @HeadBuf[0];
+      ResPackWriterFillHead(Head, AEntries, AOpts, ALayout);
+      AWrite(Head, SizeUInt(HeadSize));
+    end
+    else
+      WriteHeadChunked;
   end;
 
   { data 槽位：按 Offset 顺序分段零拷贝直写，槽间隙零填 }
