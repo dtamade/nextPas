@@ -9,6 +9,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.respack.base,
+  nextpas.core.respack.hasharena,
   nextpas.core.respack.limits,
   nextpas.core.respack.reader,
   nextpas.core.respack.writer,
@@ -31,6 +32,7 @@ type
   TResPackIncOptions = nextpas.core.respack.embed.TResPackIncOptions;
   TResPackDirEntries = nextpas.core.respack.dirsource.TResPackDirEntries;
   TResPackWriteProc = nextpas.core.respack.base.TResPackWriteProc;
+  TResPackDedupBuckets = nextpas.core.respack.hasharena.TResPackDedupBuckets;
 
   EResPackError = nextpas.core.respack.base.EResPackError;
   EResPackCorrupted = nextpas.core.respack.base.EResPackCorrupted;
@@ -50,6 +52,7 @@ const
   RESPACK_FLAG_HASHED = nextpas.core.respack.base.RESPACK_FLAG_HASHED;
   RESPACK_FLAG_DIGESTED = nextpas.core.respack.base.RESPACK_FLAG_DIGESTED;
   RESPACK_FLAG_HASHINDEX = nextpas.core.respack.base.RESPACK_FLAG_HASHINDEX;
+  RESPACK_FLAG_KNOWN = nextpas.core.respack.base.RESPACK_FLAG_KNOWN;
   RESPACK_FLAG_ALGO_MASK = nextpas.core.respack.base.RESPACK_FLAG_ALGO_MASK;
   RESPACK_FLAG_ALGO_SHIFT = nextpas.core.respack.base.RESPACK_FLAG_ALGO_SHIFT;
   RESPACK_DIGEST_ALGO_SHA256 = nextpas.core.respack.base.RESPACK_DIGEST_ALGO_SHA256;
@@ -60,6 +63,11 @@ const
   RESPACK_MAX_INPUT_BYTES = nextpas.core.respack.base.RESPACK_MAX_INPUT_BYTES;
   RESPACK_MAX_ENTRY_COUNT = nextpas.core.respack.base.RESPACK_MAX_ENTRY_COUNT;
   RESPACK_EFLAG_HASHED = nextpas.core.respack.base.RESPACK_EFLAG_HASHED;
+  RESPACK_EFLAG_KNOWN = nextpas.core.respack.base.RESPACK_EFLAG_KNOWN;
+  RESPACK_HASH_ENTRY_SIZE = nextpas.core.respack.base.RESPACK_HASH_ENTRY_SIZE;
+  RESPACK_HASH_ALIGN = nextpas.core.respack.base.RESPACK_HASH_ALIGN;
+  RESPACK_HASH_EMPTY_INDEX = nextpas.core.respack.base.RESPACK_HASH_EMPTY_INDEX;
+  RESPACK_HASH_MIN_BUCKETS = nextpas.core.respack.base.RESPACK_HASH_MIN_BUCKETS;
   RESPACK_DIRSOURCE_LEGACY_LIMIT = nextpas.core.respack.base.RESPACK_DIRSOURCE_LEGACY_LIMIT;
   RESPACK_WRITER_HEAD_CHUNK = nextpas.core.respack.base.RESPACK_WRITER_HEAD_CHUNK;
 
@@ -75,6 +83,7 @@ function ResPackValidPath(const APath: string;
   const AFileEntry: Boolean): Boolean; inline;
 function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32; inline;
 function ResPackDefaultOptions: TResPackBuildOptions; inline;
+function ResPackHashBucketCount(const AEntryCount: SizeUInt): SizeUInt; inline;
 function ResPackEntriesFromDir(const ARoot: string;
   const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; inline;
 procedure ResPackBuildStreamFromDir(const ARoot: string;
@@ -146,6 +155,11 @@ end;
 function ResPackDefaultOptions: TResPackBuildOptions;
 begin
   Result := nextpas.core.respack.base.ResPackDefaultOptions;
+end;
+
+function ResPackHashBucketCount(const AEntryCount: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.respack.base.ResPackHashBucketCount(AEntryCount);
 end;
 
 function ResPackEntriesFromDir(const ARoot: string;

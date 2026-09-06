@@ -391,7 +391,15 @@ begin
   Check(nextpas.core.respack.RESPACK_DIGEST_SIZE = 32, 'facade digest size 32');
   Check(nextpas.core.respack.RESPACK_FLAG_HASHED = 1, 'facade hashed flag bit0');
   Check(nextpas.core.respack.RESPACK_FLAG_DIGESTED = 2, 'facade digested flag bit1');
+  Check(nextpas.core.respack.RESPACK_FLAG_HASHINDEX = $20, 'facade hashindex flag bit5');
+  Check(nextpas.core.respack.RESPACK_FLAG_KNOWN = $3F, 'facade known mask covers bit0-5');
   Check(nextpas.core.respack.RESPACK_EFLAG_HASHED = 1, 'facade entry hashed flag bit0');
+  Check(nextpas.core.respack.RESPACK_EFLAG_KNOWN = 1, 'facade entry known mask');
+  Check(nextpas.core.respack.RESPACK_HASH_ENTRY_SIZE = 8, 'facade hash entry size');
+  Check(nextpas.core.respack.RESPACK_HASH_ALIGN = 8, 'facade hash align');
+  Check(nextpas.core.respack.RESPACK_HASH_EMPTY_INDEX = UInt32($FFFFFFFF), 'facade hash empty index');
+  Check(nextpas.core.respack.RESPACK_HASH_MIN_BUCKETS = 2, 'facade hash min buckets');
+  Check(nextpas.core.respack.ResPackHashBucketCount(70) = 256, 'facade bucket count forwarded');
 end;
 
 { 桶数恒为 2 的幂（layout/reader 用 and (Count-1) 取桶）：扫边界值断言范围与幂性，
