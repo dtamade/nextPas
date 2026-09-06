@@ -66,10 +66,11 @@ Quantitative gates (enforced in `bench_servevfs.lpr`):
 
 | split op | ns/op | meaning |
 |----------|------:|---------|
-| `split/find-checksum-4k` | ~705 | Find + address + consume (~300 consume ⇒ lookup ≈ 400) |
-| `split/copy-checksum-4k` | ~339 | Move 4K + consume (~300 consume ⇒ copy ≈ fast) |
-| `embedded/404-miss` | ~3,380 | parse + dispatch + failed lookup, no copy |
-| `embedded/200-full-4k` | ~5,700 | everything |
+| `split/find-checksum-4k` | ~619–662 | Find + address + consume (门限 ≤ Rust split 1100，绿) |
+| `split/copy-checksum-4k` | ~320–340 | Move 4K + consume |
+| `split/sink-only-4k` | ~260 | consume alone (net 相减用) |
+| `embedded/404-miss` | ~3,300 | parse + dispatch + failed lookup, no copy |
+| `embedded/200-full-4k` | ~5,500–5,800 | everything |
 
 Reading: respack lookup+copy ≈ 0.5µs of 5.7µs total — **~90% of the cost is the
 HTTP/VFS shell (parse, dispatch, recorder), not respack**. The consume sink is a
@@ -78,6 +79,22 @@ measured itself at 9µs and was rejected). Verdict: **no respack-side optimizati
 is justified** — Find/ContentPtr are already sub-µs. Any further servevfs work belongs
 to the http.static lane (ServeVfs dispatch), not respack. Split ops stay as regression
 smoke (`BUDGET_SPLIT_FIND/COPY_NS` 5µs).
+
+### vs Rust net analysis (2026-09-06 live, same host)
+
+Sink-subtracted pure lookup+address, both sides:
+
+| side | gross (lookup+consume) | sink alone | net lookup |
+|------|----------------------:|-----------:|-----------:|
+| Pascal `split/find-checksum` | ~619 | ~260 | **~360** |
+| Rust `include_dir get_file` | ~1015 | ~960 | **~55** |
+
+Gross 总额 Pascal 胜（619 < 1015，门限 `BASELINE_RUST_SPLIT_NS` 1100 已编码进
+`bench_servevfs`，退化即红灯）。net 口径 Rust 哈希（O(1)，55ns）领先 Pascal
+二分+校验+解码（O(log n)，360ns）约 6×：微调（循环守卫上提）只换来 413→360ns，
+不同复杂度类打不赢。追平的唯一路径是 FORMAT 预留的 bit5 hash-index 区（O(1)
+路径查找索引），属版式扩展，另案立项——当前冻结范围（行为/格式/错误语义）内
+已到顶。`StoredPathSpanFast`（循环内免检视图）即本次微调产物，行为零变更。
 
 ## 2. Embed carrier startup (µs, 1MiB pack, 200×5KiB)
 
@@ -124,6 +141,10 @@ reading is **same RSS (1,040MB all sides), wall differs by work content**
 (raw copy 0.2s < full build 1.0s ≈ Rust 1.2s < Go 2.4s). The "not less than FPC"
 bar for the packer is **memory parity**, not wall parity — documented as such;
 wall parity holds at the copy primitive, not the build.
+
+2026-09-06 live re-run (same host): Pascal wall 1035ms ≤ Rust 1244ms, RSS 1039 vs
+1035. Bulk wall 无硬门限（单样本 wall 噪声大），RSS 单边门限已编码进
+`bench_writer_memory`（packer 峰值超 FPC 峰值 15% 即红灯，输出 `gate:` 行作证）。
 
 ## 4. Writer dedup (Deduplicate on, O(n) 回验+单 slab)
 

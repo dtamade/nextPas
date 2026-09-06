@@ -35,6 +35,11 @@ type
     function Search(const APath: string; out AIdx: SizeUInt): Boolean;
     { Path view helper via bytes.ops (inline, zero-copy). }
     function PathSpanRaw(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
+    { Unchecked index span: caller holds RequireOpen + AIdx < Count (open-time
+      validation already bounds every stored path; DecodeWire trusts the same
+      basis). Search loop + ComparePathAtSpan only; public StoredPathSpan keeps
+      full guards. }
+    function StoredPathSpanFast(const AIdx: SizeUInt): TByteSpan; inline;
     { Range-checked path view single source: RequireOpen + overflow/BlobTotal/strtab
       guards (inline, zero-copy via PathSpanRaw); StoredPathSpan(Of) 共用。 }
     function CheckedPathSpan(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
@@ -148,6 +153,14 @@ begin
   { 全量守卫与 StoredPathSpanOf 一致：CheckedPathSpan 内含 RequireOpen +
     PathEnd 回绕/BlobTotal/strtab 越界校验，杜绝越界视图。 }
   Result := CheckedPathSpan(RdU32LE(Base), RdU16LE(Base + 4));
+end;
+
+function TResPack.StoredPathSpanFast(const AIdx: SizeUInt): TByteSpan; inline;
+var
+  Base: PByte;
+begin
+  Base := FData + SizeUInt(FHdr.IndexOffset) + AIdx * RESPACK_ENTRY_SIZE;
+  Result := PathSpanRaw(RdU32LE(Base), RdU16LE(Base + 4));
 end;
 
 function TResPack.CheckedPathSpan(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
@@ -549,11 +562,13 @@ begin
   Lo := 0;
   Hi := Count;
   if Hi = 0 then Exit(0);
-  { Binary search via StoredPathSpan + SpanCompare (bytes.ops); not inline. }
+  { Binary search via StoredPathSpanFast + SpanCompare (bytes.ops); not inline.
+    RequireOpen hoisted (once), per-step guards redundant: Open validated every
+    stored path and Mid < Count by loop construction. }
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    C := SpanCompare(StoredPathSpan(Mid), AQuery);
+    C := SpanCompare(StoredPathSpanFast(Mid), AQuery);
     if C < 0 then
       Lo := Mid + 1
     else
@@ -573,7 +588,9 @@ var
   S: TByteSpan;
 begin
   RequireOpen;
-  S := StoredPathSpan(AIdx);
+  if AIdx >= Count then
+    raise EResPackCorrupted.CreateCtx('path', '', 'respack: index out of range');
+  S := StoredPathSpanFast(AIdx);
   Result := SpanCompare(S, AQuery);
 end;
 end.

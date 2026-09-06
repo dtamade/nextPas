@@ -55,6 +55,7 @@ var
   I, N: Integer;
   Blob: TResPackBlob;
   T0, T1: QWord;
+  FpcPeakMB, PackPeakMB: Int64;
 begin
   { 单条目 8MB：条目数适中，内容缓冲占输入的绝对大头 }
   ChunkSize := SizeUInt(8) * 1024 * 1024;
@@ -87,13 +88,20 @@ begin
   { 先跑 FPC 对照：此前无更大分配，此时 VmHWM 即 FPC 作业精确峰值；
     随后 packer 峰值取 max，两数齐全可逐项比（任一相等即另一方不超）。 }
   RunFpcBaseline(Contents);
+  FpcPeakMB := ProcessPeakRssBytes div 1048576;
   T0 := GetTickCount64;
   Blob := ResPackBuild(Entries, ResPackDefaultOptions);
   T1 := GetTickCount64;
   try
     WriteLn('build ok: blob bytes = ', Blob.Size, ' in ', (T1 - T0), ' ms');
-    WriteLn('peak rss after build : ', ProcessPeakRssBytes div 1048576, ' MB');
+    PackPeakMB := ProcessPeakRssBytes div 1048576;
+    WriteLn('peak rss after build : ', PackPeakMB, ' MB');
     WriteLn('throughput: ', (ATargetBytes div 1048576), ' MB pack, ratio blob/input=', (Blob.Size / ATargetBytes):0:3);
+    { 单边门限：VmHWM 只增不减，packer 真峰值被 FPC 峰值掩盖时此门宽松（只抓总体膨胀，
+      不抓 packer 缩小——缩小不是回归）。packer 相真实超 FPC 15% 即红灯。 }
+    if PackPeakMB > (FpcPeakMB * 115) div 100 then
+      raise Exception.Create('bench: packer peak RSS exceeds FPC peak by >15%');
+    WriteLn('gate: packer peak ', PackPeakMB, ' MB within 1.15x FPC peak ', FpcPeakMB, ' MB');
   finally
     ResPackFreeBlob(Blob);
   end;

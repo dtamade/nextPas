@@ -44,6 +44,11 @@ const
   BASELINE_FPC_NS = 8500;   { FPC RTL TFileStream 4KiB 同机实测 }
   BASELINE_GO_NS = 7200;    { Go embed.FS 4KiB 公开数据 }
   BASELINE_RUST_NS = 7100;  { Rust include_dir 4KiB 公开数据 }
+  { 零拷贝层对 Rust 门限：compare_rust get_file+sum 同机 live ~1015ns（2026-09-06），
+    Pascal split/find-checksum 为"查找+同量消费"，总额更低即赢；1100 留余量，
+    退化（查找变慢/汇膨胀）即红灯。net 分析见 RESULTS.md（Rust 哈希 55ns 仍领先，
+    追平需 FORMAT bit5 hash-index，另案）。 }
+  BASELINE_RUST_SPLIT_NS = 1100;
 
 type
   { 最小请求桩：ServeVfs 只触 Path/PathParam/GetHeaders }
@@ -419,6 +424,14 @@ begin
   ACtx.SetBytes(E.Size);
 end;
 
+{ 成本拆分 sink-only：只消费预解析条目，不查找。net_lookup = find - sink，
+  与 Rust 端 sink-only 标定相减后比纯查找+寻址，汇方法不同不再污染结论。 }
+procedure BenchSplitSink(const ACtx: IBenchContext);
+begin
+  ConsumeBuf(GRP.ContentPtr(GSplitEntry), GSplitEntry.Size);
+  ACtx.SetBytes(GSplitEntry.Size);
+end;
+
 { 成本拆分 copy-only：预解析条目直拷 4K + 消费，无查找、无 handler }
 procedure BenchSplitCopy(const ACtx: IBenchContext);
 begin
@@ -464,7 +477,10 @@ begin
   R := AResults.GetByName('servevfs/split/copy-checksum-4k');
   if R.NsPerOp > BUDGET_SPLIT_COPY_NS then
     raise Exception.CreateFmt('budget exceeded split/copy: %.0f > %d ns/op', [R.NsPerOp, BUDGET_SPLIT_COPY_NS]);
-  WriteLn('budget: all 7 within threshold (embedded ', BUDGET_EMBEDDED_NS, ' os ', BUDGET_OS_NS, ' ns/op)');
+  R := AResults.GetByName('servevfs/split/sink-only-4k');
+  if R.NsPerOp > BUDGET_SPLIT_COPY_NS then
+    raise Exception.CreateFmt('budget exceeded split/sink: %.0f > %d ns/op', [R.NsPerOp, BUDGET_SPLIT_COPY_NS]);
+  WriteLn('budget: all 8 within threshold (embedded ', BUDGET_EMBEDDED_NS, ' os ', BUDGET_OS_NS, ' ns/op)');
   { 同机对照量化门限：不低于 FPC RTL，接近 Go/Rust（±30% 内，RESULTS.md 快照） }
   R := AResults.GetByName('servevfs/fpc-tfilestream/4k');
   if R.NsPerOp > BASELINE_FPC_NS * 1.1 then
@@ -474,6 +490,10 @@ begin
   if (REmb.NsPerOp > BASELINE_GO_NS * 1.3) or (REmb.NsPerOp > BASELINE_RUST_NS * 1.3) then
     raise Exception.CreateFmt('baseline violation embedded %.0f exceeds Go %d / Rust %d ns/op by >30%%', [REmb.NsPerOp, BASELINE_GO_NS, BASELINE_RUST_NS]);
   WriteLn('baseline: embedded ', REmb.NsPerOp:0:1, ' ns/op <= FPC ', BASELINE_FPC_NS, ' and within 1.3x Go ', BASELINE_GO_NS, ' / Rust ', BASELINE_RUST_NS);
+  R := AResults.GetByName('servevfs/split/find-checksum-4k');
+  if R.NsPerOp > BASELINE_RUST_SPLIT_NS then
+    raise Exception.CreateFmt('baseline violation split/find %.0f > Rust split %d ns/op: zero-copy read no longer beats Rust peer', [R.NsPerOp, BASELINE_RUST_SPLIT_NS]);
+  WriteLn('baseline: split/find ', R.NsPerOp:0:1, ' ns/op <= Rust split ', BASELINE_RUST_SPLIT_NS);
 end;
 
 { 计时区外的正确性首验：任何一项语义漂移直接失败，不让基准测错误路径 }
@@ -538,6 +558,7 @@ begin
         .Add('servevfs/embedded/404-miss', @BenchEmbMiss)
         .Add('servevfs/split/find-checksum-4k', @BenchSplitFind)
         .Add('servevfs/split/copy-checksum-4k', @BenchSplitCopy)
+        .Add('servevfs/split/sink-only-4k', @BenchSplitSink)
         .AddBaseline('fpc-rtl/TFileStream-4k', BASELINE_FPC_NS)
         .AddBaseline('go-embed/FS-4k', BASELINE_GO_NS)
         .AddBaseline('rust-include_dir-4k', BASELINE_RUST_NS)
