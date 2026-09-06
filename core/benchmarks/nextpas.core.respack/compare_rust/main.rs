@@ -40,6 +40,8 @@ fn main() {
     println!();
     bench_include_dir_get_file(DUR);
     println!();
+    bench_sink_only(DUR);
+    println!();
     bench_startup_pack_file();
     println!();
     bench_bulk_write_512();
@@ -53,6 +55,29 @@ fn gen_pattern(buf: &mut [u8], seed: usize) {
     for (j, b) in buf.iter_mut().enumerate() {
         *b = ((j * 31 + seed * 7) % 251) as u8;
     }
+}
+
+// Sink-only calibration: checksum a pre-fetched slice, no lookup.
+// net_lookup = get_file_op - sink_only; compared against Pascal's
+// (find_checksum - sink_only) so differing sink strides cancel out.
+fn bench_sink_only(dur: Duration) {
+    let contents: &[u8] = ASSETS.get_file("file0000.bin").unwrap().contents();
+    let mut acc: u64 = 0;
+    for _ in 0..WARMUP_ITERS {
+        for &b in contents {
+            acc = acc.wrapping_add(b as u64);
+        }
+    }
+    let mut iters: u64 = 0;
+    let start = Instant::now();
+    while start.elapsed() < dur {
+        for &b in contents {
+            acc = acc.wrapping_add(b as u64);
+        }
+        iters += 1;
+    }
+    println!("  checksum: {:016x}", acc);
+    print_result("rust-sink/only-4k", iters, start.elapsed());
 }
 
 // Startup peer for Pascal readfile-pack-carrier: 1MiB generated file is
