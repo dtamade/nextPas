@@ -97,6 +97,19 @@ begin
     raise EResPackError.Create('respack.stream: layout data start exceeds total');
   if ALayout.StrTabBase > ALayout.DataStart then
     raise EResPackError.Create('respack.stream: layout string base exceeds data start');
+  if ALayout.HashBuckets > 0 then
+  begin
+    if SizeUInt(Length(ALayout.HashSlotIdx)) <> ALayout.HashBuckets then
+      raise EResPackError.Create('respack.stream: layout hash slots mismatch');
+    if ALayout.HashBase > ALayout.Total then
+      raise EResPackError.Create('respack.stream: layout hash base exceeds total');
+    if ALayout.HashBuckets > High(SizeUInt) div SizeUInt(RESPACK_HASH_ENTRY_SIZE) then
+      raise EResPackTooLarge.Create('respack.stream: hash segment too large');
+    if ALayout.HashBase + UInt64(ALayout.HashBuckets) * RESPACK_HASH_ENTRY_SIZE <> ALayout.Total then
+      raise EResPackError.Create('respack.stream: layout hash end mismatch');
+  end
+  else if ALayout.HashBase <> 0 then
+    raise EResPackError.Create('respack.stream: layout hash base without buckets');
   if (N = 0) and (ALayout.SlotCount <> 0) then
     raise EResPackError.Create('respack.stream: layout slots without entries');
   if N > 0 then
@@ -148,6 +161,7 @@ var
   Gap: UInt64;
   DigestTmp: TResPackDigest;
   SlotDigests: array of TResPackDigest;
+  HashSeg: TBytes;
   ChunkCap: SizeUInt;
   ChunkPos: SizeUInt;
   procedure FlushHead; inline;
@@ -267,6 +281,7 @@ begin
   begin
     if ALayout.DigOff > Cur then
       WriteZeros(AWrite, ALayout.DigOff - Cur);
+    Cur := ALayout.DigOff;
     { 摘要数组与 index 同序（FORMAT.md）：按 Order 映射输入条目，输入序直排即错位；
       去重命中同槽内容一致，按 SlotCount 计次后经 EntrySlots 复用，零重复摘要 CPU。 }
     if N > 0 then
@@ -300,6 +315,32 @@ begin
           AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @DigestTmp[0]);
           AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
         end;
+    if N > 0 then
+      Cur := ALayout.DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
+  end;
+
+  { 哈希段（opt-in）：digest/data 之后 8 对齐直排，FillHash 单源；
+    transient 桶数×8 堆缓冲（AWrite 单次），与 digest 缓存同式，异常自动释放。
+    间隙零填后 Cur 落 Total，与 ValidateEmitLayout 的 hash-end 相等断言一致。 }
+  if ALayout.HashBuckets > 0 then
+  begin
+    if ALayout.HashBase > Cur then
+      WriteZeros(AWrite, ALayout.HashBase - Cur);
+    if ALayout.HashBuckets > High(SizeUInt) div SizeUInt(RESPACK_HASH_ENTRY_SIZE) then
+      raise EResPackTooLarge.Create('respack: hash segment too large for host');
+    try
+      SetLength(HashSeg, ALayout.HashBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
+    except
+      on E: EOutOfMemory do
+        raise EResPackTooLarge.Create('respack: hash segment too large for host');
+    end;
+    if Length(HashSeg) > 0 then
+    begin
+      ResPackWriterFillHash(@HashSeg[0], AEntries, AOpts, ALayout);
+      AWrite(@HashSeg[0], SizeUInt(Length(HashSeg)));
+    end;
+    HashSeg := nil;
+    Cur := ALayout.Total;
   end;
 end;
 

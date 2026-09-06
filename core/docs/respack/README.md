@@ -81,7 +81,7 @@ nextpas.core.respack.embed.pas          ← blob→.inc/.inc unit 纯内存生�
 | 单元 | 允许依赖 | 说明 |
 |------|----------|------|
 | `base` | L0（`base`/`errors`） | 纯类型常量 |
-| `reader` | `base` | 只读无分配，八步校验 |
+| `reader` | `base` | 只读无分配，九步校验 |
 | `writer.layout` | `base` + `bytes.ops` + `collections.algorithms` + `mem.base` | 布局单源（排序/去重/对齐） |
 | `writer.builder` | `base` + `writer.layout` + `bytes.ops` | 头/index/string 单源 |
 | `writer` | `writer.layout` + `writer.builder` + `base` | GetMem 一次性，定向清零 |

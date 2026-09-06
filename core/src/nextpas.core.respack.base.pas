@@ -26,8 +26,16 @@ const
   RESPACK_FLAG_ALGO_MASK  = $0000001C;  { bit2-4 digest 算法 ID 掩码 }
   RESPACK_FLAG_ALGO_SHIFT = 2;
   RESPACK_DIGEST_ALGO_SHA256 = 0;       { 0 = SHA-256（v1 唯一合法值） }
+  RESPACK_FLAG_HASHINDEX  = $00000020;  { bit5：尾部哈希段存在（O(1) 路径查找，FORMAT.md） }
   RESPACK_FLAG_KNOWN    = RESPACK_FLAG_HASHED or RESPACK_FLAG_DIGESTED
-    or RESPACK_FLAG_ALGO_MASK;
+    or RESPACK_FLAG_ALGO_MASK or RESPACK_FLAG_HASHINDEX;
+
+  { 哈希段：digest 区之后（无 digest 时 data 区之后），8 字节对齐；
+    entryCount 相关条目：u32 LE 路径 fnv32 + u32 LE index，空槽 index = $FFFFFFFF }
+  RESPACK_HASH_ENTRY_SIZE = 8;
+  RESPACK_HASH_ALIGN = 8;
+  RESPACK_HASH_EMPTY_INDEX = UInt32($FFFFFFFF);
+  RESPACK_HASH_MIN_BUCKETS = 2;
 
   { entry flags }
   RESPACK_EFLAG_HASHED = $0001;      { 本条目 hash 有效（权威判定） }
@@ -92,6 +100,7 @@ type
     CodecId: Byte;                { 编解码；默认 STORE=0 }
     DigestFunc: TResPackDigestFunc; { nil = 无 digest 区 }
     MaxTotalInputBytes: SizeUInt; { 输入总量上限；超限 EResPackTooLarge }
+    HashIndex: Boolean;           { 写尾部哈希段（O(1) 查找，老 reader 拒收 bit5 包） }
   end;
 
   { Build 产物：Owned=True 时 Data 为堆缓冲，须 ResPackFreeBlob 归还 }
@@ -189,6 +198,10 @@ function ResPackCmpPath(const PA: PByte; const LA: SizeUInt; const PB: PByte; co
 { 默认构建选项 }
 function ResPackDefaultOptions: TResPackBuildOptions; inline;
 
+{ 哈希段桶数单源（writer 布局与 reader 校验/查找共用）：N=0→0；否则装载≤0.5
+  的最小 2 的幂（≥2）。N 受 MAX_ENTRY_COUNT 熔断，2N 无回绕。 }
+function ResPackHashBucketCount(const AEntryCount: SizeUInt): SizeUInt; inline;
+
 procedure ResPackFreeBlob(var ABlob: TResPackBlob); inline;
 
 implementation
@@ -199,6 +212,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid,
   nextpas.core.checksum.fnv32,
+  nextpas.core.mem.base,
   nextpas.core.text.number;
 
 function RdU16LE(AData: PByte): Word; inline;
@@ -263,6 +277,21 @@ begin
   Result.CodecId := RESPACK_CODEC_STORE;
   Result.DigestFunc := nil;
   Result.MaxTotalInputBytes := RESPACK_MAX_INPUT_BYTES;
+  { 哈希段默认关：bit5 包老 reader 整包拒收，兼容优先；perf 通道显式开。 }
+  Result.HashIndex := False;
+end;
+
+function ResPackHashBucketCount(const AEntryCount: SizeUInt): SizeUInt; inline;
+var
+  Need: SizeUInt;
+begin
+  if AEntryCount = 0 then
+    Exit(0);
+  if not TryAddSizeUInt(AEntryCount, AEntryCount, Need) then
+    raise EResPackTooLarge.Create('respack: hash bucket size overflow');
+  Result := nextpas.core.mem.base.NextPowerOfTwo(Need);
+  if Result < RESPACK_HASH_MIN_BUCKETS then
+    Result := RESPACK_HASH_MIN_BUCKETS;
 end;
 
 procedure ResPackFreeBlob(var ABlob: TResPackBlob); inline;

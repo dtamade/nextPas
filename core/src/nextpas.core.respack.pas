@@ -49,6 +49,7 @@ const
   RESPACK_CODEC_STORE = nextpas.core.respack.base.RESPACK_CODEC_STORE;
   RESPACK_FLAG_HASHED = nextpas.core.respack.base.RESPACK_FLAG_HASHED;
   RESPACK_FLAG_DIGESTED = nextpas.core.respack.base.RESPACK_FLAG_DIGESTED;
+  RESPACK_FLAG_HASHINDEX = nextpas.core.respack.base.RESPACK_FLAG_HASHINDEX;
   RESPACK_FLAG_ALGO_MASK = nextpas.core.respack.base.RESPACK_FLAG_ALGO_MASK;
   RESPACK_FLAG_ALGO_SHIFT = nextpas.core.respack.base.RESPACK_FLAG_ALGO_SHIFT;
   RESPACK_DIGEST_ALGO_SHA256 = nextpas.core.respack.base.RESPACK_DIGEST_ALGO_SHA256;

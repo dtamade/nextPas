@@ -382,6 +382,32 @@ begin
   end;
 end;
 
+{ 哈希段往返：内存版与流式版逐字节一致（双 Emit 路径同 FillHash 单源），
+  Open 暴露段，查找/失配经哈希+回退正确。 }
+procedure TestCrossPathHashIndex;
+var
+  H: THolder;
+  Opts: TResPackBuildOptions;
+  B: TResPackBlob;
+  RP: TResPack;
+  E: TResPackEntry;
+begin
+  BuildCrossFixture(H);
+  Opts := ResPackDefaultOptions;
+  Opts.HashIndex := True;
+  CheckStreamIdentical('cross hashindex', H.Inputs, Opts);
+  B := ResPackBuild(H.Inputs, Opts);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(RP.HasHashIndex, 'hash roundtrip exposes index');
+    Check(RP.Count = 6, 'hash roundtrip six entries');
+    Check(RP.Find('copy1.bin', E) and (E.Size = 12), 'hash roundtrip shared found');
+    Check(not RP.Find('missing.bin', E), 'hash roundtrip miss False');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 { 同包 build-then-read：有序/空文件/unicode/去重槽位/摘要逐项回验 }
 procedure CheckCrossRoundtrip(const ALabel: string;
   const AInputs: TResPackInputArray; const AOpts: TResPackBuildOptions;
@@ -598,6 +624,7 @@ begin
   T.Test('cross dedup+digest identity', @TestCrossPathDedupDigest);
   T.Test('cross empty identity', @TestCrossPathEmpty);
   T.Test('cross chunked head identity', @TestCrossPathChunkedHead);
+  T.Test('cross hashindex identity', @TestCrossPathHashIndex);
   T.Test('perf smoke 10k', @TestPerfSmoke10k);
   if not T.Run then Halt(1);
 end.

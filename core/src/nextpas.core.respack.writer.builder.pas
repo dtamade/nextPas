@@ -20,6 +20,13 @@ procedure ResPackWriterFillEntry40(const ADst: PByte;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
   const ASrcIdx: SizeUInt; const ACurStrOff: UInt64); inline;
 
+{ 哈希段单源：桶→(fnv32, index) 8B LE 直排，空桶 fnv=0/idx=$FFFFFFFF；
+  fnv 重算自输入路径字节（与 reader 按存储字节重算一致），布局只定桶位。
+  memory/stream 双 Emit 共用，INV-R5 确定性单点。调用方保证 ADst ≥ 桶数×8 可写。 }
+procedure ResPackWriterFillHash(const ADst: PByte;
+  const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout);
+
 { 单源填充 Head 区域：header(40) + index(N*40) + string table + 对齐填充 = DataStart。
   调用方保证 AHead 指向至少 DataStart 字节可写。 }
 procedure ResPackWriterFillHead(const AHead: PByte;
@@ -44,6 +51,8 @@ begin
   HdrFlags := 0;
   if AOpts.Hashes then HdrFlags := HdrFlags or RESPACK_FLAG_HASHED;
   if AOpts.DigestFunc <> nil then HdrFlags := HdrFlags or RESPACK_FLAG_DIGESTED;
+  if AOpts.HashIndex and (ALayout.HashBuckets > 0) then
+    HdrFlags := HdrFlags or RESPACK_FLAG_HASHINDEX;
   WrU32LE(ADst + 8, HdrFlags);
   WrU32LE(ADst + 12, UInt32(ALayout.N));
   WrU64LE(ADst + 16, UInt64(RESPACK_HEADER_SIZE));
@@ -94,6 +103,39 @@ begin
         BytesCopy(AHead + Cur, Pointer(AEntries[J].Path), ALayout.PathLens[J]);
       Inc(Cur, ALayout.PathLens[J]);
     end;
+end;
+
+procedure ResPackWriterFillHash(const ADst: PByte;
+  const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout);
+var
+  B, Idx, Src: SizeUInt;
+  P: PByte;
+  Fnv: UInt32;
+begin
+  if ALayout.HashBuckets = 0 then Exit;
+  if SizeUInt(Length(ALayout.HashSlotIdx)) <> ALayout.HashBuckets then
+    raise EResPackError.Create('respack: hash slot table mismatch');
+  for B := 0 to ALayout.HashBuckets - 1 do
+  begin
+    Idx := SizeUInt(ALayout.HashSlotIdx[B]);
+    if (ALayout.HashSlotIdx[B] = RESPACK_HASH_EMPTY_INDEX) or (Idx >= ALayout.N) then
+    begin
+      WrU32LE(ADst + B * RESPACK_HASH_ENTRY_SIZE, 0);
+      WrU32LE(ADst + B * RESPACK_HASH_ENTRY_SIZE + 4, RESPACK_HASH_EMPTY_INDEX);
+    end
+    else
+    begin
+      Src := ALayout.Order[Idx];
+      if ALayout.PathLens[Src] > 0 then
+        P := PByte(@AEntries[Src].Path[1])
+      else
+        P := nil;
+      Fnv := ResPackFnv1a32(P, SizeUInt(ALayout.PathLens[Src]));
+      WrU32LE(ADst + B * RESPACK_HASH_ENTRY_SIZE, Fnv);
+      WrU32LE(ADst + B * RESPACK_HASH_ENTRY_SIZE + 4, UInt32(Idx));
+    end;
+  end;
 end;
 
 end.

@@ -410,6 +410,69 @@ begin
   end;
 end;
 
+function HashOpts: TResPackBuildOptions; inline;
+begin
+  Result := ResPackDefaultOptions;
+  Result.HashIndex := True;
+end;
+
+procedure TestHashIndexEmitted;
+var
+  InA: array[0..2] of TResPackInputEntry;
+  B: TResPackBlob;
+  RP: TResPack;
+  E: TResPackEntry;
+begin
+  InA[0] := Ent('a.bin', BytesOf('one'));
+  InA[1] := Ent('b.bin', BytesOf('two'));
+  InA[2] := Ent('c.bin', BytesOf('three'));
+  B := ResPackBuild(InA, HashOpts);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(RP.HasHashIndex, 'hash pack exposes index');
+    Check((RP.Header.Flags and nextpas.core.respack.RESPACK_FLAG_HASHINDEX) <> 0,
+      'hash pack sets bit5');
+    Check(RP.Find('b.bin', E) and (E.Size = 3), 'hash pack find works');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure TestHashIndexDefaultOff;
+var
+  InA: array[0..0] of TResPackInputEntry;
+  B: TResPackBlob;
+  RP: TResPack;
+begin
+  InA[0] := Ent('a.bin', BytesOf('one'));
+  B := ResPackBuild(InA, ResPackDefaultOptions);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(not RP.HasHashIndex, 'default pack has no index');
+    Check((RP.Header.Flags and nextpas.core.respack.RESPACK_FLAG_HASHINDEX) = 0,
+      'default pack bit5 clear');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure TestHashIndexEmptyPack;
+var
+  InA: TResPackInputArray;
+  B: TResPackBlob;
+  RP: TResPack;
+begin
+  InA := nil;
+  B := ResPackBuild(InA, HashOpts);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(RP.Count = 0, 'empty hash pack opens');
+    Check(not RP.HasHashIndex, 'empty pack carries no segment');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 { 默认即去重：不断言具体槽位实现，只断言可观测契约——同内容两条目同槽、
   内容正确；改默认值必先改此用例（防默认漂移）。 }
 procedure TestDefaultDedupOn;
@@ -532,6 +595,9 @@ begin
     T.Test('nil data nonzero raises', @TestNilDataNonzeroRaises);
     T.Test('facade wire consts', @TestFacadeWireConsts);
     T.Test('bucket count pow2', @TestBucketCountPow2);
+    T.Test('hash index emitted', @TestHashIndexEmitted);
+    T.Test('hash index default off', @TestHashIndexDefaultOff);
+    T.Test('hash index empty pack', @TestHashIndexEmptyPack);
     T.Test('default dedup on', @TestDefaultDedupOn);
     T.Test('empty pack opens', @TestEmptyPack);
     T.Test('golden snapshot', @TestGoldenSnapshot);

@@ -32,6 +32,11 @@ type
     DataStart: UInt64;
     DigOff: UInt64;
     Total: UInt64;
+    { 哈希段（opt-in）：桶数 0 = 无段；HashSlotIdx 为桶→index（$FFFFFFFF 空），
+      Emit 经此直排，reader 侧按同规则派生（ResPackHashBucketCount 单源）。 }
+    HashBuckets: SizeUInt;
+    HashBase: UInt64;
+    HashSlotIdx: array of UInt32;
   end;
 
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
@@ -103,6 +108,9 @@ begin
   ALayout.DataStart := 0;
   ALayout.DigOff := 0;
   ALayout.Total := 0;
+  ALayout.HashBuckets := 0;
+  ALayout.HashBase := 0;
+  ALayout.HashSlotIdx := nil;
 end;
 
 procedure ResPackComputeLayout(const AEntries: array of TResPackInputEntry;
@@ -122,6 +130,10 @@ var
   NeedFnv: Boolean;
   DigOff: UInt64;
   Total: UInt64;
+  HashBase: UInt64;
+  Hi, Hb, Hp2: SizeUInt;
+  HFnv: UInt32;
+  Hp: PByte;
   SortData: TOrderSortData;
 begin
   ResPackLayoutClear(ALayout);
@@ -339,6 +351,55 @@ begin
   begin
     DigOff := 0;
     Total := EndData;
+  end;
+  { 哈希段（opt-in）：digest/data 之后 8 对齐；桶数单源于 base，灌桶按 index 序
+    （确定性，INV-R5），fnv 候选+开放寻址，装载≤0.5 恒有空槽（探针傻瓜式上界兜底）。 }
+  ALayout.HashBuckets := 0;
+  ALayout.HashBase := 0;
+  if AOpts.HashIndex and (N > 0) then
+  begin
+    BucketCount := ResPackHashBucketCount(N);
+    if BucketCount < RESPACK_HASH_MIN_BUCKETS then
+      raise EResPackError.Create('respack: hash bucket count too small');
+    if BucketCount > High(UInt64) div RESPACK_HASH_ENTRY_SIZE then
+      raise EResPackTooLarge.Create('respack: hash section too large');
+    if Total > High(UInt64) - (RESPACK_HASH_ALIGN - 1) then
+      raise EResPackTooLarge.Create('respack: hash alignment overflow');
+    HashBase := AlignUpU64(Total, RESPACK_HASH_ALIGN);
+    if HashBase > High(UInt64) - UInt64(BucketCount) * RESPACK_HASH_ENTRY_SIZE then
+      raise EResPackTooLarge.Create('respack: total size overflow');
+    try
+      SetLength(ALayout.HashSlotIdx, BucketCount);
+    except
+      on E: EOutOfMemory do
+        raise EResPackTooLarge.Create('respack: hash table too large for host');
+    end;
+    for Hi := 0 to BucketCount - 1 do
+      ALayout.HashSlotIdx[Hi] := RESPACK_HASH_EMPTY_INDEX;
+    { 按 index 序灌桶：存 index 位（reader DecodeWire 同义），fnv 取该位之源路径；
+      输入序直排则 SrcIdx/位错位（6 条目乱序即现形，2 条目恰有序掩盖）。 }
+    for I := 0 to N - 1 do
+    begin
+      J := ALayout.Order[I];
+      if Length(AEntries[J].Path) > 0 then
+        Hp := PByte(@AEntries[J].Path[1])
+      else
+        Hp := nil;
+      HFnv := ResPackFnv1a32(Hp, SizeUInt(ALayout.PathLens[J]));
+      Hb := SizeUInt(HFnv) and (BucketCount - 1);
+      Hp2 := 0;
+      while ALayout.HashSlotIdx[Hb] <> RESPACK_HASH_EMPTY_INDEX do
+      begin
+        Inc(Hp2);
+        if Hp2 > BucketCount then
+          raise EResPackError.Create('respack: hash table full');
+        Hb := (Hb + 1) and (BucketCount - 1);
+      end;
+      ALayout.HashSlotIdx[Hb] := UInt32(I);
+    end;
+    ALayout.HashBuckets := BucketCount;
+    ALayout.HashBase := HashBase;
+    Total := HashBase + UInt64(BucketCount) * RESPACK_HASH_ENTRY_SIZE;
   end;
   if Total > High(SizeUInt) then
     raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
