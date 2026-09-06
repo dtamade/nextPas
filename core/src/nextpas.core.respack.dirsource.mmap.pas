@@ -51,7 +51,7 @@ begin
     end;
     Result := True;
   except
-    on E: Exception do
+    on E: ENextPasError do
     begin
       AErrMsg := 'mmap failed: ' + E.Message + ' (path=' + APath + ')';
       AMap := nil;
