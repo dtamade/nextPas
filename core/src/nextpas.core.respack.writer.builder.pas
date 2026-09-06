@@ -26,6 +26,12 @@ procedure ResPackWriterFillEntry40(const ADst: PByte;
 procedure ResPackWriterFillHash(const ADst: PByte;
   const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout);
+{ 哈希段分片单源：[AStartBucket,AStartBucket+ABucketCount) 区间直排，供 stream 64K 分片复用；
+  全量 FillHash 经此单点，INV-R5 单源。调用方保证 ADst ≥ ABucketCount×8 可写。 }
+procedure ResPackWriterFillHashRange(const ADst: PByte;
+  const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
+  const AStartBucket, ABucketCount: SizeUInt);
 
 { 单源填充 Head 区域：header(40) + index(N*40) + string table + 对齐填充 = DataStart。
   调用方保证 AHead 指向至少 DataStart 字节可写。 }
@@ -105,21 +111,27 @@ begin
     end;
 end;
 
-procedure ResPackWriterFillHash(const ADst: PByte;
+procedure ResPackWriterFillHashRange(const ADst: PByte;
   const AEntries: array of TResPackInputEntry;
-  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout);
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
+  const AStartBucket, ABucketCount: SizeUInt);
 var
-  B, Idx, Src: SizeUInt;
+  B, Bucket, Idx, Src: SizeUInt;
   P: PByte;
   Fnv: UInt32;
 begin
+  if ABucketCount = 0 then Exit;
   if ALayout.HashBuckets = 0 then Exit;
+  if (AStartBucket > ALayout.HashBuckets) or
+     (ABucketCount > ALayout.HashBuckets - AStartBucket) then
+    raise EResPackError.Create('respack: hash range out of bounds');
   if SizeUInt(Length(ALayout.HashSlotIdx)) <> ALayout.HashBuckets then
     raise EResPackError.Create('respack: hash slot table mismatch');
-  for B := 0 to ALayout.HashBuckets - 1 do
+  for B := 0 to ABucketCount - 1 do
   begin
-    Idx := SizeUInt(ALayout.HashSlotIdx[B]);
-    if (ALayout.HashSlotIdx[B] = RESPACK_HASH_EMPTY_INDEX) or (Idx >= ALayout.N) then
+    Bucket := AStartBucket + B;
+    Idx := SizeUInt(ALayout.HashSlotIdx[Bucket]);
+    if (ALayout.HashSlotIdx[Bucket] = RESPACK_HASH_EMPTY_INDEX) or (Idx >= ALayout.N) then
     begin
       WrU32LE(ADst + B * RESPACK_HASH_ENTRY_SIZE, 0);
       WrU32LE(ADst + B * RESPACK_HASH_ENTRY_SIZE + 4, RESPACK_HASH_EMPTY_INDEX);
@@ -136,6 +148,14 @@ begin
       WrU32LE(ADst + B * RESPACK_HASH_ENTRY_SIZE + 4, UInt32(Idx));
     end;
   end;
+end;
+
+procedure ResPackWriterFillHash(const ADst: PByte;
+  const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout);
+begin
+  if ALayout.HashBuckets = 0 then Exit;
+  ResPackWriterFillHashRange(ADst, AEntries, AOpts, ALayout, 0, ALayout.HashBuckets);
 end;
 
 end.

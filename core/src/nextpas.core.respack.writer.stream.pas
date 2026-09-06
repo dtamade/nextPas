@@ -28,6 +28,11 @@ procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
   消三处复制。 }
 function ResPackBuildLayoutBlob(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout): TResPackBlob;
+{ 内存组装单源：ComputeLayout 1×（排序/fnv/去重）+ BuildLayoutBlob 直排堆 blob；
+  writer/dirsource 双 Build 共用，禁 Size+BuildStream 双算；布局经 try..finally
+  Clear 释放不丢，峰值 ~1×+头；冷路径不 inline，零拷贝经 BytesCopy 单源。 }
+function ResPackBuildBlobFromEntries(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions): TResPackBlob;
 { 纯预取总长：独立 Compute 1×；需随后输出时请 Compute 1× + ResPackLayoutTotal/Emit/BuildLayoutBlob 直排，勿 Size + BuildStream 连调致 2× 排序/去重。 }
 function ResPackBuildStreamSize(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): UInt64;
@@ -153,15 +158,15 @@ procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
   const AWrite: TResPackWriteProc);
 var
-  N, I, J, K, S: SizeUInt;
+  N, I, J, K: SizeUInt;
   Cur: UInt64;
   HeadBuf: TBytes;
   Head: PByte;
   HeadSize: UInt64;
   Gap: UInt64;
   DigestTmp: TResPackDigest;
-  SlotDigests: array of TResPackDigest;
-  HashSeg: TBytes;
+  HashChunk: TBytes;
+  HStart, HCount, HCapBuckets: SizeUInt;
   ChunkCap: SizeUInt;
   ChunkPos: SizeUInt;
   procedure FlushHead; inline;
@@ -282,64 +287,55 @@ begin
     if ALayout.DigOff > Cur then
       WriteZeros(AWrite, ALayout.DigOff - Cur);
     Cur := ALayout.DigOff;
-    { 摘要数组与 index 同序（FORMAT.md）：按 Order 映射输入条目，输入序直排即错位；
-      去重命中同槽内容一致，按 SlotCount 计次后经 EntrySlots 复用，零重复摘要 CPU。 }
+    { 摘要与 index 同序（FORMAT.md）：按 Order 映射输入条目逐项直排；
+      无 SlotCount×32 堆缓存，栈上 DigestTmp 32B O(1)，BytesZero 单源 inline；
+      去重包重复槽多算 CPU 换 ~1×+64K 峰值，INV-R5 字节一致。 }
     if N > 0 then
-      if (ALayout.SlotCount > 0) and (ALayout.SlotCount < N) then
+      for I := 0 to N - 1 do
       begin
-        try
-          SetLength(SlotDigests, ALayout.SlotCount);
-        except
-          on E: EOutOfMemory do
-            raise EResPackTooLarge.Create('respack: digest cache too large for host');
-        end;
-        for K := 0 to ALayout.SlotCount - 1 do
-        begin
-          J := ALayout.Slots[K].SrcIdx;
-          BytesZero(@SlotDigests[K][0], RESPACK_DIGEST_SIZE);
-          AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @SlotDigests[K][0]);
-        end;
-        for I := 0 to N - 1 do
-        begin
-          J := ALayout.Order[I];
-          S := ALayout.EntrySlots[J];
-          AWrite(@SlotDigests[S][0], RESPACK_DIGEST_SIZE);
-        end;
-        SlotDigests := nil;
-      end
-      else
-        for I := 0 to N - 1 do
-        begin
-          J := ALayout.Order[I];
-          BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
-          AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @DigestTmp[0]);
-          AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
-        end;
+        J := ALayout.Order[I];
+        BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+        AOpts.DigestFunc(AEntries[J].Data, AEntries[J].DataSize, @DigestTmp[0]);
+        AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+      end;
     if N > 0 then
       Cur := ALayout.DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
   end;
 
-  { 哈希段（opt-in）：digest/data 之后 8 对齐直排，FillHash 单源；
-    transient 桶数×8 堆缓冲（AWrite 单次），与 digest 缓存同式，异常自动释放。
-    间隙零填后 Cur 落 Total，与 ValidateEmitLayout 的 hash-end 相等断言一致。 }
+  { 哈希段（opt-in）：digest/data 之后 8 对齐直排，FillHashRange 单源分片；
+    HeadBuf 已落盘故先释放，HashChunk 64K 封顶（8192 桶/片），无桶数×8 全量具化，
+    峰值 ~1×+64K；托管释放不丢。与 ValidateEmitLayout 的 hash-end 相等断言一致。 }
   if ALayout.HashBuckets > 0 then
   begin
     if ALayout.HashBase > Cur then
       WriteZeros(AWrite, ALayout.HashBase - Cur);
     if ALayout.HashBuckets > High(SizeUInt) div SizeUInt(RESPACK_HASH_ENTRY_SIZE) then
       raise EResPackTooLarge.Create('respack: hash segment too large for host');
+    HeadBuf := nil;
+    HCapBuckets := RESPACK_WRITER_HEAD_CHUNK div SizeUInt(RESPACK_HASH_ENTRY_SIZE);
+    if HCapBuckets = 0 then HCapBuckets := 1;
     try
-      SetLength(HashSeg, ALayout.HashBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
+      if ALayout.HashBuckets < HCapBuckets then
+        SetLength(HashChunk, ALayout.HashBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE))
+      else
+        SetLength(HashChunk, HCapBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
     except
       on E: EOutOfMemory do
         raise EResPackTooLarge.Create('respack: hash segment too large for host');
     end;
-    if Length(HashSeg) > 0 then
-    begin
-      ResPackWriterFillHash(@HashSeg[0], AEntries, AOpts, ALayout);
-      AWrite(@HashSeg[0], SizeUInt(Length(HashSeg)));
+    try
+      HStart := 0;
+      while HStart < ALayout.HashBuckets do
+      begin
+        HCount := ALayout.HashBuckets - HStart;
+        if HCount > HCapBuckets then HCount := HCapBuckets;
+        ResPackWriterFillHashRange(@HashChunk[0], AEntries, AOpts, ALayout, HStart, HCount);
+        AWrite(@HashChunk[0], HCount * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
+        Inc(HStart, HCount);
+      end;
+    finally
+      HashChunk := nil;
     end;
-    HashSeg := nil;
     Cur := ALayout.Total;
   end;
 end;
@@ -397,11 +393,20 @@ begin
   Off := 0;
   Sink :=
     procedure(const AData: PByte; const ASize: SizeUInt)
+    var
+      Rem: SizeUInt;
     begin
       if ASize = 0 then Exit;
+      if AData = nil then
+        raise EResPackError.Create('respack: stream chunk has nil data');
+      if Off > SizeUInt(Total) then
+        raise EResPackError.Create('respack: stream size mismatch');
+      Rem := SizeUInt(Total) - Off;
+      if ASize > Rem then
+        raise EResPackError.Create('respack: stream size mismatch');
       BytesCopy(Buf + Off, AData, ASize);
       Inc(Off, ASize);
-    end; { 单闭包/Build，堆分配一次，零每块分配；BytesCopy inline 快道 }
+    end; { 越界前置 guard，布局/发射分叉即拒，零堆越界写；BytesCopy inline 快道 }
   try
     ResPackEmitLayout(AEntries, AOpts, ALayout, Sink);
     if Off <> SizeUInt(Total) then
@@ -414,6 +419,22 @@ begin
     if Buf <> nil then
       FreeMem(Buf);
     raise;
+  end;
+end;
+
+function ResPackBuildBlobFromEntries(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions): TResPackBlob;
+var
+  L: TResPackLayout;
+begin
+  Result.Data := nil;
+  Result.Size := 0;
+  Result.Owned := False;
+  ResPackComputeLayout(AEntries, AOpts, L);
+  try
+    Result := ResPackBuildLayoutBlob(AEntries, AOpts, L);
+  finally
+    ResPackLayoutClear(L);
   end;
 end;
 

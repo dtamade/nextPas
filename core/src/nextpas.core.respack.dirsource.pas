@@ -1,6 +1,6 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包适配：唯一 L2→L2 FS seam（fs+path；io.mapped 经 dirsource.mmap 单源，本单元不直引），流式mmap 零双驻留 ~1×+头，generic TWalkCtx/EnsureWalkCapacity/WalkPrePlain/WalkPreEmbed + CleanRootDir/AppendMmapEntry/BuildBlobFromEntries 单源，<800 行免拆。 }
+{** @desc 目录 → 打包适配：唯一 L2→L2 FS seam（fs+path；io.mapped 经 dirsource.mmap 单源，本单元不直引），流式mmap 零双驻留 ~1×+头，generic TWalkCtx/EnsureWalkCapacity/WalkPrePlain/WalkPreEmbed + CleanRootDir/AppendMmapEntry 单源，内存组装经 writer.stream.ResPackBuildBlobFromEntries 单源，<800 行免拆。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -79,12 +79,13 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.fs,
+  nextpas.core.mem.base,
   nextpas.core.path,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.respack.dirsource.mmap,
   nextpas.core.respack.reader,
-  nextpas.core.respack.writer,
+  nextpas.core.respack.writer.builder,
   nextpas.core.respack.writer.layout;
 
 type
@@ -504,22 +505,489 @@ begin
   end;
 end;
 
-{ 内存直排构造单源：ComputeLayout 1×（排序/fnv/去重）+ BuildLayoutBlob 直排堆 blob；
-  禁 Size+BuildStream 双算（stream 单源语）。FromDir/EmbedBuild 共用，峰值 ~1×+头，
-  布局经 try..finally ResPackLayoutClear 释放不丢。冷路径，不 inline。 }
-function BuildBlobFromEntries(const AEntries: TResPackInputArray;
-  const AOpts: TResPackBuildOptions): TResPackBlob;
+{ 有界单活锚点：Walk 仅收路径/大小 (0 映射)，布局经 ResPackComputeLayout 1× 基座 + 文件背 fnv/回验补丁，发射按槽单映射；语义等价 ResPackComputeLayout 1× + ResPackBuildLayoutBlob，由 ResPackBuildBlobFromEntries 单源承载；峰值 ~1×+头，并发映射 ≤2，try..finally 不丢。 }
+type
+  TBoundMeta = record
+    EntryPath: string;
+    FilePath: string;
+    Size: SizeUInt;
+    ModTime: Int64;
+  end;
+  TBoundMetaArray = array of TBoundMeta;
+  PBoundCtx = ^TBoundCtx;
+  TBoundCtx = record
+    Root: string;
+    Include: TResPackIncludeFunc;
+    EmbedOpts: TResPackEmbedOptions;
+    IsEmbed: Boolean;
+    Metas: TBoundMetaArray;
+    Count: SizeUInt;
+    Cap: SizeUInt;
+    Total: SizeUInt;
+    Failed: Boolean;
+    FailMsg: string;
+  end;
+
+{ inline 零拷贝：直行扩容，BytesNextCapacity 单源 }
+procedure EnsureBoundCap(var Ctx: TBoundCtx; const ANeeded: SizeUInt); inline;
+begin
+  if Ctx.Count < Ctx.Cap then Exit;
+  Ctx.Cap := BytesNextCapacity(Ctx.Cap, ANeeded);
+  SetLength(Ctx.Metas, Ctx.Cap);
+end;
+
+function WalkProcBoundPlain(const APath: string; const AInfo: TFileInfo;
+  const AErr: Exception; AUserData: Pointer): Boolean;
 var
-  L: TResPackLayout;
+  Ctx: PBoundCtx;
+  Rel: string;
+  St: TFileInfo;
+  LSum: SizeUInt;
+  Idx: SizeUInt;
+begin
+  Result := True;
+  Ctx := PBoundCtx(AUserData);
+  if not WalkPrePlain(APath, AInfo, AErr, Ctx^.Root, Ctx^.Include, Ctx^.Failed, Ctx^.FailMsg, Rel, St, LSum, Ctx^.Total) then
+  begin
+    if Ctx^.Failed then Exit(False) else Exit(True);
+  end;
+  Idx := Ctx^.Count;
+  EnsureBoundCap(Ctx^, Idx + 1);
+  Ctx^.Metas[Idx].EntryPath := Rel;
+  Ctx^.Metas[Idx].FilePath := APath;
+  Ctx^.Metas[Idx].Size := SizeUInt(St.Size);
+  Ctx^.Metas[Idx].ModTime := St.ModTime div 1000000000;
+  Inc(Ctx^.Count);
+  Ctx^.Total := LSum;
+end;
+
+function WalkProcBoundEmbed(const APath: string; const AInfo: TFileInfo;
+  const AErr: Exception; AUserData: Pointer): Boolean;
+var
+  Ctx: PBoundCtx;
+  Rel, Mapped: string;
+  St: TFileInfo;
+  LSum: SizeUInt;
+  Idx: SizeUInt;
+begin
+  Result := True;
+  Ctx := PBoundCtx(AUserData);
+  if not WalkPreEmbed(APath, AInfo, AErr, Ctx^.Root, Ctx^.EmbedOpts, Ctx^.Failed, Ctx^.FailMsg, Rel, Mapped, St, LSum, Ctx^.Total) then
+  begin
+    if Ctx^.Failed then Exit(False) else Exit(True);
+  end;
+  Idx := Ctx^.Count;
+  EnsureBoundCap(Ctx^, Idx + 1);
+  Ctx^.Metas[Idx].EntryPath := Mapped;
+  Ctx^.Metas[Idx].FilePath := APath;
+  Ctx^.Metas[Idx].Size := SizeUInt(St.Size);
+  Ctx^.Metas[Idx].ModTime := St.ModTime div 1000000000;
+  Inc(Ctx^.Count);
+  Ctx^.Total := LSum;
+end;
+
+{ 0 映射收集：仅路径/大小，失败清串抛 walk 错，不丢 }
+procedure CollectBoundMetas(const ARoot: string;
+  const AInclude: TResPackIncludeFunc; out AMetas: TBoundMetaArray);
+var
+  Ctx: TBoundCtx;
+  RootClean: string;
+begin
+  AMetas := nil;
+  RootClean := CleanRootDir(ARoot);
+  Ctx.Root := RootClean;
+  Ctx.Include := AInclude;
+  Ctx.IsEmbed := False;
+  Ctx.Metas := nil;
+  Ctx.Count := 0;
+  Ctx.Cap := 0;
+  Ctx.Total := 0;
+  Ctx.Failed := False;
+  Ctx.FailMsg := '';
+  WalkEx(RootClean, @WalkProcBoundPlain, @Ctx);
+  if Ctx.Failed then
+  begin
+    Ctx.Metas := nil;
+    raise EResPackDirSourceFailed.CreateCtx('walk', ARoot, 'respack.dirsource: ' + Ctx.FailMsg);
+  end;
+  if SizeUInt(Length(Ctx.Metas)) <> Ctx.Count then
+    SetLength(Ctx.Metas, Ctx.Count);
+  AMetas := Ctx.Metas;
+end;
+
+{ 0 映射嵌入收集：校验委派 embed 拥有，空匹配显式报错 }
+procedure CollectBoundEmbedMetas(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions; out AMetas: TBoundMetaArray);
+var
+  Ctx: TBoundCtx;
+  RootClean: string;
+begin
+  AMetas := nil;
+  ResPackEmbedCheckOptions(AOpts);
+  RootClean := CleanRootDir(ASourceDir);
+  Ctx.Root := RootClean;
+  Ctx.EmbedOpts := AOpts;
+  Ctx.IsEmbed := True;
+  Ctx.Include := nil;
+  Ctx.Metas := nil;
+  Ctx.Count := 0;
+  Ctx.Cap := 0;
+  Ctx.Total := 0;
+  Ctx.Failed := False;
+  Ctx.FailMsg := '';
+  WalkEx(RootClean, @WalkProcBoundEmbed, @Ctx);
+  if Ctx.Failed then
+  begin
+    Ctx.Metas := nil;
+    raise EResPackDirSourceFailed.CreateCtx('walk', ASourceDir, 'respack.dirsource: ' + Ctx.FailMsg);
+  end;
+  if SizeUInt(Length(Ctx.Metas)) <> Ctx.Count then
+    SetLength(Ctx.Metas, Ctx.Count);
+  if Ctx.Count = 0 then
+  begin
+    Ctx.Metas := nil;
+    raise EResPackError.Create('respack.embed: no entries matched after ' +
+      'filter/mapping (source "' + ASourceDir + '")');
+  end;
+  AMetas := Ctx.Metas;
+end;
+
+{ 单活零拷贝：单文件视图哈希，finally 释锚，不 inline 冷路径 }
+function BoundFileFnv(const AFilePath: string; const ASize: SizeUInt): UInt32;
+var
+  LMap: IMappedFile;
+  LErr: string;
+begin
+  if ASize = 0 then
+    Exit(ResPackFnv1a32(nil, 0));
+  if not TryMmapRequire(AFilePath, Int64(ASize), LMap, LErr) then
+    raise EResPackDirSourceFailed.CreateCtx('mmap', AFilePath, 'respack.dirsource: ' + LErr);
+  try
+    if (LMap = nil) or (LMap.Data = nil) then
+      raise EResPackDirSourceFailed.CreateCtx('mmap', AFilePath, 'respack.dirsource: empty mapping');
+    Result := ResPackFnv1a32(LMap.Data, ASize);
+  finally
+    LMap := nil;
+  end;
+end;
+
+{ 双活上限：两文件视图比对，SpanEqual 单源，finally 双释 }
+function BoundFilesEqual(const APathA, APathB: string; const ASize: SizeUInt): Boolean;
+var
+  LMapA, LMapB: IMappedFile;
+  LErr: string;
+begin
+  if ASize = 0 then Exit(True);
+  if APathA = APathB then Exit(True);
+  if not TryMmapRequire(APathA, Int64(ASize), LMapA, LErr) then
+    raise EResPackDirSourceFailed.CreateCtx('mmap', APathA, 'respack.dirsource: ' + LErr);
+  try
+    if not TryMmapRequire(APathB, Int64(ASize), LMapB, LErr) then
+      raise EResPackDirSourceFailed.CreateCtx('mmap', APathB, 'respack.dirsource: ' + LErr);
+    try
+      Result := SpanEqual(TByteSpan.Create(LMapA.Data, ASize), TByteSpan.Create(LMapB.Data, ASize));
+    finally
+      LMapB := nil;
+    end;
+  finally
+    LMapA := nil;
+  end;
+end;
+
+{ 单活零拷贝直写：视图经 AWrite 单次，finally 释锚 }
+procedure BoundWriteFile(const AFilePath: string; const ASize: SizeUInt;
+  const AWrite: TResPackWriteProc);
+var
+  LMap: IMappedFile;
+  LErr: string;
+begin
+  if ASize = 0 then Exit;
+  if not TryMmapRequire(AFilePath, Int64(ASize), LMap, LErr) then
+    raise EResPackDirSourceFailed.CreateCtx('mmap', AFilePath, 'respack.dirsource: ' + LErr);
+  try
+    AWrite(LMap.Data, ASize);
+  finally
+    LMap := nil;
+  end;
+end;
+
+{ 单活摘要：视图经 DigestFunc 单次，空文件传 nil/0 }
+procedure BoundDigestFile(const AFilePath: string; const ASize: SizeUInt;
+  const AFunc: TResPackDigestFunc; const ADst: PByte);
+var
+  LMap: IMappedFile;
+  LErr: string;
+begin
+  if ASize = 0 then
+  begin
+    AFunc(nil, 0, ADst);
+    Exit;
+  end;
+  if not TryMmapRequire(AFilePath, Int64(ASize), LMap, LErr) then
+    raise EResPackDirSourceFailed.CreateCtx('mmap', AFilePath, 'respack.dirsource: ' + LErr);
+  try
+    AFunc(LMap.Data, ASize, ADst);
+  finally
+    LMap := nil;
+  end;
+end;
+
+{ 零页分段：BYTES_ZERO_PAGE 单源，含循环不 inline }
+procedure BoundWriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64);
+var
+  N: UInt64;
+  L: SizeUInt;
+begin
+  N := ACount;
+  while N > 0 do
+  begin
+    if N >= BYTES_ZERO_PAGE_SIZE then L := BYTES_ZERO_PAGE_SIZE else L := SizeUInt(N);
+    AWrite(@BYTES_ZERO_PAGE[0], L);
+    Dec(N, L);
+  end;
+end;
+
+{ 有界布局：dummy 基座排序 + 单活哈希 + 双活上限回验；对齐经 mem.base 单源 }
+procedure BuildBoundLayout(const AMetas: TBoundMetaArray;
+  const AOpts: TResPackBuildOptions; out ALayout: TResPackLayout);
+var
+  N, I, J, K: SizeUInt;
+  LDummy: Byte;
+  Dummy: TResPackInputArray;
+  BaseOpts: TResPackBuildOptions;
+  Fnv: array of UInt32;
+  Cur, EndData, DigOff, Total, HashBase: UInt64;
+  Buckets: SizeUInt;
+begin
+  ResPackLayoutClear(ALayout);
+  N := SizeUInt(Length(AMetas));
+  LDummy := 0;
+  SetLength(Dummy, N);
+  if N > 0 then
+    for I := 0 to N - 1 do
+    begin
+      Dummy[I].Path := AMetas[I].EntryPath;
+      Dummy[I].DataSize := AMetas[I].Size;
+      Dummy[I].ModTime := AMetas[I].ModTime;
+      if AMetas[I].Size = 0 then Dummy[I].Data := nil else Dummy[I].Data := @LDummy;
+    end;
+  BaseOpts := AOpts;
+  BaseOpts.Deduplicate := False;
+  BaseOpts.Hashes := False;
+  ResPackComputeLayout(Dummy, BaseOpts, ALayout);
+  Dummy := nil;
+  if N = 0 then Exit;
+  if (not AOpts.Deduplicate) and (not AOpts.Hashes) then Exit;
+  SetLength(Fnv, N);
+  for I := 0 to N - 1 do
+    Fnv[I] := BoundFileFnv(AMetas[I].FilePath, AMetas[I].Size);
+  if not AOpts.Deduplicate then
+  begin
+    SetLength(ALayout.FnvBuf, N);
+    for I := 0 to N - 1 do
+      ALayout.FnvBuf[I] := Fnv[I];
+    for K := 0 to ALayout.SlotCount - 1 do
+      ALayout.Slots[K].Fnv := Fnv[ALayout.Slots[K].SrcIdx];
+    Fnv := nil;
+    Exit;
+  end;
+  SetLength(ALayout.FnvBuf, N);
+  for I := 0 to N - 1 do
+    ALayout.FnvBuf[I] := Fnv[I];
+  ALayout.SlotCount := 0;
+  Cur := ALayout.DataStart;
+  for I := 0 to N - 1 do
+  begin
+    J := ALayout.Order[I];
+    ALayout.EntrySlots[J] := SizeUInt(-1);
+    if ALayout.SlotCount > 0 then
+      for K := 0 to ALayout.SlotCount - 1 do
+        if (ALayout.Slots[K].Fnv = Fnv[J]) and (AMetas[J].Size = AMetas[ALayout.Slots[K].SrcIdx].Size) then
+          if (AMetas[J].Size = 0) or BoundFilesEqual(AMetas[J].FilePath, AMetas[ALayout.Slots[K].SrcIdx].FilePath, AMetas[J].Size) then
+          begin
+            ALayout.EntrySlots[J] := K;
+            Break;
+          end;
+    if ALayout.EntrySlots[J] = SizeUInt(-1) then
+    begin
+      Cur := nextpas.core.mem.base.AlignUp64(Cur, RESPACK_DATA_ALIGN);
+      ALayout.Slots[ALayout.SlotCount].Offset := Cur;
+      ALayout.Slots[ALayout.SlotCount].SrcIdx := J;
+      ALayout.Slots[ALayout.SlotCount].Fnv := Fnv[J];
+      ALayout.EntrySlots[J] := ALayout.SlotCount;
+      Cur := Cur + UInt64(AMetas[J].Size);
+      Inc(ALayout.SlotCount);
+    end;
+  end;
+  Fnv := nil;
+  EndData := Cur;
+  if AOpts.DigestFunc <> nil then
+  begin
+    DigOff := nextpas.core.mem.base.AlignUp64(EndData, 4);
+    if (DigOff = 0) and (EndData <> 0) then
+      raise EResPackError.Create('respack: digest offset overflow');
+    if N > High(UInt64) div RESPACK_DIGEST_SIZE then
+      raise EResPackTooLarge.Create('respack: digest size overflow');
+    if DigOff > High(UInt64) - UInt64(N) * RESPACK_DIGEST_SIZE then
+      raise EResPackTooLarge.Create('respack: total size overflow');
+    Total := DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
+  end
+  else
+  begin
+    DigOff := 0;
+    Total := EndData;
+  end;
+  Buckets := ALayout.HashBuckets;
+  if AOpts.HashIndex and (N > 0) then
+  begin
+    if Buckets > High(UInt64) div SizeUInt(RESPACK_HASH_ENTRY_SIZE) then
+      raise EResPackTooLarge.Create('respack: hash segment too large for host');
+    if Total > High(UInt64) - (RESPACK_HASH_ALIGN - 1) then
+      raise EResPackTooLarge.Create('respack: hash alignment overflow');
+    HashBase := nextpas.core.mem.base.AlignUp64(Total, RESPACK_HASH_ALIGN);
+    if HashBase > High(UInt64) - UInt64(Buckets) * RESPACK_HASH_ENTRY_SIZE then
+      raise EResPackTooLarge.Create('respack: total size overflow');
+    ALayout.HashBase := HashBase;
+    Total := HashBase + UInt64(Buckets) * RESPACK_HASH_ENTRY_SIZE;
+  end;
+  if Total > High(SizeUInt) then
+    raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
+  ALayout.DigOff := DigOff;
+  ALayout.Total := Total;
+end;
+
+{ 有界发射：头/哈希经 builder 单源，数/摘按槽单活，finally 外层清布局 }
+procedure EmitBoundLayout(const AMetas: TBoundMetaArray;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
+  const AWrite: TResPackWriteProc);
+var
+  N, I, J, K, S: SizeUInt;
+  Cur, Gap: UInt64;
+  HeadBuf, HashSeg: TBytes;
+  Dummy: TResPackInputArray;
+  LDummy: Byte;
+  DigestTmp: TResPackDigest;
+  SlotDigests: array of TResPackDigest;
+begin
+  if not Assigned(AWrite) then
+    raise EResPackError.Create('respack.stream: Write proc is nil');
+  N := ALayout.N;
+  LDummy := 0;
+  SetLength(Dummy, N);
+  if N > 0 then
+    for I := 0 to N - 1 do
+    begin
+      Dummy[I].Path := AMetas[I].EntryPath;
+      Dummy[I].DataSize := AMetas[I].Size;
+      Dummy[I].ModTime := AMetas[I].ModTime;
+      if AMetas[I].Size = 0 then Dummy[I].Data := nil else Dummy[I].Data := @LDummy;
+    end;
+  if ALayout.DataStart > 0 then
+  begin
+    SetLength(HeadBuf, SizeUInt(ALayout.DataStart));
+    ResPackWriterFillHead(@HeadBuf[0], Dummy, AOpts, ALayout);
+    AWrite(@HeadBuf[0], SizeUInt(ALayout.DataStart));
+    HeadBuf := nil;
+  end;
+  Cur := ALayout.DataStart;
+  if ALayout.SlotCount > 0 then
+    for K := 0 to ALayout.SlotCount - 1 do
+    begin
+      Gap := ALayout.Slots[K].Offset - Cur;
+      if Gap > 0 then
+        BoundWriteZeros(AWrite, Gap);
+      J := ALayout.Slots[K].SrcIdx;
+      if AMetas[J].Size > 0 then
+        BoundWriteFile(AMetas[J].FilePath, AMetas[J].Size, AWrite);
+      Cur := ALayout.Slots[K].Offset + UInt64(AMetas[J].Size);
+    end;
+  if AOpts.DigestFunc <> nil then
+  begin
+    if ALayout.DigOff > Cur then
+      BoundWriteZeros(AWrite, ALayout.DigOff - Cur);
+    Cur := ALayout.DigOff;
+    if N > 0 then
+      if (ALayout.SlotCount > 0) and (ALayout.SlotCount < N) then
+      begin
+        SetLength(SlotDigests, ALayout.SlotCount);
+        for K := 0 to ALayout.SlotCount - 1 do
+        begin
+          J := ALayout.Slots[K].SrcIdx;
+          BytesZero(@SlotDigests[K][0], RESPACK_DIGEST_SIZE);
+          BoundDigestFile(AMetas[J].FilePath, AMetas[J].Size, AOpts.DigestFunc, @SlotDigests[K][0]);
+        end;
+        for I := 0 to N - 1 do
+        begin
+          J := ALayout.Order[I];
+          S := ALayout.EntrySlots[J];
+          AWrite(@SlotDigests[S][0], RESPACK_DIGEST_SIZE);
+        end;
+        SlotDigests := nil;
+      end
+      else
+        for I := 0 to N - 1 do
+        begin
+          J := ALayout.Order[I];
+          BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+          BoundDigestFile(AMetas[J].FilePath, AMetas[J].Size, AOpts.DigestFunc, @DigestTmp[0]);
+          AWrite(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+        end;
+    if N > 0 then
+      Cur := ALayout.DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
+  end;
+  if ALayout.HashBuckets > 0 then
+  begin
+    if ALayout.HashBase > Cur then
+      BoundWriteZeros(AWrite, ALayout.HashBase - Cur);
+    SetLength(HashSeg, ALayout.HashBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
+    if Length(HashSeg) > 0 then
+    begin
+      ResPackWriterFillHash(@HashSeg[0], Dummy, AOpts, ALayout);
+      AWrite(@HashSeg[0], SizeUInt(Length(HashSeg)));
+    end;
+    HashSeg := nil;
+  end;
+  Dummy := nil;
+end;
+
+{ 有界内存组装：单次 GetMem + BytesCopy 单源直填，异常 FreeMem 不丢 }
+function BuildBoundBlob(const AMetas: TBoundMetaArray;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout): TResPackBlob;
+var
+  Total: UInt64;
+  Buf: PByte;
+  Off: SizeUInt;
+  Sink: TResPackWriteProc;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  ResPackComputeLayout(AEntries, AOpts, L);
+  Total := ALayout.Total;
+  if Total = 0 then Exit;
+  if Total > High(SizeUInt) then
+    raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
+  Buf := nil;
+  GetMem(Buf, SizeUInt(Total));
+  Off := 0;
+  Sink :=
+    procedure(const AData: PByte; const ASize: SizeUInt)
+    begin
+      if ASize = 0 then Exit;
+      BytesCopy(Buf + Off, AData, ASize);
+      Inc(Off, ASize);
+    end;
   try
-    Result := ResPackBuildLayoutBlob(AEntries, AOpts, L);
-  finally
-    ResPackLayoutClear(L);
+    EmitBoundLayout(AMetas, AOpts, ALayout, Sink);
+    if Off <> SizeUInt(Total) then
+      raise EResPackError.Create('respack: stream size mismatch');
+    Result.Data := Buf;
+    Result.Size := SizeUInt(Total);
+    Result.Owned := True;
+    Buf := nil;
+  except
+    if Buf <> nil then
+      FreeMem(Buf);
+    raise;
   end;
 end;
 
@@ -527,54 +995,64 @@ procedure ResPackBuildStreamFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc;
   const AInclude: TResPackIncludeFunc);
 var
-  Entries: TResPackInputArray;
-  Anchors: TResPackMapsArray;
+  Metas: TBoundMetaArray;
+  L: TResPackLayout;
 begin
   if not Assigned(AWrite) then
     raise EResPackError.Create('respack.dirsource: Write proc is nil');
-  CollectStreamEntries(ARoot, AInclude, Entries, Anchors);
+  CollectBoundMetas(ARoot, AInclude, Metas);
   try
-    { 流式两遍零双驻留：复用 writer.stream 单源布局，峰值 ~1×+头，接口锚点在 BuildStream 期间保活 }
-    ResPackBuildStream(Entries, AOpts, AWrite);
+    BuildBoundLayout(Metas, AOpts, L);
+    try
+      EmitBoundLayout(Metas, AOpts, L, AWrite);
+    finally
+      ResPackLayoutClear(L);
+    end;
   finally
-    { 稳定性：接口托管的 mmap 视图随 Anchors 清空自动 Unmap，异常路径亦不丢资源 }
-    SetLength(Anchors, 0);
-    SetLength(Entries, 0);
+    SetLength(Metas, 0);
   end;
 end;
 
 function ResPackBuildFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions; const AInclude: TResPackIncludeFunc): TResPackBlob;
 var
-  Entries: TResPackInputArray;
-  Anchors: TResPackMapsArray;
+  Metas: TBoundMetaArray;
+  L: TResPackLayout;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单次 Walk + 单次布局：Collect 单源枚举一次，直排经 BuildBlobFromEntries 单源；
-    禁 Size+BuildStream 双算（stream 单源语）。峰值 ~1×+头，try..finally 释放不丢 }
-  CollectStreamEntries(ARoot, AInclude, Entries, Anchors);
+  { 有界单活：0 映射收集 + 单布局 + 单活发射，峰值 ~1×+头，finally 不丢 }
+  CollectBoundMetas(ARoot, AInclude, Metas);
   try
-    Result := BuildBlobFromEntries(Entries, AOpts);
+    BuildBoundLayout(Metas, AOpts, L);
+    try
+      Result := BuildBoundBlob(Metas, AOpts, L);
+    finally
+      ResPackLayoutClear(L);
+    end;
   finally
-    SetLength(Anchors, 0);
-    SetLength(Entries, 0);
+    SetLength(Metas, 0);
   end;
 end;
 
 function ResPackBuildStreamSizeFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions; const AInclude: TResPackIncludeFunc): UInt64;
 var
-  Entries: TResPackInputArray;
-  Anchors: TResPackMapsArray;
+  Metas: TBoundMetaArray;
+  L: TResPackLayout;
 begin
-  CollectStreamEntries(ARoot, AInclude, Entries, Anchors);
+  { 有界预取：布局 Total 直读，单活哈希/双活回验，并发映射 ≤2 }
+  CollectBoundMetas(ARoot, AInclude, Metas);
   try
-    Result := ResPackBuildStreamSize(Entries, AOpts);
+    BuildBoundLayout(Metas, AOpts, L);
+    try
+      Result := L.Total;
+    finally
+      ResPackLayoutClear(L);
+    end;
   finally
-    SetLength(Anchors, 0);
-    SetLength(Entries, 0);
+    SetLength(Metas, 0);
   end;
 end;
 
@@ -718,54 +1196,65 @@ end;
 procedure ResPackEmbedBuildStream(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions; const AWrite: TResPackWriteProc);
 var
-  Entries: TResPackInputArray;
-  Anchors: TResPackMapsArray;
+  Metas: TBoundMetaArray;
+  L: TResPackLayout;
 begin
   if not Assigned(AWrite) then
     raise EResPackError.Create('respack.dirsource: Write proc is nil');
-  CollectEmbedEntries(ASourceDir, AOpts, Entries, Anchors);
+  { 有界单活：嵌入收集 0 映射 + 单布局 + 单活发射，finally 不丢 }
+  CollectBoundEmbedMetas(ASourceDir, AOpts, Metas);
   try
-    { 流式mmap 零拷贝 + writer.stream 两遍零双驻留：峰值 ~1×+头（mmap 虚存零堆拷贝 + 头块 KB 级分段 AWrite），稳定性 try..finally 释放不丢；单源 ResPackBuildStream 复用 writer.layout }
-    ResPackBuildStream(Entries, AOpts.Build, AWrite);
+    BuildBoundLayout(Metas, AOpts.Build, L);
+    try
+      EmitBoundLayout(Metas, AOpts.Build, L, AWrite);
+    finally
+      ResPackLayoutClear(L);
+    end;
   finally
-    SetLength(Anchors, 0);
-    SetLength(Entries, 0);
+    SetLength(Metas, 0);
   end;
 end;
 
 function ResPackEmbedStreamSizeFromDir(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): UInt64;
 var
-  Entries: TResPackInputArray;
-  Anchors: TResPackMapsArray;
+  Metas: TBoundMetaArray;
+  L: TResPackLayout;
 begin
-  CollectEmbedEntries(ASourceDir, AOpts, Entries, Anchors);
+  { 有界预取：嵌入布局 Total 直读，并发映射 ≤2 }
+  CollectBoundEmbedMetas(ASourceDir, AOpts, Metas);
   try
-    Result := ResPackBuildStreamSize(Entries, AOpts.Build);
+    BuildBoundLayout(Metas, AOpts.Build, L);
+    try
+      Result := L.Total;
+    finally
+      ResPackLayoutClear(L);
+    end;
   finally
-    SetLength(Anchors, 0);
-    SetLength(Entries, 0);
+    SetLength(Metas, 0);
   end;
 end;
 
 function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob;
 var
-  Entries: TResPackInputArray;
-  Anchors: TResPackMapsArray;
+  Metas: TBoundMetaArray;
+  L: TResPackLayout;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单次 Walk + 单次布局：Collect 单源枚举一次，直排经 BuildBlobFromEntries 单源
-    （与 FromDir 同管线，仅 AOpts.Build 透传）；禁 Size+BuildStream 双算。
-    峰值 ~1×+头，try..finally 释放不丢 }
-  CollectEmbedEntries(ASourceDir, AOpts, Entries, Anchors);
+  { 有界内存组装：单次 Walk + 单布局 + 单活直排，禁双算，finally 不丢 }
+  CollectBoundEmbedMetas(ASourceDir, AOpts, Metas);
   try
-    Result := BuildBlobFromEntries(Entries, AOpts.Build);
+    BuildBoundLayout(Metas, AOpts.Build, L);
+    try
+      Result := BuildBoundBlob(Metas, AOpts.Build, L);
+    finally
+      ResPackLayoutClear(L);
+    end;
   finally
-    SetLength(Anchors, 0);
-    SetLength(Entries, 0);
+    SetLength(Metas, 0);
   end;
 end;
 

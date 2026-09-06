@@ -317,41 +317,57 @@ begin
   if Result < MIN then Result := MIN;
 end;
 
-procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt);
+{ 算桶数+建 arena+分配填$FF 单源；Alloc 返回 slab 内指针零拷贝，$FF 为 -1 链终止哨兵 }
+procedure ResPackHashArenaInit(const AN: SizeUInt; const AExtra: SizeUInt; const ATag: string; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt);
 var
-  NeedArena: SizeUInt;
-  Target: SizeUInt;
-  I: SizeUInt;
+  NeedBuckets, Total, Target: SizeUInt;
+begin
+  AArena := nil;
+  ABucketsHead := nil;
+  ASlotNext := nil;
+  ABucketCount := 0;
+  Target := 0;
+  if not TryMulSizeUInt(AN, 2, Target) then
+    Target := High(SizeUInt);
+  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
+  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedBuckets) then
+    raise EResPackTooLarge.Create('respack: ' + ATag + ' arena size overflow');
+  if not TryAddSizeUInt(NeedBuckets, AExtra, Total) then
+    raise EResPackTooLarge.Create('respack: ' + ATag + ' arena size overflow');
+  try
+    AArena := TLocalArena.Create(Total);
+  except
+    on E: EOutOfMemoryError do
+      raise EResPackTooLarge.Create('respack: ' + ATag + ' arena too large');
+  end;
+  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
+  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
+  if (ABucketsHead = nil) or (ASlotNext = nil) then
+  begin
+    ABucketsHead := nil;
+    ASlotNext := nil;
+    ABucketCount := 0;
+    AArena.Free;
+    AArena := nil;
+    raise EResPackTooLarge.Create('respack: ' + ATag + ' arena alloc failed');
+  end;
+  FillChar(ABucketsHead^, ABucketCount * SizeUInt(SizeOf(SizeInt)), $FF);
+  FillChar(ASlotNext^, AN * SizeUInt(SizeOf(SizeInt)), $FF);
+end;
+
+procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt);
 begin
   AArena := nil;
   ABucketsHead := nil;
   ASlotNext := nil;
   ABucketCount := 0;
   if AN = 0 then Exit;
-  Target := 0;
-  if not TryMulSizeUInt(AN, 2, Target) then
-    Target := High(SizeUInt);
-  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
-  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedArena) then
-    raise EResPackTooLarge.Create('respack: dedup arena size overflow');
-  try
-    AArena := TLocalArena.Create(NeedArena);
-  except
-    on E: EOutOfMemoryError do
-      raise EResPackTooLarge.Create('respack: dedup arena too large');
-  end;
-  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
-  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
-  if (ABucketsHead = nil) or (ASlotNext = nil) then
-    raise EResPackTooLarge.Create('respack: dedup arena alloc failed');
-  FillChar(ABucketsHead^, ABucketCount * SizeUInt(SizeOf(SizeInt)), $FF);
-  FillChar(ASlotNext^, AN * SizeUInt(SizeOf(SizeInt)), $FF);
+  ResPackHashArenaInit(AN, 0, 'dedup', AArena, ABucketsHead, ASlotNext, ABucketCount);
 end;
 
 procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
 var
-  NeedBuckets, NeedDistinct, Total: SizeUInt;
-  Target: SizeUInt;
+  NeedDistinct: SizeUInt;
 begin
   AArena := nil;
   ABucketsHead := nil;
@@ -359,28 +375,19 @@ begin
   ADistinct := nil;
   ABucketCount := 0;
   if AN <= 1 then Exit;
-  Target := 0;
-  if not TryMulSizeUInt(AN, 2, Target) then Target := High(SizeUInt);
-  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
-  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedBuckets) then
-    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
   if not TryMulSizeUInt(AN, SizeUInt(SizeOf(TResPackDistinct)), NeedDistinct) then
     raise EResPackTooLarge.Create('respack: overlap distinct size overflow');
-  if not TryAddSizeUInt(NeedBuckets, NeedDistinct, Total) then
-    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
-  try
-    AArena := TLocalArena.Create(Total);
-  except
-    on E: EOutOfMemoryError do
-      raise EResPackTooLarge.Create('respack: overlap arena too large');
-  end;
-  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
-  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
+  ResPackHashArenaInit(AN, NeedDistinct, 'overlap', AArena, ABucketsHead, ASlotNext, ABucketCount);
   ADistinct := PResPackDistinct(AArena.Alloc(AN * SizeUInt(SizeOf(TResPackDistinct))));
-  if (ABucketsHead = nil) or (ASlotNext = nil) or (ADistinct = nil) then
+  if ADistinct = nil then
+  begin
+    ABucketsHead := nil;
+    ASlotNext := nil;
+    ABucketCount := 0;
+    AArena.Free;
+    AArena := nil;
     raise EResPackTooLarge.Create('respack: overlap arena alloc failed');
-  FillChar(ABucketsHead^, ABucketCount * SizeUInt(SizeOf(SizeInt)), $FF);
-  FillChar(ASlotNext^, AN * SizeUInt(SizeOf(SizeInt)), $FF);
+  end;
 end;
 
 procedure ResPackDedupDone(var AArena: TLocalArena); inline;
