@@ -15,6 +15,19 @@ type
   { 单源于 base，兼容别名，零分叉。 }
   TResPackWriteProc = nextpas.core.respack.base.TResPackWriteProc;
 
+{ 零填分段单源：BYTES_ZERO_PAGE 单源，≤4K 快道 inline，>4K 外联 Loop；
+  writer/dirsource 双 Emit 共用，消两套 WriteZeros 镜像。 }
+procedure ResPackWriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
+{ 头区分片直写单源：≤64K 单次 FillHead 快道，>64K 走 64K chunk（header/index/string 逐段灌 chunk），
+  writer 内存背与 dirsource 文件背共用，峰值 64K 封顶；BytesCopy 单源 inline 零拷贝。 }
+procedure ResPackEmitHead(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
+  const AWrite: TResPackWriteProc);
+{ 哈希段分片直写单源：HashBase 间隙零填 + FillHashRange 8192 桶/片分片，峰值 64K 封顶，
+  无桶数×8 全量具化；writer/dirsource 双 Emit 共用，INV-R5 单源。 }
+procedure ResPackEmitHashSegment(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
+  const AWrite: TResPackWriteProc; var ACur: UInt64);
 { 流式两遍构造：与 ResPackBuild 同确定性（INV-R5），分段经 AWrite 回调输出，
   不一次性持有 Total 输出缓冲。 }
 procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
@@ -63,7 +76,7 @@ begin
   end;
 end;
 
-procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
+procedure ResPackWriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
 begin
   if ACount = 0 then Exit;
   if ACount <= BYTES_ZERO_PAGE_SIZE then
@@ -74,9 +87,154 @@ begin
   WriteZerosLoop(AWrite, ACount);
 end;
 
+{ 内部别名：历史 WriteZeros 调用收敛至 ResPackWriteZeros 单源，inline 零开销。 }
+procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
+begin
+  ResPackWriteZeros(AWrite, ACount);
+end;
+
 function ResPackLayoutTotal(const ALayout: TResPackLayout): UInt64; inline;
 begin
   Result := ALayout.Total;
+end;
+
+procedure ResPackEmitHead(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
+  const AWrite: TResPackWriteProc);
+var
+  N, II, JJ: SizeUInt;
+  HeadBuf: TBytes;
+  Head: PByte;
+  HeadSize: UInt64;
+  CurOff: UInt64;
+  Pad: UInt64;
+  ChunkCap: SizeUInt;
+  ChunkPos: SizeUInt;
+  procedure FlushHead; inline;
+  begin
+    if ChunkPos > 0 then
+    begin
+      AWrite(@HeadBuf[0], ChunkPos);
+      ChunkPos := 0;
+    end;
+  end;
+  procedure WriteHeadBytes(const ASrc: Pointer; ALen: SizeUInt);
+  var
+    Src: PByte;
+    Rem, CopyNow: SizeUInt;
+  begin
+    if (ASrc = nil) or (ALen = 0) then Exit;
+    if ALen <= ChunkCap - ChunkPos then
+    begin
+      BytesCopy(@HeadBuf[ChunkPos], ASrc, ALen);
+      Inc(ChunkPos, ALen);
+      if ChunkPos = ChunkCap then FlushHead;
+      Exit;
+    end;
+    Src := PByte(ASrc);
+    Rem := ALen;
+    while Rem > 0 do
+    begin
+      if ChunkPos = ChunkCap then FlushHead;
+      CopyNow := Rem;
+      if CopyNow > ChunkCap - ChunkPos then CopyNow := ChunkCap - ChunkPos;
+      BytesCopy(@HeadBuf[ChunkPos], Src, CopyNow);
+      Inc(ChunkPos, CopyNow);
+      Inc(Src, CopyNow);
+      Dec(Rem, CopyNow);
+      if ChunkPos = ChunkCap then FlushHead;
+    end;
+  end;
+begin
+  HeadSize := ALayout.DataStart;
+  if HeadSize = 0 then Exit;
+  { 头块大小 = DataStart；≤64K 单次 SetLength+FillHead 快道，>64K 走 64K chunk
+    直写，内存版与流式版逐字节一致由 roundtrip 门禁锁定；峰值 64K 封顶。 }
+  if HeadSize <= UInt64(RESPACK_WRITER_HEAD_CHUNK) then
+  begin
+    SetLength(HeadBuf, SizeUInt(HeadSize));
+    try
+      Head := @HeadBuf[0];
+      ResPackWriterFillHead(Head, AEntries, AOpts, ALayout);
+      AWrite(Head, SizeUInt(HeadSize));
+    finally
+      HeadBuf := nil;
+    end;
+    Exit;
+  end;
+  ChunkCap := RESPACK_WRITER_HEAD_CHUNK;
+  SetLength(HeadBuf, ChunkCap);
+  try
+    ChunkPos := 0;
+    N := ALayout.N;
+    ResPackWriterFillHeader40(@HeadBuf[ChunkPos], AOpts, ALayout);
+    Inc(ChunkPos, RESPACK_HEADER_SIZE);
+    CurOff := ALayout.StrTabBase;
+    if N > 0 then
+      for II := 0 to N - 1 do
+      begin
+        if ChunkCap - ChunkPos < RESPACK_ENTRY_SIZE then FlushHead;
+        JJ := ALayout.Order[II];
+        ResPackWriterFillEntry40(@HeadBuf[ChunkPos], AEntries, AOpts, ALayout, JJ, CurOff);
+        Inc(ChunkPos, RESPACK_ENTRY_SIZE);
+        Inc(CurOff, ALayout.PathLens[JJ]);
+        if ChunkPos = ChunkCap then FlushHead;
+      end;
+    if N > 0 then
+      for II := 0 to N - 1 do
+      begin
+        JJ := ALayout.Order[II];
+        if ALayout.PathLens[JJ] > 0 then
+          WriteHeadBytes(PByte(@AEntries[JJ].Path[1]), ALayout.PathLens[JJ]);
+      end;
+    FlushHead;
+    Pad := 0;
+    if ALayout.DataStart > ALayout.StrTabBase + ALayout.StrLen then
+      Pad := ALayout.DataStart - (ALayout.StrTabBase + ALayout.StrLen);
+    if Pad > 0 then
+      ResPackWriteZeros(AWrite, Pad);
+  finally
+    HeadBuf := nil;
+  end;
+end;
+
+procedure ResPackEmitHashSegment(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
+  const AWrite: TResPackWriteProc; var ACur: UInt64);
+var
+  HashChunk: TBytes;
+  HStart, HCount, HCapBuckets: SizeUInt;
+begin
+  if ALayout.HashBuckets = 0 then Exit;
+  if ALayout.HashBase > ACur then
+    ResPackWriteZeros(AWrite, ALayout.HashBase - ACur);
+  if ALayout.HashBuckets > High(SizeUInt) div SizeUInt(RESPACK_HASH_ENTRY_SIZE) then
+    raise EResPackTooLarge.Create('respack: hash segment too large for host');
+  HCapBuckets := RESPACK_WRITER_HEAD_CHUNK div SizeUInt(RESPACK_HASH_ENTRY_SIZE);
+  if HCapBuckets = 0 then HCapBuckets := 1;
+  try
+    if ALayout.HashBuckets < HCapBuckets then
+      SetLength(HashChunk, ALayout.HashBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE))
+    else
+      SetLength(HashChunk, HCapBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
+  except
+    on E: EOutOfMemory do
+      raise EResPackTooLarge.Create('respack: hash segment too large for host');
+  end;
+  try
+    HStart := 0;
+    while HStart < ALayout.HashBuckets do
+    begin
+      HCount := ALayout.HashBuckets - HStart;
+      if HCount > HCapBuckets then HCount := HCapBuckets;
+      ResPackWriterFillHashRange(@HashChunk[0], AEntries, AOpts, ALayout, HStart, HCount);
+      AWrite(@HashChunk[0], HCount * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
+      Inc(HStart, HCount);
+    end;
+  finally
+    HashChunk := nil;
+  end;
+  ACur := ALayout.Total;
 end;
 
 { 外部 Layout 校验：槽位单调/索引越界/回绕前置拒绝，逆序 Gap 下溢不再落入 UInt64 相减；含循环禁 inline。 }
@@ -160,121 +318,25 @@ procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
 var
   N, I, J, K, S: SizeUInt;
   Cur: UInt64;
-  HeadBuf: TBytes;
-  Head: PByte;
-  HeadSize: UInt64;
   Gap: UInt64;
   DigestTmp: TResPackDigest;
   SlotDigests: array of TResPackDigest;
-  HashChunk: TBytes;
-  HStart, HCount, HCapBuckets: SizeUInt;
-  ChunkCap: SizeUInt;
-  ChunkPos: SizeUInt;
-  procedure FlushHead; inline;
-  begin
-    if ChunkPos > 0 then
-    begin
-      AWrite(@HeadBuf[0], ChunkPos);
-      ChunkPos := 0;
-    end;
-  end;
-  procedure WriteHeadBytes(const ASrc: Pointer; ALen: SizeUInt);
-  var
-    Src: PByte;
-    Rem, CopyNow: SizeUInt;
-  begin
-    if (ASrc = nil) or (ALen = 0) then Exit;
-    if ALen <= ChunkCap - ChunkPos then
-    begin
-      BytesCopy(@HeadBuf[ChunkPos], ASrc, ALen);
-      Inc(ChunkPos, ALen);
-      if ChunkPos = ChunkCap then FlushHead;
-      Exit;
-    end;
-    Src := PByte(ASrc);
-    Rem := ALen;
-    while Rem > 0 do
-    begin
-      if ChunkPos = ChunkCap then FlushHead;
-      CopyNow := Rem;
-      if CopyNow > ChunkCap - ChunkPos then CopyNow := ChunkCap - ChunkPos;
-      BytesCopy(@HeadBuf[ChunkPos], Src, CopyNow);
-      Inc(ChunkPos, CopyNow);
-      Inc(Src, CopyNow);
-      Dec(Rem, CopyNow);
-      if ChunkPos = ChunkCap then FlushHead;
-    end;
-  end;
-  procedure WriteHeadChunked;
-  var
-    II, JJ: SizeUInt;
-    CurOff: UInt64;
-    Pad: UInt64;
-  begin
-    ChunkCap := RESPACK_WRITER_HEAD_CHUNK;
-    { 64K HeadBuf 复用分片直写：header/index/string 逐段灌 chunk，满即落盘 }
-    SetLength(HeadBuf, ChunkCap);
-    ChunkPos := 0;
-    N := ALayout.N;
-    { header/index 直写至 chunk，复用 builder 单源，无中间 40B Tmp 拷贝 }
-    ResPackWriterFillHeader40(@HeadBuf[ChunkPos], AOpts, ALayout);
-    Inc(ChunkPos, RESPACK_HEADER_SIZE);
-    CurOff := ALayout.StrTabBase;
-    if N > 0 then
-      for II := 0 to N - 1 do
-      begin
-        if ChunkCap - ChunkPos < RESPACK_ENTRY_SIZE then FlushHead;
-        JJ := ALayout.Order[II];
-        ResPackWriterFillEntry40(@HeadBuf[ChunkPos], AEntries, AOpts, ALayout, JJ, CurOff);
-        Inc(ChunkPos, RESPACK_ENTRY_SIZE);
-        Inc(CurOff, ALayout.PathLens[JJ]);
-        if ChunkPos = ChunkCap then FlushHead;
-      end;
-    { string table：路径按 Order 顺序零拷贝分片直写，BytesCopy 单源 }
-    if N > 0 then
-      for II := 0 to N - 1 do
-      begin
-        JJ := ALayout.Order[II];
-        if ALayout.PathLens[JJ] > 0 then
-          WriteHeadBytes(PByte(@AEntries[JJ].Path[1]), ALayout.PathLens[JJ]);
-      end;
-    FlushHead;
-    Pad := 0;
-    if ALayout.DataStart > ALayout.StrTabBase + ALayout.StrLen then
-      Pad := ALayout.DataStart - (ALayout.StrTabBase + ALayout.StrLen);
-    if Pad > 0 then
-      WriteZeros(AWrite, Pad);
-  end;
 begin
   if not Assigned(AWrite) then
     raise EResPackError.Create('respack.stream: Write proc is nil');
   ValidateEmitLayout(AEntries, ALayout, Assigned(AOpts.DigestFunc));
-  HeadBuf := nil;
   N := ALayout.N;
-  HeadSize := ALayout.DataStart;
-  { 头块大小 = DataStart；≤64K 单次 SetLength+FillHead 快道，>64K 走 64K chunk
-    直写，内存版与流式版逐字节一致由 roundtrip 门禁锁定。 }
-  if HeadSize > 0 then
-  begin
-    if HeadSize <= UInt64(RESPACK_WRITER_HEAD_CHUNK) then
-    begin
-      SetLength(HeadBuf, SizeUInt(HeadSize));
-      Head := @HeadBuf[0];
-      ResPackWriterFillHead(Head, AEntries, AOpts, ALayout);
-      AWrite(Head, SizeUInt(HeadSize));
-    end
-    else
-      WriteHeadChunked;
-  end;
+  { 头区分片单源于 ResPackEmitHead（≤64K 快道/>64K chunk，峰值 64K 封顶）。 }
+  ResPackEmitHead(AEntries, AOpts, ALayout, AWrite);
 
   { data 槽位：按 Offset 顺序分段零拷贝直写，槽间隙零填 }
-  Cur := HeadSize;
+  Cur := ALayout.DataStart;
   if ALayout.SlotCount > 0 then
     for K := 0 to ALayout.SlotCount - 1 do
     begin
       Gap := ALayout.Slots[K].Offset - Cur;
       if Gap > 0 then
-        WriteZeros(AWrite, Gap);
+        ResPackWriteZeros(AWrite, Gap);
       J := ALayout.Slots[K].SrcIdx;
       if AEntries[J].DataSize > 0 then
         AWrite(AEntries[J].Data, AEntries[J].DataSize);
@@ -285,7 +347,7 @@ begin
   if AOpts.DigestFunc <> nil then
   begin
     if ALayout.DigOff > Cur then
-      WriteZeros(AWrite, ALayout.DigOff - Cur);
+      ResPackWriteZeros(AWrite, ALayout.DigOff - Cur);
     Cur := ALayout.DigOff;
     { 摘要与 index 同序（FORMAT.md）：重复包按槽单算经 EntrySlots 直排复用，
       无重复零堆快道；BytesZero 单源 inline，槽摘要指针零拷贝直写，INV-R5 一致。 }
@@ -327,42 +389,8 @@ begin
       Cur := ALayout.DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
   end;
 
-  { 哈希段（opt-in）：digest/data 之后 8 对齐直排，FillHashRange 单源分片；
-    HeadBuf 已落盘故先释放，HashChunk 64K 封顶（8192 桶/片），无桶数×8 全量具化，
-    峰值 ~1×+64K；托管释放不丢。与 ValidateEmitLayout 的 hash-end 相等断言一致。 }
-  if ALayout.HashBuckets > 0 then
-  begin
-    if ALayout.HashBase > Cur then
-      WriteZeros(AWrite, ALayout.HashBase - Cur);
-    if ALayout.HashBuckets > High(SizeUInt) div SizeUInt(RESPACK_HASH_ENTRY_SIZE) then
-      raise EResPackTooLarge.Create('respack: hash segment too large for host');
-    HeadBuf := nil;
-    HCapBuckets := RESPACK_WRITER_HEAD_CHUNK div SizeUInt(RESPACK_HASH_ENTRY_SIZE);
-    if HCapBuckets = 0 then HCapBuckets := 1;
-    try
-      if ALayout.HashBuckets < HCapBuckets then
-        SetLength(HashChunk, ALayout.HashBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE))
-      else
-        SetLength(HashChunk, HCapBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
-    except
-      on E: EOutOfMemory do
-        raise EResPackTooLarge.Create('respack: hash segment too large for host');
-    end;
-    try
-      HStart := 0;
-      while HStart < ALayout.HashBuckets do
-      begin
-        HCount := ALayout.HashBuckets - HStart;
-        if HCount > HCapBuckets then HCount := HCapBuckets;
-        ResPackWriterFillHashRange(@HashChunk[0], AEntries, AOpts, ALayout, HStart, HCount);
-        AWrite(@HashChunk[0], HCount * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
-        Inc(HStart, HCount);
-      end;
-    finally
-      HashChunk := nil;
-    end;
-    Cur := ALayout.Total;
-  end;
+  { 哈希段分片单源于 ResPackEmitHashSegment（8192 桶/片，峰值 64K 封顶）。 }
+  ResPackEmitHashSegment(AEntries, AOpts, ALayout, AWrite, Cur);
 end;
 
 procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;

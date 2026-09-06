@@ -902,6 +902,24 @@ begin
   end;
 end;
 
+{ 非法查询一律 False（ValidSpan 预扫，不进入索引结构）。 }
+procedure TestFindInvalidReturnsFalse;
+var
+  B: TResPackBlob;
+  RP: TResPack;
+  E: TResPackEntry;
+begin
+  BuildBase(B);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(not RP.Find('../zz', E), 'non-canonical query misses');
+    Check(not RP.Find('', E), 'empty query misses');
+    RP.Close;
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.respack.reader');
   T.Test('happy open/find/content', @TestHappyOpen);
@@ -934,5 +952,6 @@ begin
   T.Test('hash corrupt rejects', @TestHashCorruptRejects);
   T.Test('hash late corrupt rejects', @TestHashLateCorruptRejects);
   T.Test('hash with digest', @TestHashWithDigest);
+  T.Test('find invalid returns false', @TestFindInvalidReturnsFalse);
   if not T.Run then Halt(1);
 end.

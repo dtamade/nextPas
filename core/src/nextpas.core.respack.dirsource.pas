@@ -1,6 +1,6 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包适配：唯一 L2→L2 FS seam（fs+path；io.mapped 经 dirsource.mmap 单源，本单元不直引），流式mmap 零双驻留 ~1×+头，WalkPrePlain/Embed + CleanRootDir 单源 inline 零拷贝，内存组装契约镜像 writer.stream.ResPackBuildLayoutBlob（GetMem 单次+BytesCopy 直填+Off 校验+OOM→TooLarge，见 writer.stream.ResPackBuildLayoutBlob；文件背与内存背不同源故骨架镜像非直调），布局基座经 ResPackComputeLayout 1× + 文件背 fnv/哈希回验补丁（去重哈希经 respack.hasharena.ResPackDedupInit 单源，tiny≤4 线性免 arena），发射按槽单映射写+摘要融合（见 writer.stream.ResPackEmitLayout 四阶段镜像；头/哈希经 builder 单源，零页经 BYTES_ZERO_PAGE 单源）。embed 纯逻辑归 embed 拥有（选项校验/Glob/Inc 源），本单元仅收口 IO 走查（ResPackEmbedBuild 系内存 sink 薄封装）。约1100 行：枚举/有界布局/发射/解包同 seam 收口，超阈按 dirsource.walk/embed/extract 拆子模块。 }
+{** @desc 目录 → 打包适配：唯一 L2→L2 FS seam（fs+path；io.mapped 经 dirsource.mmap 单源，本单元不直引），流式mmap 零双驻留 ~1×+64K，WalkPrePlain/Embed + CleanRootDir 单源 inline 零拷贝，内存组装契约镜像 writer.stream.ResPackBuildLayoutBlob（GetMem 单次+BytesCopy 直填+Off 校验+OOM→TooLarge，文件/内存双背骨架镜像非直调），布局基座经 ResPackComputeLayout 1× + 文件背 fnv/哈希回验补丁（去重哈希经 respack.hasharena.ResPackDedupInit 单源，tiny≤4 线性免 arena；尾段总数单源于 writer.layout.ResPackFinishLayoutTail），发射按槽单映射写+摘要融合（头/哈希分片单源于 writer.stream.ResPackEmitHead/ResPackEmitHashSegment，64K 封顶无全量具化；零页单源于 writer.stream.ResPackWriteZeros；去重 FNV 融合于外层单映射，免单独 FNV 全员映射遍）；映射守卫单源于 BoundRequireMap（TryMmapRequire+空映射判空收敛）；embed 纯逻辑归 embed 拥有（选项校验/Glob/Inc 源），本单元仅收口 IO 走查（ResPackEmbedBuild 系内存 sink 薄封装）。枚举/有界布局/发射/解包同 seam 收口，超阈按 dirsource.walk/embed/extract 拆子模块（本 slice 先收敛单源+峰值+守卫，拆分见 docs）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -506,19 +506,18 @@ begin
   AMetas := Ctx.Metas;
 end;
 
+{ 映射守卫单源：TryMmapRequire+空映射判空收敛，四处单活映射（Fnv/Equal/Outer/Emit）及去重外层映射经此单守卫，finally 置 nil 由调用方负责；冷路径不 inline 守 I-Cache。 }
+procedure BoundRequireMap(const APath: string; const ASize: SizeUInt; out AMap: IMappedFile); forward;
+
 { 单活零拷贝：单文件视图哈希，finally 释锚，不 inline 冷路径 }
 function BoundFileFnv(const AFilePath: string; const ASize: SizeUInt): UInt32;
 var
   LMap: IMappedFile;
-  LErr: string;
 begin
   if ASize = 0 then
     Exit(ResPackFnv1a32(nil, 0));
-  if not TryMmapRequire(AFilePath, Int64(ASize), LMap, LErr) then
-    raise EResPackDirSourceFailed.CreateCtx('mmap', AFilePath, 'respack.dirsource: ' + LErr);
+  BoundRequireMap(AFilePath, ASize, LMap);
   try
-    if (LMap = nil) or (LMap.Data = nil) then
-      raise EResPackDirSourceFailed.CreateCtx('mmap', AFilePath, 'respack.dirsource: empty mapping');
     Result := ResPackFnv1a32(LMap.Data, ASize);
   finally
     LMap := nil;
@@ -529,15 +528,12 @@ end;
 function BoundFilesEqual(const APathA, APathB: string; const ASize: SizeUInt): Boolean;
 var
   LMapA, LMapB: IMappedFile;
-  LErr: string;
 begin
   if ASize = 0 then Exit(True);
   if APathA = APathB then Exit(True);
-  if not TryMmapRequire(APathA, Int64(ASize), LMapA, LErr) then
-    raise EResPackDirSourceFailed.CreateCtx('mmap', APathA, 'respack.dirsource: ' + LErr);
+  BoundRequireMap(APathA, ASize, LMapA);
   try
-    if not TryMmapRequire(APathB, Int64(ASize), LMapB, LErr) then
-      raise EResPackDirSourceFailed.CreateCtx('mmap', APathB, 'respack.dirsource: ' + LErr);
+    BoundRequireMap(APathB, ASize, LMapB);
     try
       Result := SpanEqual(TByteSpan.Create(LMapA.Data, ASize), TByteSpan.Create(LMapB.Data, ASize));
     finally
@@ -552,14 +548,10 @@ end;
 function BoundOuterEqualSlot(const AOuterData: PByte; const ASlotPath: string; const ASize: SizeUInt): Boolean; inline;
 var
   LMapB: IMappedFile;
-  LErr: string;
 begin
   if ASize = 0 then Exit(True);
-  if not TryMmapRequire(ASlotPath, Int64(ASize), LMapB, LErr) then
-    raise EResPackDirSourceFailed.CreateCtx('mmap', ASlotPath, 'respack.dirsource: ' + LErr);
+  BoundRequireMap(ASlotPath, ASize, LMapB);
   try
-    if (LMapB = nil) or (LMapB.Data = nil) then
-      raise EResPackDirSourceFailed.CreateCtx('mmap', ASlotPath, 'respack.dirsource: empty mapping');
     Result := SpanEqual(TByteSpan.Create(AOuterData, ASize), TByteSpan.Create(LMapB.Data, ASize));
   finally
     LMapB := nil;
@@ -571,7 +563,6 @@ procedure BoundEmitSlot(const AFilePath: string; const ASize: SizeUInt;
   const AWrite: TResPackWriteProc; const AFunc: TResPackDigestFunc; const ADigestOut: PByte);
 var
   LMap: IMappedFile;
-  LErr: string;
 begin
   if ASize = 0 then
   begin
@@ -579,11 +570,8 @@ begin
       AFunc(nil, 0, ADigestOut);
     Exit;
   end;
-  if not TryMmapRequire(AFilePath, Int64(ASize), LMap, LErr) then
-    raise EResPackDirSourceFailed.CreateCtx('mmap', AFilePath, 'respack.dirsource: ' + LErr);
+  BoundRequireMap(AFilePath, ASize, LMap);
   try
-    if (LMap = nil) or (LMap.Data = nil) then
-      raise EResPackDirSourceFailed.CreateCtx('mmap', AFilePath, 'respack.dirsource: empty mapping');
     AWrite(LMap.Data, ASize);
     if (AFunc <> nil) and (ADigestOut <> nil) then
       AFunc(LMap.Data, ASize, ADigestOut);
@@ -592,33 +580,29 @@ begin
   end;
 end;
 
-{ 零页分段：BYTES_ZERO_PAGE 单源；循环体外联守 I-Cache，≤4K 快道 inline（镜像 writer.stream.WriteZeros）。 }
-procedure BoundWriteZerosLoop(const AWrite: TResPackWriteProc; ACount: UInt64);
+{ 映射守卫单源：TryMmapRequire+空映射判空收敛，四处单活映射（Fnv/Equal/Outer/Emit）及去重外层映射经此单守卫，finally 置 nil 由调用方负责；冷路径不 inline 守 I-Cache。 }
+procedure BoundRequireMap(const APath: string; const ASize: SizeUInt; out AMap: IMappedFile);
 var
-  N: UInt64;
-  L: SizeUInt;
+  LErr: string;
 begin
-  N := ACount;
-  while N > 0 do
+  AMap := nil;
+  if ASize = 0 then Exit;
+  if not TryMmapRequire(APath, Int64(ASize), AMap, LErr) then
+    raise EResPackDirSourceFailed.CreateCtx('mmap', APath, 'respack.dirsource: ' + LErr);
+  if (AMap = nil) or (AMap.Data = nil) then
   begin
-    if N >= BYTES_ZERO_PAGE_SIZE then L := BYTES_ZERO_PAGE_SIZE else L := SizeUInt(N);
-    AWrite(@BYTES_ZERO_PAGE[0], L);
-    Dec(N, L);
+    AMap := nil;
+    raise EResPackDirSourceFailed.CreateCtx('mmap', APath, 'respack.dirsource: empty mapping');
   end;
 end;
 
+{ 零页分段单源于 writer.stream.ResPackWriteZeros（BYTES_ZERO_PAGE 单源经 writer.stream，≤4K 快道 inline）；本单元薄转发，消两套镜像。 }
 procedure BoundWriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
 begin
-  if ACount = 0 then Exit;
-  if ACount <= BYTES_ZERO_PAGE_SIZE then
-  begin
-    AWrite(@BYTES_ZERO_PAGE[0], SizeUInt(ACount));
-    Exit;
-  end;
-  BoundWriteZerosLoop(AWrite, ACount);
+  nextpas.core.respack.writer.stream.ResPackWriteZeros(AWrite, ACount);
 end;
 
-{ 有界布局：dummy 基座排序（熔断前置，免大额瞬时分配）+ 单活哈希 + 哈希去重（respack.hasharena.ResPackDedupInit 单源，tiny≤4 线性免 arena；回验外层单映射复用，并发映射 ≤2）；尾段 digest/hash/total 镜像 writer.layout 溢出钳制，对齐经 mem.base.AlignUp64 单源。 }
+{ 有界布局：dummy 基座排序（熔断前置，免大额瞬时分配）+ 去重 FNV 融合于外层单映射（免单独 FNV 全员映射遍，三映射→两映射）+ 哈希去重（respack.hasharena.ResPackDedupInit 单源，tiny≤4 线性免 arena；回验外层单映射复用，并发映射 ≤2，经 BoundRequireMap 单守卫）；尾段总数单源于 writer.layout.ResPackFinishLayoutTail。 }
 procedure BuildBoundLayout(const AMetas: TBoundMetaArray;
   const AOpts: TResPackBuildOptions; out ALayout: TResPackLayout);
 var
@@ -636,7 +620,6 @@ var
   DedupArena: TLocalArena;
   LOuterMap: IMappedFile;
   LOuterData: PByte;
-  LErr: string;
 begin
   ResPackLayoutClear(ALayout);
   N := SizeUInt(Length(AMetas));
@@ -670,10 +653,10 @@ begin
     on E: EOutOfMemory do
       raise EResPackTooLarge.Create('respack: entry count too large for host');
   end;
-  for I := 0 to N - 1 do
-    Fnv[I] := BoundFileFnv(AMetas[I].FilePath, AMetas[I].Size);
   if not AOpts.Deduplicate then
   begin
+    for I := 0 to N - 1 do
+      Fnv[I] := BoundFileFnv(AMetas[I].FilePath, AMetas[I].Size);
     SetLength(ALayout.FnvBuf, N);
     for I := 0 to N - 1 do
       ALayout.FnvBuf[I] := Fnv[I];
@@ -682,14 +665,13 @@ begin
     Fnv := nil;
     Exit;
   end;
-  SetLength(ALayout.FnvBuf, N);
-  for I := 0 to N - 1 do
-    ALayout.FnvBuf[I] := Fnv[I];
+  { 去重 FNV 融合：免单独 FNV 全员映射遍，Fnv[J] 在外层单映射内由 LOuterData 直算，
+    三映射（FNV/去重/发射）→两映射（去重/发射）+ 内层候选，缺页与系统调用减半。 }
   ALayout.SlotCount := 0;
   Cur := ALayout.DataStart;
   if N <= 4 then
   begin
-    { tiny 线性免 arena：外层每 I 单映射复用，免每候选重映射外层文件。 }
+    { tiny 线性免 arena：外层每 I 单映射复用（BoundRequireMap 单守卫），FNV 融合直算，免每候选重映射外层文件。 }
     for I := 0 to N - 1 do
     begin
       J := ALayout.Order[I];
@@ -698,12 +680,10 @@ begin
       LOuterData := nil;
       if AMetas[J].Size > 0 then
       begin
-        if not TryMmapRequire(AMetas[J].FilePath, Int64(AMetas[J].Size), LOuterMap, LErr) then
-          raise EResPackDirSourceFailed.CreateCtx('mmap', AMetas[J].FilePath, 'respack.dirsource: ' + LErr);
+        BoundRequireMap(AMetas[J].FilePath, AMetas[J].Size, LOuterMap);
         try
-          if (LOuterMap = nil) or (LOuterMap.Data = nil) then
-            raise EResPackDirSourceFailed.CreateCtx('mmap', AMetas[J].FilePath, 'respack.dirsource: empty mapping');
           LOuterData := LOuterMap.Data;
+          Fnv[J] := ResPackFnv1a32(LOuterData, AMetas[J].Size);
           if ALayout.SlotCount > 0 then
             for K := 0 to ALayout.SlotCount - 1 do
               if (ALayout.Slots[K].Fnv = Fnv[J]) and (AMetas[J].Size = AMetas[ALayout.Slots[K].SrcIdx].Size) then
@@ -717,13 +697,17 @@ begin
           LOuterMap := nil;
         end;
       end
-      else if ALayout.SlotCount > 0 then
+      else
+      begin
+        Fnv[J] := ResPackFnv1a32(nil, 0);
+        if ALayout.SlotCount > 0 then
         for K := 0 to ALayout.SlotCount - 1 do
           if (ALayout.Slots[K].Fnv = Fnv[J]) and (AMetas[ALayout.Slots[K].SrcIdx].Size = 0) then
           begin
             ALayout.EntrySlots[J] := K;
             Break;
           end;
+      end;
       if ALayout.EntrySlots[J] = SizeUInt(-1) then
       begin
         Cur := nextpas.core.mem.base.AlignUp64(Cur, RESPACK_DATA_ALIGN);
@@ -748,17 +732,15 @@ begin
       begin
         J := ALayout.Order[I];
         ALayout.EntrySlots[J] := SizeUInt(-1);
-        BucketIdx := SizeUInt(Fnv[J]) and (BucketCount - 1);
         LOuterMap := nil;
         LOuterData := nil;
         if AMetas[J].Size > 0 then
         begin
-          if not TryMmapRequire(AMetas[J].FilePath, Int64(AMetas[J].Size), LOuterMap, LErr) then
-            raise EResPackDirSourceFailed.CreateCtx('mmap', AMetas[J].FilePath, 'respack.dirsource: ' + LErr);
+          BoundRequireMap(AMetas[J].FilePath, AMetas[J].Size, LOuterMap);
           try
-            if (LOuterMap = nil) or (LOuterMap.Data = nil) then
-              raise EResPackDirSourceFailed.CreateCtx('mmap', AMetas[J].FilePath, 'respack.dirsource: empty mapping');
             LOuterData := LOuterMap.Data;
+            Fnv[J] := ResPackFnv1a32(LOuterData, AMetas[J].Size);
+            BucketIdx := SizeUInt(Fnv[J]) and (BucketCount - 1);
             Probe := BucketsHead[BucketIdx];
             while Probe <> -1 do
             begin
@@ -778,6 +760,8 @@ begin
         end
         else
         begin
+          Fnv[J] := ResPackFnv1a32(nil, 0);
+          BucketIdx := SizeUInt(Fnv[J]) and (BucketCount - 1);
           Probe := BucketsHead[BucketIdx];
           while Probe <> -1 do
           begin
@@ -807,51 +791,33 @@ begin
       nextpas.core.respack.hasharena.ResPackDedupDone(DedupArena);
     end;
   end;
+  try
+    SetLength(ALayout.FnvBuf, N);
+  except
+    on E: EOutOfMemory do
+      raise EResPackTooLarge.Create('respack: entry count too large for host');
+  end;
+  for I := 0 to N - 1 do
+    ALayout.FnvBuf[I] := Fnv[I];
   Fnv := nil;
   EndData := Cur;
-  if AOpts.DigestFunc <> nil then
-  begin
-    DigOff := nextpas.core.mem.base.AlignUp64(EndData, 4);
-    if (DigOff = 0) and (EndData <> 0) then
-      raise EResPackError.Create('respack: digest offset overflow');
-    if N > High(UInt64) div RESPACK_DIGEST_SIZE then
-      raise EResPackTooLarge.Create('respack: digest size overflow');
-    if DigOff > High(UInt64) - UInt64(N) * RESPACK_DIGEST_SIZE then
-      raise EResPackTooLarge.Create('respack: total size overflow');
-    Total := DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
-  end
-  else
-  begin
-    DigOff := 0;
-    Total := EndData;
-  end;
-  Buckets := ALayout.HashBuckets;
-  if AOpts.HashIndex and (N > 0) then
-  begin
-    if Buckets > High(UInt64) div SizeUInt(RESPACK_HASH_ENTRY_SIZE) then
-      raise EResPackTooLarge.Create('respack: hash segment too large for host');
-    if Total > High(UInt64) - (RESPACK_HASH_ALIGN - 1) then
-      raise EResPackTooLarge.Create('respack: hash alignment overflow');
-    HashBase := nextpas.core.mem.base.AlignUp64(Total, RESPACK_HASH_ALIGN);
-    if HashBase > High(UInt64) - UInt64(Buckets) * RESPACK_HASH_ENTRY_SIZE then
-      raise EResPackTooLarge.Create('respack: total size overflow');
-    ALayout.HashBase := HashBase;
-    Total := HashBase + UInt64(Buckets) * RESPACK_HASH_ENTRY_SIZE;
-  end;
-  if Total > High(SizeUInt) then
-    raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
+  { 尾段总数单源于 writer.layout.ResPackFinishLayoutTail（digest/哈希对齐+上界，writer/dirsource 共用）；
+    HashSlotIdx 沿用基座（仅路径/order 派生），HashBase/Total 按去重后 EndData 重算。 }
+  ResPackFinishLayoutTail(EndData, N, AOpts.DigestFunc <> nil, AOpts.HashIndex,
+    DigOff, HashBase, Total, Buckets);
   ALayout.DigOff := DigOff;
+  ALayout.HashBase := HashBase;
   ALayout.Total := Total;
+  ALayout.HashBuckets := Buckets;
 end;
 
-{ 有界发射：四阶段镜像 writer.stream.ResPackEmitLayout（头经 builder 单源直排、数据按槽单映射写+摘要融合、摘要按 EntrySlots 直排复用、哈希经 builder 单源；文件背与内存背不同源故骨架镜像非直调，直调需 N 并发映射）；槽单调前置拒绝防 Gap 下溢，Dummy 熔断前置，finally 外层清布局。 }
+{ 有界发射：头/哈希分片单源于 writer.stream.ResPackEmitHead/ResPackEmitHashSegment（64K 封顶，峰值 ~1×+64K），数据按槽单映射写+摘要融合，摘要按 EntrySlots 直排复用；槽单调前置拒绝防 Gap 下溢，Dummy 熔断前置。 }
 procedure EmitBoundLayout(const AMetas: TBoundMetaArray;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
   const AWrite: TResPackWriteProc);
 var
   N, I, J, K, S: SizeUInt;
   Cur, Gap: UInt64;
-  HeadBuf, HashSeg: TBytes;
   Dummy: TResPackInputArray;
   LDummy: Byte;
   SlotDigests: array of TResPackDigest;
@@ -882,13 +848,8 @@ begin
       Dummy[I].ModTime := AMetas[I].ModTime;
       if AMetas[I].Size = 0 then Dummy[I].Data := nil else Dummy[I].Data := @LDummy;
     end;
-  if ALayout.DataStart > 0 then
-  begin
-    SetLength(HeadBuf, SizeUInt(ALayout.DataStart));
-    ResPackWriterFillHead(@HeadBuf[0], Dummy, AOpts, ALayout);
-    AWrite(@HeadBuf[0], SizeUInt(ALayout.DataStart));
-    HeadBuf := nil;
-  end;
+  { 头区分片单源于 writer.stream.ResPackEmitHead（≤64K 快道/>64K chunk，峰值 64K 封顶，无 DataStart 全量具化）。 }
+  nextpas.core.respack.writer.stream.ResPackEmitHead(Dummy, AOpts, ALayout, AWrite);
   Cur := ALayout.DataStart;
   if HasDigest and (ALayout.SlotCount > 0) then
   begin
@@ -936,18 +897,8 @@ begin
       Cur := ALayout.DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
   end;
   SlotDigests := nil;
-  if ALayout.HashBuckets > 0 then
-  begin
-    if ALayout.HashBase > Cur then
-      BoundWriteZeros(AWrite, ALayout.HashBase - Cur);
-    SetLength(HashSeg, ALayout.HashBuckets * SizeUInt(RESPACK_HASH_ENTRY_SIZE));
-    if Length(HashSeg) > 0 then
-    begin
-      ResPackWriterFillHash(@HashSeg[0], Dummy, AOpts, ALayout);
-      AWrite(@HashSeg[0], SizeUInt(Length(HashSeg)));
-    end;
-    HashSeg := nil;
-  end;
+  { 哈希段分片单源于 writer.stream.ResPackEmitHashSegment（8192 桶/片，峰值 64K 封顶，无桶数×8 全量具化）。 }
+  nextpas.core.respack.writer.stream.ResPackEmitHashSegment(Dummy, AOpts, ALayout, AWrite, Cur);
   Dummy := nil;
 end;
 

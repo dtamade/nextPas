@@ -42,6 +42,11 @@ type
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
 procedure ResPackComputeLayout(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; out ALayout: TResPackLayout);
+{ 尾段总数单源：digest 对齐/哈希对齐/上界钳制，供 writer.layout 与 dirsource 有界布局共用；
+  仅算数（DigOff/HashBase/Total/Buckets），灌桶分配由调用方负责；冷路径不 inline 守 I-Cache。 }
+procedure ResPackFinishLayoutTail(const AEndData: UInt64; const AN: SizeUInt;
+  const AHasDigest, AHashIndex: Boolean; out ADigOff, AHashBase, ATotal: UInt64;
+  out AHashBuckets: SizeUInt);
 
 implementation
 
@@ -129,6 +134,54 @@ begin
   ALayout.HashBuckets := 0;
   ALayout.HashBase := 0;
   ALayout.HashSlotIdx := nil;
+end;
+
+{ 尾段总数单源实现：digest 4 对齐 + 哈希 8 对齐 + 三处上界钳制；writer/dirsource 共用消镜像。 }
+procedure ResPackFinishLayoutTail(const AEndData: UInt64; const AN: SizeUInt;
+  const AHasDigest, AHashIndex: Boolean; out ADigOff, AHashBase, ATotal: UInt64;
+  out AHashBuckets: SizeUInt);
+var
+  LDigOff, LTotal, LHashBase: UInt64;
+  LBuckets: SizeUInt;
+begin
+  if AHasDigest then
+  begin
+    LDigOff := AlignUpU64(AEndData, 4);
+    if (LDigOff = 0) and (AEndData <> 0) then
+      raise EResPackError.Create('respack: digest offset overflow');
+    if AN > High(UInt64) div RESPACK_DIGEST_SIZE then
+      raise EResPackTooLarge.Create('respack: digest size overflow');
+    if LDigOff > High(UInt64) - UInt64(AN) * RESPACK_DIGEST_SIZE then
+      raise EResPackTooLarge.Create('respack: total size overflow');
+    LTotal := LDigOff + UInt64(AN) * RESPACK_DIGEST_SIZE;
+  end
+  else
+  begin
+    LDigOff := 0;
+    LTotal := AEndData;
+  end;
+  LBuckets := 0;
+  LHashBase := 0;
+  if AHashIndex and (AN > 0) then
+  begin
+    LBuckets := ResPackHashBucketCount(AN);
+    if LBuckets < RESPACK_HASH_MIN_BUCKETS then
+      raise EResPackError.Create('respack: hash bucket count too small');
+    if LBuckets > High(UInt64) div SizeUInt(RESPACK_HASH_ENTRY_SIZE) then
+      raise EResPackTooLarge.Create('respack: hash section too large');
+    if LTotal > High(UInt64) - (RESPACK_HASH_ALIGN - 1) then
+      raise EResPackTooLarge.Create('respack: hash alignment overflow');
+    LHashBase := AlignUpU64(LTotal, RESPACK_HASH_ALIGN);
+    if LHashBase > High(UInt64) - UInt64(LBuckets) * RESPACK_HASH_ENTRY_SIZE then
+      raise EResPackTooLarge.Create('respack: total size overflow');
+    LTotal := LHashBase + UInt64(LBuckets) * RESPACK_HASH_ENTRY_SIZE;
+  end;
+  if LTotal > High(SizeUInt) then
+    raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
+  ADigOff := LDigOff;
+  AHashBase := LHashBase;
+  ATotal := LTotal;
+  AHashBuckets := LBuckets;
 end;
 
 procedure ResPackComputeLayout(const AEntries: array of TResPackInputEntry;
@@ -325,38 +378,18 @@ begin
     end;
   ALayout.SlotCount := SlotCount;
   EndData := Cur;
-  if AOpts.DigestFunc <> nil then
-  begin
-    DigOff := AlignUpU64(EndData, 4);
-    if (DigOff = 0) and (EndData <> 0) then
-      raise EResPackError.Create('respack: digest offset overflow');
-    if N > High(UInt64) div RESPACK_DIGEST_SIZE then
-      raise EResPackTooLarge.Create('respack: digest size overflow');
-    if DigOff > High(UInt64) - UInt64(N) * RESPACK_DIGEST_SIZE then
-      raise EResPackTooLarge.Create('respack: total size overflow');
-    Total := DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
-  end
-  else
-  begin
-    DigOff := 0;
-    Total := EndData;
-  end;
-  { 哈希段（opt-in）：digest/data 之后 8 对齐；桶数单源于 base，灌桶按 index 序
-    （确定性，INV-R5），fnv 候选+开放寻址，装载≤0.5 恒有空槽（探针傻瓜式上界兜底）。 }
+  { 尾段总数单源于 ResPackFinishLayoutTail（digest/哈希对齐+上界，writer/dirsource 共用）。 }
+  ResPackFinishLayoutTail(EndData, N, AOpts.DigestFunc <> nil, AOpts.HashIndex,
+    DigOff, HashBase, Total, BucketCount);
+  ALayout.DigOff := DigOff;
+  ALayout.Total := Total;
   ALayout.HashBuckets := 0;
   ALayout.HashBase := 0;
-  if AOpts.HashIndex and (N > 0) then
+  { 哈希段灌桶（opt-in）：总数已由单源算出，此处仅分配 HashSlotIdx 并按 index 序灌桶
+    （确定性，INV-R5），fnv 候选+开放寻址，装载≤0.5 恒有空槽（探针傻瓜式上界兜底）。 }
+  if BucketCount > 0 then
   begin
-    BucketCount := ResPackHashBucketCount(N);
-    if BucketCount < RESPACK_HASH_MIN_BUCKETS then
-      raise EResPackError.Create('respack: hash bucket count too small');
-    if BucketCount > High(UInt64) div RESPACK_HASH_ENTRY_SIZE then
-      raise EResPackTooLarge.Create('respack: hash section too large');
-    if Total > High(UInt64) - (RESPACK_HASH_ALIGN - 1) then
-      raise EResPackTooLarge.Create('respack: hash alignment overflow');
-    HashBase := AlignUpU64(Total, RESPACK_HASH_ALIGN);
-    if HashBase > High(UInt64) - UInt64(BucketCount) * RESPACK_HASH_ENTRY_SIZE then
-      raise EResPackTooLarge.Create('respack: total size overflow');
+    ALayout.HashBase := HashBase;
     try
       SetLength(ALayout.HashSlotIdx, BucketCount);
     except
@@ -387,13 +420,7 @@ begin
       ALayout.HashSlotIdx[Hb] := UInt32(I);
     end;
     ALayout.HashBuckets := BucketCount;
-    ALayout.HashBase := HashBase;
-    Total := HashBase + UInt64(BucketCount) * RESPACK_HASH_ENTRY_SIZE;
   end;
-  if Total > High(SizeUInt) then
-    raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
-  ALayout.DigOff := DigOff;
-  ALayout.Total := Total;
 end;
 
 end.
