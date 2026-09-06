@@ -177,9 +177,13 @@ Move，同字节流，校验和不变）后五轮 Pascal 1189–1222 vs Rust 117
 成立；此前 wall-win 是口径红利，撤回）。RSS 1040–1041 vs 1035MB 持续持平。
 三方输入校验和同机一致（Pascal/Rust/Go 均为 `0000000f9ffffd34`，u64 回绕累加，
 载荷逐字节同源）。
-门限：`bench_writer_memory` 内双门（端到端 wall ≤1500ms 回归级 + packer 峰值超
-FPC 峰值 15% 即红灯）；wall 单样本噪声大（曾见 13.8s 毛刺），门限只抓回归，
-胜负以本节逐轮记录为准，复测前勿引用。
+门限：wall 对比门为 `compare_bulk_wall.sh` 动态脚本（`make -C
+core/benchmarks/nextpas.core.respack/bench_writer_memory compare`，同机双边 N 轮，
+中位数对比 + 逐轮校验和一致，默认 +10% 接近带；硬编码 wall 常量跨机器/负载必误报
+或放水，已退役），`bench_writer_memory` 本体内只保留 RSS 单边门（packer 峰值超
+FPC 峰值 15% 即红灯）。脚本同机五轮（PIN_CORES=42-43）：Pascal 中位数 1171ms，
+Rust 1177ms，COMPARE PASS。wall 单样本噪声大（曾见 13.8s 毛刺），胜负以本节逐轮
+记录为准，复测前勿引用。
 
 ## 4. Writer dedup (Deduplicate on, O(n) 回验+单 slab)
 

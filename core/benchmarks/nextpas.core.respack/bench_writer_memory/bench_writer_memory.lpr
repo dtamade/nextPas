@@ -61,14 +61,12 @@ var
   T0, T1, T2, T3: QWord;
   FillMs, BuildMs, EndToEndMs: QWord;
   FpcPeakMB, PackPeakMB: Int64;
-const
-  { 跨语言同载荷：与 compare_go/compare_rust 的 genPattern 同式
-    (byte = (j*31 + seed*7) mod 251, seed = 条目序号），三方输入校验和一致，
-    wall 对比才成立。校验和为 u64 回绕累加，与两对端同算法。 }
-  { 端到端 wall 门限：Rust 对端同机 live ~1217ms（2026-09-06），本值留余量；
-    回退即红灯。单样本 wall 噪声大，门限取回归级而非贴身线，胜负以 RESULTS
-    逐轮记录为准，复测前勿引用。 }
-  BASELINE_RUST_BULK_MS = 1500;
+{ 跨语言同载荷：与 compare_go/compare_rust 的 genPattern 同式
+  (byte = (j*31 + seed*7) mod 251, seed = 条目序号），三方输入校验和一致，
+  wall 对比才成立。校验和为 u64 回绕累加，与两对端同算法。
+  wall 对比门不在此硬编码：单机 wall 常量跨机器/负载必误报或放水；
+  直接对比门为 ../compare_bulk_wall.sh（同机双边 N 轮，中位数对比 +
+  逐轮校验和一致，默认 +10% 接近带）。本程序只断言 RSS 单边门。 }
 begin
   { 单条目 8MB：条目数适中，内容缓冲占输入的绝对大头 }
   ChunkSize := SizeUInt(8) * 1024 * 1024;
@@ -160,13 +158,10 @@ begin
     EndToEndMs := FillMs + BuildMs;
     WriteLn('build ok: blob bytes = ', Blob.Size, ' in ', BuildMs, ' ms',
       ' (fill ', FillMs, ' ms, end-to-end ', EndToEndMs, ' ms)');
+    WriteLn('wall verdict via ../compare_bulk_wall.sh (same-host both sides)');
     PackPeakMB := ProcessPeakRssBytes div 1048576;
     WriteLn('peak rss after build : ', PackPeakMB, ' MB');
     WriteLn('throughput: ', (ATargetBytes div 1048576), ' MB pack, ratio blob/input=', (Blob.Size / ATargetBytes):0:3);
-    if EndToEndMs > BASELINE_RUST_BULK_MS then
-      raise Exception.Create('bench: end-to-end pack wall exceeds Rust baseline gate');
-    WriteLn('gate: end-to-end ', EndToEndMs, ' ms within Rust bulk gate ',
-      BASELINE_RUST_BULK_MS, ' ms');
     { 单边门限：VmHWM 只增不减，packer 真峰值被 FPC 峰值掩盖时此门宽松（只抓总体膨胀，
       不抓 packer 缩小——缩小不是回归）。packer 相真实超 FPC 15% 即红灯。 }
     if PackPeakMB > (FpcPeakMB * 115) div 100 then
