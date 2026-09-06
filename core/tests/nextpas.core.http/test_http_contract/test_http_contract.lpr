@@ -1094,7 +1094,7 @@ begin
   Check(not SourceHas(LMessage, 'deprecated ''Use THttpRequestBuilder instead'''),
     'message no longer carries deprecated multi-arg NewRequest markers');
 
-  Check(SourceHas(LFacade, 'THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;'),
+  Check(SourceHas(LFacade, 'THttpRequestBuilder = nextpas.core.http.messages.THttpRequestBuilder;'),
     'facade re-exports THttpRequestBuilder as the recommended construction path');
 
   { NewStreamingRequest physically deleted — builder / SendStreaming only. }
@@ -1139,10 +1139,9 @@ begin
       LPaths[I] + ' must not construct bare EArgumentError');
   end;
 
-  LSource := ReadTextFile('../../../src/nextpas.core.http.pas');
+  LSource := ReadTextFile('../../../src/nextpas.core.http.middlewares.pas');
   Check(SourceHas(LSource,
-    'raise EHttpError.Create(hekArgument,'#10 +
-    '      ''HttpUseRequestArena: router must not be nil'')'),
+    'raise EHttpError.Create(hekArgument, ''HttpUseRequestArena: router must not be nil'')'),
     'HttpUseRequestArena nil router uses hekArgument');
 
   LSource := ReadTextFile(
