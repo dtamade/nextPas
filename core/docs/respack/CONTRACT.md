@@ -39,7 +39,7 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | 写 | `function ResPackBuild(const AEntries: TResPackInputArray; const AOpts: TResPackBuildOptions): TResPackBlob` | 排序/去重/对齐/索引/digest 一次完成 |
 
 - blob 输入一律 `(PByte, SizeUInt)`，不持有所有权；调用方保证生命期覆盖 TResPack
-- `TResPackBuildOptions`：`Deduplicate: Boolean`（默认 False）、`CodecId: Byte`（默认 `STORE=0`）、
+- `TResPackBuildOptions`：`Deduplicate: Boolean`（默认 True，同内容槽位共享；fnv 候选+逐字节回验，去重门限见 §6）、`CodecId: Byte`（默认 `STORE=0`）、
   `DigestFunc: TResPackDigestFunc`（nil = 无 digest 区；算法 ID 经 header flags bit2-4 预留，v1 仅 0=SHA-256）、时间戳来源
 
 ---
