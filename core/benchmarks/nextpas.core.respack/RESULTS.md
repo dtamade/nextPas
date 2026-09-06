@@ -163,6 +163,9 @@ wall parity holds at the copy primitive, not the build.
 2026-09-06 live re-run (same host): Pascal wall 1035ms ≤ Rust 1244ms, RSS 1039 vs
 1035. Bulk wall 无硬门限（单样本 wall 噪声大），RSS 单边门限已编码进
 `bench_writer_memory`（packer 峰值超 FPC 峰值 15% 即红灯，输出 `gate:` 行作证）。
+2026-09-06 附注：P0 去重默认开启后曾暴露 bench 输入 bug——填充与拷贝分属两轮循环，
+64 条目内容全同，包坍缩至 8MB 而 Rust 对端实写 512MB（不可比）；已修为逐条目独立
+填充，包回 ~512MB（本轮复测：Pascal 978ms/RSS 1040MB vs Rust 1217ms/RSS 1035MB）。
 
 ## 4. Writer dedup (Deduplicate on, O(n) 回验+单 slab)
 

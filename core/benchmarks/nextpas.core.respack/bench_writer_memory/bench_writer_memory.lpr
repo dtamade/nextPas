@@ -63,10 +63,12 @@ begin
   SetLength(Contents, N);
   SetLength(Entries, N);
   SetLength(Chunk, SizeInt(ChunkSize));
-  for I := 0 to N - 1 do
-    FillChar(Chunk[0], ChunkSize, Byte(I mod 251));
+  { 逐条目独立填充再拷贝：各条目内容互异（Byte(I mod 251)），去重不得跨条目
+    复用，blob 回到 ~512MB，与 Rust 对端同量实写可比。填充与拷贝同循环，
+    杜绝"先填同一块再全拷贝"造成的全同内容坍缩（P0 去重默认开后现形）。 }
   for I := 0 to N - 1 do
   begin
+    FillChar(Chunk[0], ChunkSize, Byte(I mod 251));
     SetLength(Contents[I], SizeInt(ChunkSize));
     Move(Chunk[0], Contents[I][0], ChunkSize);
     Entries[I].Path := 'chunk' + IntToStr(I) + '.bin';
