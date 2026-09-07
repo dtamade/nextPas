@@ -41,6 +41,10 @@ procedure ResPackEmitLayout(const AEntries: array of TResPackInputEntry;
   消三处复制。 }
 function ResPackBuildLayoutBlob(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout): TResPackBlob;
+{ 发射布局校验单源：槽位单调/索引越界/回绕前置拒绝，writer 内存背与
+  dirsource 文件背（经 dummy 条目）共用，消两套 Validate 镜像；含循环禁 inline。 }
+procedure ResPackValidateEmitLayout(const AEntries: array of TResPackInputEntry;
+  const ALayout: TResPackLayout; const AHasDigest: Boolean);
 { 内存组装单源：ComputeLayout 1×（排序/fnv/去重）+ BuildLayoutBlob 直排堆 blob；
   writer/dirsource 双 Build 共用，禁 Size+BuildStream 双算；布局经 try..finally
   Clear 释放不丢，峰值 ~1×+头；冷路径不 inline，零拷贝经 BytesCopy 单源。 }
@@ -238,7 +242,7 @@ begin
 end;
 
 { 外部 Layout 校验：槽位单调/索引越界/回绕前置拒绝，逆序 Gap 下溢不再落入 UInt64 相减；含循环禁 inline。 }
-procedure ValidateEmitLayout(const AEntries: array of TResPackInputEntry;
+procedure ResPackValidateEmitLayout(const AEntries: array of TResPackInputEntry;
   const ALayout: TResPackLayout; const AHasDigest: Boolean);
 var
   N: SizeUInt;
@@ -324,7 +328,7 @@ var
 begin
   if not Assigned(AWrite) then
     raise EResPackError.Create('respack.stream: Write proc is nil');
-  ValidateEmitLayout(AEntries, ALayout, Assigned(AOpts.DigestFunc));
+  ResPackValidateEmitLayout(AEntries, ALayout, Assigned(AOpts.DigestFunc));
   N := ALayout.N;
   { 头区分片单源于 ResPackEmitHead（≤64K 快道/>64K chunk，峰值 64K 封顶）。 }
   ResPackEmitHead(AEntries, AOpts, ALayout, AWrite);

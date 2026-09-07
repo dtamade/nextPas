@@ -37,11 +37,28 @@ type
     HashBuckets: SizeUInt;
     HashBase: UInt64;
     HashSlotIdx: array of UInt32;
+    { 桶位路径 fnv 缓存（与 HashSlotIdx 等长对齐，空桶=0）：布局灌桶单次扫描
+      落盘，供 builder FillHashRange 直排复用，发射零重算（同字节单掃）。 }
+    HashFnv: array of UInt32;
   end;
 
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
 procedure ResPackComputeLayout(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; out ALayout: TResPackLayout);
+{ 槽位命中单源（视图版）：fnv + 长度 + 字节回验，内存背与文件背共用；
+  bytes.ops SpanEqual 单源 inline 零拷贝，tiny 线性/哈希双路径经此收敛。 }
+function ResPackSlotsEqualView(const ASlotFnv, ANeedFnv: UInt32;
+  const ASlotSize, ANeedSize: SizeUInt;
+  const ASlotData, ANeedData: PByte): Boolean; inline;
+{ 槽位分配单源：对齐经 mem.base，writer 内存背与 dirsource 文件背共用，inline。 }
+procedure ResPackLayoutAddSlot(var ALayout: TResPackLayout; var ACur: UInt64;
+  var ASlotCount: SizeUInt; const AEntries: array of TResPackInputEntry;
+  const AFnvBuf: array of UInt32; const AJ: SizeUInt; const ANeedFnv: Boolean); inline;
+{ 槽位落位单源（底层）：对齐 + Offset/SrcIdx/Fnv/EntrySlots/Cur 前进，内存背与
+  文件背经此收敛，调用方保证 SlotCount 容量充足；inline 零拷贝。 }
+procedure ResPackLayoutPlaceSlot(var ALayout: TResPackLayout; var ACur: UInt64;
+  var ASlotCount: SizeUInt; const AJ: SizeUInt;
+  const ASize: SizeUInt; const AFnv: UInt32); inline;
 { 尾段总数单源：digest 对齐/哈希对齐/上界钳制，供 writer.layout 与 dirsource 有界布局共用；
   仅算数（DigOff/HashBase/Total/Buckets），灌桶分配由调用方负责；冷路径不 inline 守 I-Cache。 }
 procedure ResPackFinishLayoutTail(const AEndData: UInt64; const AN: SizeUInt;
@@ -89,32 +106,61 @@ begin
 end;
 
 { 槽位命中判定单源：fnv 候选 + 长度 + 字节回验，tiny 线性/哈希主循环共用。 }
+function ResPackSlotsEqualView(const ASlotFnv, ANeedFnv: UInt32;
+  const ASlotSize, ANeedSize: SizeUInt;
+  const ASlotData, ANeedData: PByte): Boolean; inline;
+begin
+  Result := (ASlotFnv = ANeedFnv)
+    and (ASlotSize = ANeedSize)
+    and ((ANeedSize = 0)
+      or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(ANeedData, ANeedSize),
+        TByteSpan.Create(ASlotData, ANeedSize)));
+end;
+
 function SlotContentEqual(const AEntries: array of TResPackInputEntry;
   const ASlots: array of TResPackSlot; const AFnvBuf: array of UInt32;
   const AJ, AK: SizeUInt): Boolean; inline;
+var
+  LSlotIdx: SizeUInt;
 begin
-  Result := (ASlots[AK].Fnv = AFnvBuf[AJ])
-    and (AEntries[AJ].DataSize = AEntries[ASlots[AK].SrcIdx].DataSize)
-    and ((AEntries[AJ].DataSize = 0)
-      or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[AJ].Data, AEntries[AJ].DataSize),
-        TByteSpan.Create(AEntries[ASlots[AK].SrcIdx].Data, AEntries[AJ].DataSize)));
+  LSlotIdx := ASlots[AK].SrcIdx;
+  Result := ResPackSlotsEqualView(ASlots[AK].Fnv, AFnvBuf[AJ],
+    AEntries[LSlotIdx].DataSize, AEntries[AJ].DataSize,
+    AEntries[LSlotIdx].Data, AEntries[AJ].Data);
 end;
 
 { 槽位分配单源：对齐经 mem.base，tiny/哈希/直排三处共用。 }
-procedure LayoutAddSlot(var ALayout: TResPackLayout; var ACur: UInt64;
-  var ASlotCount: SizeUInt; const AEntries: array of TResPackInputEntry;
-  const AFnvBuf: array of UInt32; const AJ: SizeUInt; const ANeedFnv: Boolean); inline;
+procedure ResPackLayoutPlaceSlot(var ALayout: TResPackLayout; var ACur: UInt64;
+  var ASlotCount: SizeUInt; const AJ: SizeUInt;
+  const ASize: SizeUInt; const AFnv: UInt32); inline;
 begin
   ACur := AlignUpU64(ACur, RESPACK_DATA_ALIGN);
   ALayout.Slots[ASlotCount].Offset := ACur;
   ALayout.Slots[ASlotCount].SrcIdx := AJ;
-  if ANeedFnv then
-    ALayout.Slots[ASlotCount].Fnv := AFnvBuf[AJ]
-  else
-    ALayout.Slots[ASlotCount].Fnv := 0;
+  ALayout.Slots[ASlotCount].Fnv := AFnv;
   ALayout.EntrySlots[AJ] := ASlotCount;
-  ACur := ACur + UInt64(AEntries[AJ].DataSize);
+  ACur := ACur + UInt64(ASize);
   Inc(ASlotCount);
+end;
+
+procedure ResPackLayoutAddSlot(var ALayout: TResPackLayout; var ACur: UInt64;
+  var ASlotCount: SizeUInt; const AEntries: array of TResPackInputEntry;
+  const AFnvBuf: array of UInt32; const AJ: SizeUInt; const ANeedFnv: Boolean); inline;
+var
+  LFnv: UInt32;
+begin
+  if ANeedFnv then
+    LFnv := AFnvBuf[AJ]
+  else
+    LFnv := 0;
+  ResPackLayoutPlaceSlot(ALayout, ACur, ASlotCount, AJ, AEntries[AJ].DataSize, LFnv);
+end;
+
+procedure LayoutAddSlot(var ALayout: TResPackLayout; var ACur: UInt64;
+  var ASlotCount: SizeUInt; const AEntries: array of TResPackInputEntry;
+  const AFnvBuf: array of UInt32; const AJ: SizeUInt; const ANeedFnv: Boolean); inline;
+begin
+  ResPackLayoutAddSlot(ALayout, ACur, ASlotCount, AEntries, AFnvBuf, AJ, ANeedFnv);
 end;
 
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
@@ -134,6 +180,7 @@ begin
   ALayout.HashBuckets := 0;
   ALayout.HashBase := 0;
   ALayout.HashSlotIdx := nil;
+  ALayout.HashFnv := nil;
 end;
 
 { 尾段总数单源实现：digest 4 对齐 + 哈希 8 对齐 + 三处上界钳制；writer/dirsource 共用消镜像。 }
@@ -385,19 +432,24 @@ begin
   ALayout.Total := Total;
   ALayout.HashBuckets := 0;
   ALayout.HashBase := 0;
-  { 哈希段灌桶（opt-in）：总数已由单源算出，此处仅分配 HashSlotIdx 并按 index 序灌桶
-    （确定性，INV-R5），fnv 候选+开放寻址，装载≤0.5 恒有空槽（探针傻瓜式上界兜底）。 }
+  { 哈希段灌桶（opt-in）：总数已由单源算出，此处分配 HashSlotIdx/HashFnv 并按 index 序灌桶
+    （确定性，INV-R5），fnv 候选+开放寻址，装载≤0.5 恒有空槽（探针傻瓜式上界兜底）；
+    路径 fnv 单掃落盘供发射直排复用。 }
   if BucketCount > 0 then
   begin
     ALayout.HashBase := HashBase;
     try
       SetLength(ALayout.HashSlotIdx, BucketCount);
+      SetLength(ALayout.HashFnv, BucketCount);
     except
       on E: EOutOfMemory do
         raise EResPackTooLarge.Create('respack: hash table too large for host');
     end;
     for Hi := 0 to BucketCount - 1 do
+    begin
       ALayout.HashSlotIdx[Hi] := RESPACK_HASH_EMPTY_INDEX;
+      ALayout.HashFnv[Hi] := 0;
+    end;
     { 按 index 序灌桶：存 index 位（reader DecodeWire 同义），fnv 取该位之源路径；
       输入序直排则 SrcIdx/位错位（6 条目乱序即现形，2 条目恰有序掩盖）。 }
     for I := 0 to N - 1 do
@@ -418,6 +470,7 @@ begin
         Hb := (Hb + 1) and (BucketCount - 1);
       end;
       ALayout.HashSlotIdx[Hb] := UInt32(I);
+      ALayout.HashFnv[Hb] := HFnv;
     end;
     ALayout.HashBuckets := BucketCount;
   end;

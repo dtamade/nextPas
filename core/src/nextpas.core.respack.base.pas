@@ -200,7 +200,7 @@ uses
   nextpas.core.bytes.pathvalid,
   nextpas.core.checksum.fnv32,
   nextpas.core.mem.base,
-  nextpas.core.text.number;
+  nextpas.core.text.conv;
 
 function RdU16LE(AData: PByte): Word; inline;
 begin
@@ -290,18 +290,6 @@ begin
   ABlob.Owned := False;
 end;
 
-{ 十进制转字符串单源于 text.number }
-function ResPackUIntToStr(AValue: UInt32): string;
-var
-  LBuf: array[0..15] of AnsiChar;
-  LLen: Int32;
-begin
-  LLen := UIntToBuffer(UInt64(AValue), @LBuf[0]);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen));
-end;
-
 constructor EResPackError.Create(const AMsg: string);
 begin
   inherited Create(AMsg);
@@ -366,7 +354,8 @@ constructor EResPackCorrupted.CreateStep(const AStep: Integer; const AOp,
   APath, ADetail: string);
 begin
   inherited CreateCtx(AOp, APath, 'respack: validation step '
-    + ResPackUIntToStr(UInt32(AStep)) + ' failed: ' + ADetail);
+    { 十进制单源于 text.conv, 与 embed 一致, inline 转发 }
+    + nextpas.core.text.conv.IntToStr(AStep) + ' failed: ' + ADetail);
   FStep := AStep;
 end;
 

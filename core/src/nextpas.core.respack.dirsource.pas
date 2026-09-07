@@ -1,6 +1,16 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包适配：唯一 L2→L2 FS seam（fs+path；io.mapped 经 dirsource.mmap 单源，本单元不直引），流式mmap 零双驻留 ~1×+64K，WalkPrePlain/Embed + CleanRootDir 单源 inline 零拷贝，内存组装契约镜像 writer.stream.ResPackBuildLayoutBlob（GetMem 单次+BytesCopy 直填+Off 校验+OOM→TooLarge，文件/内存双背骨架镜像非直调），布局基座经 ResPackComputeLayout 1× + 文件背 fnv/哈希回验补丁（去重哈希经 respack.hasharena.ResPackDedupInit 单源，tiny≤4 线性免 arena；尾段总数单源于 writer.layout.ResPackFinishLayoutTail），发射按槽单映射写+摘要融合（头/哈希分片单源于 writer.stream.ResPackEmitHead/ResPackEmitHashSegment，64K 封顶无全量具化；零页单源于 writer.stream.ResPackWriteZeros；去重 FNV 融合于外层单映射，免单独 FNV 全员映射遍）；映射守卫单源于 BoundRequireMap（TryMmapRequire+空映射判空收敛）；embed 纯逻辑归 embed 拥有（选项校验/Glob/Inc 源），本单元仅收口 IO 走查（ResPackEmbedBuild 系内存 sink 薄封装）。枚举/有界布局/发射/解包同 seam 收口，超阈按 dirsource.walk/embed/extract 拆子模块（本 slice 先收敛单源+峰值+守卫，拆分见 docs）。 }
+{**
+  @desc 目录 → 打包适配：唯一 L2→L2 FS seam。
+  @note io.mapped 经 dirsource.mmap 单源，本单元不直引。
+  @note 峰值 ~1×+64K：流式 mmap 零双驻留，Walk 仅收路径/大小。
+  @note 布局基座经 writer.layout ResPackComputeLayout 1×，
+    文件背 FNV/哈希回验补丁经 hasharena 单源 + 槽分配单源。
+  @note 发射头/哈希分片单源于 writer.stream，零页单源于 ResPackWriteZeros。
+  @note 内存组装契约镜像 writer.stream ResPackBuildLayoutBlob（文件/内存双背骨架镜像非直调）。
+  @note 映射守卫单源于 BoundRequireMap；embed 纯逻辑归 embed 拥有。
+  @note 枚举/有界布局/发射/解包同 seam 收口；超阈拆分见 docs。
+ }
 
 {$I nextpas.core.settings.inc}
 
@@ -359,7 +369,7 @@ begin
   end;
 end;
 
-{ 有界单活锚点：Walk 仅收路径/大小 (0 映射)，布局经 ResPackComputeLayout 1× 基座 + 文件背 fnv/哈希回验补丁（去重哈希经 respack.hasharena.ResPackDedupInit 单源，tiny≤4 线性免 arena；回验外层单映射复用，FNV 段与发射段各 1 映射/文件，并发映射 ≤2），发射按槽单映射写+摘要融合；内存组装契约镜像 writer.stream.ResPackBuildLayoutBlob（文件背与内存背不同源故骨架镜像，GetMem 单次+BytesCopy 直填+Off 校验+OOM→TooLarge）；峰值 ~1×+头，try..finally 不丢。 }
+{ 有界单活锚点：Walk 仅收路径/大小 (0 映射)，布局经 ResPackComputeLayout 1× 基座 + 文件背 fnv/哈希回验补丁（去重哈希经 respack.hasharena.ResPackDedupInit 单源，tiny≤4 线性免 arena；命中/落位单源于 writer.layout，FNV 段与发射段各 1 映射/文件，并发映射 ≤2），发射按槽单映射写+摘要融合；内存组装契约镜像 writer.stream.ResPackBuildLayoutBlob（文件/内存双背骨架镜像非直调）；峰值 ~1×+头，try..finally 不丢。 }
 type
   TBoundMeta = record
     EntryPath: string;
@@ -524,7 +534,7 @@ begin
   end;
 end;
 
-{ 双活上限：两文件视图比对，SpanEqual 单源，finally 双释；去重内循环优先用外层单映射复用版（见下），免每候选重映射外层文件。 }
+{ 双活上限：两文件视图比对，命中判定单源于 writer.layout ResPackSlotsEqualView（fnv 已在外层比较，此处传 0/0 仅比字节），finally 双释；去重内循环优先用外层单映射复用版（见下），免每候选重映射外层文件。 }
 function BoundFilesEqual(const APathA, APathB: string; const ASize: SizeUInt): Boolean;
 var
   LMapA, LMapB: IMappedFile;
@@ -535,7 +545,7 @@ begin
   try
     BoundRequireMap(APathB, ASize, LMapB);
     try
-      Result := SpanEqual(TByteSpan.Create(LMapA.Data, ASize), TByteSpan.Create(LMapB.Data, ASize));
+      Result := ResPackSlotsEqualView(0, 0, ASize, ASize, LMapB.Data, LMapA.Data);
     finally
       LMapB := nil;
     end;
@@ -544,7 +554,7 @@ begin
   end;
 end;
 
-{ 外层单映射复用回验：AOuterData 为外层文件已映射视图（Size>0 时非 nil），本函数仅映射槽候选单次，SpanEqual 单源 inline 零拷贝；去重内循环经此收敛，外层每 I 仅 1 映射。 }
+{ 外层单映射复用回验：AOuterData 为外层文件已映射视图（Size>0 时非 nil），本函数仅映射槽候选单次，命中判定单源于 writer.layout ResPackSlotsEqualView（与内存背同 fnv+长度+字节语义），inline 零拷贝；去重内循环经此收敛，外层每 I 仅 1 映射。 }
 function BoundOuterEqualSlot(const AOuterData: PByte; const ASlotPath: string; const ASize: SizeUInt): Boolean; inline;
 var
   LMapB: IMappedFile;
@@ -552,7 +562,7 @@ begin
   if ASize = 0 then Exit(True);
   BoundRequireMap(ASlotPath, ASize, LMapB);
   try
-    Result := SpanEqual(TByteSpan.Create(AOuterData, ASize), TByteSpan.Create(LMapB.Data, ASize));
+    Result := ResPackSlotsEqualView(0, 0, ASize, ASize, LMapB.Data, AOuterData);
   finally
     LMapB := nil;
   end;
@@ -602,7 +612,7 @@ begin
   nextpas.core.respack.writer.stream.ResPackWriteZeros(AWrite, ACount);
 end;
 
-{ 有界布局：dummy 基座排序（熔断前置，免大额瞬时分配）+ 去重 FNV 融合于外层单映射（免单独 FNV 全员映射遍，三映射→两映射）+ 哈希去重（respack.hasharena.ResPackDedupInit 单源，tiny≤4 线性免 arena；回验外层单映射复用，并发映射 ≤2，经 BoundRequireMap 单守卫）；尾段总数单源于 writer.layout.ResPackFinishLayoutTail。 }
+{ 有界布局：dummy 基座排序（熔断前置，免大额瞬时分配）+ 去重 FNV 融合于外层单映射（免单独 FNV 全员映射遍，三映射→两映射）+ 哈希去重（respack.hasharena.ResPackDedupInit 单源，tiny≤4 线性免 arena；命中判定单源于 writer.layout ResPackSlotsEqualView，槽落位单源于 ResPackLayoutPlaceSlot，回验外层单映射复用，并发映射 ≤2，经 BoundRequireMap 单守卫）；尾段总数单源于 writer.layout.ResPackFinishLayoutTail。 }
 procedure BuildBoundLayout(const AMetas: TBoundMetaArray;
   const AOpts: TResPackBuildOptions; out ALayout: TResPackLayout);
 var
@@ -655,6 +665,8 @@ begin
   end;
   if not AOpts.Deduplicate then
   begin
+    { 非去重 + Hashes：FNV 段每文件 1 映射 + 发射段每文件 1 映射（各段并发 ≤1），
+      头区需 FNV 先行故两段为下界；摘要融合于发射映射内（BoundEmitSlot 单映射写+摘要），无第三遍。 }
     for I := 0 to N - 1 do
       Fnv[I] := BoundFileFnv(AMetas[I].FilePath, AMetas[I].Size);
     SetLength(ALayout.FnvBuf, N);
@@ -709,15 +721,8 @@ begin
           end;
       end;
       if ALayout.EntrySlots[J] = SizeUInt(-1) then
-      begin
-        Cur := nextpas.core.mem.base.AlignUp64(Cur, RESPACK_DATA_ALIGN);
-        ALayout.Slots[ALayout.SlotCount].Offset := Cur;
-        ALayout.Slots[ALayout.SlotCount].SrcIdx := J;
-        ALayout.Slots[ALayout.SlotCount].Fnv := Fnv[J];
-        ALayout.EntrySlots[J] := ALayout.SlotCount;
-        Cur := Cur + UInt64(AMetas[J].Size);
-        Inc(ALayout.SlotCount);
-      end;
+        { 槽落位单源于 writer.layout ResPackLayoutPlaceSlot（与内存背同对齐/偏移语义），inline 零拷贝 }
+        ResPackLayoutPlaceSlot(ALayout, Cur, ALayout.SlotCount, J, AMetas[J].Size, Fnv[J]);
     end;
   end
   else
@@ -776,15 +781,10 @@ begin
         end;
         if ALayout.EntrySlots[J] = SizeUInt(-1) then
         begin
-          Cur := nextpas.core.mem.base.AlignUp64(Cur, RESPACK_DATA_ALIGN);
-          ALayout.Slots[ALayout.SlotCount].Offset := Cur;
-          ALayout.Slots[ALayout.SlotCount].SrcIdx := J;
-          ALayout.Slots[ALayout.SlotCount].Fnv := Fnv[J];
-          SlotNext[ALayout.SlotCount] := BucketsHead[BucketIdx];
-          BucketsHead[BucketIdx] := SizeInt(ALayout.SlotCount);
-          ALayout.EntrySlots[J] := ALayout.SlotCount;
-          Cur := Cur + UInt64(AMetas[J].Size);
-          Inc(ALayout.SlotCount);
+          { 槽落位单源于 writer.layout ResPackLayoutPlaceSlot，链挂载保留哈希语义 }
+          ResPackLayoutPlaceSlot(ALayout, Cur, ALayout.SlotCount, J, AMetas[J].Size, Fnv[J]);
+          SlotNext[ALayout.EntrySlots[J]] := BucketsHead[BucketIdx];
+          BucketsHead[BucketIdx] := SizeInt(ALayout.EntrySlots[J]);
         end;
       end;
     finally
@@ -811,7 +811,7 @@ begin
   ALayout.HashBuckets := Buckets;
 end;
 
-{ 有界发射：头/哈希分片单源于 writer.stream.ResPackEmitHead/ResPackEmitHashSegment（64K 封顶，峰值 ~1×+64K），数据按槽单映射写+摘要融合，摘要按 EntrySlots 直排复用；槽单调前置拒绝防 Gap 下溢，Dummy 熔断前置。 }
+{ 有界发射：头/哈希分片单源于 writer.stream.ResPackEmitHead/ResPackEmitHashSegment（64K 封顶，峰值 ~1×+64K），校验单源于 ResPackValidateEmitLayout（经 dummy 条目，消两套 Validate 镜像），数据按槽单映射写+摘要融合（摘要槽缓存避免逐条目重映射，文件背与内存背直排语义一致）；槽单调前置拒绝防 Gap 下溢，Dummy 熔断前置。 }
 procedure EmitBoundLayout(const AMetas: TBoundMetaArray;
   const AOpts: TResPackBuildOptions; const ALayout: TResPackLayout;
   const AWrite: TResPackWriteProc);
@@ -830,8 +830,6 @@ begin
     raise EResPackTooLarge.Create('respack: entry count exceeds limit');
   if N <> SizeUInt(Length(AMetas)) then
     raise EResPackError.Create('respack.stream: layout entry count mismatch');
-  if ALayout.SlotCount > SizeUInt(Length(ALayout.Slots)) then
-    raise EResPackError.Create('respack.stream: layout slot count exceeds slots');
   HasDigest := AOpts.DigestFunc <> nil;
   LDummy := 0;
   try
@@ -848,6 +846,8 @@ begin
       Dummy[I].ModTime := AMetas[I].ModTime;
       if AMetas[I].Size = 0 then Dummy[I].Data := nil else Dummy[I].Data := @LDummy;
     end;
+  { 布局校验单源于 writer.stream ResPackValidateEmitLayout（dummy 条目仅供长度/单调/回绕校验，不读 Data 内容）；文件背不再手写弱校验。 }
+  nextpas.core.respack.writer.stream.ResPackValidateEmitLayout(Dummy, ALayout, HasDigest);
   { 头区分片单源于 writer.stream.ResPackEmitHead（≤64K 快道/>64K chunk，峰值 64K 封顶，无 DataStart 全量具化）。 }
   nextpas.core.respack.writer.stream.ResPackEmitHead(Dummy, AOpts, ALayout, AWrite);
   Cur := ALayout.DataStart;
@@ -865,11 +865,8 @@ begin
   if ALayout.SlotCount > 0 then
     for K := 0 to ALayout.SlotCount - 1 do
     begin
+      { 索引/单调已由 ResPackValidateEmitLayout 前置覆盖，此处仅推进 Gap + 单映射发射 }
       J := ALayout.Slots[K].SrcIdx;
-      if J >= N then
-        raise EResPackError.Create('respack.stream: layout slot source out of range');
-      if ALayout.Slots[K].Offset < Cur then
-        raise EResPackError.Create('respack.stream: layout slot offsets not monotonic');
       Gap := ALayout.Slots[K].Offset - Cur;
       if Gap > 0 then
         BoundWriteZeros(AWrite, Gap);
@@ -887,10 +884,9 @@ begin
     if N > 0 then
       for I := 0 to N - 1 do
       begin
+        { 条目-槽映射已由校验覆盖，直接按 EntrySlots 直排复用槽摘要 }
         J := ALayout.Order[I];
         S := ALayout.EntrySlots[J];
-        if S >= ALayout.SlotCount then
-          raise EResPackError.Create('respack.stream: layout entry-slot out of range');
         AWrite(@SlotDigests[S][0], RESPACK_DIGEST_SIZE);
       end;
     if N > 0 then

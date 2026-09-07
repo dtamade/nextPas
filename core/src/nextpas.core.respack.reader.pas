@@ -343,6 +343,8 @@ var
   LastEnd: UInt64;
   Probe: SizeInt;
   IsDup: Boolean;
+  TinySeen: array[0..3] of TResPackDistinct;
+  J: SizeUInt;
 begin
   if ACount = 0 then Exit;
   OverlapArena := nil;
@@ -350,7 +352,8 @@ begin
   SlotNext := nil;
   Distinct := nil;
   BucketCount := 0;
-  if ACount > 1 then
+  { tiny N<=4 栈上线性判重，免 overlap arena 一次性分配；等价键比较 (Off,Size)。 }
+  if ACount > 4 then
     ResPackOverlapInit(ACount, OverlapArena, BucketsHead, SlotNext, Distinct, BucketCount);
   try
     DistinctCount := 0;
@@ -393,6 +396,13 @@ begin
             begin IsDup := True; Break; end;
             Probe := SlotNext[SizeUInt(Probe)];
           end;
+        end
+        else if ACount <= 4 then
+        begin
+          if DistinctCount > 0 then
+            for J := 0 to DistinctCount - 1 do
+              if (TinySeen[J].Off = DataOff) and (TinySeen[J].Size = DataSize) then
+              begin IsDup := True; Break; end;
         end;
         if not IsDup then
         begin
@@ -405,6 +415,12 @@ begin
             Distinct[DistinctCount].Size := DataSize;
             SlotNext[DistinctCount] := BucketsHead[BucketIdx];
             BucketsHead[BucketIdx] := SizeInt(DistinctCount);
+            Inc(DistinctCount);
+          end
+          else if ACount <= 4 then
+          begin
+            TinySeen[DistinctCount].Off := DataOff;
+            TinySeen[DistinctCount].Size := DataSize;
             Inc(DistinctCount);
           end;
         end;

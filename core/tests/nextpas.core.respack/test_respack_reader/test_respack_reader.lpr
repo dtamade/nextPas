@@ -902,6 +902,88 @@ begin
   end;
 end;
 
+{ 首个非空桶指位置越界值：桶结构损坏，Open 第 9 步拒绝。 }
+procedure TestHashBadIndexRejects;
+var
+  B: TResPackBlob;
+  Wide: TBytes;
+  RP: TResPack;
+  Buckets: SizeUInt;
+  Base: SizeUInt;
+  I: SizeUInt;
+  Idx: UInt32;
+  Got: Boolean;
+begin
+  BuildHashBase(B);
+  try
+    Buckets := ResPackHashBucketCount(2);
+    Base := B.Size - SizeUInt(Buckets) * 8;
+    SetLength(Wide, B.Size);
+    Move(B.Data^, Wide[0], B.Size);
+    I := 0;
+    while I < Buckets do
+    begin
+      Idx := RdU32LE(@Wide[Base + I * 8 + 4]);
+      if Idx <> UInt32($FFFFFFFF) then
+        Break;
+      Inc(I);
+    end;
+    Check(I < Buckets, 'hash pack has a non-empty bucket');
+    WrU32LE(@Wide[Base + I * 8 + 4], 2);
+    Got := False;
+    try
+      RP := ResPackOpen(@Wide[0], SizeUInt(Length(Wide)));
+    except
+      on X: EResPackCorrupted do Got := X.Step = 9;
+      on X: Exception do ;
+    end;
+    Check(Got, 'out-of-range hash slot rejected at step9');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+{ 清空首个非空桶：非空数 <> N，Open 第 9 步拒绝。 }
+procedure TestHashCountMismatchRejects;
+var
+  B: TResPackBlob;
+  Wide: TBytes;
+  RP: TResPack;
+  Buckets: SizeUInt;
+  Base: SizeUInt;
+  I: SizeUInt;
+  Idx: UInt32;
+  Got: Boolean;
+begin
+  BuildHashBase(B);
+  try
+    Buckets := ResPackHashBucketCount(2);
+    Base := B.Size - SizeUInt(Buckets) * 8;
+    SetLength(Wide, B.Size);
+    Move(B.Data^, Wide[0], B.Size);
+    I := 0;
+    while I < Buckets do
+    begin
+      Idx := RdU32LE(@Wide[Base + I * 8 + 4]);
+      if Idx <> UInt32($FFFFFFFF) then
+        Break;
+      Inc(I);
+    end;
+    Check(I < Buckets, 'hash pack has a non-empty bucket');
+    WrU32LE(@Wide[Base + I * 8 + 4], UInt32($FFFFFFFF));
+    Got := False;
+    try
+      RP := ResPackOpen(@Wide[0], SizeUInt(Length(Wide)));
+    except
+      on X: EResPackCorrupted do Got := X.Step = 9;
+      on X: Exception do ;
+    end;
+    Check(Got, 'hash slot count mismatch rejected at step9');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 { 非法查询一律 False（ValidSpan 预扫，不进入索引结构）。 }
 procedure TestFindInvalidReturnsFalse;
 var
@@ -950,6 +1032,8 @@ begin
   T.Test('tail bytes not addressable', @TestTailBytesNotAddressable);
   T.Test('hash hit and miss fallback', @TestHashHitAndMissFallback);
   T.Test('hash corrupt rejects', @TestHashCorruptRejects);
+  T.Test('hash slot index out of range rejects', @TestHashBadIndexRejects);
+  T.Test('hash slot count mismatch rejects', @TestHashCountMismatchRejects);
   T.Test('hash late corrupt rejects', @TestHashLateCorruptRejects);
   T.Test('hash with digest', @TestHashWithDigest);
   T.Test('find invalid returns false', @TestFindInvalidReturnsFalse);
